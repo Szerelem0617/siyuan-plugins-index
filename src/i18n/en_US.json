@@ -97,7 +97,6 @@
         "title": "Outline Type",
         "content": "Generation method for outline",
         "options": {
-          "copy": "Copy",
           "ref": "Reference",
           "embed": "Embed"
         }

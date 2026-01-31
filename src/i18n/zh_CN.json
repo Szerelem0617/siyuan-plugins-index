@@ -97,7 +97,6 @@
         "title": "大纲类型",
         "content": "选择大纲的生成方式",
         "options": {
-          "copy": "复制",
           "ref": "引用",
           "embed": "嵌入"
         }
