@@ -14,6 +14,21 @@ async function changeSort(notebook: string, paths: string[]) {
     }
 }
 
+async function getBlockKramdown(id: string) {
+    try {
+        const response = await fetch("/api/block/getBlockKramdown", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id })
+        });
+        const res = await response.json();
+        return res.data?.kramdown || "";
+    } catch (e) {
+        console.error("Failed to get kramdown", e);
+        return "";
+    }
+}
+
 export class ListProcessor {
     errors: string[] = [];
     ibp: IBlockProcessor;
@@ -46,51 +61,44 @@ export class ListProcessor {
             let children = childrenRes.data || [];
 
             for (const child of children) {
-                const childResult = await this.processRecursive(child.id, "NodeList", actionType, childCtx);
+                await this.processRecursive(child.id, "NodeList", actionType, childCtx);
                 ctx.previousId = childCtx.previousId;
             }
             return result;
 
         } else if (type === "NodeList" || type === "l") { 
             let childrenRes = await client.sql({
-                stmt: `SELECT id, type, previous_id, next_id, content, sort FROM blocks WHERE parent_id = '${blockId}' AND type = 'i'`
+                stmt: `SELECT id, type, content FROM blocks WHERE parent_id = '${blockId}' AND type = 'i'`
             });
             let children = childrenRes.data || [];
             
-            // Debug: Log raw chain data
-            console.log(`[Builder] Raw Chain Data:`, children.map((c: any) => ({
-                id: c.id,
-                prev: c.previous_id,
-                next: c.next_id,
-                sort: c.sort
-            })));
-
-            // Sort by linked list (visual order)
-            if (children.length > 0) {
-                const map = new Map();
-                let first = null;
-                children.forEach((c: any) => {
-                    map.set(c.id, c);
-                });
-                
-                // Find head: has no previous_id or previous_id not in this set
-                children.forEach((c: any) => {
-                    if (!c.previous_id || !map.has(c.previous_id)) {
-                        first = c;
-                    }
-                });
-
-                const sorted = [];
-                let curr = first;
-                while (curr) {
-                    sorted.push(curr);
-                    curr = map.get(curr.next_id);
+            // Sort by Kramdown Source (Authoritative Visual Order)
+            const kramdown = await getBlockKramdown(blockId);
+            if (kramdown) {
+                // Extract IDs in order: {: id="2021..."}
+                const idRegex = /\{: id="(\d{14}-[a-z0-9]{7})"\}/g;
+                const orderedIds = [];
+                let match;
+                while ((match = idRegex.exec(kramdown)) !== null) {
+                    orderedIds.push(match[1]);
                 }
                 
-                if (sorted.length !== children.length) {
-                    console.warn(`[Builder] Linked list broken. Sorted: ${sorted.length}, Total: ${children.length}`);
-                } else {
-                    children = sorted;
+                if (orderedIds.length > 0) {
+                    const childMap = new Map(children.map((c:any) => [c.id, c]));
+                    const sorted = [];
+                    // Filter ordered IDs to only include direct children of this list
+                    for (const id of orderedIds) {
+                        if (childMap.has(id)) {
+                            sorted.push(childMap.get(id));
+                            childMap.delete(id);
+                        }
+                    }
+                    // Append any leftovers (fallback)
+                    if (childMap.size > 0) {
+                        for (const c of childMap.values()) sorted.push(c);
+                    }
+                    
+                    if (sorted.length > 0) children = sorted;
                 }
             }
             
@@ -103,7 +111,7 @@ export class ListProcessor {
                     });
                     const textMap = new Map();
                     textRes.data?.forEach((r:any) => textMap.set(r.parent_id, stripMarkdownSyntax(r.content)));
-                    console.log(`[Builder] List Order (Text):`, children.map((c: any) => textMap.get(c.id) || "N/A"));
+                    console.log(`[Builder] List Order (Kramdown):`, children.map((c: any) => textMap.get(c.id) || "N/A"));
                 } catch(e) {
                     console.error("[Builder] Failed to debug list order", e);
                 }

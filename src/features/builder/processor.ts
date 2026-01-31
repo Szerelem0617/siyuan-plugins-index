@@ -116,12 +116,14 @@ export class IBlockProcessor {
         }
 
         if (docId) {
-            let notebook, path;
+            let notebook, path, hpath;
             try {
                 const pathRes = await post("/api/filetree/getPathByID", { id: docId });
                 if (pathRes) {
                     notebook = pathRes.notebook;
                     path = pathRes.path;
+                    hpath = await post("/api/filetree/getHPathByID", { id: docId });
+
                     await client.renameDoc({ notebook, path, title });
                     
                     const verifyRes = await client.getBlockAttrs({ id: docId });
@@ -144,7 +146,7 @@ export class IBlockProcessor {
             updatePromises.push(client.updateBlock({ id: core.contentId, dataType: "markdown", data: newMd }));
             if (Object.keys(stylesToKeep).length > 0) updatePromises.push(client.setBlockAttrs({ id: core.contentId, attrs: stylesToKeep }));
             await Promise.all(updatePromises);
-            return { id: docId, notebook, path };
+            return { id: docId, notebook, path, hpath };
         }
 
         let notebook, path;
@@ -277,9 +279,18 @@ export class IBlockProcessor {
         
         let tempMd = md.replace(/\s*\{:[^}]+\}\s*$/, "");
         let hasSeparator = false;
+        let currentIcon = null;
 
-        const docLinkRegex = /^\s*\[.*?\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)\s*/;
-        if (docLinkRegex.test(tempMd)) {
+        const docLinkRegex = /^\s*\[(.*?)\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)\s*/;
+        const docMatch = tempMd.match(docLinkRegex);
+        if (docMatch) {
+            const anchor = docMatch[1];
+            // If anchor looks like an icon (short, not full title), use it
+            // Heuristic: length < 8 (standard emoji is 2 chars, some are longer)
+            // Or if it matches emoji regex
+            if (anchor && anchor.length < 8) {
+                currentIcon = anchor;
+            }
             tempMd = tempMd.replace(docLinkRegex, "");
         }
 
@@ -289,7 +300,6 @@ export class IBlockProcessor {
             tempMd = tempMd.replace(sepLinkRegex, "");
         }
 
-        let currentIcon = null;
         const explicitIconRegex = /^(?:([\uD800-\uDBFF][\uDC00-\uDFFF])|(:[^:]+:)|\[(.*?)\]\(siyuan:\/\/blocks\/.*?\))\s*/;
         const iconMatch = tempMd.match(explicitIconRegex);
         

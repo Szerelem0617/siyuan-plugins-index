@@ -91,13 +91,6 @@ async function syncManager(sourceBlockId: string, sourceType: string, actionType
       const processor = new ListProcessor();
       await processor.processRecursive(sourceBlockId, sourceType, actionType);
       
-      // Refresh UI
-      try {
-          await fetch("/api/ui/reloadFiletree", { method: "POST" });
-      } catch (e) {
-          console.error("Failed to reload filetree", e);
-      }
-
       if (processor.ibp.errors.length > 0) { // Access via ibp
           // @ts-ignore
           client.pushMsg({
