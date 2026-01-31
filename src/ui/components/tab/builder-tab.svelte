@@ -13,10 +13,10 @@ class={tabbarfocus === "builder"
     ? "config__tab-container"
     : "config__tab-container fn__none"}
 >
-<SettingItem
-    type="hint"
-    content={i18n.settingsTab.items.builder}
-    settingKey="builder"
-    settingValue={settingsStrings.builder}
-/>
+    <SettingItem
+        type="switch"
+        content={i18n.settingsTab.items.builderAutoUpdate}
+        settingKey="builderAutoUpdate"
+        settingValue={settingsStrings.builderAutoUpdate}
+    />
 </div>

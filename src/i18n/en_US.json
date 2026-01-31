@@ -109,9 +109,9 @@
         "title": "Outline Auto Update",
         "content": "Auto update outline on doc load"
       },
-      "builder": {
-        "title": "Doc Builder",
-        "content": "Enable Document Builder feature"
+      "builderAutoUpdate": {
+        "title": "Builder Auto Update",
+        "content": "Auto sync content for Document Builder"
       }
     }
   }

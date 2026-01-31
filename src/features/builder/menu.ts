@@ -49,14 +49,23 @@ async function syncManager(sourceBlockId: string, sourceType: string, actionType
 
     // Update tree-create logic
     const treeAttr = attrs["custom-tree-create"];
-    let currentType = null;
+    let currentData: any = {};
     if (treeAttr) {
         try {
-            currentType = JSON.parse(treeAttr).treeType;
+            // Need robust decoding here too? Usually getBlockAttrs returns decoded JSON if it's stored as such? 
+            // Or string. "custom-tree-create" is a string containing JSON.
+            // Siyuan returns it as string. It might have &quot;.
+            // Let's use simple parse for now, assuming standard behavior, or the same robust method if needed.
+            // But menu.ts runs in browser context too? Yes.
+            let val = treeAttr;
+            if (val.includes("&quot;")) val = val.replace(/&quot;/g, '"');
+            currentData = JSON.parse(val);
         } catch (e) {
             console.error("Failed to parse custom-tree-create", e);
         }
     }
+    
+    let currentType = currentData.treeType;
 
     let newType = currentType;
     if (!currentType) {
@@ -68,9 +77,13 @@ async function syncManager(sourceBlockId: string, sourceType: string, actionType
     }
 
     if (newType && newType !== currentType) {
+        currentData.treeType = newType;
+        if (currentData.builderAutoUpdate === undefined) {
+            currentData.builderAutoUpdate = true;
+        }
         await client.setBlockAttrs({
             id: sourceBlockId,
-            attrs: { "custom-tree-create": JSON.stringify({ treeType: newType }) }
+            attrs: { "custom-tree-create": JSON.stringify(currentData) }
         });
     }
 

@@ -109,9 +109,9 @@
         "title": "大纲自动更新",
         "content": "文档加载时是否自动更新大纲"
       },
-      "builder": {
-        "title": "文档构建器",
-        "content": "启用文档构建器功能"
+      "builderAutoUpdate": {
+        "title": "构建器自动更新",
+        "content": "是否自动同步文档构建器内容"
       }
     }
   }

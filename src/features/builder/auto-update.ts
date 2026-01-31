@@ -17,6 +17,8 @@ export async function autoUpdateBuilder(parentId: string, existingBlock?: any) {
 
     // Parse attribute
     let treeType = null;
+    let localAutoUpdate = undefined;
+
     try {
         const match = block.ial.match(/custom-tree-create="([^"]*)"/);
         if (match && match[1]) {
@@ -26,12 +28,21 @@ export async function autoUpdateBuilder(parentId: string, existingBlock?: any) {
              txt.innerHTML = val;
              val = txt.value;
              
-             treeType = JSON.parse(val).treeType;
+             const data = JSON.parse(val);
+             treeType = data.treeType;
+             localAutoUpdate = data.builderAutoUpdate;
         } else {
              console.log(`[Builder] custom-tree-create attribute not found in IAL: ${block.ial}`);
         }
     } catch (e) {
         console.error("[Builder] Failed to parse tree attribute", e);
+    }
+
+    // Check Auto Update Settings
+    // Respect only local setting. If missing, assume true if the attribute exists.
+    if (localAutoUpdate === false) {
+        console.log("[Builder] Auto-update disabled locally.");
+        return;
     }
 
     if (!treeType) {

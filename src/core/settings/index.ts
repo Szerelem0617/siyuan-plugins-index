@@ -6,7 +6,7 @@ export class SettingsProperty {
     depth: number;
     listType: string;
     linkType: string;
-    builder: boolean;
+    builderAutoUpdate: boolean;
     autoUpdate: boolean;
     col: number;
     fold: number;
@@ -25,7 +25,7 @@ export class SettingsProperty {
         this.depth = 0;
         this.listType = "unordered";
         this.linkType = "ref";
-        this.builder = true;
+        this.builderAutoUpdate = true;
         this.autoUpdate = true;
         this.col = 1;
         this.fold = 0;
@@ -48,7 +48,7 @@ export class SettingsProperty {
         this.depth = settings.get("depth");
         this.listType = settings.get("listType");
         this.linkType = settings.get("linkType");
-        this.builder = settings.get("builder");
+        this.builderAutoUpdate = settings.get("builderAutoUpdate");
         this.autoUpdate = settings.get("autoUpdate");
         this.col = settings.get("col");
         this.fold = settings.get("fold");
@@ -100,6 +100,7 @@ class Settings {
         this.set("autoUpdate", data.autoUpdate ?? def.autoUpdate);
         this.set("insertionMode", data.insertionMode ?? def.insertionMode);
         this.set("icon", data.icon ?? def.icon);
+        this.set("builderAutoUpdate", data.builderAutoUpdate ?? def.builderAutoUpdate);
     }
 
     loadSettingsforOutline(data: any){
