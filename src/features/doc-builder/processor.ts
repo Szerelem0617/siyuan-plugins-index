@@ -231,14 +231,6 @@ export class IBlockProcessor {
         let tempMd = md.replace(/\s*\{:[^}]+\}\s*$/, "");
         let hasSeparator = false;
 
-        let currentIcon = null;
-        const explicitIconRegex = /^(?:([\uD800-\uDBFF][\uDC00-\uDFFF])|(:[^:]+:)|\[(.*?)\]\(siyuan:\/\/blocks\/.*?\))\s*/;
-        const iconMatch = tempMd.match(explicitIconRegex);
-        
-        if (iconMatch) {
-            currentIcon = iconMatch[1] || iconMatch[2] || iconMatch[3];
-        }
-
         const docLinkRegex = /^\s*\[.*?\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)\s*/;
         if (docLinkRegex.test(tempMd)) {
             tempMd = tempMd.replace(docLinkRegex, "");
@@ -248,6 +240,14 @@ export class IBlockProcessor {
         if (sepLinkRegex.test(tempMd)) {
             hasSeparator = true;
             tempMd = tempMd.replace(sepLinkRegex, "");
+        }
+
+        let currentIcon = null;
+        const explicitIconRegex = /^(?:([\uD800-\uDBFF][\uDC00-\uDFFF])|(:[^:]+:)|\[(.*?)\]\(siyuan:\/\/blocks\/.*?\))\s*/;
+        const iconMatch = tempMd.match(explicitIconRegex);
+        
+        if (iconMatch) {
+            currentIcon = iconMatch[1] || iconMatch[2] || iconMatch[3];
         }
 
         let syncMd = tempMd.trim();
