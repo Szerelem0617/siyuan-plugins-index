@@ -36,65 +36,42 @@ export function buildDoc({ detail }: any) {
 async function syncManager(sourceBlockId: string, sourceType: string, actionType: string) {
     // Check for Index/Outline attributes to prevent conflict
     const attrsRes = await client.getBlockAttrs({ id: sourceBlockId });
-    if (attrsRes.data && (attrsRes.data["custom-index-create"] || attrsRes.data["custom-outline-create"])) {
-        // Use client wrapper for consistency if extended, but direct client SDK usage is fine.
-        // Assuming client (SDK wrapper) has no pushErrMsg, I should check shared/api-client/index.ts
-        // I exported `const client = new Client()`. SDK Client doesn't have pushMsg/pushErrMsg directly?
-        // Wait, SDK Client usually interacts with API. PushMsg is frontend API.
-        // `src/utils.ts` exported `client = new Client()`. And it was used for `client.pushMsg`.
-        // So SDK client MUST have it.
-        // I'll proceed assuming it does.
-        // If not, I should import `pushErrMsg` from siyuan package or utils.
-        // `import { showMessage } from "siyuan"`?
-        // Legacy `utils` used `client.pushMsg`.
-        // I'll assume SDK client supports it.
-        // But wait, the recent check I added used `client.pushErrMsg`.
-        
-        // Actually, looking at `src/utils.ts` again.
-        // `export const client = new Client();`
-        // It imports `Client` from `@siyuan-community/siyuan-sdk`.
-        // I will assume it works.
-        // But to be safe, I'll check my shared/utils/index.ts. I didn't export client there.
-        // I exported client from `shared/api-client/index.ts`.
-        // OK.
-        
-        // However, `pushErrMsg` is not standard SiYuan API method name usually.
-        // It might be an extension in the SDK?
-        // Or `pushMsg` with type "error".
-        
-        // Let's look at `process-list.ts` again.
-        // `client.pushErrMsg({ msg: ... })`.
-        // `client.pushMsg({ msg: ... })`.
-        
-        // I will keep it as is.
-        // If it fails, I'll fix it later.
-    }
-    
-    // Re-verify attributes check logic
-    if (attrsRes.data && (attrsRes.data["custom-index-create"] || attrsRes.data["custom-outline-create"])) {
-        // Warning: SDK might not have pushErrMsg.
-        // I'll use a safer approach: try/catch or standard method if I knew it.
-        // But sticking to legacy pattern is safest for now.
-        // Let's assume the SDK has it.
-        // Actually, I can import `showMessage` from "siyuan" for frontend messages?
-        // No, `utils.ts` uses `client`.
-    }
+    const attrs = attrsRes.data || {};
 
-    if (attrsRes.data && (attrsRes.data["custom-index-create"] || attrsRes.data["custom-outline-create"])) {
-         // ... error ...
-         // I'll just copy the logic.
-         // But wait, the `client` in `newsrc` is `new Client()`.
-         // Is it the SAME class as `src/utils.ts`? Yes.
-         // So it should work.
-    }
-
-    if (attrsRes.data && (attrsRes.data["custom-index-create"] || attrsRes.data["custom-outline-create"])) {
+    if (attrs["custom-index-create"] || attrs["custom-outline-create"]) {
         // @ts-ignore
         client.pushErrMsg({
             msg: "当前不支持在大纲/目录的基础上执行文档构建器",
             timeout: 3000
         });
         return;
+    }
+
+    // Update tree-create logic
+    const treeAttr = attrs["custom-tree-create"];
+    let currentType = null;
+    if (treeAttr) {
+        try {
+            currentType = JSON.parse(treeAttr).treeType;
+        } catch (e) {
+            console.error("Failed to parse custom-tree-create", e);
+        }
+    }
+
+    let newType = currentType;
+    if (!currentType) {
+        if (actionType === "PUSH_TO_DOC") newType = "doc-tree";
+        else if (actionType === "PUSH_TO_BOTTOM") newType = "heading-tree";
+    } else {
+        if (currentType === "doc-tree" && actionType === "PUSH_TO_BOTTOM") newType = "composite-tree";
+        else if (currentType === "heading-tree" && actionType === "PUSH_TO_DOC") newType = "composite-tree";
+    }
+
+    if (newType && newType !== currentType) {
+        await client.setBlockAttrs({
+            id: sourceBlockId,
+            attrs: { "custom-tree-create": JSON.stringify({ treeType: newType }) }
+        });
     }
 
     try {

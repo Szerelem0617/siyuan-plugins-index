@@ -29,7 +29,7 @@ export class SettingsProperty {
         this.autoUpdate = true;
         this.col = 1;
         this.fold = 0;
-        this.outlineAutoUpdate = false;
+        this.outlineAutoUpdate = true;
         this.outlineType = "ref";
         this.listTypeOutline = "unordered";
         this.insertionMode = "index";
