@@ -3,12 +3,14 @@ import { setI18n, setPlugin } from "./shared/utils";
 import { createDialog, initTopbar } from "./ui/topbar";
 import { settings, CONFIG } from "./core/settings";
 import { buildDoc as buildDocNew } from "./features/builder/menu";
-import { updateIndex } from "./events/protyle-event";
+import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
 import { version } from "../plugin.json";
 
 export default class IndexPlugin extends Plugin {
+    private switchHandler: any;
+    private lastActiveDoc: { rootId: string, notebookId: string, path: string } | null = null;
 
     //加载插件
     async onload() {
@@ -21,6 +23,10 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.on("click-blockicon", buildDocNew);
         //监听文档载入事件
         this.eventBus.on("loaded-protyle-static", updateIndex);
+        
+        this.switchHandler = this.onTabSwitch.bind(this);
+        this.eventBus.on("switch-protyle", this.switchHandler);
+
         // this.eventBus.on("ws-main",this.eventBusLog);
         initEmojiEvent();
     }
@@ -31,8 +37,25 @@ export default class IndexPlugin extends Plugin {
     onunload() {
         this.eventBus.off("click-blockicon", buildDocNew);
         this.eventBus.off("loaded-protyle-static", updateIndex);
+        this.eventBus.off("switch-protyle", this.switchHandler);
         removeEmojiEvent();
         console.log("IndexPlugin onunload");
+    }
+
+    private async onTabSwitch({ detail }: any) {
+        // Trigger update for the PREVIOUS doc
+        if (this.lastActiveDoc) {
+             await execAutoUpdate(this.lastActiveDoc.rootId, this.lastActiveDoc.notebookId, this.lastActiveDoc.path);
+        }
+
+        // Update current
+        if (detail && detail.protyle && detail.protyle.block) {
+             this.lastActiveDoc = {
+                 rootId: detail.protyle.block.rootID,
+                 notebookId: detail.protyle.notebookId,
+                 path: detail.protyle.path
+             };
+        }
     }
 
     uninstall() {
