@@ -66,9 +66,18 @@ export async function autoUpdateBuilder(parentId: string, existingBlock?: any) {
         let typeStr = "NodeList";
         if (block.type === 'i') typeStr = "NodeListItem";
         
-        // console.log(`[Builder] Starting ProcessRecursive. ID: ${block.id}, Type: ${typeStr}, Action: ${actionType}`);
-        await processor.processRecursive(block.id, typeStr, actionType);
-        // console.log(`[Builder] Auto-update finished.`);
+        if (treeType === "composite-tree") {
+            // Pass 1: Update Headings
+            await processor.processRecursive(block.id, typeStr, "PUSH_TO_BOTTOM");
+            
+            // Wait to ensure index updates and avoid conflicts
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // Pass 2: Update Docs
+            await processor.processRecursive(block.id, typeStr, "PUSH_TO_DOC");
+        } else {
+            await processor.processRecursive(block.id, typeStr, actionType);
+        }
         
     } catch (e) {
         console.error("[Builder] Auto-update failed", e);

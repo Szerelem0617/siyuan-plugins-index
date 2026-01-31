@@ -74,14 +74,17 @@ export class ListProcessor {
             
             // Sort by Kramdown Source (Authoritative Visual Order)
             const kramdown = await getBlockKramdown(blockId);
+            console.log(`[Builder] Kramdown Source for ${blockId}:`, kramdown);
             if (kramdown) {
-                // Extract IDs in order: {: id="2021..."}
-                const idRegex = /\{: id="(\d{14}-[a-z0-9]{7})"\}/g;
+                // Extract IDs in order: match id="2021..."
+                const idRegex = /id="(\d{14}-[a-z0-9]{7})"/g;
                 const orderedIds = [];
                 let match;
                 while ((match = idRegex.exec(kramdown)) !== null) {
                     orderedIds.push(match[1]);
                 }
+                
+                console.log(`[Builder] Extracted ${orderedIds.length} IDs from kramdown:`, orderedIds.slice(0, 10));
                 
                 if (orderedIds.length > 0) {
                     const childMap = new Map(children.map((c:any) => [c.id, c]));

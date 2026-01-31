@@ -285,13 +285,14 @@ export class IBlockProcessor {
         const docMatch = tempMd.match(docLinkRegex);
         if (docMatch) {
             const anchor = docMatch[1];
-            // If anchor looks like an icon (short, not full title), use it
-            // Heuristic: length < 8 (standard emoji is 2 chars, some are longer)
-            // Or if it matches emoji regex
-            if (anchor && anchor.length < 8) {
-                currentIcon = anchor;
+            // If anchor is SEP_CHAR, it's a heading link, not a doc link. Skip.
+            if (anchor !== SEP_CHAR) {
+                // If anchor looks like an icon (short, not full title), use it
+                if (anchor && anchor.length < 8) {
+                    currentIcon = anchor;
+                }
+                tempMd = tempMd.replace(docLinkRegex, "");
             }
-            tempMd = tempMd.replace(docLinkRegex, "");
         }
 
         const sepLinkRegex = /^\s*(\[➖\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)|➖)\s*/;
