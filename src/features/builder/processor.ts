@@ -42,6 +42,11 @@ export class IBlockProcessor {
             case "PUSH_TO_BOTTOM":
                 resultId = await this.handlePushToBottom(core, containerAttrs, ctx);
                 break;
+            case "PUSH_COMBINED":
+                const docId = await this.handlePushToDoc(core, containerAttrs, ctx);
+                await this.handlePushToBottom(core, containerAttrs, ctx);
+                resultId = docId; // Return docId for hierarchy context
+                break;
         }
         return resultId || ctx.previousId;
     }
