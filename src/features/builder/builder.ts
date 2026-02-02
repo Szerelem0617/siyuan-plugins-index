@@ -1,6 +1,6 @@
 import { client } from "../../shared/api-client";
 import { IBlockProcessor } from "./processor";
-import { stripMarkdownSyntax } from "../../shared/utils/markdown-utils";
+
 
 async function changeSort(notebook: string, paths: string[]) {
     try {
@@ -14,20 +14,7 @@ async function changeSort(notebook: string, paths: string[]) {
     }
 }
 
-async function getBlockKramdown(id: string) {
-    try {
-        const response = await fetch("/api/block/getBlockKramdown", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id })
-        });
-        const res = await response.json();
-        return res.data?.kramdown || "";
-    } catch (e) {
-        console.error("Failed to get kramdown", e);
-        return "";
-    }
-}
+
 
 export class ListProcessor {
     errors: string[] = [];
@@ -67,57 +54,27 @@ export class ListProcessor {
             return result;
 
         } else if (type === "NodeList" || type === "l") { 
-            let childrenRes = await client.sql({
-                stmt: `SELECT id, type, content FROM blocks WHERE parent_id = '${blockId}' AND type = 'i'`
-            });
-            let children = childrenRes.data || [];
-            
-            // Sort by Kramdown Source (Authoritative Visual Order)
-            const kramdown = await getBlockKramdown(blockId);
-            console.log(`[Builder] Kramdown Source for ${blockId}:`, kramdown);
-            if (kramdown) {
-                // Extract IDs in order: match id="2021..."
-                const idRegex = /id="(\d{14}-[a-z0-9]{7})"/g;
-                const orderedIds = [];
-                let match;
-                while ((match = idRegex.exec(kramdown)) !== null) {
-                    orderedIds.push(match[1]);
-                }
+            let children: any[] = [];
+            try {
+                // Use getChildBlocks API which loads AST and traverses the linked list in memory
+                // This guarantees the children are returned in correct visual order.
+                const response = await fetch("/api/block/getChildBlocks", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: blockId })
+                });
+                const res = await response.json();
                 
-                console.log(`[Builder] Extracted ${orderedIds.length} IDs from kramdown:`, orderedIds.slice(0, 10));
-                
-                if (orderedIds.length > 0) {
-                    const childMap = new Map(children.map((c:any) => [c.id, c]));
-                    const sorted = [];
-                    // Filter ordered IDs to only include direct children of this list
-                    for (const id of orderedIds) {
-                        if (childMap.has(id)) {
-                            sorted.push(childMap.get(id));
-                            childMap.delete(id);
-                        }
-                    }
-                    // Append any leftovers (fallback)
-                    if (childMap.size > 0) {
-                        for (const c of childMap.values()) sorted.push(c);
-                    }
-                    
-                    if (sorted.length > 0) children = sorted;
+                // Debug: Print API response and key info
+                if (res.code === 0 && res.data) {
+                    console.log(`[Builder] getChildBlocks for ${blockId}:`, JSON.stringify(res.data));
+                    children = res.data;
+                    console.log(`[Builder] Retrieved ${children.length} children via AST. IDs:`, children.map((c: any) => c.id));
+                } else {
+                    console.warn(`[Builder] Failed to get children for ${blockId}`, res);
                 }
-            }
-            
-            // Debug: fetch text for items to verify order
-            if (children.length > 0) {
-                try {
-                    const ids = children.map((c:any) => `'${c.id}'`).join(",");
-                    const textRes = await client.sql({
-                        stmt: `SELECT parent_id, content FROM blocks WHERE parent_id IN (${ids}) AND type='p'`
-                    });
-                    const textMap = new Map();
-                    textRes.data?.forEach((r:any) => textMap.set(r.parent_id, stripMarkdownSyntax(r.content)));
-                    console.log(`[Builder] List Order (Kramdown):`, children.map((c: any) => textMap.get(c.id) || "N/A"));
-                } catch(e) {
-                    console.error("[Builder] Failed to debug list order", e);
-                }
+            } catch (e) {
+                console.error("[Builder] Failed to get children for list", e);
             }
 
             let docPaths: string[] = [];
