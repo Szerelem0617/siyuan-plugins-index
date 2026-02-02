@@ -2,10 +2,14 @@
   "name": "siyuan-plugins-index",
   "author": "Szerelem0617",
   "url": "https://github.com/Szerelem0617/siyuan-plugins-index",
-  "version": "1.8.8",
+  "version": "1.8.9",
   "minAppVersion": "3.3.0",
-  "backends": ["all"],
-  "frontends": ["all"],
+  "backends": [
+    "all"
+  ],
+  "frontends": [
+    "all"
+  ],
   "disabledInPublish": true,
   "displayName": {
     "default": "Index Plugin",
@@ -20,6 +24,7 @@
     "zh_CN": "README_zh_CN.md"
   },
   "keywords": [
-    "index", "目录"
+    "index",
+    "目录"
   ]
 }

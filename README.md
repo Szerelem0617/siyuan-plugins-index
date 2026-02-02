@@ -12,6 +12,12 @@ Right click on the plugin icon, show more actions
 
 `CTRL + ALT + O` Insert current document outline
 
+# Version 1.8.9
+
+- **Builder Optimization**: Refactored the auto-update logic, significantly improving synchronization performance for large lists.
+- **Auto-update Trigger**: Switching document tabs now automatically triggers all builder blocks marked for auto-update.
+- **Notice**: **The Document Builder is currently in the testing phase. Please back up important data before use. The author is not responsible for any data loss or issues caused by this feature.**
+
 # Version 1.8.0 (Major Update)
 
 - **Removed Template Feature**: Legacy template system is removed. Now you can update configurations simply by re-inserting into an existing index/outline.
@@ -26,3 +32,7 @@ Right click on the plugin icon, show more actions
 # Changelog
 
 [CHANGELOG](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/CHANGELOG.md)
+
+# Acknowledgments
+
+Special thanks to [TinkMingKing](https://github.com/TinkMingKing) for his previous maintenance of the plugin and for trusting me with the repository transfer.
