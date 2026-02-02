@@ -22,7 +22,6 @@ async function post(url: string, data: any) {
 
 export class IBlockProcessor {
     errors: string[];
-    warnedTextPrefix: boolean = false;
 
     constructor(errors: string[]) {
         this.errors = errors;
@@ -31,19 +30,6 @@ export class IBlockProcessor {
     async processSingleItem(listItemId: string, actionType: string, ctx: any) {
         const core = await this.getCoreContentInfo(listItemId);
         if (!core) return ctx.previousId;
-
-        // Validation: Check for unhandled text before separator
-        if (!core.hasSeparator && core.syncMd.includes(SEP_CHAR)) {
-            if (!this.warnedTextPrefix) {
-                // @ts-ignore
-                client.pushMsg({
-                    msg: "⚠️ 发现列表项分隔符前包含未支持的文本，已跳过此类条目（仅提示一次）",
-                    timeout: 6000
-                });
-                this.warnedTextPrefix = true;
-            }
-            return ctx.previousId; // Skip processing
-        }
 
         const containerAttrsRes = await client.getBlockAttrs({ id: core.containerId });
         const containerAttrs = containerAttrsRes.data;
@@ -317,8 +303,8 @@ export class IBlockProcessor {
             }
         } else {
              // If no doc link found, check for explicit text icon (Emoji or :code:) at start
-             // Use Unicode property escape for better Emoji detection
-             const explicitIconRegex = /^\s*(?:(\p{Emoji_Presentation})|(:[^:]+:))\s*/u;
+             // Use Unicode property escape for better Emoji detection (including symbols like 🖇️)
+             const explicitIconRegex = /^\s*(?:(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation})|(:[^:]+:))\s*/u;
              const iconMatch = tempMd.match(explicitIconRegex);
              if (iconMatch) {
                  currentIcon = iconMatch[1] || iconMatch[2];
@@ -326,9 +312,18 @@ export class IBlockProcessor {
              }
         }
 
-        const sepLinkRegex = /^\s*(\[➖\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)|➖)\s*/;
-        if (sepLinkRegex.test(tempMd)) {
+        const sepLinkRegex = /^(.*?)(\[➖\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)|➖)\s*/u;
+        const sepMatch = tempMd.match(sepLinkRegex);
+        if (sepMatch) {
             hasSeparator = true;
+            const prefix = sepMatch[1].trim();
+            // Recovery: If we haven't found an icon yet, check if the prefix we're about to strip is a single emoji
+            if (!currentIcon && prefix) {
+                const emojiTest = /^(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation}|:[^:]+:)$/u;
+                if (emojiTest.test(prefix)) {
+                    currentIcon = prefix;
+                }
+            }
             tempMd = tempMd.replace(sepLinkRegex, "");
         }
         
