@@ -1,38 +1,43 @@
-# Builder Sorting Logic Diagnosis & Fix
+# 构建器核心架构与稳定性说明 (Builder Architecture & Stability)
 
-## Current Logic (Failed)
-We attempted to sort the list items by reconstructing the linked list using `previous_id` and `next_id` attributes from the `blocks` table.
-- **Hypothesis**: The `sort` attribute is unreliable for newly inserted items, but the linked list structure (`previous_id` pointing to the preceding sibling) accurately reflects the visual order.
-- **Implementation**:
-    1.  Fetch all items.
-    2.  Identify the "Head" (item with no `previous_id` or `previous_id` pointing to a block not in the current list).
-    3.  Traverse `next_id` to build the list.
-    4.  Fallback to DB order if the traversed count doesn't match the total count.
+## 1. 高性能批量同步引擎 (Batch Processing Engine)
 
-## Diagnosis of Failure
-The logs show the order `1, 2, 3, 1.5, 2.5`, which matches the "append" order. This indicates the **fallback mechanism was triggered**, meaning the linked list reconstruction failed (incomplete chain).
+为了解决列表项增多时的卡顿问题，构建器已全面重构为“分析-执行”架构：
 
-### Possible Reasons for Chain Break
-1.  **Multiple Heads / Fragments**: The DB might contain fragmented chains if sync/indexing is lagging.
-2.  **Ghost Nodes**: `previous_id` might point to a block that was deleted or moved, making `map.has(previous_id)` false when it shouldn't be (or vice versa).
-3.  **Type Mismatch**: String vs null handling for IDs.
+*   **视觉顺序保证**: 使用 `/api/block/getChildBlocks` (AST) 代替 SQL 查询，确保获取的子项顺序与 UI 看到的完全一致。
+*   **批量数据预取**: 
+    *   通过 `IN (...)` 语句一次性获取所有子项的属性 (IAL) 和内容 (P 块)。
+    *   一次性获取所有绑定的目标块 (Subdocs/Headings) 的状态。
+*   **差量更新 (Differential Sync)**: 
+    *   在内存中比对源内容（文本/图标）与目标状态。
+    *   **只有当内容发生变化或目标丢失时**，才会触发写操作。
+    *   未变动的条目会直接 `Skip`，极大地提升了“自动更新”模式下的性能。
+*   **排序优化**: 在所有更新完成后，统一执行一次 `changeSort`，确保文档树顺序正确。
 
-## Corrected Strategy
-We need a more robust sorting algorithm that handles potentially imperfect chains or correctly interprets the `sort` attribute if available.
+## 2. 鲁棒性改进 (Robustness Fixes)
 
-However, since `sort` proved unreliable, we must fix the Linked List traversal.
+针对用户复杂的输入场景，构建器进行了多项健壮性优化：
 
-**Improved Linked List Logic:**
-1.  **Strict Head Detection**: Find the item whose `previous_id` is *empty* or *null*. This is the absolute start of the list.
-    *   *Correction*: If the list is a sub-list, the first item's `previous_id` is NOT empty. It points to the parent? No, `previous_id` points to *sibling*. For the first item in a list, `previous_id` is empty (or points to nothing in that sibling scope).
-2.  **Map-based Reordering**:
-    *   Create a `nextMap`: `previous_id` -> `id`. (This maps "Who follows X?").
-    *   Find the item that *no one follows*? No.
-    *   Find the item that *follows no one* (Head).
-    *   Traverse using `nextMap`.
+*   **增强型图标识别**: 
+    *   使用 `\p{Emoji_Presentation}` Unicode 属性，完美识别并剥离 `🙃`、`🤣` 等原生表情符号。
+    *   支持识别 `:code:` 格式的短代码。
+*   **前缀自动清理**: 
+    *   当用户在列表中手动输入表情时，构建器会将其识别为图标并从标题中剔除，防止出现 `🤣 ➖ 🤣 ➖ 标题` 这种多重前缀。
+*   **图标位置规则**: 
+    *   **列表项**: 保留表情，位于 `➖` 之前。
+    *   **标题行 (Outline)**: 保持整洁，不包含表情。
+    *   **子文档 (Subdoc)**: 表情同步为文档的 `icon` 属性。
+*   **异常提示**: 
+    *   如果列表项的分隔符 `➖` 前包含无法识别的文本，构建器会跳过该条目并发出一次性警告，避免破坏数据结构。
 
-**Alternative: Sort by `sort` attribute but explicitly numeric?**
-SiYuan `sort` is a number. `ORDER BY sort ASC` should work *if* SiYuan updates it.
-If SiYuan hasn't updated `sort` for `1.5` to be between `1` and `2`, then `sort` is useless.
+## 3. 复合树 (Composite Tree) 更新策略
 
-**Conclusion**: We must debug the `previous_id` / `next_id` values to understand why the chain appears broken. I will add debug logs to inspect the chain linkage.
+对于同时包含“标题行”和“子文档”的复合树：
+
+*   **两步走策略**: 先更新标题行，再更新子文档。
+*   **极速延迟**: 采用 **100ms** 的最小化安全延迟，既保证了思源内核索引的稳定性，又确保了操作的流畅感。
+
+## 4. 其它修复
+
+*   修复了 `getChildBlocks` 接口误用导致的 `SyntaxError`。
+*   移除了一切不必要的中间 SQL 查询和过时的 Kramdown 解析逻辑。

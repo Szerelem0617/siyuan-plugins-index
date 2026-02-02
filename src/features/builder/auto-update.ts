@@ -67,13 +67,9 @@ export async function autoUpdateBuilder(parentId: string, existingBlock?: any) {
         if (block.type === 'i') typeStr = "NodeListItem";
         
         if (treeType === "composite-tree") {
-            // Pass 1: Update Headings
+            // Two-pass update to ensure stable indexing with a minimal delay
             await processor.processRecursive(block.id, typeStr, "PUSH_TO_BOTTOM");
-            
-            // Wait to ensure index updates and avoid conflicts
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
-            // Pass 2: Update Docs
+            await new Promise(resolve => setTimeout(resolve, 100)); // 0.1s delay
             await processor.processRecursive(block.id, typeStr, "PUSH_TO_DOC");
         } else {
             await processor.processRecursive(block.id, typeStr, actionType);

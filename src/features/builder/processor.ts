@@ -281,6 +281,10 @@ export class IBlockProcessor {
         const children = childrenRes.data;
         if (!children || children.length === 0) return null;
 
+        return this.parseItemContent(listItemId, children);
+    }
+
+    parseItemContent(listItemId: string, children: any[]) {
         const sepRegex = /(\[➖\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)|➖)/;
         const iconRegex = /\s*\[.*?\]\(siyuan:\/\/blocks\/.*?\)\s*/; 
 
