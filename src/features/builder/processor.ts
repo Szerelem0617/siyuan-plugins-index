@@ -58,8 +58,9 @@ export class IBlockProcessor {
                 break;
             case "PUSH_COMBINED":
                 const docResult = await this.handlePushToDoc(core, containerAttrs, ctx);
-                await this.handlePushToBottom(core, containerAttrs, ctx);
-                result = docResult; // Return doc result for hierarchy context
+                const headingId = await this.handlePushToBottom(core, containerAttrs, ctx);
+                // Return composite result: ID tracks heading (for sibling ordering), rest tracks doc (for hierarchy)
+                result = { ...docResult, id: headingId }; 
                 break;
         }
         return result || ctx.previousId;

@@ -107,7 +107,7 @@ export class ListProcessor {
         let targetMap = new Map();
         if (targetIds.size > 0) {
             const targetRes = await client.sql({ 
-                stmt: `SELECT id, content, type, sort, ial, markdown, box, path FROM blocks WHERE id IN (${Array.from(targetIds).join(",")})` 
+                stmt: `SELECT id, content, type, sort, ial, markdown, box, path, hpath FROM blocks WHERE id IN (${Array.from(targetIds).join(",")})` 
             });
             targetRes.data?.forEach((t: any) => targetMap.set(t.id, t));
         }
@@ -183,17 +183,23 @@ export class ListProcessor {
                 // Skip Update - Construct Result Context manually
                 // console.log(`[Builder] Skipping ${child.id}`);
                 
+                const combinedResult: any = {};
+
                 if (docTarget) {
                     // Optimization: Use cached path from SQL
-                    result = { 
-                        id: docTarget.id, 
-                        notebook: docTarget.box, 
-                        path: docTarget.path 
-                    };
+                    combinedResult.id = docTarget.id;
+                    combinedResult.notebook = docTarget.box;
+                    combinedResult.path = docTarget.path;
+                    combinedResult.hpath = docTarget.hpath;
                 }
                 
-                if (!result && headingTarget) {
-                    result = headingTarget.id;
+                if (headingTarget) {
+                    // For Combined/Outline modes, ID must track the Heading for correct ordering
+                    combinedResult.id = headingTarget.id;
+                }
+
+                if (combinedResult.id) {
+                    result = combinedResult;
                 }
 
                 // Update Context
