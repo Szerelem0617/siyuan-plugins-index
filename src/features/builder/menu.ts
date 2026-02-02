@@ -14,8 +14,23 @@ export function buildDoc({ detail }: any) {
     const blockId = blockElement.getAttribute("data-node-id");
     const blockType = blockElement.getAttribute("data-type");
 
-    // Only show for List or ListItem
-    if (blockType !== "NodeList" && blockType !== "NodeListItem") return;
+    // 1. Only show for NodeList (the container), not individual items
+    if (blockType !== "NodeList") return;
+
+    // 2. Check if it is the outermost list (and not inside an embed)
+    let parent = blockElement.parentElement;
+    let isOutermost = true;
+    while (parent) {
+        const pType = parent.getAttribute?.("data-type");
+        // If parent is a List, ListItem, or Embed (iblock), then this is not outermost/valid
+        if (pType === "NodeList" || pType === "NodeListItem" || pType === "NodeBlockQueryEmbed") {
+            isOutermost = false;
+            break;
+        }
+        if (parent.classList.contains("protyle-wysiwyg")) break;
+        parent = parent.parentElement;
+    }
+    if (!isOutermost) return;
 
     // Add Smart Selector menu items
     menu.addSeparator();
