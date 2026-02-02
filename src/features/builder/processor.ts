@@ -22,6 +22,7 @@ async function post(url: string, data: any) {
 
 export class IBlockProcessor {
     errors: string[];
+    warnedTextPrefix: boolean = false;
 
     constructor(errors: string[]) {
         this.errors = errors;
@@ -30,6 +31,19 @@ export class IBlockProcessor {
     async processSingleItem(listItemId: string, actionType: string, ctx: any) {
         const core = await this.getCoreContentInfo(listItemId);
         if (!core) return ctx.previousId;
+
+        // Validation: Check for unhandled text before separator
+        if (!core.hasSeparator && core.syncMd.includes(SEP_CHAR)) {
+            if (!this.warnedTextPrefix) {
+                // @ts-ignore
+                client.pushMsg({
+                    msg: "⚠️ 发现列表项分隔符前包含未支持的文本，已跳过此类条目（仅提示一次）",
+                    timeout: 6000
+                });
+                this.warnedTextPrefix = true;
+            }
+            return ctx.previousId; // Skip processing
+        }
 
         const containerAttrsRes = await client.getBlockAttrs({ id: core.containerId });
         const containerAttrs = containerAttrsRes.data;
@@ -91,7 +105,7 @@ export class IBlockProcessor {
             if (Object.keys(stylesToKeep).length > 0) await client.setBlockAttrs({ id: targetId, attrs: stylesToKeep });
         }
 
-        const finalMd = await this.constructListItemMarkdown(containerAttrs, targetId, core.syncMd);
+        const finalMd = await this.constructListItemMarkdown(containerAttrs, targetId, core.syncMd, undefined, core.currentIcon);
         const updatePromises = [];
         updatePromises.push(client.updateBlock({ id: core.contentId, dataType: "markdown", data: finalMd }));
         if (Object.keys(stylesToKeep).length > 0) updatePromises.push(client.setBlockAttrs({ id: core.contentId, attrs: stylesToKeep }));
@@ -243,6 +257,9 @@ export class IBlockProcessor {
                 }
             }
             parts.push(`[${icon}](siyuan://blocks/${docId})`);
+        } else if (docIcon) {
+            // Case: No doc link, but explicit icon exists (e.g. Heading Tree with existing emoji)
+            parts.push(docIcon);
         }
 
         if (headingId) {
@@ -293,6 +310,15 @@ export class IBlockProcessor {
                 }
                 tempMd = tempMd.replace(docLinkRegex, "");
             }
+        } else {
+             // If no doc link found, check for explicit text icon (Emoji or :code:) at start
+             // Use Unicode property escape for better Emoji detection
+             const explicitIconRegex = /^\s*(?:(\p{Emoji_Presentation})|(:[^:]+:))\s*/u;
+             const iconMatch = tempMd.match(explicitIconRegex);
+             if (iconMatch) {
+                 currentIcon = iconMatch[1] || iconMatch[2];
+                 tempMd = tempMd.replace(explicitIconRegex, "");
+             }
         }
 
         const sepLinkRegex = /^\s*(\[➖\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)|➖)\s*/;
@@ -300,13 +326,9 @@ export class IBlockProcessor {
             hasSeparator = true;
             tempMd = tempMd.replace(sepLinkRegex, "");
         }
-
-        const explicitIconRegex = /^(?:([\uD800-\uDBFF][\uDC00-\uDFFF])|(:[^:]+:)|\[(.*?)\]\(siyuan:\/\/blocks\/.*?\))\s*/;
-        const iconMatch = tempMd.match(explicitIconRegex);
         
-        if (iconMatch) {
-            currentIcon = iconMatch[1] || iconMatch[2] || iconMatch[3];
-        }
+        // Remove old explicitIconRegex check as it's now integrated above
+
 
         let syncMd = tempMd.trim();
         let plain = stripMarkdownSyntax(syncMd);
