@@ -3,9 +3,9 @@
   "insertoutline": "Insert Outline",
   "settings": "Settings",
   "addTopBarIcon": "Insert Index",
-  "indexSettings": "Index Settings",
-  "outlineSettings": "Outline Settings",
-  "builderSettings": "Builder Settings (Beta)",
+  "indexSettings": "Index",
+  "outlineSettings": "Outline",
+  "builderSettings": "Builder (Beta)",
   "cancel": "Cancel",
   "confirm": "Confirm",
   "update": "Update",
@@ -43,8 +43,8 @@
         "title": "Link Type",
         "content": "Link style for the index",
         "options": {
-          "ref": "Reference",
-          "embed": "Embed"
+          "ref": "Link",
+          "embed": "Reference"
         }
       },
       "icon": {
@@ -97,13 +97,13 @@
         "title": "Outline Type",
         "content": "Generation method for outline",
         "options": {
-          "ref": "Reference",
-          "embed": "Embed"
+          "ref": "Link",
+          "embed": "Reference"
         }
       },
       "iconOutline": {
-        "title": "Outline Icon",
-        "content": "Show icons in outline"
+        "title": "Rich Text Sync",
+        "content": "Sync rich text content for headings"
       },
       "outlineAutoUpdate": {
         "title": "Outline Auto Update",
@@ -112,7 +112,8 @@
       "builderAutoUpdate": {
         "title": "Builder Auto Update",
         "content": "Auto sync content for Document Builder"
-      }
+      },
+      "builderDesc": "📄 Sub-page link · ➖ Heading link"
     }
   }
 }

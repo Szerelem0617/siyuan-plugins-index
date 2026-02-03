@@ -102,8 +102,8 @@
         }
       },
       "iconOutline": {
-        "title": "大纲图标",
-        "content": "是否在大纲中显示图标"
+        "title": "富文本同步",
+        "content": "是否同步标题行的富文本内容"
       },
       "outlineAutoUpdate": {
         "title": "大纲自动更新",
@@ -112,7 +112,8 @@
       "builderAutoUpdate": {
         "title": "构建器自动更新",
         "content": "是否自动同步文档构建器内容"
-      }
+      },
+      "builderDesc": "📄 跳转子文档 · ➖ 跳转标题行"
     }
   }
 }
