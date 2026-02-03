@@ -1,5 +1,6 @@
 import { client } from "../../shared/api-client";
 import { ListProcessor } from "./builder";
+import { createDatabase } from "../data/action";
 
 /**
  * 块标菜单回调
@@ -46,6 +47,14 @@ export function buildDoc({ detail }: any) {
         label: "👇 构建标题行",
         click: () => syncManager(blockId, blockType, "PUSH_TO_BOTTOM")
     });
+
+    /* Feature disabled for 1.8.9
+    menu.addItem({
+        icon: "iconDatabase",
+        label: "📅 创建数据库",
+        click: () => createDatabase(blockId)
+    });
+    */
 }
 
 async function syncManager(sourceBlockId: string, sourceType: string, actionType: string) {

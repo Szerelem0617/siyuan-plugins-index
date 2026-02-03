@@ -1,0 +1,219 @@
+# 思源笔记数据库 (Attribute View / AV) 相关 API 汇总
+
+本文档汇总了所有与思源笔记数据库（属性视图）相关的内核 API。这些 API 位于 `/api/av/` 路径下，提供了对数据库视图的渲染、结构定义、数据读写以及搜索等功能。
+
+所有接口均为 `POST` 请求，参数和返回值格式遵循思源 API 规范。
+
+## 1. 视图渲染与读取 (Rendering & Reading)
+
+用于获取数据库的视图结构、列定义以及数据内容。
+
+### `renderAttributeView`
+渲染属性视图（获取视图结构和当前页数据）。
+*   **参数**:
+    *   `id`: string, 数据库 AV ID。
+    *   `viewID`: string, 视图 ID（可选）。
+    *   `page`: int, 页码（默认 1）。
+    *   `pageSize`: int, 每页条数（可选）。
+    *   `query`: string, 搜索查询语句（可选）。
+    *   `keyID`: string, 排序/过滤关联的列 ID（可选）。
+    *   `groupPaging`: map, 分组分页信息（可选）。
+*   **用途**: 这是加载数据库界面的核心 API，返回视图配置、列信息 (`views`) 和行数据。如果指定的 `id` 对应的数据库不存在，后端会自动初始化一个新的空数据库。
+
+### `renderSnapshotAttributeView`
+渲染快照中的属性视图。
+*   **参数**:
+    *   `id`: string, 数据库 AV ID。
+    *   `snapshot`: string, 快照索引 ID。
+*   **用途**: 查看历史快照中的数据库状态。
+
+### `renderHistoryAttributeView`
+渲染历史版本中的属性视图。
+*   **参数**:
+    *   `id`: string, 数据库 AV ID。
+    *   `created`: string, 历史版本创建时间。
+    *   ...其他同 `renderAttributeView`
+*   **用途**: 查看文件历史中的数据库状态。
+
+### `getAttributeViewPrimaryKeyValues`
+获取数据库的主键值（通常是块 ID 和名称）。
+*   **参数**:
+    *   `id`: string, 数据库 AV ID。
+    *   `keyword`: string, 搜索关键词（可选）。
+    *   `page`: int, 页码。
+    *   `pageSize`: int, 每页条数。
+*   **用途**: 用于获取数据库中所有行的基础信息，通常用于关联选择或引用。
+
+### `getAttributeView`
+获取属性视图的基础元数据。
+*   **参数**:
+    *   `id`: string, 数据库 AV ID。
+*   **用途**: 获取数据库的名称、创建时间等基本属性。
+
+### `getAttributeViewKeys`
+获取指定块关联的数据库列（Key）信息。
+*   **参数**:
+    *   `id`: string, 块 ID。
+*   **用途**: 查询某个块属于哪些数据库的哪些列。
+
+### `getAttributeViewKeysByAvID`
+获取指定数据库的所有列（Key）定义。
+*   **参数**:
+    *   `avID`: string, 数据库 AV ID。
+*   **用途**: 获取数据库的 Schema（所有列的类型、名称、配置）。
+
+### `getAttributeViewKeysByID`
+获取指定列 ID 的详细信息。
+*   **参数**:
+    *   `avID`: string, 数据库 AV ID。
+    *   `keyIDs`: []string, 列 ID 列表。
+*   **用途**: 获取特定列的详细配置。
+
+### `getCurrentAttrViewImages`
+获取当前属性视图中的图片资源。
+*   **参数**:
+    *   `id`: string, 数据库 AV ID。
+    *   `viewID`: string, 视图 ID。
+*   **用途**: 可能是为了画廊视图或导出功能获取图片。
+
+## 2. 数据操作 (Data Manipulation)
+
+用于修改数据库中的单元格数据。
+
+### `setAttributeViewBlockAttr`
+设置单个单元格的值。
+*   **参数**:
+    *   `avID`: string, 数据库 AV ID。
+    *   `keyID`: string, 列 ID。
+    *   `itemID`: string, 行 ID (Block ID)。
+    *   `value`: any, 新值（类型需匹配列定义）。
+*   **用途**: 修改单个数据。会自动触发视图重载。
+
+### `batchSetAttributeViewBlockAttrs`
+批量设置多个单元格的值。
+*   **参数**:
+    *   `avID`: string, 数据库 AV ID。
+    *   `values`: []object, 更新对象列表，每项包含 `keyID`, `itemID`, `value`。
+*   **用途**: **推荐**的批量更新方式，性能优于单次调用，且自动处理 UI 刷新。
+
+### `addAttributeViewBlocks`
+向数据库添加新块（行）。
+*   **参数**:
+    *   `avID`: string, 数据库 AV ID。
+    *   `blockID`: string, 上下文块 ID（可选）。
+    *   `srcs`: []object, 源块信息（如果是现有块加入）。
+    *   `previousID`: string, 插入位置的前一个块 ID。
+*   **用途**: 在数据库中创建新行或关联现有块。
+
+### `removeAttributeViewBlocks`
+从数据库中移除块（行）。
+*   **参数**:
+    *   `avID`: string, 数据库 AV ID。
+    *   `srcIDs`: []string, 要移除的行 ID 列表。
+*   **用途**: 删除数据库中的行。
+
+### `duplicateAttributeViewBlock`
+复制数据库中的块。
+*   **参数**:
+    *   `avID`: string, 数据库 AV ID。
+*   **用途**: 复制当前选中的行或数据库本身（需确认具体行为）。
+
+### `batchReplaceAttributeViewBlocks`
+批量替换数据库中的块引用。
+*   **参数**:
+    *   `avID`: string, 数据库 AV ID。
+    *   `isDetached`: bool, 是否是脱离的视图。
+    *   `oldNew`: []map[string]string, 旧 ID 到新 ID 的映射列表。
+*   **用途**: 用于高级的数据迁移或引用重构。
+
+### `appendAttributeViewDetachedBlocksWithValues`
+向脱离的数据库视图追加带有值的块。
+*   **参数**:
+    *   `avID`: string。
+    *   `blocksValues`: [][]*Value, 数据值矩阵。
+*   **用途**: 内部使用的 API，可能用于某些特定的导入或生成场景。
+
+## 3. 结构定义 (Structure & Schema)
+
+用于修改数据库的列、视图和属性。
+
+### `addAttributeViewKey`
+添加新列。
+*   **参数**:
+    *   `avID`: string。
+    *   `keyName`: string, 列名。
+    *   `keyType`: string, 列类型 (text, number, select, etc.)。
+*   **用途**: 修改数据库结构，增加字段。
+
+### `removeAttributeViewKey`
+删除列。
+*   **参数**:
+    *   `avID`: string。
+    *   `keyID`: string。
+    *   `removeRelationDest`: bool, 是否同时删除关联的目标。
+*   **用途**: 修改数据库结构，删除字段。
+
+### `changeAttrViewLayout`
+修改视图布局类型。
+*   **参数**:
+    *   `avID`: string。
+    *   `layoutType`: string (table, board, calendar, etc.)。
+*   **用途**: 切换视图显示模式（如从表格切换到看板）。
+
+### `setAttrViewGroup`
+设置视图分组。
+*   **参数**:
+    *   `avID`: string。
+    *   `group`: object, 分组配置。
+*   **用途**: 配置看板或表格的分组依据。
+
+### `sortAttributeViewKey` / `sortAttributeViewViewKey`
+排序列。
+*   **用途**: 调整列在界面上的显示顺序。
+
+## 4. 搜索与过滤 (Search & Filter)
+
+### `searchAttributeView`
+搜索数据库。
+*   **参数**:
+    *   `keyword`: string, 关键词。
+*   **用途**: 全局搜索数据库（可能用于“添加数据库”时的搜索）。
+
+### `searchAttributeViewRelationKey` / `searchAttributeViewRollupDestKeys`
+搜索关联列或汇总目标列。
+*   **用途**: 在配置关联关系或汇总列时，搜索可用的目标列。
+
+### `getAttributeViewFilterSort`
+获取当前的过滤和排序配置。
+*   **用途**: 获取视图当前的筛选状态。
+
+## 5. 辅助功能 (Utility)
+
+### `getMirrorDatabaseBlocks`
+获取镜像数据库块。
+*   **用途**: 获取引用了该数据库的镜像块信息。
+
+### `setDatabaseBlockView`
+设置数据库块的视图。
+*   **用途**: 切换某个数据库块实例当前显示的视图。
+
+### `getAttributeViewAddingBlockDefaultValues`
+获取添加块时的默认值。
+*   **用途**: 当视图存在过滤条件时，新建的块需要自动填充某些属性以满足过滤条件，此 API 用于获取这些预设值。
+
+### `getAttributeViewBoundBlockIDsByItemIDs` / `getAttributeViewItemIDsByBoundIDs`
+转换绑定块 ID 和项目 ID。
+*   **用途**: 处理数据库项与其底层绑定块之间的 ID 映射关系。
+
+## 6. 创建数据库 (Creating a Database)
+
+目前没有直接的 `createAttributeView` 接口。创建数据库的本质是创建一个 `NodeAttributeView` 类型的块，并触发其初始化。
+
+**步骤**:
+
+1.  **创建块**: 使用 `/api/block/insertBlock` 或 `/api/block/appendBlock` 插入一个属性视图块。
+    *   `dataType`: `"markdown"`
+    *   `data`: `<div data-type="NodeAttributeView"></div>` (也可指定 `data-av-type="table"`)
+2.  **获取 ID**: 从创建块接口的响应中获取新块的 `doOperations[0].id`。此 ID 即为后续使用的 `avID`。
+3.  **初始化视图**: 调用 `/api/av/renderAttributeView`，传入 `id` (即上一步的 Block ID)。
+    *   后端检测到该 ID 对应的视图文件不存在时，会自动调用 `av.NewAttributeView` 创建一个新的空数据库。
