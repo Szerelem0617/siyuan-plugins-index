@@ -55,16 +55,15 @@ export async function generateIndex(notebook: any, ppath: any, pitem: IndexQueue
             }
 
             let iconStr = iconEnabled ? getProcessedDocIcon(icon, subFileCount != 0) : "";
+            let safeName = name.replace(/"/g, "&quot;");
 
             let linkType = linkTypeSetting == "ref" ? true : false;
             if (linkType) {
                 data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;
             } else {
                 if (iconEnabled && iconStr) {
-                    let safeIconStr = iconStr.replace(/"/g, "&quot;");
-                    data += `((${id} "${safeIconStr}")) ${name}\n`;
+                    data += `${iconStr} ((${id} "${safeName}"))\n`;
                 } else {
-                    let safeName = name.replace(/"/g, "&quot;");
                     data += `((${id} "${safeName}"))\n`;
                 }
             }
@@ -122,16 +121,15 @@ export async function generateIndexAndOutline(notebook: any, ppath: any, pitem: 
                 }
 
                 let iconStr = iconEnabled ? getProcessedDocIcon(icon, subFileCount != 0) : "";
+                let safeName = name.replace(/"/g, "&quot;");
 
                 let linkType = linkTypeSetting == "ref" ? true : false;
                 if (linkType) {
                     data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;
                 } else {
                     if (iconEnabled && iconStr) {
-                        let safeIconStr = iconStr.replace(/"/g, "&quot;");
-                        data += `((${id} "${safeIconStr}")) ${name}\n`;
+                        data += `${iconStr} ((${id} "${safeName}"))\n`;
                     } else {
-                        let safeName = name.replace(/"/g, "&quot;");
                         data += `((${id} "${safeName}"))\n`;
                     }
                 }
