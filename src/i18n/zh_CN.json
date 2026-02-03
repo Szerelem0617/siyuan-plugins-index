@@ -3,9 +3,9 @@
   "insertoutline": "插入大纲",
   "settings": "设置",
   "addTopBarIcon": "插入目录",
-  "indexSettings": "目录设置",
-  "outlineSettings": "大纲设置",
-  "builderSettings": "构建器设置 (测试)",
+  "indexSettings": "目录",
+  "outlineSettings": "大纲",
+  "builderSettings": "构建器 (测试)",
   "cancel": "取消",
   "confirm": "确定",
   "update": "更新",
@@ -43,8 +43,8 @@
         "title": "链接类型",
         "content": "选择生成目录的链接样式",
         "options": {
-          "ref": "链接引用",
-          "embed": "嵌入块"
+          "ref": "链接",
+          "embed": "引用"
         }
       },
       "icon": {
@@ -97,8 +97,8 @@
         "title": "大纲类型",
         "content": "选择大纲的生成方式",
         "options": {
-          "ref": "引用",
-          "embed": "嵌入"
+          "ref": "链接",
+          "embed": "引用"
         }
       },
       "iconOutline": {
