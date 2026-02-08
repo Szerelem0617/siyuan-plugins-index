@@ -184,10 +184,16 @@ export class IBlockProcessor {
             let absPath = templatePath;
             
             if (dataDir) {
-                const relPath = templatePath.startsWith("/") ? templatePath : "/" + templatePath;
+                let relPath = templatePath.startsWith("/") ? templatePath : "/" + templatePath;
+                // SiYuan templates are always stored in the 'templates' subfolder of the data directory.
+                // If the stored path doesn't include it, we must prepend it.
+                if (!relPath.startsWith("/templates/")) {
+                    relPath = "/templates" + relPath;
+                }
                 const fullPath = relPath.endsWith(".md") ? relPath : relPath + ".md";
-                // Normalize all slashes to forward slashes for consistency
-                absPath = (dataDir + fullPath).replace(/\\/g, "/");
+                
+                // Construct absolute path and normalize to Windows backslashes
+                absPath = (dataDir + fullPath).replace(/\//g, "\\").replace(/\\\\/g, "\\");
             }
 
             console.log("[Builder] Rendering template with absolute path:", absPath);
@@ -197,7 +203,13 @@ export class IBlockProcessor {
                     path: absPath,
                     preview: false
                 });
-                finalMarkdown = renderRes.content || renderRes.dom || "";
+                const dom = renderRes.content || renderRes.dom || "";
+                if (dom) {
+                    // Convert Protyle DOM to Markdown using Lute
+                    // @ts-ignore
+                    const lute = window.Lute.New();
+                    finalMarkdown = lute.BlockDOM2Md(dom);
+                }
             } catch (e) {
                 console.error("[Builder] Template render failed for path:", absPath, e);
             }
