@@ -1,4 +1,18 @@
 /**
+ * 将 Hex 字符串转换为 Emoji 字符
+ * @param hex Emoji 的 Hex 编码 (e.g. "1f600" or "1f600-fe0f")
+ * @returns 对应的 Unicode Emoji 字符
+ */
+export function hexToEmoji(hex: string) {
+    if (!hex) return "";
+    try {
+        return hex.split("-").map(item => String.fromCodePoint(parseInt(item, 16))).join("");
+    } catch (e) {
+        return hex;
+    }
+}
+
+/**
  * 获取处理后的文档图标 (Unicode/Emoji/Static Text/Custom Image/Dynamic Icon)
  * @param icon 图标字符串
  * @param hasChild 是否有子文档 (用于默认图标判断)
@@ -29,20 +43,7 @@ export function getProcessedDocIcon(icon: string, hasChild: boolean) {
 
     // 4. Unicode 十六进制序列 (Unicode Hex Sequence - e.g. "1f600")
     if (/^[0-9a-fA-F-]+$/.test(icon)) {
-        let result = "";
-        try {
-            for (const element of icon.split("-")) {
-                if (!element) continue;
-                const codePoint = parseInt(element, 16);
-                if (isNaN(codePoint)) {
-                    return hasChild ? "📑" : "📄";
-                }
-                result += String.fromCodePoint(codePoint);
-            }
-            return result;
-        } catch (e) {
-            return hasChild ? "📑" : "📄";
-        }
+        return hexToEmoji(icon) || (hasChild ? "📑" : "📄");
     }
 
     return hasChild ? "📑" : "📄";

@@ -136,8 +136,12 @@
                 siyuan.config.editor.emoji = recent;
                 
                 try {
-                    await fetchSyncPost("/api/system/setEditorConf", {
-                        emoji: recent
+                    // SiYuan API setEditorConf might return empty response which fetchSyncPost fails to parse as JSON
+                    await fetch("/api/system/setEditorConf", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            emoji: recent
+                        })
                     });
                 } catch (apiError) {
                     console.error("[EmojiDialog] Failed to update Siyuan configuration:", apiError);

@@ -1,6 +1,7 @@
 import { client } from "../../shared/api-client";
 import { getProcessedDocIcon } from "../../shared/utils/icon-utils";
 import { stripMarkdownSyntax } from "../../shared/utils/markdown-utils";
+import { ATTR_LINKED_AV, ATTR_ITEM_ID } from "../../shared/constants";
 
 // Constants
 export const ATTR_INDEX = "custom-index-subdoc-id";
@@ -27,6 +28,58 @@ export class IBlockProcessor {
         this.errors = errors;
     }
 
+    async getLinkedAVData(listItemId: string, itemAttrs: any) {
+        // 1. Get Parent to find AV ID
+        const parentRes = await client.sql({ stmt: `SELECT parent_id FROM blocks WHERE id = '${listItemId}'` });
+        const parentId = parentRes.data?.[0]?.parent_id;
+        if (!parentId) return null;
+
+        const parentAttrsRes = await client.getBlockAttrs({ id: parentId });
+        const avId = parentAttrsRes.data?.[ATTR_LINKED_AV];
+        if (!avId) return null;
+
+        const itemId = itemAttrs[ATTR_ITEM_ID];
+        if (!itemId) return null;
+
+        // 2. Get Keys to find col IDs
+        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
+        const keys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
+        
+        const keyMap: any = {};
+        keys.forEach((k: any) => {
+            if (["icon", "title-img", "template"].includes(k.name)) {
+                keyMap[k.name] = k.id;
+            }
+        });
+
+        if (Object.keys(keyMap).length === 0) return null;
+
+        // 3. Get Row Data (Iterate pages if necessary, but limit to first page/recent for perf)
+        const renderRes = await post("/api/av/renderAttributeView", { id: avId, pageSize: 200 });
+        const rows = renderRes.view ? renderRes.view.rows : (renderRes.rows || []);
+        const row = rows.find((r: any) => r.id === itemId);
+
+        if (!row) return null;
+
+        const result: any = {};
+        const columns = renderRes.view ? renderRes.view.columns : (renderRes.columns || []);
+
+        for (const [name, keyId] of Object.entries(keyMap)) {
+            const colIndex = columns.findIndex((c: any) => c.id === keyId);
+            if (colIndex > -1 && row.cells[colIndex]) {
+                const cellVal = row.cells[colIndex].value;
+                if (cellVal) {
+                    if (cellVal.type === "text") result[name] = cellVal.text?.content;
+                    else if (cellVal.type === "mAsset") result[name] = cellVal.mAsset?.[0]?.content; 
+                    else if (cellVal.type === "template") result[name] = cellVal.template?.content;
+                    else if (cellVal.content) result[name] = cellVal.content; 
+                }
+            }
+        }
+        
+        return result;
+    }
+
     async processSingleItem(listItemId: string, actionType: string, ctx: any) {
         const core = await this.getCoreContentInfo(listItemId);
         if (!core) return ctx.previousId;
@@ -45,7 +98,6 @@ export class IBlockProcessor {
             case "PUSH_COMBINED":
                 const docResult = await this.handlePushToDoc(core, containerAttrs, ctx);
                 const headingId = await this.handlePushToBottom(core, containerAttrs, ctx);
-                // Return composite result: ID tracks heading (for sibling ordering), rest tracks doc (for hierarchy)
                 result = { ...docResult, id: headingId }; 
                 break;
         }
@@ -116,6 +168,41 @@ export class IBlockProcessor {
             }
         }
 
+        // Fetch Linked AV Data
+        const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs);
+        const targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
+        
+        // Revert to direct assignment as complex styles (like gradients) are already formatted in DB
+        const targetImage = linkedData?.["title-img"] || null;
+
+        const templatePath = linkedData?.template || "";
+        
+        let finalMarkdown = "";
+        if (templatePath) {
+            // @ts-ignore
+            const dataDir = window.siyuan?.config?.system?.dataDir;
+            let absPath = templatePath;
+            
+            if (dataDir) {
+                const relPath = templatePath.startsWith("/") ? templatePath : "/" + templatePath;
+                const fullPath = relPath.endsWith(".md") ? relPath : relPath + ".md";
+                // Normalize all slashes to forward slashes for consistency
+                absPath = (dataDir + fullPath).replace(/\\/g, "/");
+            }
+
+            console.log("[Builder] Rendering template with absolute path:", absPath);
+            try {
+                const renderRes = await post("/api/template/render", {
+                    id: core.containerId,
+                    path: absPath,
+                    preview: false
+                });
+                finalMarkdown = renderRes.content || renderRes.dom || "";
+            } catch (e) {
+                console.error("[Builder] Template render failed for path:", absPath, e);
+            }
+        }
+
         if (docId) {
             let notebook, path, hpath;
             try {
@@ -127,22 +214,20 @@ export class IBlockProcessor {
 
                     await client.renameDoc({ notebook, path, title });
                     
-                    const verifyRes = await client.getBlockAttrs({ id: docId });
-                    const docIconRaw = verifyRes?.data?.icon || "";
-
-                    if (core.currentIcon) {
-                        const resolvedDocIcon = getProcessedDocIcon(docIconRaw, false); // Using utility
-                        if (resolvedDocIcon !== core.currentIcon) {
-                            const iconToSend = this.emojiToHex(core.currentIcon);
-                            await client.setBlockAttrs({ id: docId, attrs: { icon: iconToSend } });
-                        }
+                    const docAttrs: any = {};
+                    if (targetIcon) docAttrs.icon = targetIcon;
+                    if (targetImage) docAttrs["title-img"] = targetImage;
+                    
+                    if (Object.keys(docAttrs).length > 0) {
+                        await client.setBlockAttrs({ id: docId, attrs: docAttrs });
                     }
                 }
             } catch (e) {
                 console.error("[Sync] Rename/Icon Sync failed:", e);
             }
             
-            const newMd = await this.constructListItemMarkdown(containerAttrs, containerAttrs[ATTR_OUTLINE], core.syncMd, docId, core.currentIcon);
+            const displayIcon = getProcessedDocIcon(targetIcon || core.currentIcon || "", false);
+            const newMd = await this.constructListItemMarkdown(containerAttrs, containerAttrs[ATTR_OUTLINE], core.syncMd, docId, displayIcon);
             const updatePromises = [];
             updatePromises.push(client.updateBlock({ id: core.contentId, dataType: "markdown", data: newMd }));
             if (Object.keys(stylesToKeep).length > 0) updatePromises.push(client.setBlockAttrs({ id: core.contentId, attrs: stylesToKeep }));
@@ -179,19 +264,10 @@ export class IBlockProcessor {
             path = hpath;
         }
 
-        const newIdRes = await client.createDocWithMd({ notebook, path, markdown: "" });
+        const newIdRes = await client.createDocWithMd({ notebook, path, markdown: finalMarkdown });
         const newId = newIdRes.data;
 
         if (newId) {
-            const attrs = { [ATTR_INDEX]: newId };
-            let iconToSend = null;
-
-             if (core.currentIcon) {
-                iconToSend = this.emojiToHex(core.currentIcon);
-                attrs['icon'] = iconToSend;
-            }
-
-            // Fetch physical path for sorting
             let physicalPath = null;
             try {
                  const pRes = await post("/api/filetree/getPathByID", { id: newId });
@@ -202,12 +278,18 @@ export class IBlockProcessor {
 
             const promises = [];
             promises.push(client.setBlockAttrs({ id: core.containerId, attrs: { [ATTR_INDEX]: newId } }));
-            if (iconToSend) {
-                promises.push(client.setBlockAttrs({ id: newId, attrs: { icon: iconToSend } }));
+            
+            const docAttrs: any = {};
+            if (targetIcon) docAttrs.icon = targetIcon;
+            if (targetImage) docAttrs["title-img"] = targetImage;
+            
+            if (Object.keys(docAttrs).length > 0) {
+                promises.push(client.setBlockAttrs({ id: newId, attrs: docAttrs }));
             }
             await Promise.all(promises);
 
-            const newMd = await this.constructListItemMarkdown(containerAttrs, containerAttrs[ATTR_OUTLINE], core.syncMd, newId, core.currentIcon || DEFAULT_ICON);
+            const displayIcon = getProcessedDocIcon(targetIcon || core.currentIcon || "", false);
+            const newMd = await this.constructListItemMarkdown(containerAttrs, containerAttrs[ATTR_OUTLINE], core.syncMd, newId, displayIcon);
             const updatePromises = [];
             updatePromises.push(client.updateBlock({ id: core.contentId, dataType: "markdown", data: newMd }));
             if (Object.keys(stylesToKeep).length > 0) updatePromises.push(client.setBlockAttrs({ id: core.contentId, attrs: stylesToKeep }));
@@ -240,12 +322,10 @@ export class IBlockProcessor {
                      const rawIcon = docInfoRes.data.icon || DEFAULT_ICON;
                      icon = getProcessedDocIcon(rawIcon, false);
                 } catch(e) {
-                    // console.error("[Sync] Failed to get doc icon:", e);
                 }
             }
             parts.push(`[${icon}](siyuan://blocks/${docId})`);
         } else if (docIcon) {
-            // Case: No doc link, but explicit icon exists (e.g. Heading Tree with existing emoji)
             parts.push(docIcon);
         }
 
@@ -293,17 +373,13 @@ export class IBlockProcessor {
         const docMatch = tempMd.match(docLinkRegex);
         if (docMatch) {
             const anchor = docMatch[1];
-            // If anchor is SEP_CHAR, it's a heading link, not a doc link. Skip.
             if (anchor !== SEP_CHAR) {
-                // If anchor looks like an icon (short, not full title), use it
                 if (anchor && anchor.length < 8) {
                     currentIcon = anchor;
                 }
                 tempMd = tempMd.replace(docLinkRegex, "");
             }
         } else {
-             // If no doc link found, check for explicit text icon (Emoji or :code:) at start
-             // Use Unicode property escape for better Emoji detection (including symbols like 🖇️)
              const explicitIconRegex = /^\s*(?:(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation})|(:[^:]+:))\s*/u;
              const iconMatch = tempMd.match(explicitIconRegex);
              if (iconMatch) {
@@ -317,7 +393,6 @@ export class IBlockProcessor {
         if (sepMatch) {
             hasSeparator = true;
             const prefix = sepMatch[1].trim();
-            // Recovery: If we haven't found an icon yet, check if the prefix we're about to strip is a single emoji
             if (!currentIcon && prefix) {
                 const emojiTest = /^(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation}|:[^:]+:)$/u;
                 if (emojiTest.test(prefix)) {
@@ -327,9 +402,6 @@ export class IBlockProcessor {
             tempMd = tempMd.replace(sepLinkRegex, "");
         }
         
-        // Remove old explicitIconRegex check as it's now integrated above
-
-
         let syncMd = tempMd.trim();
         let plain = stripMarkdownSyntax(syncMd);
 
