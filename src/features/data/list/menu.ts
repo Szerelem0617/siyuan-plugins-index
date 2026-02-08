@@ -1,5 +1,4 @@
-import { focusDatabaseView } from "../attribute-view/action";
-import { createDatabaseWithBlocks } from "./action";
+import { focusDatabaseView, createDatabaseWithBlocks } from "./action";
 
 /**
  * Data 功能的块菜单回调 (针对列表块)
