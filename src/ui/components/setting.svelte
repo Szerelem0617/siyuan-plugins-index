@@ -6,6 +6,7 @@
     import IndexTab from "./tab/index-tab.svelte";
     import OutlineTab from "./tab/outline-tab.svelte";
     import BuilderTab from "./tab/builder-tab.svelte";
+    import DataTab from "./tab/data-tab.svelte";
 
     let settingsStrings = new SettingsProperty();
     settingsStrings.getAll();
@@ -63,11 +64,22 @@
             <span class="item__text">{i18n.builderSettings}</span>
             <span class="fn__flex-1"></span>
         </div>
+        <!-- Data Tab -->
+        <div 
+            class={tabbarfocus === "data" ? "item item--full item--focus" : "item item--full"}
+            on:click={() => { tabbarfocus = "data"; eventBus.emit("updateSettings"); }}
+        >
+            <span class="fn__flex-1"></span>
+            <span class="item__icon"><svg><use xlink:href="#iconDatabase" /></svg></span>
+            <span class="item__text">数据库</span>
+            <span class="fn__flex-1"></span>
+        </div>
     </div>
     
     <div class="config__tab-wrap fn__flex-1" style="overflow-y: auto; padding: 16px;">
         <IndexTab tabbarfocus={tabbarfocus} settingsStrings={settingsStrings} />
         <OutlineTab tabbarfocus={tabbarfocus} settingsStrings={settingsStrings} />
         <BuilderTab tabbarfocus={tabbarfocus} settingsStrings={settingsStrings} />
+        <DataTab tabbarfocus={tabbarfocus} settingsStrings={settingsStrings} />
     </div>
 </div>

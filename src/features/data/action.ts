@@ -1,6 +1,7 @@
 import { client } from "../../shared/api-client";
 import { showMessage, Dialog } from "siyuan";
 import { ATTR_LINKED_AV, ATTR_LINKED_LIST, ATTR_ITEM_ID } from "./constants";
+import { settings } from "../../core/settings";
 
 async function post(url: string, data: any) {
     const response = await fetch(url, {
@@ -253,53 +254,21 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         try {
             levelKeyId = await ensureKey("Level", "number", "iconSort");
             fatherKeyId = await ensureKey("Father", "text", "iconLink");
-            iconKeyId = await ensureKey("icon", "text", "iconEmoji");
-            titleImgKeyId = await ensureKey("title-img", "text", "iconImage");
-            templateKeyId = await ensureKey("template", "text", "iconLayout");
+            
+            // Optional template columns
+            if (settings.get("dbAddTemplateCols")) {
+                iconKeyId = await ensureKey("icon", "text", "iconEmoji");
+                titleImgKeyId = await ensureKey("title-img", "text", "iconImage");
+                templateKeyId = await ensureKey("template", "text", "iconLayout");
+            }
 
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            if (!existingAvID && levelKeyId && viewID) {
-                let avName = "新数据库";
-                if (allItems.length > 0) {
-                    try {
-                        const firstItemDom = await client.getBlockDOM({ id: allItems[0].originalId });
-                        const tempSpan = document.createElement("span");
-                        tempSpan.innerHTML = firstItemDom.data.dom;
-                        avName = tempSpan.innerText.trim().substring(0, 30) || "新数据库";
-                    } catch (e) {}
-                }
-
-                // 1. Transaction: Set Filters & Name
-                await post("/api/transactions", {
+            // Ensure Level and Father are hidden (for both new and existing DBs)
+            if (levelKeyId && fatherKeyId && viewID) {
+                 await post("/api/transactions", {
                     app: "plugin-index",
-                    transactions: [{
-                        doOperations: [
-                            {
-                                action: "setAttrViewFilters",
-                                avID: realAvID,
-                                blockID: viewID,
-                                data: [{
-                                    column: levelKeyId,
-                                    operator: "=",
-                                    value: {
-                                        type: "number",
-                                        number: { content: 1, isNotEmpty: true }
-                                    }
-                                }]
-                            },
-                            {
-                                action: "setAttrViewName",
-                                avID: realAvID,
-                                data: avName
-                            }
-                        ]
-                    }]
-                });
-
-                // 2. Transaction: Hide Columns
-                await post("/api/transactions", {
-                    app: "plugin-index",
+                    reqId: Date.now(),
                     transactions: [{
                         doOperations: [
                             {
@@ -318,6 +287,50 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                             }
                         ]
                     }]
+                });
+            }
+
+            if (!existingAvID && levelKeyId && viewID) {
+                let avName = "新数据库";
+                if (allItems.length > 0) {
+                    try {
+                        const firstItemDom = await client.getBlockDOM({ id: allItems[0].originalId });
+                        const tempSpan = document.createElement("span");
+                        tempSpan.innerHTML = firstItemDom.data.dom;
+                        avName = tempSpan.innerText.trim().substring(0, 30) || "新数据库";
+                    } catch (e) {}
+                }
+
+                const ops: any[] = [
+                    {
+                        action: "setAttrViewName",
+                        avID: realAvID,
+                        data: avName
+                    }
+                ];
+
+                // Focus Level Configuration
+                const focusLevel = settings.get("dbFocusLevel");
+                if (focusLevel > 0) {
+                    ops.push({
+                        action: "setAttrViewFilters",
+                        avID: realAvID,
+                        blockID: viewID,
+                        data: [{
+                            column: levelKeyId,
+                            operator: "=",
+                            value: {
+                                type: "number",
+                                number: { content: Number(focusLevel), isNotEmpty: true } // Ensure proper number casting
+                            }
+                        }]
+                    });
+                }
+
+                await post("/api/transactions", {
+                    app: "plugin-index",
+                    reqId: Date.now() + 100, // Ensure strictly later timestamp
+                    transactions: [{ doOperations: ops }]
                 });
             }
 
