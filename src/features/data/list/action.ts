@@ -385,6 +385,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
             }
             itemIDToBlockID[item.originalId] = itemID;
 
+            // COMMON: Always update hierarchy fields
             if (levelKeyId) {
                 updateValues.push({
                     keyID: levelKeyId,
@@ -399,9 +400,13 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                     value: { type: "text", text: { content: item.parentId || "" } }
                 });
             }
-            if (iconKeyId) updateValues.push({ keyID: iconKeyId, itemID: itemID, value: { type: "text", text: { content: "" } } });
-            if (titleImgKeyId) updateValues.push({ keyID: titleImgKeyId, itemID: itemID, value: { type: "text", text: { content: "" } } });
-            if (templateKeyId) updateValues.push({ keyID: templateKeyId, itemID: itemID, value: { type: "text", text: { content: "" } } });
+
+            // ONLY FOR NEW DB: Initialize template/style columns to empty
+            if (!existingAvID) {
+                if (iconKeyId) updateValues.push({ keyID: iconKeyId, itemID: itemID, value: { type: "text", text: { content: "" } } });
+                if (titleImgKeyId) updateValues.push({ keyID: titleImgKeyId, itemID: itemID, value: { type: "text", text: { content: "" } } });
+                if (templateKeyId) updateValues.push({ keyID: templateKeyId, itemID: itemID, value: { type: "text", text: { content: "" } } });
+            }
         }
 
         if (newSrcs.length > 0) {
