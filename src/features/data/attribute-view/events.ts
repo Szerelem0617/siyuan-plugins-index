@@ -3,6 +3,7 @@ import { Menu, Dialog, showMessage } from "siyuan";
 import { BGS } from "./constants";
 import EmojiDialog from "../../../ui/components/dialog/emoji-dialog.svelte";
 import { post } from "../../../shared/api-client/request";
+import { formatDate } from "../../../shared/utils";
 
 class AVEventHandler {
     private onContextMenuBound = this.onContextMenu.bind(this);
@@ -553,11 +554,6 @@ class AVEventHandler {
             console.error("Sync Error", e);
             showMessage(`❌ 同步失败: ${e.message}`, 3000, "error"); 
         }
-    }
-
-    private formatDate(d: Date) {
-        const p = (n: number) => (n < 10 ? "0" + n : n);
-        return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
     }
 }
 

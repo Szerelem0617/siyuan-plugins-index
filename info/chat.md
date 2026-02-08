@@ -35,4 +35,66 @@
 
 ## 给思源源码开发者的 Debug 提示 (关于 Emoji 点击精度)
 
-(保留之前的 Emoji 提示部分...)
+
+
+(此处保留之前的内容...)
+
+
+
+## 给思源源码开发者的 Debug 提示 (关于数据库命名失败)
+
+
+
+我们在尝试通过 API 创建数据库并自动命名时遇到了问题。
+
+
+
+**操作背景**:
+
+1.  通过 `insertBlock` 插入一个 `NodeAttributeView` 块。
+
+2.  从返回的 HTML 中通过正则匹配提取 `data-av-id` (例如 `20260208204552-8bkses9`)。
+
+3.  通过 `renderAttributeView` 获取第一个视图的 `viewID` (例如 `20260208204552-a51e6d4`)。
+
+4.  发送一个 `transactions` 请求，尝试修改数据库名称。
+
+
+
+**使用的 Transaction 逻辑**:
+
+```json
+
+{
+
+    "action": "setAttrViewName",
+
+    "avID": "20260208204552-8bkses9",
+
+    "data": "新命名的数据库名"
+
+}
+
+```
+
+
+
+**问题描述**:
+
+-   日志显示 `avID`、`viewID` 和提取的名称均正确。
+
+-   Transaction 请求发送成功（code 0），但界面和数据上均未生效，数据库名称依然显示为默认或为空。
+
+
+
+**需要专家确认的问题**:
+
+1.  **Action 选型**: `setAttrViewName` 到底是修改“数据库（Attribute View）”的总名称，还是修改“视图（View/Tab）”的名称？
+
+2.  **关键参数**: 修改**数据库总名称**（即数据库块顶部的名字）的正确 Action 名称是什么？是否需要在 `data` 之外传入其他 ID（比如 `blockID` 或特定的视图 ID）？
+
+3.  **时机问题**: 在插入数据库块并立即通过 `render` 获取 ID 后发送 Transaction，是否会因为数据库索引未完成而导致失败？是否需要调用特定的同步接口？
+
+
+
+**请求**: 请提供 SiYuan 源码中修改数据库名称（Database Name）的核心 Action 定义及所需的完整参数结构。

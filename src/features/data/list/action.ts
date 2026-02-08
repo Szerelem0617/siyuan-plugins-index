@@ -3,6 +3,7 @@ import { showMessage } from "siyuan";
 import { ATTR_LINKED_AV, ATTR_LINKED_LIST, ATTR_ITEM_ID } from "../../../shared/constants";
 import { settings } from "../../../core/settings";
 import { post } from "../../../shared/api-client/request";
+import { formatDate } from "../../../shared/utils";
 
 /**
  * 聚焦数据库视图：根据当前块的层级自动筛选 Level
@@ -287,15 +288,30 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                         const firstItemDom = await client.getBlockDOM({ id: allItems[0].originalId });
                         const tempSpan = document.createElement("span");
                         tempSpan.innerHTML = firstItemDom.data.dom;
-                        avName = tempSpan.innerText.trim().substring(0, 30) || "新数据库";
-                    } catch (e) {}
+                        // Clean zero-width characters and whitespace
+                        const extractedName = tempSpan.innerText.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+                        if (extractedName) {
+                            avName = extractedName.substring(0, 30);
+                        }
+                        console.log("[Data] Extracted avName from first item:", avName);
+                    } catch (e) {
+                        console.error("[Data] Failed to get name from first item:", e);
+                    }
                 }
+
+                console.log("[Data] Naming Database:", { avID: realAvID, viewID, avName });
 
                 const ops: any[] = [
                     {
                         action: "setAttrViewName",
-                        avID: realAvID,
+                        // 陷阱：此处必须使用 id 而不是 avID，与大多数 AV Action 不一致
+                        id: realAvID, 
                         data: avName
+                    },
+                    {
+                        action: "doUpdateUpdated",
+                        id: blockID, // 数据库块的 ID
+                        data: formatDate(new Date())
                     }
                 ];
 

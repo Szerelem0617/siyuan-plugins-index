@@ -93,3 +93,11 @@ export function decodeHtml(html: string) {
     txt.innerHTML = html;
     return txt.value;
 }
+
+/**
+ * 格式化日期为 YYYYMMDDHHmmss
+ */
+export function formatDate(d: Date) {
+    const p = (n: number) => (n < 10 ? "0" + n : n);
+    return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
