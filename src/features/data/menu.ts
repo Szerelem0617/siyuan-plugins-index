@@ -16,7 +16,7 @@ export function addDataMenuItems({ detail }: any) {
     if (isAllList) {
         menu.addItem({
             icon: "iconDatabase",
-            label: "📊 列表转数据库 (自动清理)",
+            label: "📊 创建数据库",
             click: () => createDatabaseWithBlocks(selectedIds, protyle)
         });
     }

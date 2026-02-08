@@ -52,7 +52,7 @@ export async function focusDatabaseView(blockId: string, protyle: any) {
         }
 
         if (!linkedAvId) {
-            showMessage("❌ 未找到绑定的数据库（请确保该列表已转为数据库）", 3000, "info");
+            showMessage("❌ 未找到绑定的数据库（请确保该列表已创建数据库）", 3000, "info");
             return;
         }
 
@@ -108,7 +108,7 @@ export async function focusDatabaseView(blockId: string, protyle: any) {
 }
 
 /**
- * 列表转数据库逻辑
+ * 创建数据库逻辑
  */
 export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle: any) {
     if (!sourceBlockIds || sourceBlockIds.length === 0) return;
