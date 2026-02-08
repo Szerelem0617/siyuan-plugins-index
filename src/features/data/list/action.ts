@@ -1,6 +1,6 @@
 import { client } from "../../../shared/api-client";
 import { showMessage } from "siyuan";
-import { ATTR_LINKED_AV, ATTR_LINKED_LIST, ATTR_ITEM_ID } from "../../../shared/constants";
+import { ATTR_LINKED_AV, ATTR_LINKED_AV_BLOCK, ATTR_LINKED_LIST, ATTR_ITEM_ID } from "../../../shared/constants";
 import { settings } from "../../../core/settings";
 import { post } from "../../../shared/api-client/request";
 import { formatDate } from "../../../shared/utils";
@@ -33,8 +33,23 @@ export async function focusDatabaseView(blockId: string, protyle: any) {
             const attrsRes = await client.getBlockAttrs({ id: currentId });
             const attrs = attrsRes.data || {};
             if (attrs[ATTR_LINKED_AV]) {
-                linkedAvId = attrs[ATTR_LINKED_AV];
-                break;
+                const avId = attrs[ATTR_LINKED_AV];
+                const avBlockId = attrs[ATTR_LINKED_AV_BLOCK];
+                
+                let isDeadLink = false;
+                if (avBlockId) {
+                    try {
+                        const blockInfo = await post("/api/block/getBlockInfo", { id: avBlockId });
+                        if (!blockInfo) isDeadLink = true;
+                    } catch (e) {
+                        isDeadLink = true;
+                    }
+                }
+
+                if (!isDeadLink) {
+                    linkedAvId = avId;
+                    break;
+                }
             }
 
             currentId = res.data[0].parent_id;
@@ -109,20 +124,36 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
     try {
         // --- 0. 预检查：智能检测绑定关系 ---
         let existingAvID = null;
+        let existingAvBlockID = null;
         for (const listId of sourceBlockIds) {
             const attrsRes = await client.getBlockAttrs({ id: listId });
             const attrs = attrsRes.data || {};
 
             if (attrs[ATTR_LINKED_AV]) {
                 const linkedAvId = attrs[ATTR_LINKED_AV];
-                try {
-                    const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: linkedAvId });
-                    if (keysRes) {
-                        existingAvID = linkedAvId;
-                        break;
+                const linkedAvBlockId = attrs[ATTR_LINKED_AV_BLOCK];
+
+                let isDeadLink = false;
+                if (linkedAvBlockId) {
+                    try {
+                        const blockInfo = await post("/api/block/getBlockInfo", { id: linkedAvBlockId });
+                        if (!blockInfo) isDeadLink = true;
+                    } catch (e) {
+                        isDeadLink = true;
                     }
-                } catch (e) {
-                    console.warn(`[Data] AV Check failed for [${linkedAvId}]`, e);
+                }
+
+                if (!isDeadLink) {
+                    try {
+                        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: linkedAvId });
+                        if (keysRes) {
+                            existingAvID = linkedAvId;
+                            existingAvBlockID = linkedAvBlockId;
+                            break;
+                        }
+                    } catch (e) {
+                        console.warn(`[Data] AV Check failed for [${linkedAvId}]`, e);
+                    }
                 }
             }
         }
@@ -167,7 +198,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         }
 
         let realAvID = existingAvID;
-        let blockID = existingAvID; 
+        let blockID = existingAvBlockID || existingAvID; 
         let viewID = null;
 
         if (!existingAvID) {
@@ -424,10 +455,17 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         await Promise.all(savePromises);
 
         // --- 7. 双向绑定 ---
+        for (const listId of sourceBlockIds) {
+            await client.setBlockAttrs({ 
+                id: listId, 
+                attrs: { 
+                    [ATTR_LINKED_AV]: realAvID,
+                    [ATTR_LINKED_AV_BLOCK]: blockID
+                } 
+            });
+        }
+
         if (!existingAvID) {
-            for (const listId of sourceBlockIds) {
-                await client.setBlockAttrs({ id: listId, attrs: { [ATTR_LINKED_AV]: realAvID } });
-            }
             await client.setBlockAttrs({ id: blockID, attrs: { [ATTR_LINKED_LIST]: sourceBlockIds.join(",") } });
         }
 
