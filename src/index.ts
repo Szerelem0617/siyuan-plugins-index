@@ -3,6 +3,7 @@ import { setI18n, setPlugin } from "./shared/utils";
 import { createDialog, initTopbar } from "./ui/topbar";
 import { settings, CONFIG } from "./core/settings";
 import { buildDoc as buildDocNew } from "./features/builder/menu";
+import { addDataMenuItems, avEventHandler } from "./features/data";
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
@@ -21,6 +22,7 @@ export default class IndexPlugin extends Plugin {
         await settings.initData();
         //监听块菜单事件
         this.eventBus.on("click-blockicon", buildDocNew);
+        this.eventBus.on("click-blockicon", addDataMenuItems);
         //监听文档载入事件
         this.eventBus.on("loaded-protyle-static", updateIndex);
         
@@ -29,6 +31,7 @@ export default class IndexPlugin extends Plugin {
 
         // this.eventBus.on("ws-main",this.eventBusLog);
         initEmojiEvent();
+        avEventHandler.init();
     }
     // onLayoutReady() {
     //     initObserver();
@@ -36,9 +39,11 @@ export default class IndexPlugin extends Plugin {
 
     onunload() {
         this.eventBus.off("click-blockicon", buildDocNew);
+        this.eventBus.off("click-blockicon", addDataMenuItems);
         this.eventBus.off("loaded-protyle-static", updateIndex);
         this.eventBus.off("switch-protyle", this.switchHandler);
         removeEmojiEvent();
+        avEventHandler.destroy();
         console.log("IndexPlugin onunload");
     }
 
