@@ -378,6 +378,12 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         // --- 5. 插入与更新数据 ---
         let itemIDMap: Record<string, string> = {};
         
+        // Fix: If we are creating a NEW database (because the old one was dead or didn't exist),
+        // we MUST ignore the savedItemID from the DOM because they belong to the old/dead AV.
+        if (!existingAvID) {
+            allItems.forEach(item => item.savedItemID = null);
+        }
+        
         if (existingAvID) {
             try {
                 const renderRes = await post("/api/av/renderAttributeView", { 
