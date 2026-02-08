@@ -18,6 +18,9 @@ async function handleAltClick(event: MouseEvent) {
 
     const target = event.target as HTMLElement;
     const textContent = target.textContent?.trim() || "";
+
+    // Ignore database cells (they have their own handling)
+    if (target.closest(".av__cell")) return;
     
     // Ignore the fixed separator character
     if (textContent === "➖") return;
