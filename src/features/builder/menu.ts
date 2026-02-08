@@ -47,12 +47,6 @@ export function buildDoc({ detail }: any) {
         label: "👇 构建标题行",
         click: () => syncManager(blockId, blockType, "PUSH_TO_BOTTOM")
     });
-
-    menu.addItem({
-        icon: "iconDatabase",
-        label: "📅 创建数据库",
-        click: () => createDatabaseWithBlocks([blockId], detail.protyle)
-    });
 }
 
 async function syncManager(sourceBlockId: string, sourceType: string, actionType: string) {

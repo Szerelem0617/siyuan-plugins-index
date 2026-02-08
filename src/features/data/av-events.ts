@@ -54,20 +54,7 @@ class AVEventHandler {
 
         let protyleInstance: any = null;
         try {
-            // @ts-ignore
-            const editors = window.siyuan.ws.app.plugins.find(p => p.name === "index-siyuan")?.getOpenedTab(); 
-            // Better way to find protyle instance in current project context:
-            // index.ts might need to expose a way to get active protyle.
-            // For now, let's use a simpler heuristic or the one from original code if we can access siyuan globals.
-            // @ts-ignore
-            if (window.siyuan.layout.centerLayout) {
-                // @ts-ignore
-                const activeTab = window.siyuan.layout.centerLayout.querySelector(".layout__wnd--active .protyle.fn__flex-1:not(.fn__none)");
-                if (activeTab) {
-                    // Try to find the protyle instance associated with this element
-                    // This is tricky without direct access to the Editor objects.
-                }
-            }
+            protyleInstance = this.getProtyleByElement(avContainer);
         } catch (e) {
             console.warn("[SyncPlugin] Protyle lookup failed:", e);
         }
@@ -93,6 +80,32 @@ class AVEventHandler {
         }
 
         this.showSyncMenu(pos, avID, rowID, colID, avBlockID, protyleInstance, colType, colName, cell);
+    }
+
+    private getProtyleByElement(element: Element): any {
+        try {
+            // @ts-ignore
+            const root = window.siyuan.layout.layout;
+            const find = (node: any): any => {
+                if (!node) return null;
+                if (node.model && node.model.editor && node.model.editor.protyle && node.model.editor.protyle.element) {
+                    if (node.model.editor.protyle.element.contains(element)) {
+                        return node.model.editor; 
+                    }
+                }
+                if (node.children) {
+                    for (const child of node.children) {
+                        const res = find(child);
+                        if (res) return res;
+                    }
+                }
+                return null;
+            }
+            return find(root);
+        } catch(e) {
+            console.error("Protyle lookup error", e);
+            return null;
+        }
     }
 
     private async showSyncMenu(pos: any, avID: string, rowID: string, colID: string, avBlockID: string, protyleInstance: any, colType: string, colName: string, cell: HTMLElement) {
@@ -390,10 +403,17 @@ class AVEventHandler {
     private async updateCellValue(protyleInstance: any, avID: string, rowID: string, colID: string, newValue: string) {
         try {
             const avData = await post("/api/av/renderAttributeView", { id: avID });
-            const rows = avData.view ? avData.view.rows : avData.rows || [];
+            // The API response data structure usually has 'view' at the top level
+            const view = avData.view || avData;
+            const rows = view.rows || [];
             const row = rows.find((r: any) => r.id === rowID);
-            const columns = avData.view ? avData.view.columns : avData.columns || [];
+            
+            // Columns might be directly on view or passed differently
+            const columns = view.columns || [];
             const cellIndex = columns.findIndex((c: any) => c.id === colID);
+            
+            if (!row || cellIndex === -1) throw new Error("Row or Column not found");
+            
             const cellData = row.cells[cellIndex];
             if (!cellData) throw new Error("Cell not found");
             
@@ -419,12 +439,14 @@ class AVEventHandler {
                 protyleInstance.transaction([operation]);
             } else {
                 await post("/api/transactions", {
-                    app: "plugin-index",
+                    app: "plugin-index", // Use a fixed app ID or retrieved one
+                    reqId: Date.now(),
                     transactions: [{ doOperations: [operation] }]
                 });
             }
             showMessage(`✅ 已保存: ${newValue.substring(0, 20)}${newValue.length > 20 ? '...' : ''}`, 3000);
         } catch (e: any) {
+            console.error("Update Value Error", e);
             showMessage(`❌ 保存失败: ${e.message}`, 3000, "error");
         }
     }
@@ -482,6 +504,8 @@ class AVEventHandler {
             const columns = view.columns || [];
             const colIndex = columns.findIndex((c: any) => c.id === colID);
             
+            if (!sourceRow || colIndex === -1) throw new Error("Source row or column not found");
+
             const cleanValue = (val: any) => {
                 const res: any = { type: val.type };
                 ["text", "number", "mSelect", "mAsset", "block", "url", "phone", "email", "template", "checkbox", "relation", "rollup", "date"].forEach(f => {
@@ -521,11 +545,13 @@ class AVEventHandler {
             } else {
                 await post("/api/transactions", { 
                     app: "plugin-index", 
+                    reqId: Date.now(),
                     transactions: [{ doOperations: ops }] 
                 });
             }
             showMessage(`✅ 同步成功: 更新 ${targetIDs.length} 个项`, 3000);
         } catch (e: any) { 
+            console.error("Sync Error", e);
             showMessage(`❌ 同步失败: ${e.message}`, 3000, "error"); 
         }
     }
