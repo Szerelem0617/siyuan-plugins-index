@@ -1,6 +1,7 @@
 import { client } from "../../shared/api-client";
 import { Menu, Dialog, showMessage } from "siyuan";
 import { BGS } from "./constants";
+import EmojiDialog from "../../ui/components/dialog/emoji-dialog.svelte";
 
 async function post(url: string, data: any) {
     const response = await fetch(url, {
@@ -137,29 +138,13 @@ class AVEventHandler {
             // 1. 图标 (Icon)
             const isIconCol = (cell.querySelector(".b3-menu__avemoji")) || /^icon$/i.test(colName);
             if (isIconCol) {
-                const iconMenu: any[] = [];
-                // @ts-ignore
-                const emojis = window.siyuan.config.editor.emoji;
-                if (emojis && emojis.length > 0) {
-                    emojis.slice(0, 10).forEach((unicode: string) => {
-                        iconMenu.push({
-                            label: this.getEmojiHTML(unicode),
-                            click: () => {
-                                const val = (colType === "text") ? this.getEmojiChar(unicode) : unicode;
-                                this.updateCellValue(protyleInstance, avID, rowID, colID, val);
-                            }
-                        });
-                    });
-                    iconMenu.push({ type: "separator" });
-                }
-                iconMenu.push({
-                    label: "输入 /emoji",
+                menu.addItem({
+                    icon: "iconEmoji",
+                    label: "选择图标 (Icon)",
                     click: () => {
-                        cell.click(); cell.focus();
-                        setTimeout(() => { document.execCommand("insertText", false, "/emoji"); }, 50);
+                        this.openEmojiDialog(protyleInstance, avID, rowID, colID);
                     }
                 });
-                menu.addItem({ icon: "iconEmoji", label: "选择图标 (Icon)", submenu: iconMenu });
             }
 
             // 2. 题头图 (Title Image)
@@ -237,6 +222,30 @@ class AVEventHandler {
             label: "向下同步：到所有子项",
             click: () => this.syncAttribute(avID, rowID, colID, "children", avBlockID, protyleInstance)
         });
+    }
+
+    private openEmojiDialog(protyleInstance: any, avID: string, rowID: string, colID: string) {
+        const dialog = new Dialog({
+            title: "",
+            content: `<div class="emoji-dialog-content" style="height: 100%; display: flex; flex-direction: column;"></div>`,
+            width: "360px",
+            height: "460px",
+        });
+
+        const target = dialog.element.querySelector(".emoji-dialog-content");
+        if (target) {
+            new EmojiDialog({
+                target: target,
+                props: {
+                    onSelect: (emoji: string) => {
+                        if (emoji !== undefined) {
+                            this.updateCellValue(protyleInstance, avID, rowID, colID, emoji);
+                        }
+                        dialog.destroy();
+                    }
+                }
+            });
+        }
     }
 
     private openBuiltInImagesDialog(protyleInstance: any, avID: string, rowID: string, colID: string) {
