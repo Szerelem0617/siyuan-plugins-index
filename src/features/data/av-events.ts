@@ -1,6 +1,6 @@
 import { client } from "../../shared/api-client";
 import { Menu, Dialog, showMessage } from "siyuan";
-import { BGS, ATTR_LINKED_AV } from "./constants";
+import { BGS } from "./constants";
 
 async function post(url: string, data: any) {
     const response = await fetch(url, {
@@ -14,75 +14,33 @@ async function post(url: string, data: any) {
 }
 
 class AVEventHandler {
-    private onMouseDownBound = this.onMouseDown.bind(this);
-    private onClickBound = this.onClick.bind(this);
+    private onContextMenuBound = this.onContextMenu.bind(this);
+    private lastClickedAVCell: HTMLElement | null = null;
 
     public init() {
-        window.addEventListener("mousedown", this.onMouseDownBound, true);
-        window.addEventListener("click", this.onClickBound, true);
+        window.addEventListener("contextmenu", this.onContextMenuBound, true);
     }
 
     public destroy() {
-        window.removeEventListener("mousedown", this.onMouseDownBound, true);
-        window.removeEventListener("click", this.onClickBound, true);
+        window.removeEventListener("contextmenu", this.onContextMenuBound, true);
+        this.lastClickedAVCell = null;
     }
 
-    private getAVCell(event: MouseEvent) {
-        if (!event.altKey) return null;
+    private onContextMenu(event: MouseEvent) {
         const target = event.target as HTMLElement;
-        return target.closest(".av__cell");
-    }
-
-    private onMouseDown(event: MouseEvent) {
-        const cell = this.getAVCell(event);
+        const cell = target.closest(".av__cell") as HTMLElement;
         if (cell) {
-            event.preventDefault();
-            event.stopPropagation();
+            this.lastClickedAVCell = cell;
+        } else {
+            this.lastClickedAVCell = null;
         }
     }
 
-    private async onClick(event: MouseEvent) {
-        const cell = this.getAVCell(event) as HTMLElement;
-        if (!cell) return;
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        const row = cell.closest(".av__row") || cell.closest(".av__gallery-item") || cell.closest(".av__kanban-item");
-        const avContainer = cell.closest(".av") as HTMLElement;
-        if (!row || !avContainer) return;
-
-        let protyleInstance: any = null;
-        try {
-            protyleInstance = this.getProtyleByElement(avContainer);
-        } catch (e) {
-            console.warn("[SyncPlugin] Protyle lookup failed:", e);
-        }
-
-        const avID = avContainer.getAttribute("data-av-id")!;
-        const avBlockID = avContainer.getAttribute("data-node-id")!;
-        const rowID = row.getAttribute("data-id")!;
-        let colID = cell.getAttribute("data-col-id") || cell.getAttribute("data-field-id")!;
-
-        const pos = {
-            clientX: event.clientX || cell.getBoundingClientRect().left,
-            clientY: event.clientY || cell.getBoundingClientRect().bottom
-        };
-
-        let colType = "";
-        let colName = "";
-        if (avContainer) {
-            const headerCell = avContainer.querySelector(`.av__row--header .av__cell[data-col-id="${colID}"]`);
-            if (headerCell) {
-                colType = headerCell.getAttribute("data-dtype") || "";
-                colName = headerCell.querySelector(".av__celltext")?.textContent?.trim() || "";
-            }
-        }
-
-        this.showSyncMenu(pos, avID, rowID, colID, avBlockID, protyleInstance, colType, colName, cell);
+    public getLastClickedCell() {
+        return this.lastClickedAVCell;
     }
 
-    private getProtyleByElement(element: Element): any {
+    public getProtyleByElement(element: Element): any {
         try {
             // @ts-ignore
             const root = window.siyuan.layout.layout;
@@ -108,9 +66,36 @@ class AVEventHandler {
         }
     }
 
-    private async showSyncMenu(pos: any, avID: string, rowID: string, colID: string, avBlockID: string, protyleInstance: any, colType: string, colName: string, cell: HTMLElement) {
-        const menu = new Menu("av-sync-menu");
-        
+    public async showSyncMenu(menu: Menu, cell: HTMLElement) {
+        const row = cell.closest(".av__row") || cell.closest(".av__gallery-item") || cell.closest(".av__kanban-item");
+        const avContainer = cell.closest(".av") as HTMLElement;
+        if (!row || !avContainer) return;
+
+        let protyleInstance: any = null;
+        try {
+            protyleInstance = this.getProtyleByElement(avContainer);
+        } catch (e) {
+            console.warn("[SyncPlugin] Protyle lookup failed:", e);
+        }
+
+        const avID = avContainer.getAttribute("data-av-id")!;
+        const avBlockID = avContainer.getAttribute("data-node-id")!;
+        const rowID = row.getAttribute("data-id")!;
+        let colID = cell.getAttribute("data-col-id") || cell.getAttribute("data-field-id")!;
+
+        let colType = "";
+        let colName = "";
+        if (avContainer) {
+            const headerCell = avContainer.querySelector(`.av__row--header .av__cell[data-col-id="${colID}"]`);
+            if (headerCell) {
+                colType = headerCell.getAttribute("data-dtype") || "";
+                colName = headerCell.querySelector(".av__celltext")?.textContent?.trim() || "";
+            }
+        }
+
+        // Add Separator to separate from native items
+        menu.addSeparator();
+
         if (cell) {
             // 1. 图标 (Icon)
             const isIconCol = (cell.querySelector(".b3-menu__avemoji")) || /^icon$/i.test(colName);
@@ -215,8 +200,6 @@ class AVEventHandler {
             label: "向下同步：到所有子项",
             click: () => this.syncAttribute(avID, rowID, colID, "children", avBlockID, protyleInstance)
         });
-
-        menu.open({ x: pos.clientX, y: pos.clientY });
     }
 
     private openBuiltInImagesDialog(protyleInstance: any, avID: string, rowID: string, colID: string) {

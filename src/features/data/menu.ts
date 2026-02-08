@@ -1,5 +1,17 @@
-import { client } from "../../shared/api-client";
 import { focusDatabaseView, createDatabaseWithBlocks } from "./action";
+import { avEventHandler } from "./av-events";
+
+/**
+ * AV 菜单回调 (open-menu-av)
+ */
+export function addAVMenuItems({ detail }: any) {
+    const { menu } = detail;
+    const cell = avEventHandler.getLastClickedCell();
+    
+    if (cell && menu) {
+        avEventHandler.showSyncMenu(menu, cell);
+    }
+}
 
 /**
  * Data 功能的块菜单回调
@@ -11,7 +23,7 @@ export function addDataMenuItems({ detail }: any) {
     const types = Array.from(blockElements).map((el: any) => el.getAttribute("data-type"));
     const selectedIds = Array.from(blockElements).map((el: any) => el.getAttribute("data-node-id"));
 
-    // 1. 列表转数据库 (仅限全选列表)
+    // 1. 创建数据库 (仅限全选列表)
     const isAllList = types.every(t => t === "NodeList");
     if (isAllList) {
         menu.addItem({
