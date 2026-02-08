@@ -1,20 +1,8 @@
-import { focusDatabaseView, createDatabaseWithBlocks } from "./action";
-import { avEventHandler } from "./av-events";
+import { focusDatabaseView } from "../attribute-view/action";
+import { createDatabaseWithBlocks } from "./action";
 
 /**
- * AV 菜单回调 (open-menu-av)
- */
-export function addAVMenuItems({ detail }: any) {
-    const { menu } = detail;
-    const cell = avEventHandler.getLastClickedCell();
-    
-    if (cell && menu) {
-        avEventHandler.showSyncMenu(menu, cell);
-    }
-}
-
-/**
- * Data 功能的块菜单回调
+ * Data 功能的块菜单回调 (针对列表块)
  */
 export function addDataMenuItems({ detail }: any) {
     const { menu, blockElements, protyle } = detail;

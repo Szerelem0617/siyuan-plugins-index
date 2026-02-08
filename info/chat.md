@@ -12,41 +12,36 @@
     - `index/`: 实现文档子文档目录的自动生成与更新逻辑。
     - `outline/`: 实现文档内标题大纲的提取、格式化及插入逻辑。
     - `builder/`: 提供更复杂的文档构建器功能，支持深度定制和自动同步。
-    - `data/`: 数据转换与同步功能。
-        - `action.ts`: 核心逻辑实现，如“创建数据库”及数据库视图聚焦。
-        - `menu.ts`: 统一管理块菜单（Context Menu）项。目前已集成数据库单元格的右键菜单功能。
-        - `av-events.ts`: 数据库增强功能处理类，支持属性向上/向下同步、图标/题头图/模板选择等。
+    - **`data/`**: 数据转换与同步功能（已进行解耦重构）。
+        - `index.ts`: 统一导出点。
+        - **`list/`**: 列表块相关操作。
+            - `action.ts`: 列表转数据库核心逻辑 (`createDatabaseWithBlocks`)。
+            - `menu.ts`: 针对列表块的右键菜单回调。
+        - **`attribute-view/`**: 数据库（AV）相关增强。
+            - `action.ts`: 数据库视图聚焦逻辑 (`focusDatabaseView`)。
+            - `events.ts`: 数据库事件监听与单元格上下文捕获（支持 Alt+Click 和 ContextMenu）。
+            - `menu.ts`: 数据库内部同步及增强功能的菜单 handler。
+            - `constants.ts`: 数据库专用视觉常量（如题头图背景）。
     - `notebook/`: 实现笔记本级别的目录索引生成。
-- **`src/events/`**: 事件处理逻辑。
-    - `protyle-event.ts`: 监听 Protyle 编辑器的静态加载和切换事件，驱动目录和大纲的自动更新。
-    - `emoji-event.ts`: 处理内置 Emoji 的点击事件，支持在编辑器中直接触发 Emoji 选择器。
-- **`src/shared/`**: 共享资源。
-    - `api-client/`: 封装了 SiYuan SDK，提供 `BlockService` 等高层服务，支持带属性绑定的块插入与更新（支持大纲结构的自动修复）。
-    - `utils/`: 包含图标处理、Markdown 转换、队列处理等通用工具函数。
-- **`src/ui/`**: 界面展示层。
-    - `topbar.ts`: 定义顶栏图标及主弹窗逻辑。
-    - `components/`: 基于 Svelte 的 UI 组件，涵盖设置面板及各类功能对话框。
+- **`src/events/`**: 插件级通用事件处理。
+- **`src/shared/`**: 高度解耦的共享资源。
+    - `api-client/`: 封装 SiYuan SDK 及 `post` 请求工具。
+    - `constants.ts`: 定义全局共用的自定义属性键名（如 `ATTR_LINKED_AV`）。
+    - `utils/`: 通用工具函数（图标、Markdown 处理等）。
+- **`src/ui/`**: 界面展示层。基于 Svelte 的组件化 UI。
 
 ## 关键技术点
 
-1. **解耦设计**: 业务逻辑高度模块化，通过 `src/features` 分类管理，便于维护和扩展。
-2. **菜单驱动**: 摒弃了 `Alt + Click` 等隐蔽的交互方式，全面转向 SiYuan 原生的右键菜单（`click-blockicon`），提升了功能的可发现性和易用性。
-3. **自动化更新**: 通过监听 `loaded-protyle-static` 和 `switch-protyle` 事件，实现目录和大纲的无感同步。
-4. **属性同步**: 针对数据库（Attribute View）实现了深度的属性同步逻辑（向上/向下），极大地方便了大规模文档元数据的管理。
-5. **Svelte 集成**: 使用 Svelte 构建响应式 UI，提供流畅的用户配置体验。
+1. **解耦设计**: 采用 Feature-based 目录结构，业务逻辑（Action）、交互逻辑（Menu）与事件驱动（Events）清晰分离。
+2. **多模式触发**: 数据库增强功能同时支持 `Alt + Click`（快捷操作）和 SiYuan 原生右键菜单（`open-menu-av`），兼顾效率与发现性。
+3. **自动化更新**: 监听 Protyle 生命周期事件，确保目录大纲与内容的实时一致性。
+4. **属性持久化**: 利用 `custom-attr` 在列表与数据库之间建立稳固的双向映射。
 
-## 给思源源码开发者的 Debug 提示
+## 下一步 Refractor 建议
 
-为了将“创建数据库”、“向上/向下同步”等功能完美集成到 SiYuan 的右键菜单中，我们需要确认以下信息：
+1.  **列处理器抽象 (Column Processors)**: 目前 `events.ts` 中处理 Icon、题头图、模板的逻辑混合在一起。建议抽象出 `IColumnProcessor` 接口，为不同列类型编写独立的处理器类。
+2.  **上下文管理强化**: `lastClickedAVCell` 是一个全局变量。建议引入一个单例 `EditorContext` 来管理当前活动的编辑器实例、选中的块/单元格，提高可靠性。
+3.  **UI 组件化**: 数据库增强功能中的“内置背景选择”和“模板选择”目前仍使用原生 DOM 操作生成。建议将其重构为独立的 Svelte 组件，利用 Svelte 的声明式渲染简化代码。
+4.  **统一 API 错误处理**: 在 `src/shared/api-client/request.ts` 中增加通用的错误捕获与用户提示（Message）逻辑，减少业务代码中的重复 try-catch。
 
-1.  **AV 单元格的右键事件机制**:
-    - 当用户在数据库（Attribute View）的单元格（`.av__cell`）上点击右键时，触发的是哪个 EventBus 事件？（例如：是 `click-blockicon`，还是 `open-menu-av`，或者其他专用事件？）
-    - 如果触发了事件，其 `detail` 对象中是否包含可以直接操作的 `Menu` 实例以及当前选中的单元格/行信息？
 
-2.  **菜单挂载点**:
-    - 如果没有专用事件，官方推荐的方式是否是监听全局 `contextmenu` 事件？
-    - 在 `contextmenu` 事件触发后，如何获取当前已经打开的系统菜单实例（例如 `window.siyuan.menus.menu`），以便向其 `append` 自定义的菜单项，而不是覆盖整个菜单？
-
-3.  **现有尝试**:
-    - 目前尝试了监听 `click-blockicon`，但似乎在 AV 单元格右键时并未触发，或者无法通过 `detail` 获取到单元格上下文。
-    - 接下来将尝试监听全局 `contextmenu` 并延时挂载菜单项。

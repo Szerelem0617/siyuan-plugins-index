@@ -74,7 +74,3 @@ export const BGS = [
     "background-image:linear-gradient(-225deg, #69EACB 0%, #EACCF8 48%, #6654F1 100%)",
     "background-image:linear-gradient(-225deg, #231557 0%, #44107A 29%, #FF1361 67%, #FFF800 100%)"
 ];
-
-export const ATTR_LINKED_AV = "custom-index-linked-av";
-export const ATTR_LINKED_LIST = "custom-index-linked-list";
-export const ATTR_ITEM_ID = "custom-av-item-id";

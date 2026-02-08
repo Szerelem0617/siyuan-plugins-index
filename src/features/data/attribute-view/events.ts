@@ -1,18 +1,8 @@
-import { client } from "../../shared/api-client";
+import { client } from "../../../shared/api-client";
 import { Menu, Dialog, showMessage } from "siyuan";
 import { BGS } from "./constants";
-import EmojiDialog from "../../ui/components/dialog/emoji-dialog.svelte";
-
-async function post(url: string, data: any) {
-    const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-    });
-    const res = await response.json();
-    if (res.code !== 0) throw new Error(`API Error ${res.code}: ${res.msg}`);
-    return res.data;
-}
+import EmojiDialog from "../../../ui/components/dialog/emoji-dialog.svelte";
+import { post } from "../../../shared/api-client/request";
 
 class AVEventHandler {
     private onContextMenuBound = this.onContextMenu.bind(this);
@@ -478,26 +468,6 @@ class AVEventHandler {
             console.error("Update Value Error", e);
             showMessage(`❌ 保存失败: ${e.message}`, 3000, "error");
         }
-    }
-
-    private getEmojiChar(unicode: string) {
-        if (!unicode || unicode.indexOf(".") > -1) return unicode;
-        try {
-            return unicode.split("-").map(item => String.fromCodePoint(parseInt(item, 16))).join("");
-        } catch (e) { return unicode; }
-    }
-
-    private getEmojiHTML(unicode: string) {
-        try {
-            if (unicode.indexOf(".") > -1) {
-                return `<img class="emoji" src="/emojis/${unicode}"/>`;
-            }
-            let emoji = "";
-            unicode.split("-").forEach(item => {
-                emoji += String.fromCodePoint(parseInt(item, 16));
-            });
-            return emoji;
-        } catch (e) { return ""; }
     }
 
     private async findChildItemIDs(sourceBlockID: string, allRows: any[], columns: any[]) {
