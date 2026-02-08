@@ -15,15 +15,52 @@ async function post(url: string, data: any) {
 
 class AVEventHandler {
     private onContextMenuBound = this.onContextMenu.bind(this);
+    private onMouseDownBound = this.onMouseDown.bind(this);
+    private onClickBound = this.onClick.bind(this);
     private lastClickedAVCell: HTMLElement | null = null;
 
     public init() {
         window.addEventListener("contextmenu", this.onContextMenuBound, true);
+        window.addEventListener("mousedown", this.onMouseDownBound, true);
+        window.addEventListener("click", this.onClickBound, true);
     }
 
     public destroy() {
         window.removeEventListener("contextmenu", this.onContextMenuBound, true);
+        window.removeEventListener("mousedown", this.onMouseDownBound, true);
+        window.removeEventListener("click", this.onClickBound, true);
         this.lastClickedAVCell = null;
+    }
+
+    private getAVCell(event: MouseEvent) {
+        if (!event.altKey) return null;
+        const target = event.target as HTMLElement;
+        return target.closest(".av__cell") as HTMLElement;
+    }
+
+    private onMouseDown(event: MouseEvent) {
+        const cell = this.getAVCell(event);
+        if (cell) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }
+
+    private async onClick(event: MouseEvent) {
+        const cell = this.getAVCell(event);
+        if (!cell) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const menu = new Menu("av-sync-menu");
+        this.showSyncMenu(menu, cell);
+        
+        const pos = {
+            clientX: event.clientX || cell.getBoundingClientRect().left,
+            clientY: event.clientY || cell.getBoundingClientRect().bottom
+        };
+        menu.open({ x: pos.clientX, y: pos.clientY });
     }
 
     private onContextMenu(event: MouseEvent) {
