@@ -17,48 +17,27 @@
 
 **请求**: 请提供将 `renderTemplate` 返回的 DOM 内容正确写入新文档的 API 调用链路或示例代码。
 
-## 关于获取数据库全量数据与列映射的疑问 (Batch Processing)
+## 关于项目架构与重构的思考 (Refactoring & Architecture)
 
+### 1. `events.ts` 的存留问题
+**结论**: `events.ts` **不能删除**，它是 Attribute View 交互的“总调度中心 (Controller)”。
 
+**理由**:
+- **事件捕获**: 它负责监听全局 `mousedown`、`click` 和 `contextmenu` 事件。只有在这里才能捕获到用户是否按下了 `Alt` 键并点击了数据库单元格。
+- **上下文识别**: 它包含 `getAVCell` 和 `getProtyleByElement` 等逻辑，用于从 DOM 元素溯源到具体的数据库 ID、行 ID 和 Protyle 实例。
+- **插件集成**: `src/index.ts` 中注册的 `open-menu-av` 事件直接绑定到此文件的 `addAVMenuItems`。
+- **职责**: 现在的 `events.ts` 已经变得非常精简，它不再包含复杂的同步算法，而是专注于“识别交互 -> 构建菜单 -> 调用功能模块”。
 
-**当前背景**:
+### 2. `utils.ts` 的迁移建议
+**结论**: 建议将其移至 `src/shared/utils/av-utils.ts`。
 
-我们在开发“批量同步到后代”功能时，需要获取数据库（Attribute View）中的**所有行**（包括被当前视图筛选器隐藏的行），以便查找并更新后代项。
+**理由**:
+- **跨功能共享**: `getColIDMap`（获取列名到 ID 的映射）和 `cleanValue`（规范化单元格数据）不仅在 `attribute-view` 内部使用，未来在 `src/features/data/list/action.ts`（如列表聚焦数据库）中也会用到。
+- **降低耦合**: 按照 Feature-Oriented 架构，`shared` 应该存放那些“不属于特定业务，而是作为基础设施”的工具。AV 的数据解析协议（Standard Pose）属于这类基础设施。
+- **架构一致性**: 我们的 `shared/utils` 已经有了 `dom-utils`、`markdown-utils` 等，新增 `av-utils` 能够让数据处理逻辑更加统一。
 
-
-
-**我们尝试的方案**:
-
-1.  创建一个临时视图 (`addAttributeViewView`)。
-
-2.  使用 `renderAttributeView` 读取该临时视图的数据（期望是没有筛选的全量数据）。
-
-3.  操作完成后删除临时视图。
-
-
-
-**遇到的问题**:
-
-- **列索引不匹配**: 我们发现源视图（用户当前看到的）和临时视图返回的数据中，`columns` 的顺序可能不一致。导致我们用源视图计算出的 `colIndex` 去读取临时视图的 `cells` 时取到了错误的数据（或空数据）。
-
-- **数据获取**: 我们不确定这是否是获取全量数据的最佳实践。
-
-
-
-**我们的疑问**:
-
-1.  **全量数据获取**: 有没有更优雅的 API 来获取指定 AV (`avID`) 的所有行数据（忽略 View 的 Filters）？
-
-    - 比如 `renderAttributeView` 是否支持忽略 `viewID` 直接获取原始数据？
-
-    - 或者是否有 SQL 查询方案可以直接构建出 AV 的行结构？
-
-2.  **列 ID 映射**: 不同 View 返回的 `columns` 顺序是否是不确定的？
-
-    - 最佳实践是否是：每次 `renderAttributeView` 后，都必须根据返回的 `view.columns` 重新建立 `ColumnID -> Index` 的映射表？
-
-3.  **性能优化**: 如果数据库很大（几千行），创建临时视图 -> 渲染 -> 删除 的开销是否过大？是否有针对纯数据读写的轻量级接口？
-
-
-
-**请求**: 请指点获取 AV 全量数据的标准姿势，以及如何稳健地处理跨视图的列数据映射。
+---
+**后续行动**:
+- [ ] 将 `src/features/data/attribute-view/utils.ts` 移动并重命名为 `src/shared/utils/av-utils.ts`。
+- [ ] 更新 `attribute-view` 目录下所有文件的引用路径。
+- [ ] 检查 `src/features/data/list/action.ts` 是否可以改用这些工具以简化代码。
