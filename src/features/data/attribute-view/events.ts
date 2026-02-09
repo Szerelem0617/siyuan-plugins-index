@@ -201,79 +201,185 @@ class AVEventHandler {
             }
         }
 
-        const syncLabel = isHeader ? "同步此列数据 (从首行开始)" : "数据同步到";
-        const syncSubmenu = [
-            {
-                icon: "iconSort",
-                label: "同级",
-                click: () => this.syncAttribute(avID, rowID || "first", colID, "level", avBlockID, protyleInstance)
-            },
-            {
-                icon: "iconLink",
-                label: "兄弟",
-                click: () => this.syncAttribute(avID, rowID || "first", colID, "siblings", avBlockID, protyleInstance)
-            },
-            {
-                icon: "iconDown",
-                label: "后代",
-                click: () => this.syncAttribute(avID, rowID || "first", colID, "descendants", avBlockID, protyleInstance)
-            },
-            {
-                icon: "iconFilter",
-                label: "所有筛选出的项",
-                click: () => {
-                    confirmDialog("批量同步", "确认将当前项(或首行)的值同步到所有筛选出的项吗？", () => {
+        const syncLabel = isHeader ? "批量同步到后代" : "数据同步到";
+        
+        if (isHeader) {
+            menu.addItem({
+                icon: "iconSync",
+                label: syncLabel,
+                click: () => this.batchSyncToDescendants(avID, colID, avBlockID, protyleInstance)
+            });
+        } else {
+            const syncSubmenu = [
+                {
+                    icon: "iconSort",
+                    label: "同级",
+                    click: () => this.syncAttribute(avID, rowID || "first", colID, "level", avBlockID, protyleInstance)
+                },
+                {
+                    icon: "iconLink",
+                    label: "兄弟",
+                    click: () => this.syncAttribute(avID, rowID || "first", colID, "siblings", avBlockID, protyleInstance)
+                },
+                {
+                    icon: "iconDown",
+                    label: "后代",
+                    click: () => this.syncAttribute(avID, rowID || "first", colID, "descendants", avBlockID, protyleInstance)
+                },
+                {
+                    icon: "iconFilter",
+                    label: "所有筛选出的项",
+                    click: () => {
                         this.syncAttribute(avID, rowID || "first", colID, "filtered", avBlockID, protyleInstance);
-                    });
+                    }
                 }
-            }
-        ];
+            ];
 
-        menu.addItem({
-            icon: "iconSync",
-            label: syncLabel,
-            submenu: syncSubmenu
-        });
+            menu.addItem({
+                icon: "iconSync",
+                label: syncLabel,
+                submenu: syncSubmenu
+            });
+        }
     }
 
     private async batchUpdateCellValue(protyleInstance: any, avID: string, colID: string, newValue: string, colType: string, avBlockID: string) {
-        confirmDialog("批量设置", `确认将该值应用于当前筛选出的所有项吗？\n新值: ${newValue.substring(0, 30)}${newValue.length > 30 ? '...' : ''}`, async () => {
-            try {
-                showMessage("⏳ 正在批量执行...", 3000);
-                const avData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
-                const view = avData.view || avData; 
-                const rows = view.rows || [];
-                const columns = view.columns || [];
-                const colIndex = columns.findIndex((c: any) => c.id === colID);
-                if (colIndex === -1) throw new Error("Column not found");
+        try {
+            showMessage("⏳ 正在批量执行...", 3000);
+            const avData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
+            const view = avData.view || avData; 
+            const rows = view.rows || [];
+            const columns = view.columns || [];
+            const colIndex = columns.findIndex((c: any) => c.id === colID);
+            if (colIndex === -1) throw new Error("Column not found");
 
-                const ops = rows.map((row: any) => {
-                    const cellData = row.cells[colIndex];
-                    const cellType = cellData.valueType || colType || "text";
-                    const updateData: any = { id: cellData.id, type: cellType };
-                    if (cellType === "mAsset") {
-                        updateData.mAsset = [{ content: newValue, name: newValue.split('/').pop() }];
-                    } else {
-                        updateData[cellType === "text" || cellType === "template" ? cellType : "text"] = { content: newValue };
-                    }
-                    return { action: "updateAttrViewCell", id: cellData.id, avID, keyID: colID, rowID: row.id, data: updateData };
-                });
-
-                if (avBlockID) {
-                    ops.push({ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) });
-                }
-
-                if (protyleInstance) {
-                    protyleInstance.transaction(ops);
+            const ops = rows.map((row: any) => {
+                const cellData = row.cells[colIndex];
+                const cellType = cellData.valueType || colType || "text";
+                const updateData: any = { id: cellData.id, type: cellType };
+                if (cellType === "mAsset") {
+                    updateData.mAsset = [{ content: newValue, name: newValue.split('/').pop() }];
                 } else {
-                    await post("/api/transactions", { app: "plugin-index", reqId: Date.now(), transactions: [{ doOperations: ops }] });
+                    updateData[cellType === "text" || cellType === "template" ? cellType : "text"] = { content: newValue };
                 }
-                showMessage(`✅ 批量更新成功: ${rows.length} 个项`, 3000);
-            } catch (e: any) {
-                console.error("Batch Update Error", e);
-                showMessage(`❌ 批量执行失败: ${e.message}`, 3000, "error");
+                return { action: "updateAttrViewCell", id: cellData.id, avID, keyID: colID, rowID: row.id, data: updateData };
+            });
+
+            if (avBlockID) {
+                ops.push({ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) });
             }
-        });
+
+            if (protyleInstance) {
+                protyleInstance.transaction(ops);
+            } else {
+                await post("/api/transactions", { app: "plugin-index", reqId: Date.now(), transactions: [{ doOperations: ops }] });
+            }
+            showMessage(`✅ 批量更新成功: ${rows.length} 个项`, 3000);
+        } catch (e: any) {
+            console.error("Batch Update Error", e);
+            showMessage(`❌ 批量执行失败: ${e.message}`, 3000, "error");
+        }
+    }
+
+    private async batchSyncToDescendants(avID: string, colID: string, avBlockID: string, protyleInstance: any) {
+        try {
+            console.log(`[Batch Sync] Starting sync for AV [${avID}], Col [${colID}]`);
+            showMessage("⏳ 正在批量同步到后代...", 3000);
+            
+            // 1. 获取当前视图的所有可见行（作为源）
+            const sourceViewData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
+            const sourceRows = sourceViewData.view?.rows || sourceViewData.rows || [];
+            console.log(`[Batch Sync] Fetched ${sourceRows.length} source rows (current view)`);
+            
+            // 2. 获取整个数据库的所有行（作为目标查找范围）
+            const allViewData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 2000, filters: [] });
+            const allRows = allViewData.view?.rows || allViewData.rows || [];
+            console.log(`[Batch Sync] Fetched ${allRows.length} total rows (target scope)`);
+
+            const view = sourceViewData.view || sourceViewData;
+            const columns = view.columns || [];
+            const colIndex = columns.findIndex((c: any) => c.id === colID);
+            const pathIdx = columns.findIndex((c: any) => c.name === "Path");
+            
+            console.log(`[Batch Sync] ColIndex: ${colIndex}, PathColIndex: ${pathIdx}`);
+            
+            if (colIndex === -1) throw new Error("Source column not found");
+            
+            const ops: any[] = [];
+            
+            // For each row in current view (SOURCE), find its descendants in all rows (TARGET) and update them
+            for (const row of sourceRows) {
+                const sourceValue = row.cells[colIndex].value;
+                const sourceBlockCell = row.cells.find((c: any) => c.valueType === "block");
+                const sourceBlockID = sourceBlockCell?.value?.block?.id;
+                
+                // Debug log for each source (optional, maybe too verbose for large sets, limiting to first few or specific checks)
+                // console.log(`[Batch Sync] Processing source row: ${row.id}, BlockID: ${sourceBlockID}`);
+                
+                if (!sourceBlockID) continue;
+
+                const cleanValue = (val: any) => {
+                    const res: any = { type: val.type };
+                    ["text", "number", "mSelect", "mAsset", "block", "url", "phone", "email", "template", "checkbox", "relation", "rollup", "date"].forEach(f => {
+                        if (val[f] !== undefined) res[f] = JSON.parse(JSON.stringify(val[f]));
+                    });
+                    return res;
+                };
+                const syncValue = cleanValue(sourceValue);
+
+                let targetIDs: string[] = [];
+                if (pathIdx !== -1) {
+                    targetIDs = allRows.filter((r: any) => {
+                        const path = r.cells[pathIdx]?.value?.text?.content || "";
+                        // Logic check: verify path format matches expectation
+                        return path.includes(`/${sourceBlockID}/`) && r.id !== row.id;
+                    }).map((r: any) => r.id);
+                } else {
+                    console.log(`[Batch Sync] Path column missing, falling back to recursive search for [${sourceBlockID}]`);
+                    targetIDs = await this.findChildItemIDs(sourceBlockID, allRows, columns);
+                }
+
+                if (targetIDs.length > 0) {
+                    console.log(`[Batch Sync] Found ${targetIDs.length} descendants for [${sourceBlockID}]`);
+                }
+
+                targetIDs.forEach(tid => {
+                    const targetRow = allRows.find((r: any) => r.id === tid);
+                    if (targetRow) {
+                        const cell = targetRow.cells[colIndex];
+                        const data = JSON.parse(JSON.stringify(syncValue)); 
+                        data.id = cell.id;
+                        ops.push({ action: "updateAttrViewCell", id: cell.id, avID, keyID: colID, rowID: tid, data });
+                    }
+                });
+            }
+
+            console.log(`[Batch Sync] Total operations generated: ${ops.length}`);
+
+            if (ops.length === 0) {
+                console.warn("[Batch Sync] No operations generated. Check path matching or source/target overlap.");
+                return; // Silent return
+            }
+
+            if (avBlockID) {
+                ops.push({ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) });
+            }
+
+            if (protyleInstance) {
+                protyleInstance.transaction(ops);
+            } else {
+                await post("/api/transactions", { 
+                    app: "plugin-index", 
+                    reqId: Date.now(),
+                    transactions: [{ doOperations: ops }] 
+                });
+            }
+            showMessage(`✅ 批量同步成功: 更新 ${ops.length} 个单元格`, 3000);
+
+        } catch (e: any) {
+            console.error("Batch Sync Error", e);
+            showMessage(`❌ 批量同步失败: ${e.message}`, 3000, "error");
+        }
     }
 
     private openEmojiDialog(protyleInstance: any, avID: string, rowID: string, colID: string, isBatch = false, avBlockID = "") {
