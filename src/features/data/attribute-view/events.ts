@@ -204,14 +204,24 @@ class AVEventHandler {
 
         menu.addItem({
             icon: "iconSync",
-            label: "向上同步：到所有同层级项",
-            click: () => this.syncAttribute(avID, rowID, colID, "same-level", avBlockID, protyleInstance)
-        });
-
-        menu.addItem({
-            icon: "iconDown",
-            label: "向下同步：到所有子项",
-            click: () => this.syncAttribute(avID, rowID, colID, "children", avBlockID, protyleInstance)
+            label: "数据同步到",
+            submenu: [
+                {
+                    icon: "iconSort",
+                    label: "同级",
+                    click: () => this.syncAttribute(avID, rowID, colID, "level", avBlockID, protyleInstance)
+                },
+                {
+                    icon: "iconLink",
+                    label: "兄弟",
+                    click: () => this.syncAttribute(avID, rowID, colID, "siblings", avBlockID, protyleInstance)
+                },
+                {
+                    icon: "iconDown",
+                    label: "后代",
+                    click: () => this.syncAttribute(avID, rowID, colID, "descendants", avBlockID, protyleInstance)
+                }
+            ]
         });
     }
 
@@ -494,7 +504,7 @@ class AVEventHandler {
         return childrenIDs;
     }
 
-    private async syncAttribute(avID: string, rowID: string, colID: string, mode: "same-level" | "children", avBlockID: string, protyleInstance: any) {
+    private async syncAttribute(avID: string, rowID: string, colID: string, mode: "level" | "siblings" | "descendants", avBlockID: string, protyleInstance: any) {
         try {
             showMessage("⏳ 正在同步...", 3000);
             const avData = await post("/api/av/renderAttributeView", { id: avID });
@@ -515,15 +525,33 @@ class AVEventHandler {
             };
 
             const syncValue = cleanValue(sourceRow.cells[colIndex].value);
-            const sourceBlockID = sourceRow.cells.find((c: any) => c.valueType === "block").value.block.id;
+            const sourceBlockCell = sourceRow.cells.find((c: any) => c.valueType === "block");
+            const sourceBlockID = sourceBlockCell?.value?.block?.id;
+            if (!sourceBlockID) throw new Error("无法获取当前行对应的块 ID");
+
             let targetIDs: string[] = [];
             
-            if (mode === "same-level") {
+            if (mode === "level") {
                 const levelIdx = columns.findIndex((c: any) => c.name === "Level");
+                if (levelIdx === -1) throw new Error("数据库中未找到 Level 字段");
                 const targetLevel = sourceRow.cells[levelIdx]?.value?.number?.content;
                 targetIDs = rows.filter((r: any) => r.cells[levelIdx]?.value?.number?.content == targetLevel && r.id !== rowID).map((r: any) => r.id);
+            } else if (mode === "siblings") {
+                const fatherIdx = columns.findIndex((c: any) => c.name === "Father");
+                if (fatherIdx === -1) throw new Error("数据库中未找到 Father 字段");
+                const targetFather = sourceRow.cells[fatherIdx]?.value?.text?.content || "";
+                targetIDs = rows.filter((r: any) => (r.cells[fatherIdx]?.value?.text?.content || "") === targetFather && r.id !== rowID).map((r: any) => r.id);
             } else { 
-                targetIDs = await this.findChildItemIDs(sourceBlockID, rows, columns); 
+                // descendants: 优先使用 Path 字段进行快速匹配，否则使用递归 Father 查找
+                const pathIdx = columns.findIndex((c: any) => c.name === "Path");
+                if (pathIdx !== -1) {
+                    targetIDs = rows.filter((r: any) => {
+                        const path = r.cells[pathIdx]?.value?.text?.content || "";
+                        return path.includes(`/${sourceBlockID}/`) && r.id !== rowID;
+                    }).map((r: any) => r.id);
+                } else {
+                    targetIDs = await this.findChildItemIDs(sourceBlockID, rows, columns); 
+                }
             }
 
             if (targetIDs.length === 0) return showMessage("未找到目标项", 3000, "info");
@@ -537,7 +565,7 @@ class AVEventHandler {
 
             if (avBlockID) {
                 // @ts-ignore
-                ops.push({ action: "doUpdateUpdated", id: avBlockID, data: this.formatDate(new Date()) });
+                ops.push({ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) });
             }
 
             if (protyleInstance) {
