@@ -144,7 +144,7 @@ class AVEventHandler {
                 const titleImgMenu: any[] = [];
                 
                 titleImgMenu.push({
-                    icon: "iconRefresh",
+                    icon: "iconLayout",
                     label: "内置背景图 (Built-in)",
                     click: () => {
                         this.openBuiltInImagesDialog(protyleInstance, avID, rowID, colID);
@@ -152,29 +152,19 @@ class AVEventHandler {
                 });
 
                 titleImgMenu.push({
-                    icon: "iconUpload",
-                    label: "上传图片 (Upload)",
+                    icon: "iconImage",
+                    label: "资源文件 (Assets)",
                     click: () => {
-                        this.triggerFileUpload(protyleInstance, avID, rowID, colID);
+                        this.openAssetDialog(protyleInstance, avID, rowID, colID);
                     }
                 });
 
                 titleImgMenu.push({
-                    icon: "iconImage", 
+                    icon: "iconRefresh", 
                     label: "随机背景 (Random)",
                     click: () => {
                         const randomBg = BGS[Math.floor(Math.random() * BGS.length)];
                         this.updateCellValue(protyleInstance, avID, rowID, colID, randomBg);
-                    }
-                });
-
-                titleImgMenu.push({ type: "separator" });
-
-                titleImgMenu.push({
-                    icon: "iconTrashcan",
-                    label: "移除背景 (Remove)",
-                    click: () => {
-                        this.updateCellValue(protyleInstance, avID, rowID, colID, "");
                     }
                 });
 
@@ -272,41 +262,116 @@ class AVEventHandler {
         });
     }
 
-    private triggerFileUpload(protyleInstance: any, avID: string, rowID: string, colID: string) {
-        const input = document.createElement("input");
-        input.type = "file";
-        input.accept = "image/*";
-        input.style.display = "none";
-        document.body.appendChild(input);
-        
-        input.addEventListener("change", (e: any) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("assetsDirPath", "/assets/");
-
-            fetch("/api/asset/upload", {
-                method: "POST",
-                body: formData
-            }).then(res => res.json()).then(res => {
-                if (res.code === 0 && res.data.succMap) {
-                    const filename = Object.keys(res.data.succMap)[0];
-                    const url = res.data.succMap[filename];
-                    const finalVal = `background-image:url("${url}")`;
-                    this.updateCellValue(protyleInstance, avID, rowID, colID, finalVal);
-                } else {
-                    showMessage("上传失败: " + res.msg, 3000, "error");
-                }
-            }).catch(err => {
-                showMessage("上传出错: " + err.message, 3000, "error");
-            }).finally(() => {
-                input.remove();
-            });
+    private openAssetDialog(protyleInstance: any, avID: string, rowID: string, colID: string) {
+        const dialog = new Dialog({
+            title: "选择资源",
+            content: `
+            <div id="sync-plugin-asset-root" style="display:flex; height: 60vh; width: 100%; box-sizing: border-box; overflow: hidden; border-radius: 0 0 4px 4px;">
+                <div class="asset-sidebar" style="width: 320px; border-right: 1px solid var(--b3-border-color); display: flex; flex-direction: column; background-color: var(--b3-theme-surface);">
+                    <div style="padding: 8px;">
+                        <input class="b3-text-field fn__block" placeholder="搜索资源 (↑↓导航 Enter选择)" id="asset-search-input" autofocus>
+                    </div>
+                    <div class="b3-list b3-list--background fn__flex-1" id="asset-list" style="overflow-y: auto;">
+                        <div class="fn__loading" style="padding: 20px;"><img width="32px" src="/stage/loading-pure.svg"></div>
+                    </div>
+                </div>
+                <div id="asset-preview" class="fn__flex-1" style="padding: 16px; display: flex; align-items: center; justify-content: center; background-color: var(--b3-theme-background); overflow: hidden;">
+                    <div class="ft__center ft__on-surface">请选择资源预览</div>
+                </div>
+            </div>`,
+            width: "900px",
         });
-        
-        input.click();
+
+        const listEl = dialog.element.querySelector("#asset-list") as HTMLElement;
+        const previewEl = dialog.element.querySelector("#asset-preview") as HTMLElement;
+        const inputEl = dialog.element.querySelector("#asset-search-input") as HTMLInputElement;
+        let currentPreviewPath = "";
+        let hoverTimer: any = null;
+
+        const renderList = (keyword = "") => {
+            listEl.innerHTML = '<div class="fn__loading" style="padding: 20px;"><img width="32px" src="/stage/loading-pure.svg"></div>';
+            post("/api/search/searchAsset", { 
+                k: keyword,
+                exts: [".png", ".jpg", ".jpeg", ".gif", ".webp"]
+            }).then((res: any) => {
+                let html = "";
+                // 注意：API 返回的 res 直接就是数组
+                const assets = res || [];
+                if (assets.length > 0) {
+                    assets.forEach((item: any, index: number) => {
+                        const isFocus = index === 0 ? " b3-list-item--focus" : "";
+                        html += `<div class="b3-list-item b3-list-item--hide-action${isFocus}" 
+                            data-path="${item.path}" 
+                            style="cursor: pointer; padding: 4px 8px; margin: 2px 4px; border-radius: 4px;">
+                            <span class="b3-list-item__text">${item.hName}</span>
+                        </div>`;
+                    });
+                } else {
+                    html = `<div class="b3-list--empty" style="padding: 16px; text-align: center; color: var(--b3-theme-on-surface-light);">无匹配资源</div>`;
+                }
+                listEl.innerHTML = html;
+
+                const firstItem = listEl.querySelector(".b3-list-item") as HTMLElement;
+                if (firstItem) {
+                    const path = firstItem.getAttribute("data-path")!;
+                    currentPreviewPath = path;
+                    this.renderPreviewAsset(path, previewEl);
+                }
+
+                listEl.querySelectorAll(".b3-list-item").forEach(item => {
+                    const path = item.getAttribute("data-path")!;
+                    
+                    item.addEventListener("mouseenter", () => {
+                        if (currentPreviewPath === path) return;
+                        listEl.querySelectorAll(".b3-list-item--focus").forEach(i => i.classList.remove("b3-list-item--focus"));
+                        item.classList.add("b3-list-item--focus");
+                        clearTimeout(hoverTimer);
+                        hoverTimer = setTimeout(() => {
+                            currentPreviewPath = path;
+                            this.renderPreviewAsset(path, previewEl);
+                        }, 150);
+                    });
+
+                    item.addEventListener("click", () => {
+                        const finalVal = `background-image:url("${path}")`;
+                        this.updateCellValue(protyleInstance, avID, rowID, colID, finalVal);
+                        dialog.destroy();
+                    });
+                });
+            }).catch(err => {
+                listEl.innerHTML = `<div class="ft__center ft__error" style="padding: 16px;">查询失败: ${err.message}</div>`;
+            });
+        };
+
+        inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
+            const currentFocus = listEl.querySelector(".b3-list-item--focus") as HTMLElement;
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                const next = currentFocus ? currentFocus.nextElementSibling : listEl.querySelector(".b3-list-item");
+                if (next && next.classList.contains("b3-list-item")) {
+                    next.dispatchEvent(new MouseEvent("mouseenter"));
+                    next.scrollIntoView({ block: "nearest" });
+                }
+            } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                const prev = currentFocus ? currentFocus.previousElementSibling : listEl.querySelector(".b3-list-item:last-child");
+                if (prev && prev.classList.contains("b3-list-item")) {
+                    prev.dispatchEvent(new MouseEvent("mouseenter"));
+                    prev.scrollIntoView({ block: "nearest" });
+                }
+            } else if (e.key === "Enter") {
+                e.preventDefault();
+                if (currentFocus) currentFocus.click();
+            }
+        });
+
+        renderList();
+        inputEl.addEventListener("input", (e: any) => renderList(e.target.value));
+        setTimeout(() => inputEl.focus(), 100);
+    }
+
+    private renderPreviewAsset(path: string, previewEl: HTMLElement) {
+        previewEl.innerHTML = `<img src="/${path}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: var(--b3-dialog-shadow);">`;
     }
 
     private openTemplateDialog(protyleInstance: any, avID: string, rowID: string, colID: string, avBlockID: string) {
