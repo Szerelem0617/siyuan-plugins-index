@@ -7,10 +7,10 @@ import { formatDate } from "../../../shared/utils";
 import { getBlockAttribute } from "../../../shared/utils/dom-utils";
 
 /**
- * 聚焦数据库视图：根据当前块的层级自动筛选 Level
+ * 聚焦数据库视图：根据当前块的层级自动筛选 Level 或 Father
  */
-export async function focusDatabaseView(blockId: string, protyle: any) {
-    console.log(`[Data] Calculating level for block [${blockId}] via hierarchy`);
+export async function focusDatabaseView(blockId: string, protyle: any, mode: "level" | "siblings" | "descendants" = "level") {
+    console.log(`[Data] Focusing [${blockId}] with mode [${mode}]`);
     
     try {
         let currentId = blockId;
@@ -63,19 +63,57 @@ export async function focusDatabaseView(blockId: string, protyle: any) {
             return;
         }
 
-        if (targetLevel === 0) targetLevel = 1; 
-
-        // --- 2. 获取 View ID ---
+        // --- 2. 获取 View ID 和 Keys ---
         const initData = await post("/api/av/renderAttributeView", { id: linkedAvId });
         const viewID = initData.view ? initData.view.id : (initData.views && initData.views[0] ? initData.views[0].id : null);
         if (!viewID) throw new Error("无法获取 View ID");
 
         const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: linkedAvId });
         const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
-        const levelKey = currentKeys.find((k: any) => k.name === "Level");
 
-        if (!levelKey) {
-            throw new Error("数据库中未找到 Level 字段，请先同步");
+        let filterColumn = "";
+        let filterValue: any = null;
+        let showMsg = "";
+
+        if (mode === "level") {
+            const levelKey = currentKeys.find((k: any) => k.name === "Level");
+            if (!levelKey) throw new Error("数据库中未找到 Level 字段，请先同步");
+            if (targetLevel === 0) targetLevel = 1;
+            filterColumn = levelKey.id;
+            filterValue = { type: "number", number: { content: Number(targetLevel), isNotEmpty: true } };
+            showMsg = `✅ 已聚焦: 第 ${targetLevel} 层级`;
+        } else if (mode === "siblings") {
+            const fatherKey = currentKeys.find((k: any) => k.name === "Father");
+            if (!fatherKey) throw new Error("数据库中未找到 Father 字段，请先同步");
+            filterColumn = fatherKey.id;
+            
+            // 兄弟：Father = 当前块的父项 ID
+            const currentBlockRes = await client.sql({ stmt: `SELECT type, parent_id FROM blocks WHERE id = '${blockId}'` });
+            const currentBlock = currentBlockRes.data?.[0];
+            let parentItemId = "";
+            if (currentBlock) {
+                // currentBlock.parent_id 是 List ID，其父级可能是 ListItem 或 Doc/Notebook
+                const listRes = await client.sql({ stmt: `SELECT parent_id FROM blocks WHERE id = '${currentBlock.parent_id}'` });
+                const listParentId = listRes.data?.[0]?.parent_id;
+                if (listParentId) {
+                    const listParentRes = await client.sql({ stmt: `SELECT type FROM blocks WHERE id = '${listParentId}'` });
+                    // 如果 List 的父级是 ListItem ('i')，说明有父项
+                    if (listParentRes.data?.[0]?.type === "i") {
+                        parentItemId = listParentId;
+                    }
+                }
+            }
+            filterValue = { type: "text", text: { content: parentItemId } };
+            showMsg = `✅ 已聚焦: 兄弟项`;
+        } else {
+            // 后代：Path 包含当前块 ID 且带有分隔符
+            const pathKey = currentKeys.find((k: any) => k.name === "Path");
+            if (!pathKey) throw new Error("数据库中未找到 Path 字段，请重新同步以支持后代筛选");
+            
+            filterColumn = pathKey.id;
+            // 使用 /ID/ 匹配，由于 Path 格式为 /ID1/ID2，/ID1/ 会匹配所有后代但排除自身（自身末尾无 /）
+            filterValue = { type: "text", text: { content: `/${blockId}/` } }; 
+            showMsg = `✅ 已聚焦: 所有后代项`;
         }
 
         // --- 3. 执行筛选 ---
@@ -84,9 +122,9 @@ export async function focusDatabaseView(blockId: string, protyle: any) {
             avID: linkedAvId,
             blockID: viewID,
             data: [{
-                column: levelKey.id,
-                operator: "=",
-                value: { type: "number", number: { content: Number(targetLevel), isNotEmpty: true } }
+                column: filterColumn,
+                operator: mode === "descendants" ? "Contains" : "=",
+                value: filterValue
             }]
         }];
 
@@ -106,7 +144,7 @@ export async function focusDatabaseView(blockId: string, protyle: any) {
             });
         }
 
-        showMessage(`✅ 已聚焦: 显示第 ${targetLevel} 层级的所有项`);
+        showMessage(showMsg);
 
     } catch (e: any) {
         console.error("[Data] Focus Error:", e);
@@ -249,6 +287,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
 
         let levelKeyId = null;
         let fatherKeyId = null;
+        let pathKeyId = null;
         let iconKeyId = null;
         let titleImgKeyId = null;
         let templateKeyId = null;
@@ -277,6 +316,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         try {
             levelKeyId = await ensureKey("Level", "number", "iconSort");
             fatherKeyId = await ensureKey("Father", "text", "iconLink");
+            pathKeyId = await ensureKey("Path", "text", "iconMap");
             
             // Optional template columns
             if (settings.get("dbAddTemplateCols")) {
@@ -287,30 +327,20 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
 
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            // Ensure Level and Father are hidden (for both new and existing DBs)
-            if (levelKeyId && fatherKeyId && viewID) {
-                 await post("/api/transactions", {
-                    app: "plugin-index",
-                    reqId: Date.now(),
-                    transactions: [{
-                        doOperations: [
-                            {
-                                action: "setAttrViewColHidden",
-                                avID: realAvID,
-                                blockID: viewID,
-                                id: levelKeyId,
-                                data: true
-                            },
-                            {
-                                action: "setAttrViewColHidden",
-                                avID: realAvID,
-                                blockID: viewID,
-                                id: fatherKeyId,
-                                data: true
-                            }
-                        ]
-                    }]
-                });
+            // Ensure Level, Father, Path are hidden
+            if (viewID) {
+                 const hideOps: any[] = [];
+                 if (levelKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: levelKeyId, data: true });
+                 if (fatherKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: fatherKeyId, data: true });
+                 if (pathKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: pathKeyId, data: true });
+                 
+                 if (hideOps.length > 0) {
+                     await post("/api/transactions", {
+                        app: "plugin-index",
+                        reqId: Date.now(),
+                        transactions: [{ doOperations: hideOps }]
+                    });
+                 }
             }
 
             if (!existingAvID && levelKeyId && viewID) {
@@ -389,6 +419,46 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         }
         
         // --- 5. 插入与更新数据 ---
+        // 重新遍历一次来计算 Path，或者直接修改 traverse
+        // Since we need path, let's re-run traverse logic or adapt it.
+        // Wait, allItems is already populated by traverse() above.
+        // We need to clear it and run traverse again with path logic, OR modify the first traverse.
+        // Let's modify the first traverse.
+        allItems = []; // Clear
+        
+        const traverseWithContext = (element: Element, level: number, parentId: string | null, ancestorPath: string) => {
+            for (let i = 0; i < element.children.length; i++) {
+                const child = element.children[i];
+                const type = child.getAttribute("data-type");
+                
+                if (type === "NodeListItem") {
+                    const originalId = child.getAttribute("data-node-id");
+                    let savedItemID = getBlockAttribute(child as HTMLElement, ATTR_ITEM_ID);
+                    
+                    if (originalId) {
+                        // @ts-ignore
+                        const newItemID = window.Lute.NewNodeID();
+                        const currentPath = ancestorPath ? `${ancestorPath}/${originalId}` : `/${originalId}`;
+                        allItems.push({ originalId, newItemID, level, parentId, savedItemID, path: currentPath });
+                        traverseWithContext(child, level, originalId, currentPath);
+                    }
+                } else if (type === "NodeList") {
+                    traverseWithContext(child, level + 1, parentId, ancestorPath);
+                } else {
+                    traverseWithContext(child, level, parentId, ancestorPath);
+                }
+            }
+        };
+
+        for (const listId of sourceBlockIds) {
+            const domRes = await client.getBlockDOM({ id: listId });
+            if (domRes.data && domRes.data.dom) {
+                const tempDiv = document.createElement("div");
+                tempDiv.innerHTML = domRes.data.dom;
+                if (tempDiv.firstElementChild) traverseWithContext(tempDiv.firstElementChild, 1, null, "");
+            }
+        }
+        
         let itemIDMap: Record<string, string> = {};
         
         // Fix: If we are creating a NEW database (because the old one was dead or didn't exist),
@@ -448,6 +518,13 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                     keyID: fatherKeyId,
                     itemID: itemID,
                     value: { type: "text", text: { content: item.parentId || "" } }
+                });
+            }
+            if (pathKeyId) {
+                updateValues.push({
+                    keyID: pathKeyId,
+                    itemID: itemID,
+                    value: { type: "text", text: { content: item.path || "" } }
                 });
             }
 

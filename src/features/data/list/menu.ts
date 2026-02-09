@@ -44,8 +44,24 @@ export function addDataMenuItems({ detail }: any) {
     if (linkedAv) {
         menu.addItem({
             icon: "iconFilter",
-            label: "🔍 聚焦此层级 (更新视图)",
-            click: () => focusDatabaseView(blockId, protyle)
+            label: "🔍 聚焦",
+            submenu: [
+                {
+                    icon: "iconSort",
+                    label: "同级 (按层级)",
+                    click: () => focusDatabaseView(blockId, protyle, "level")
+                },
+                {
+                    icon: "iconLink",
+                    label: "兄弟 (按父项)",
+                    click: () => focusDatabaseView(blockId, protyle, "siblings")
+                },
+                {
+                    icon: "iconDown",
+                    label: "后代 (直系子项)",
+                    click: () => focusDatabaseView(blockId, protyle, "descendants")
+                }
+            ]
         });
     }
 }
