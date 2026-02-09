@@ -3,7 +3,7 @@ import { Menu, Dialog, showMessage } from "siyuan";
 import { BGS } from "./constants";
 import EmojiDialog from "../../../ui/components/dialog/emoji-dialog.svelte";
 import { post } from "../../../shared/api-client/request";
-import { formatDate } from "../../../shared/utils";
+import { formatDate, confirmDialog, i18n } from "../../../shared/utils";
 
 class AVEventHandler {
     private onContextMenuBound = this.onContextMenu.bind(this);
@@ -96,9 +96,10 @@ class AVEventHandler {
     }
 
     public async showSyncMenu(menu: Menu, cell: HTMLElement) {
+        const isHeader = !!cell.closest(".av__row--header");
         const row = cell.closest(".av__row") || cell.closest(".av__gallery-item") || cell.closest(".av__kanban-item");
         const avContainer = cell.closest(".av") as HTMLElement;
-        if (!row || !avContainer) return;
+        if (!avContainer || (!row && !isHeader)) return;
 
         let protyleInstance: any = null;
         try {
@@ -109,7 +110,7 @@ class AVEventHandler {
 
         const avID = avContainer.getAttribute("data-av-id")!;
         const avBlockID = avContainer.getAttribute("data-node-id")!;
-        const rowID = row.getAttribute("data-id")!;
+        const rowID = isHeader ? null : row?.getAttribute("data-id")!;
         let colID = cell.getAttribute("data-col-id") || cell.getAttribute("data-field-id")!;
 
         let colType = "";
@@ -125,15 +126,23 @@ class AVEventHandler {
         // Add Separator to separate from native items
         menu.addSeparator();
 
+        const updateValueHandler = (val: string) => {
+            if (isHeader) {
+                this.batchUpdateCellValue(protyleInstance, avID, colID, val, colType, avBlockID);
+            } else {
+                this.updateCellValue(protyleInstance, avID, rowID!, colID, val);
+            }
+        };
+
         if (cell) {
             // 1. 图标 (Icon)
             const isIconCol = (cell.querySelector(".b3-menu__avemoji")) || /^icon$/i.test(colName);
             if (isIconCol) {
                 menu.addItem({
                     icon: "iconEmoji",
-                    label: "选择图标 (Icon)",
+                    label: isHeader ? "批量设置图标" : "选择图标 (Icon)",
                     click: () => {
-                        this.openEmojiDialog(protyleInstance, avID, rowID, colID);
+                        this.openEmojiDialog(protyleInstance, avID, rowID || "", colID, isHeader, avBlockID);
                     }
                 });
             }
@@ -147,7 +156,7 @@ class AVEventHandler {
                     icon: "iconLayout",
                     label: "内置背景图 (Built-in)",
                     click: () => {
-                        this.openBuiltInImagesDialog(protyleInstance, avID, rowID, colID);
+                        this.openBuiltInImagesDialog(protyleInstance, avID, rowID || "", colID, isHeader, avBlockID);
                     }
                 });
 
@@ -155,7 +164,7 @@ class AVEventHandler {
                     icon: "iconImage",
                     label: "资源文件 (Assets)",
                     click: () => {
-                        this.openAssetDialog(protyleInstance, avID, rowID, colID);
+                        this.openAssetDialog(protyleInstance, avID, rowID || "", colID, isHeader, avBlockID);
                     }
                 });
 
@@ -164,13 +173,13 @@ class AVEventHandler {
                     label: "随机背景 (Random)",
                     click: () => {
                         const randomBg = BGS[Math.floor(Math.random() * BGS.length)];
-                        this.updateCellValue(protyleInstance, avID, rowID, colID, randomBg);
+                        updateValueHandler(randomBg);
                     }
                 });
 
                 menu.addItem({
                     icon: "iconImage",
-                    label: "选择题头图 (Title Image)",
+                    label: isHeader ? "批量设置题头图" : "选择题头图 (Title Image)",
                     submenu: titleImgMenu
                 });
             }
@@ -180,9 +189,9 @@ class AVEventHandler {
             if (isTemplateCol) {
                 menu.addItem({
                     icon: "iconMath", 
-                    label: "选择模板 (Template)",
+                    label: isHeader ? "批量设置模板" : "选择模板 (Template)",
                     click: () => {
-                        this.openTemplateDialog(protyleInstance, avID, rowID, colID, avBlockID);
+                        this.openTemplateDialog(protyleInstance, avID, rowID || "", colID, avBlockID, isHeader);
                     }
                 });
             }
@@ -192,30 +201,82 @@ class AVEventHandler {
             }
         }
 
+        const syncLabel = isHeader ? "同步此列数据 (从首行开始)" : "数据同步到";
+        const syncSubmenu = [
+            {
+                icon: "iconSort",
+                label: "同级",
+                click: () => this.syncAttribute(avID, rowID || "first", colID, "level", avBlockID, protyleInstance)
+            },
+            {
+                icon: "iconLink",
+                label: "兄弟",
+                click: () => this.syncAttribute(avID, rowID || "first", colID, "siblings", avBlockID, protyleInstance)
+            },
+            {
+                icon: "iconDown",
+                label: "后代",
+                click: () => this.syncAttribute(avID, rowID || "first", colID, "descendants", avBlockID, protyleInstance)
+            },
+            {
+                icon: "iconFilter",
+                label: "所有筛选出的项",
+                click: () => {
+                    confirmDialog("批量同步", "确认将当前项(或首行)的值同步到所有筛选出的项吗？", () => {
+                        this.syncAttribute(avID, rowID || "first", colID, "filtered", avBlockID, protyleInstance);
+                    });
+                }
+            }
+        ];
+
         menu.addItem({
             icon: "iconSync",
-            label: "数据同步到",
-            submenu: [
-                {
-                    icon: "iconSort",
-                    label: "同级",
-                    click: () => this.syncAttribute(avID, rowID, colID, "level", avBlockID, protyleInstance)
-                },
-                {
-                    icon: "iconLink",
-                    label: "兄弟",
-                    click: () => this.syncAttribute(avID, rowID, colID, "siblings", avBlockID, protyleInstance)
-                },
-                {
-                    icon: "iconDown",
-                    label: "后代",
-                    click: () => this.syncAttribute(avID, rowID, colID, "descendants", avBlockID, protyleInstance)
-                }
-            ]
+            label: syncLabel,
+            submenu: syncSubmenu
         });
     }
 
-    private openEmojiDialog(protyleInstance: any, avID: string, rowID: string, colID: string) {
+    private async batchUpdateCellValue(protyleInstance: any, avID: string, colID: string, newValue: string, colType: string, avBlockID: string) {
+        confirmDialog("批量设置", `确认将该值应用于当前筛选出的所有项吗？\n新值: ${newValue.substring(0, 30)}${newValue.length > 30 ? '...' : ''}`, async () => {
+            try {
+                showMessage("⏳ 正在批量执行...", 3000);
+                const avData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
+                const view = avData.view || avData; 
+                const rows = view.rows || [];
+                const columns = view.columns || [];
+                const colIndex = columns.findIndex((c: any) => c.id === colID);
+                if (colIndex === -1) throw new Error("Column not found");
+
+                const ops = rows.map((row: any) => {
+                    const cellData = row.cells[colIndex];
+                    const cellType = cellData.valueType || colType || "text";
+                    const updateData: any = { id: cellData.id, type: cellType };
+                    if (cellType === "mAsset") {
+                        updateData.mAsset = [{ content: newValue, name: newValue.split('/').pop() }];
+                    } else {
+                        updateData[cellType === "text" || cellType === "template" ? cellType : "text"] = { content: newValue };
+                    }
+                    return { action: "updateAttrViewCell", id: cellData.id, avID, keyID: colID, rowID: row.id, data: updateData };
+                });
+
+                if (avBlockID) {
+                    ops.push({ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) });
+                }
+
+                if (protyleInstance) {
+                    protyleInstance.transaction(ops);
+                } else {
+                    await post("/api/transactions", { app: "plugin-index", reqId: Date.now(), transactions: [{ doOperations: ops }] });
+                }
+                showMessage(`✅ 批量更新成功: ${rows.length} 个项`, 3000);
+            } catch (e: any) {
+                console.error("Batch Update Error", e);
+                showMessage(`❌ 批量执行失败: ${e.message}`, 3000, "error");
+            }
+        });
+    }
+
+    private openEmojiDialog(protyleInstance: any, avID: string, rowID: string, colID: string, isBatch = false, avBlockID = "") {
         const dialog = new Dialog({
             title: "",
             content: `<div class="emoji-dialog-content" style="height: 100%; display: flex; flex-direction: column;"></div>`,
@@ -230,7 +291,11 @@ class AVEventHandler {
                 props: {
                     onSelect: (emoji: string) => {
                         if (emoji !== undefined) {
-                            this.updateCellValue(protyleInstance, avID, rowID, colID, emoji);
+                            if (isBatch) {
+                                this.batchUpdateCellValue(protyleInstance, avID, colID, emoji, "text", avBlockID);
+                            } else {
+                                this.updateCellValue(protyleInstance, avID, rowID, colID, emoji);
+                            }
                         }
                         dialog.destroy();
                     }
@@ -239,7 +304,7 @@ class AVEventHandler {
         }
     }
 
-    private openBuiltInImagesDialog(protyleInstance: any, avID: string, rowID: string, colID: string) {
+    private openBuiltInImagesDialog(protyleInstance: any, avID: string, rowID: string, colID: string, isBatch = false, avBlockID = "") {
         let html = "";
         BGS.forEach((item, index) => {
             html += `<div data-index="${index}" style="height: 128px;${item}; cursor: pointer; border-radius: 4px; border: 1px solid var(--b3-border-color);" class="b3-card b3-card--wrap"></div>`;
@@ -256,13 +321,17 @@ class AVEventHandler {
             if (target.classList.contains("b3-card")) {
                 const index = parseInt(target.getAttribute("data-index")!);
                 const bgStyle = BGS[index];
-                this.updateCellValue(protyleInstance, avID, rowID, colID, bgStyle);
+                if (isBatch) {
+                    this.batchUpdateCellValue(protyleInstance, avID, colID, bgStyle, "text", avBlockID);
+                } else {
+                    this.updateCellValue(protyleInstance, avID, rowID, colID, bgStyle);
+                }
                 dialog.destroy();
             }
         });
     }
 
-    private openAssetDialog(protyleInstance: any, avID: string, rowID: string, colID: string) {
+    private openAssetDialog(protyleInstance: any, avID: string, rowID: string, colID: string, isBatch = false, avBlockID = "") {
         const dialog = new Dialog({
             title: "选择资源",
             content: `
@@ -334,7 +403,11 @@ class AVEventHandler {
 
                     item.addEventListener("click", () => {
                         const finalVal = `background-image:url("${path}")`;
-                        this.updateCellValue(protyleInstance, avID, rowID, colID, finalVal);
+                        if (isBatch) {
+                            this.batchUpdateCellValue(protyleInstance, avID, colID, finalVal, "text", avBlockID);
+                        } else {
+                            this.updateCellValue(protyleInstance, avID, rowID, colID, finalVal);
+                        }
                         dialog.destroy();
                     });
                 });
@@ -374,7 +447,7 @@ class AVEventHandler {
         previewEl.innerHTML = `<img src="/${path}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: var(--b3-dialog-shadow);">`;
     }
 
-    private openTemplateDialog(protyleInstance: any, avID: string, rowID: string, colID: string, avBlockID: string) {
+    private openTemplateDialog(protyleInstance: any, avID: string, rowID: string, colID: string, avBlockID: string, isBatch = false) {
         // @ts-ignore
         const renderID = protyleInstance ? protyleInstance.protyle.block.rootID : (avBlockID || "");
         
@@ -446,7 +519,11 @@ class AVEventHandler {
                     });
 
                     item.addEventListener("click", () => {
-                        this.updateCellValue(protyleInstance, avID, rowID, colID, content);
+                        if (isBatch) {
+                            this.batchUpdateCellValue(protyleInstance, avID, colID, content, "text", avBlockID);
+                        } else {
+                            this.updateCellValue(protyleInstance, avID, rowID, colID, content);
+                        }
                         dialog.destroy();
                     });
                 });
@@ -497,7 +574,8 @@ class AVEventHandler {
 
     private async updateCellValue(protyleInstance: any, avID: string, rowID: string, colID: string, newValue: string) {
         try {
-            const avData = await post("/api/av/renderAttributeView", { id: avID });
+            console.log(`[Data] Updating cell: Row [${rowID}], Col [${colID}]`, { newValue });
+            const avData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
             // The API response data structure usually has 'view' at the top level
             const view = avData.view || avData;
             const rows = view.rows || [];
@@ -507,10 +585,17 @@ class AVEventHandler {
             const columns = view.columns || [];
             const cellIndex = columns.findIndex((c: any) => c.id === colID);
             
-            if (!row || cellIndex === -1) throw new Error("Row or Column not found");
+            if (!row) {
+                console.error("[Data] Row not found in rendered view", { rowID, availableRows: rows.length });
+                throw new Error(`Row [${rowID}] not found`);
+            }
+            if (cellIndex === -1) {
+                console.error("[Data] Column not found in rendered view", { colID, availableCols: columns.map(c => c.id) });
+                throw new Error(`Column [${colID}] not found`);
+            }
             
             const cellData = row.cells[cellIndex];
-            if (!cellData) throw new Error("Cell not found");
+            if (!cellData) throw new Error("Cell data at index not found");
             
             const cellValue = cellData.value || {};
             const cellType = cellValue.type || cellData.valueType || "text";
@@ -569,13 +654,20 @@ class AVEventHandler {
         return childrenIDs;
     }
 
-    private async syncAttribute(avID: string, rowID: string, colID: string, mode: "level" | "siblings" | "descendants", avBlockID: string, protyleInstance: any) {
+    private async syncAttribute(avID: string, rowID: string, colID: string, mode: "level" | "siblings" | "descendants" | "filtered", avBlockID: string, protyleInstance: any) {
         try {
             showMessage("⏳ 正在同步...", 3000);
-            const avData = await post("/api/av/renderAttributeView", { id: avID });
+            const avData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
             const view = avData.view || avData; 
             const rows = view.rows || []; 
-            const sourceRow = rows.find((r: any) => r.id === rowID);
+            
+            let sourceRow;
+            if (rowID === "first") {
+                sourceRow = rows[0];
+            } else {
+                sourceRow = rows.find((r: any) => r.id === rowID);
+            }
+            
             const columns = view.columns || [];
             const colIndex = columns.findIndex((c: any) => c.id === colID);
             
@@ -600,23 +692,25 @@ class AVEventHandler {
                 const levelIdx = columns.findIndex((c: any) => c.name === "Level");
                 if (levelIdx === -1) throw new Error("数据库中未找到 Level 字段");
                 const targetLevel = sourceRow.cells[levelIdx]?.value?.number?.content;
-                targetIDs = rows.filter((r: any) => r.cells[levelIdx]?.value?.number?.content == targetLevel && r.id !== rowID).map((r: any) => r.id);
+                targetIDs = rows.filter((r: any) => r.cells[levelIdx]?.value?.number?.content == targetLevel && r.id !== sourceRow.id).map((r: any) => r.id);
             } else if (mode === "siblings") {
                 const fatherIdx = columns.findIndex((c: any) => c.name === "Father");
                 if (fatherIdx === -1) throw new Error("数据库中未找到 Father 字段");
                 const targetFather = sourceRow.cells[fatherIdx]?.value?.text?.content || "";
-                targetIDs = rows.filter((r: any) => (r.cells[fatherIdx]?.value?.text?.content || "") === targetFather && r.id !== rowID).map((r: any) => r.id);
-            } else { 
-                // descendants: 优先使用 Path 字段进行快速匹配，否则使用递归 Father 查找
+                targetIDs = rows.filter((r: any) => (r.cells[fatherIdx]?.value?.text?.content || "") === targetFather && r.id !== sourceRow.id).map((r: any) => r.id);
+            } else if (mode === "descendants") { 
                 const pathIdx = columns.findIndex((c: any) => c.name === "Path");
                 if (pathIdx !== -1) {
                     targetIDs = rows.filter((r: any) => {
                         const path = r.cells[pathIdx]?.value?.text?.content || "";
-                        return path.includes(`/${sourceBlockID}/`) && r.id !== rowID;
+                        return path.includes(`/${sourceBlockID}/`) && r.id !== sourceRow.id;
                     }).map((r: any) => r.id);
                 } else {
                     targetIDs = await this.findChildItemIDs(sourceBlockID, rows, columns); 
                 }
+            } else {
+                // filtered: 同步到当前视图中除了源行以外的所有行
+                targetIDs = rows.filter((r: any) => r.id !== sourceRow.id).map((r: any) => r.id);
             }
 
             if (targetIDs.length === 0) return showMessage("未找到目标项", 3000, "info");
