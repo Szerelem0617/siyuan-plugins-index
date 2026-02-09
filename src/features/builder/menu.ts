@@ -1,6 +1,7 @@
 import { client } from "../../shared/api-client";
 import { ListProcessor } from "./builder";
 import { createDatabaseWithBlocks } from "../data/action";
+import { getOutermostList } from "../../shared/utils/dom-utils";
 
 /**
  * 块标菜单回调
@@ -19,19 +20,8 @@ export function buildDoc({ detail }: any) {
     if (blockType !== "NodeList") return;
 
     // 2. Check if it is the outermost list (and not inside an embed)
-    let parent = blockElement.parentElement;
-    let isOutermost = true;
-    while (parent) {
-        const pType = parent.getAttribute?.("data-type");
-        // If parent is a List, ListItem, or Embed (iblock), then this is not outermost/valid
-        if (pType === "NodeList" || pType === "NodeListItem" || pType === "NodeBlockQueryEmbed") {
-            isOutermost = false;
-            break;
-        }
-        if (parent.classList.contains("protyle-wysiwyg")) break;
-        parent = parent.parentElement;
-    }
-    if (!isOutermost) return;
+    const outermostList = getOutermostList(blockElement);
+    if (outermostList !== blockElement) return;
 
     // Add Smart Selector menu items
     menu.addSeparator();

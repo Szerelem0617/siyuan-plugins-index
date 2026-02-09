@@ -4,6 +4,7 @@ import { ATTR_LINKED_AV, ATTR_LINKED_AV_BLOCK, ATTR_LINKED_LIST, ATTR_ITEM_ID } 
 import { settings } from "../../../core/settings";
 import { post } from "../../../shared/api-client/request";
 import { formatDate } from "../../../shared/utils";
+import { getBlockAttribute } from "../../../shared/utils/dom-utils";
 
 /**
  * 聚焦数据库视图：根据当前块的层级自动筛选 Level
@@ -167,7 +168,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                 
                 if (type === "NodeListItem") {
                     const originalId = child.getAttribute("data-node-id");
-                    let savedItemID = child.getAttribute(ATTR_ITEM_ID) || child.getAttribute(`data-${ATTR_ITEM_ID}`);
+                    let savedItemID = getBlockAttribute(child as HTMLElement, ATTR_ITEM_ID);
                     
                     if (originalId) {
                         // @ts-ignore
