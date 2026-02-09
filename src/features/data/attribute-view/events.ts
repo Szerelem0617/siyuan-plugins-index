@@ -3,7 +3,8 @@ import { Menu, Dialog, showMessage } from "siyuan";
 import { BGS } from "./constants";
 import EmojiDialog from "../../../ui/components/dialog/emoji-dialog.svelte";
 import { post } from "../../../shared/api-client/request";
-import { formatDate, confirmDialog, i18n } from "../../../shared/utils";
+import { formatDate, i18n } from "../../../shared/utils";
+import { batchSyncToDescendants } from "./events/batch-sync";
 
 class AVEventHandler {
     private onContextMenuBound = this.onContextMenu.bind(this);
@@ -207,7 +208,7 @@ class AVEventHandler {
             menu.addItem({
                 icon: "iconSync",
                 label: syncLabel,
-                click: () => this.batchSyncToDescendants(avID, colID, avBlockID, protyleInstance)
+                click: () => batchSyncToDescendants(avID, colID, avBlockID)
             });
         } else {
             const syncSubmenu = [
@@ -243,142 +244,62 @@ class AVEventHandler {
         }
     }
 
+    private async getColIDMap(avID: string) {
+        const avRawData = await post("/api/av/getAttributeView", { id: avID });
+        const keyValues = (avRawData.av || avRawData).keyValues || [];
+        const nameToID: Record<string, string> = {};
+        const idToType: Record<string, string> = {};
+        keyValues.forEach((kv: any) => {
+            nameToID[kv.key.name] = kv.key.id;
+            idToType[kv.key.id] = kv.key.type;
+        });
+        return { nameToID, idToType, keyValues };
+    }
+
     private async batchUpdateCellValue(protyleInstance: any, avID: string, colID: string, newValue: string, colType: string, avBlockID: string) {
         try {
             showMessage("⏳ 正在批量执行...", 3000);
-            const avData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
-            const view = avData.view || avData; 
-            const rows = view.rows || [];
-            const columns = view.columns || [];
-            const colIndex = columns.findIndex((c: any) => c.id === colID);
-            if (colIndex === -1) throw new Error("Column not found");
+            
+            // 1. 获取当前视图的所有可见行（作为目标）
+            const sourceViewData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
+            const visibleRows = sourceViewData.view?.rows || sourceViewData.rows || [];
+            
+            if (visibleRows.length === 0) {
+                showMessage("当前视图没有可见行", 3000, "info");
+                return;
+            }
 
-            const ops = rows.map((row: any) => {
-                const cellData = row.cells[colIndex];
-                const cellType = cellData.valueType || colType || "text";
-                const updateData: any = { id: cellData.id, type: cellType };
+            const updateValues = visibleRows.map((row: any) => {
+                const cellType = colType || "text";
+                const updateData: any = { type: cellType };
                 if (cellType === "mAsset") {
                     updateData.mAsset = [{ content: newValue, name: newValue.split('/').pop() }];
                 } else {
                     updateData[cellType === "text" || cellType === "template" ? cellType : "text"] = { content: newValue };
                 }
-                return { action: "updateAttrViewCell", id: cellData.id, avID, keyID: colID, rowID: row.id, data: updateData };
+                return {
+                    keyID: colID,
+                    itemID: row.id, // row.id is the block ID
+                    value: updateData
+                };
+            });
+
+            await post("/api/av/batchSetAttributeViewBlockAttrs", { 
+                avID: avID, 
+                values: updateValues 
             });
 
             if (avBlockID) {
-                ops.push({ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) });
-            }
-
-            if (protyleInstance) {
-                protyleInstance.transaction(ops);
-            } else {
-                await post("/api/transactions", { app: "plugin-index", reqId: Date.now(), transactions: [{ doOperations: ops }] });
-            }
-            showMessage(`✅ 批量更新成功: ${rows.length} 个项`, 3000);
-        } catch (e: any) {
-            console.error("Batch Update Error", e);
-            showMessage(`❌ 批量执行失败: ${e.message}`, 3000, "error");
-        }
-    }
-
-    private async batchSyncToDescendants(avID: string, colID: string, avBlockID: string, protyleInstance: any) {
-        try {
-            console.log(`[Batch Sync] Starting sync for AV [${avID}], Col [${colID}]`);
-            showMessage("⏳ 正在批量同步到后代...", 3000);
-            
-            // 1. 获取当前视图的所有可见行（作为源）
-            const sourceViewData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
-            const sourceRows = sourceViewData.view?.rows || sourceViewData.rows || [];
-            console.log(`[Batch Sync] Fetched ${sourceRows.length} source rows (current view)`);
-            
-            // 2. 获取整个数据库的所有行（作为目标查找范围）
-            const allViewData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 2000, filters: [] });
-            const allRows = allViewData.view?.rows || allViewData.rows || [];
-            console.log(`[Batch Sync] Fetched ${allRows.length} total rows (target scope)`);
-
-            const view = sourceViewData.view || sourceViewData;
-            const columns = view.columns || [];
-            const colIndex = columns.findIndex((c: any) => c.id === colID);
-            const pathIdx = columns.findIndex((c: any) => c.name === "Path");
-            
-            console.log(`[Batch Sync] ColIndex: ${colIndex}, PathColIndex: ${pathIdx}`);
-            
-            if (colIndex === -1) throw new Error("Source column not found");
-            
-            const ops: any[] = [];
-            
-            // For each row in current view (SOURCE), find its descendants in all rows (TARGET) and update them
-            for (const row of sourceRows) {
-                const sourceValue = row.cells[colIndex].value;
-                const sourceBlockCell = row.cells.find((c: any) => c.valueType === "block");
-                const sourceBlockID = sourceBlockCell?.value?.block?.id;
-                
-                // Debug log for each source (optional, maybe too verbose for large sets, limiting to first few or specific checks)
-                // console.log(`[Batch Sync] Processing source row: ${row.id}, BlockID: ${sourceBlockID}`);
-                
-                if (!sourceBlockID) continue;
-
-                const cleanValue = (val: any) => {
-                    const res: any = { type: val.type };
-                    ["text", "number", "mSelect", "mAsset", "block", "url", "phone", "email", "template", "checkbox", "relation", "rollup", "date"].forEach(f => {
-                        if (val[f] !== undefined) res[f] = JSON.parse(JSON.stringify(val[f]));
-                    });
-                    return res;
-                };
-                const syncValue = cleanValue(sourceValue);
-
-                let targetIDs: string[] = [];
-                if (pathIdx !== -1) {
-                    targetIDs = allRows.filter((r: any) => {
-                        const path = r.cells[pathIdx]?.value?.text?.content || "";
-                        // Logic check: verify path format matches expectation
-                        return path.includes(`/${sourceBlockID}/`) && r.id !== row.id;
-                    }).map((r: any) => r.id);
-                } else {
-                    console.log(`[Batch Sync] Path column missing, falling back to recursive search for [${sourceBlockID}]`);
-                    targetIDs = await this.findChildItemIDs(sourceBlockID, allRows, columns);
-                }
-
-                if (targetIDs.length > 0) {
-                    console.log(`[Batch Sync] Found ${targetIDs.length} descendants for [${sourceBlockID}]`);
-                }
-
-                targetIDs.forEach(tid => {
-                    const targetRow = allRows.find((r: any) => r.id === tid);
-                    if (targetRow) {
-                        const cell = targetRow.cells[colIndex];
-                        const data = JSON.parse(JSON.stringify(syncValue)); 
-                        data.id = cell.id;
-                        ops.push({ action: "updateAttrViewCell", id: cell.id, avID, keyID: colID, rowID: tid, data });
-                    }
-                });
-            }
-
-            console.log(`[Batch Sync] Total operations generated: ${ops.length}`);
-
-            if (ops.length === 0) {
-                console.warn("[Batch Sync] No operations generated. Check path matching or source/target overlap.");
-                return; // Silent return
-            }
-
-            if (avBlockID) {
-                ops.push({ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) });
-            }
-
-            if (protyleInstance) {
-                protyleInstance.transaction(ops);
-            } else {
                 await post("/api/transactions", { 
                     app: "plugin-index", 
                     reqId: Date.now(),
-                    transactions: [{ doOperations: ops }] 
+                    transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) }] }] 
                 });
             }
-            showMessage(`✅ 批量同步成功: 更新 ${ops.length} 个单元格`, 3000);
-
+            showMessage(`✅ 批量更新成功: ${updateValues.length} 个项`, 3000);
         } catch (e: any) {
-            console.error("Batch Sync Error", e);
-            showMessage(`❌ 批量同步失败: ${e.message}`, 3000, "error");
+            console.error("Batch Update Error", e);
+            showMessage(`❌ 批量执行失败: ${e.message}`, 3000, "error");
         }
     }
 
@@ -762,22 +683,27 @@ class AVEventHandler {
 
     private async syncAttribute(avID: string, rowID: string, colID: string, mode: "level" | "siblings" | "descendants" | "filtered", avBlockID: string, protyleInstance: any) {
         try {
+            console.log(`[Sync] Mode: ${mode}, Source RowID: ${rowID}, ColID: ${colID}`);
             showMessage("⏳ 正在同步...", 3000);
-            const avData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
-            const view = avData.view || avData; 
-            const rows = view.rows || []; 
             
-            let sourceRow;
-            if (rowID === "first") {
-                sourceRow = rows[0];
-            } else {
-                sourceRow = rows.find((r: any) => r.id === rowID);
-            }
+            // 1. 获取全量数据以查找目标和列映射
+            const { nameToID, keyValues } = await this.getColIDMap(avID);
+            console.log("[Sync] Column mapping established:", nameToID);
             
-            const columns = view.columns || [];
+            // 2. 确定源行数据（从当前视图获取，包含最新状态）
+            const sourceViewData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
+            const sourceRows = sourceViewData.view?.rows || sourceViewData.rows || [];
+            const sourceRow = (rowID === "first") ? sourceRows[0] : sourceRows.find((r: any) => r.id === rowID);
+            
+            if (!sourceRow) throw new Error("Source row not found in current view");
+
+            // 获取源列在 visible rows 里的索引
+            const columns = sourceViewData.view?.columns || sourceViewData.columns || [];
             const colIndex = columns.findIndex((c: any) => c.id === colID);
-            
-            if (!sourceRow || colIndex === -1) throw new Error("Source row or column not found");
+            if (colIndex === -1) {
+                console.error("[Sync] Column not found in view columns:", colID, columns);
+                throw new Error("当前视图未显示该列，无法同步");
+            }
 
             const cleanValue = (val: any) => {
                 const res: any = { type: val.type };
@@ -790,59 +716,83 @@ class AVEventHandler {
             const syncValue = cleanValue(sourceRow.cells[colIndex].value);
             const sourceBlockCell = sourceRow.cells.find((c: any) => c.valueType === "block");
             const sourceBlockID = sourceBlockCell?.value?.block?.id;
-            if (!sourceBlockID) throw new Error("无法获取当前行对应的块 ID");
+            if (!sourceBlockID) throw new Error("无法获取源行对应的块 ID");
 
-            let targetIDs: string[] = [];
+            // 3. 根据模式筛选目标 Block IDs
+            let targetBlockIDs: string[] = [];
             
             if (mode === "level") {
-                const levelIdx = columns.findIndex((c: any) => c.name === "Level");
-                if (levelIdx === -1) throw new Error("数据库中未找到 Level 字段");
-                const targetLevel = sourceRow.cells[levelIdx]?.value?.number?.content;
-                targetIDs = rows.filter((r: any) => r.cells[levelIdx]?.value?.number?.content == targetLevel && r.id !== sourceRow.id).map((r: any) => r.id);
+                const levelKeyID = nameToID["Level"];
+                const levelKV = keyValues.find((kv: any) => kv.key.id === levelKeyID);
+                if (!levelKV) throw new Error("未找到 Level 字段");
+                const sourceLevelVal = levelKV.values.find((v: any) => v.blockID === sourceBlockID);
+                const targetLevel = sourceLevelVal?.number?.content;
+                targetBlockIDs = levelKV.values
+                    .filter((v: any) => v.number?.content == targetLevel && v.blockID !== sourceBlockID)
+                    .map((v: any) => v.blockID);
             } else if (mode === "siblings") {
-                const fatherIdx = columns.findIndex((c: any) => c.name === "Father");
-                if (fatherIdx === -1) throw new Error("数据库中未找到 Father 字段");
-                const targetFather = sourceRow.cells[fatherIdx]?.value?.text?.content || "";
-                targetIDs = rows.filter((r: any) => (r.cells[fatherIdx]?.value?.text?.content || "") === targetFather && r.id !== sourceRow.id).map((r: any) => r.id);
+                const fatherKeyID = nameToID["Father"];
+                const fatherKV = keyValues.find((kv: any) => kv.key.id === fatherKeyID);
+                if (!fatherKV) throw new Error("未找到 Father 字段");
+                const sourceFatherVal = fatherKV.values.find((v: any) => v.blockID === sourceBlockID);
+                const targetFather = sourceFatherVal?.text?.content || "";
+                targetBlockIDs = fatherKV.values
+                    .filter((v: any) => (v.text?.content || "") === targetFather && v.blockID !== sourceBlockID)
+                    .map((v: any) => v.blockID);
             } else if (mode === "descendants") { 
-                const pathIdx = columns.findIndex((c: any) => c.name === "Path");
-                if (pathIdx !== -1) {
-                    targetIDs = rows.filter((r: any) => {
-                        const path = r.cells[pathIdx]?.value?.text?.content || "";
-                        return path.includes(`/${sourceBlockID}/`) && r.id !== sourceRow.id;
-                    }).map((r: any) => r.id);
+                const pathKeyID = nameToID["Path"];
+                const pathKV = keyValues.find((kv: any) => kv.key.id === pathKeyID);
+                if (pathKV) {
+                    targetBlockIDs = pathKV.values
+                        .filter((v: any) => v.text?.content?.includes(`/${sourceBlockID}/`) && v.blockID !== sourceBlockID)
+                        .map((v: any) => v.blockID);
                 } else {
-                    targetIDs = await this.findChildItemIDs(sourceBlockID, rows, columns); 
+                    // Fallback to Father recursion
+                    const fatherKeyID = nameToID["Father"];
+                    const fatherKV = keyValues.find((kv: any) => kv.key.id === fatherKeyID);
+                    if (fatherKV) {
+                        const parentMap = new Map<string, string>();
+                        fatherKV.values.forEach((v: any) => parentMap.set(v.blockID, v.text?.content || ""));
+                        const findRec = (pId: string) => {
+                            const res: string[] = [];
+                            for (const [cid, pid] of parentMap.entries()) {
+                                if (pid === pId) {
+                                    res.push(cid, ...findRec(cid));
+                                }
+                            }
+                            return res;
+                        };
+                        targetBlockIDs = findRec(sourceBlockID);
+                    }
                 }
             } else {
-                // filtered: 同步到当前视图中除了源行以外的所有行
-                targetIDs = rows.filter((r: any) => r.id !== sourceRow.id).map((r: any) => r.id);
+                // filtered: 同步到当前视图的所有其他行
+                targetBlockIDs = sourceRows.filter((r: any) => r.id !== sourceRow.id).map((r: any) => r.id);
             }
 
-            if (targetIDs.length === 0) return showMessage("未找到目标项", 3000, "info");
+            console.log(`[Sync] Found ${targetBlockIDs.length} targets.`);
+            if (targetBlockIDs.length === 0) return showMessage("未找到符合条件的项", 3000, "info");
             
-            const ops = targetIDs.map(tid => {
-                const cell = rows.find((r: any) => r.id === tid).cells[colIndex];
-                const data = JSON.parse(JSON.stringify(syncValue)); 
-                data.id = cell.id;
-                return { action: "updateAttrViewCell", id: cell.id, avID, keyID: colID, rowID: tid, data };
+            // 4. 执行更新
+            const updateValues = targetBlockIDs.map(bid => ({
+                keyID: colID,
+                itemID: bid,
+                value: syncValue
+            }));
+
+            await post("/api/av/batchSetAttributeViewBlockAttrs", { 
+                avID: avID, 
+                values: updateValues 
             });
 
             if (avBlockID) {
-                // @ts-ignore
-                ops.push({ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) });
-            }
-
-            if (protyleInstance) {
-                protyleInstance.transaction(ops);
-            } else {
                 await post("/api/transactions", { 
                     app: "plugin-index", 
                     reqId: Date.now(),
-                    transactions: [{ doOperations: ops }] 
+                    transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) }] }] 
                 });
             }
-            showMessage(`✅ 同步成功: 更新 ${targetIDs.length} 个项`, 3000);
+            showMessage(`✅ 同步成功: 更新 ${targetBlockIDs.length} 个项`, 3000);
         } catch (e: any) { 
             console.error("Sync Error", e);
             showMessage(`❌ 同步失败: ${e.message}`, 3000, "error"); 
