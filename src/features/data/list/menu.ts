@@ -44,21 +44,21 @@ export function addDataMenuItems({ detail }: any) {
     if (linkedAv) {
         menu.addItem({
             icon: "iconFilter",
-            label: "🔍 聚焦",
+            label: "🔍 数据库聚焦",
             submenu: [
                 {
                     icon: "iconSort",
-                    label: "同级 (按层级)",
+                    label: "同级",
                     click: () => focusDatabaseView(blockId, protyle, "level")
                 },
                 {
                     icon: "iconLink",
-                    label: "兄弟 (按父项)",
+                    label: "兄弟",
                     click: () => focusDatabaseView(blockId, protyle, "siblings")
                 },
                 {
                     icon: "iconDown",
-                    label: "后代 (直系子项)",
+                    label: "后代",
                     click: () => focusDatabaseView(blockId, protyle, "descendants")
                 }
             ]
