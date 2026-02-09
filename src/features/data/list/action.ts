@@ -317,12 +317,24 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                 if (allItems.length > 0) {
                     try {
                         const firstItemDom = await client.getBlockDOM({ id: allItems[0].originalId });
-                        const tempSpan = document.createElement("span");
-                        tempSpan.innerHTML = firstItemDom.data.dom;
-                        // Clean zero-width characters and whitespace
-                        const extractedName = tempSpan.innerText.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
-                        if (extractedName) {
-                            avName = extractedName.substring(0, 30);
+                        const tempDiv = document.createElement("div");
+                        tempDiv.innerHTML = firstItemDom.data.dom;
+                        const itemElement = tempDiv.firstElementChild;
+                        if (itemElement) {
+                            let textParts = [];
+                            for (let i = 0; i < itemElement.children.length; i++) {
+                                const child = itemElement.children[i];
+                                const type = child.getAttribute("data-type");
+                                const className = child.className || "";
+                                // 忽略子列表和操作按钮
+                                if (type !== "NodeList" && !className.includes("protyle-action")) {
+                                    textParts.push((child as HTMLElement).innerText || "");
+                                }
+                            }
+                            const extractedName = textParts.join("").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+                            if (extractedName) {
+                                avName = extractedName.substring(0, 30);
+                            }
                         }
                         console.log("[Data] Extracted avName from first item:", avName);
                     } catch (e) {
