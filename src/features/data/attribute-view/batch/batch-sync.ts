@@ -11,11 +11,11 @@ export async function batchSyncToDescendants(avID: string, colID: string, avBloc
     try {
         console.log(`[Batch Sync] Starting optimized sync for AV [${avID}], Col [${colID}]`);
         showMessage("⏳ 正在批量同步到后代...", 3000);
-        
+
         // 1. 获取当前视图的所有可见行 (Source)
         const sourceViewData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
         const sourceRows = sourceViewData.view?.rows || sourceViewData.rows || [];
-        
+
         if (sourceRows.length === 0) {
             console.warn("[Batch Sync] No source rows found in current view.");
             return;
@@ -23,7 +23,7 @@ export async function batchSyncToDescendants(avID: string, colID: string, avBloc
 
         // 2. 获取数据库全量原始数据
         const { nameToID, keyValues } = await getColIDMap(avID);
-        
+
         const pathKeyID = nameToID["Path"];
         const fatherKeyID = nameToID["Father"];
         const pathKV = keyValues.find((kv: any) => kv.key.id === pathKeyID);
@@ -57,14 +57,13 @@ export async function batchSyncToDescendants(avID: string, colID: string, avBloc
         const updateOps: any[] = [];
 
         for (const row of sourceRows) {
-            // 获取文档中的块 ID
-            const blockCell = row.cells.find((c: any) => c.valueType === "block");
-            const sourceBlockID = blockCell?.value?.block?.id;
+            // Use row.id directly as it matches the AV keyValues blockID
+            const sourceBlockID = row.id;
             if (!sourceBlockID) continue;
 
             const cellValue = row.cells[sourceColIndex]?.value;
             if (!cellValue) continue;
-            
+
             const syncValue = cleanValue(cellValue);
             let targetBlockIDs: string[] = [];
 
@@ -102,18 +101,18 @@ export async function batchSyncToDescendants(avID: string, colID: string, avBloc
         }
 
         // 5. 执行全量更新
-        await post("/api/av/batchSetAttributeViewBlockAttrs", { 
-            avID: avID, 
-            values: updateOps 
+        await post("/api/av/batchSetAttributeViewBlockAttrs", {
+            avID: avID,
+            values: updateOps
         });
 
         if (avBlockID) {
-            await post("/api/transactions", { 
-                app: "plugin-index", 
+            await post("/api/transactions", {
+                app: "plugin-index",
                 reqId: Date.now(),
-                transactions: [{ 
-                    doOperations: [{ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) }] 
-                }] 
+                transactions: [{
+                    doOperations: [{ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) }]
+                }]
             });
         }
 
