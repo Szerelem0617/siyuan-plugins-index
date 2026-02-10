@@ -1,13 +1,11 @@
 import { Menu } from "siyuan";
-import { post } from "../../../shared/api-client/request";
-import { getColIDMap } from "../../../shared/utils/av-utils";
 import { batchSyncToDescendants } from "./batch/batch-sync";
 import { syncAttribute } from "./sync/attribute-sync";
-import { 
-    openEmojiDialog, 
-    openBuiltInImagesDialog, 
-    openAssetDialog, 
-    openTemplateDialog, 
+import {
+    openEmojiDialog,
+    openBuiltInImagesDialog,
+    openAssetDialog,
+    openTemplateDialog,
     updateCellValue,
     BGS
 } from "./special/special-handlers";
@@ -55,7 +53,7 @@ class AVEventHandler {
 
         const menu = new Menu("av-sync-menu");
         this.showSyncMenu(menu, cell);
-        
+
         const pos = {
             clientX: event.clientX || cell.getBoundingClientRect().left,
             clientY: event.clientY || cell.getBoundingClientRect().bottom
@@ -85,7 +83,7 @@ class AVEventHandler {
                 if (!node) return null;
                 if (node.model && node.model.editor && node.model.editor.protyle && node.model.editor.protyle.element) {
                     if (node.model.editor.protyle.element.contains(element)) {
-                        return node.model.editor; 
+                        return node.model.editor;
                     }
                 }
                 if (node.children) {
@@ -97,7 +95,7 @@ class AVEventHandler {
                 return null;
             }
             return find(root);
-        } catch(e) {
+        } catch (e) {
             console.error("Protyle lookup error", e);
             return null;
         }
@@ -157,7 +155,7 @@ class AVEventHandler {
             const isTitleImgCol = (colType === "mAsset") || (colType === "text" && /^title-img$/i.test(colName));
             if (isTitleImgCol) {
                 const titleImgMenu: any[] = [];
-                
+
                 titleImgMenu.push({
                     icon: "iconLayout",
                     label: "内置背景图 (Built-in)",
@@ -171,7 +169,7 @@ class AVEventHandler {
                 });
 
                 titleImgMenu.push({
-                    icon: "iconRefresh", 
+                    icon: "iconRefresh",
                     label: "随机背景 (Random)",
                     click: () => {
                         const randomBg = BGS[Math.floor(Math.random() * BGS.length)];
@@ -190,19 +188,19 @@ class AVEventHandler {
             const isTemplateCol = (colType === "template") || (colType === "text" && /^template$/i.test(colName));
             if (isTemplateCol) {
                 menu.addItem({
-                    icon: "iconMath", 
+                    icon: "iconMath",
                     label: isHeader ? "批量设置模板" : "选择模板 (Template)",
                     click: () => openTemplateDialog(protyleInstance, avID, rowID || "", colID, avBlockID, isHeader)
                 });
             }
-            
+
             if (isIconCol || isTitleImgCol || isTemplateCol) {
                 menu.addSeparator();
             }
         }
 
         const syncLabel = isHeader ? "批量同步到后代" : "数据同步到";
-        
+
         if (isHeader) {
             menu.addItem({
                 icon: "iconSync",
@@ -214,22 +212,22 @@ class AVEventHandler {
                 {
                     icon: "iconSort",
                     label: "同级",
-                    click: () => syncAttribute(avID, rowID || "first", colID, "level", avBlockID, protyleInstance)
+                    click: () => syncAttribute(avID, rowID || "first", colID, "level", avBlockID)
                 },
                 {
                     icon: "iconLink",
                     label: "兄弟",
-                    click: () => syncAttribute(avID, rowID || "first", colID, "siblings", avBlockID, protyleInstance)
+                    click: () => syncAttribute(avID, rowID || "first", colID, "siblings", avBlockID)
                 },
                 {
                     icon: "iconDown",
                     label: "后代",
-                    click: () => syncAttribute(avID, rowID || "first", colID, "descendants", avBlockID, protyleInstance)
+                    click: () => syncAttribute(avID, rowID || "first", colID, "descendants", avBlockID)
                 },
                 {
                     icon: "iconFilter",
                     label: "所有筛选出的项",
-                    click: () => syncAttribute(avID, rowID || "first", colID, "filtered", avBlockID, protyleInstance)
+                    click: () => syncAttribute(avID, rowID || "first", colID, "filtered", avBlockID)
                 }
             ];
 

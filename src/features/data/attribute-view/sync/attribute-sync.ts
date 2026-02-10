@@ -6,7 +6,7 @@ import { getColIDMap, cleanValue } from "../../../../shared/utils/av-utils";
 /**
  * 属性同步：根据模式（同级、兄弟、后代、筛选）同步指定单元格的值
  */
-export async function syncAttribute(avID: string, rowID: string, colID: string, mode: "level" | "siblings" | "descendants" | "filtered", avBlockID: string, protyleInstance: any) {
+export async function syncAttribute(avID: string, rowID: string, colID: string, mode: "level" | "siblings" | "descendants" | "filtered", avBlockID: string) {
     try {
         console.log(`[Sync] Mode: ${mode}, Source RowID: ${rowID}, ColID: ${colID}`);
         showMessage("⏳ 正在同步...", 3000);
@@ -81,36 +81,75 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
                 })
                 .map((v: any) => v.blockID);
         } else if (mode === "siblings") {
-            const fatherKV = keyValues.find((kv: any) => kv.key.id === nameToID["Father"]);
+            const findKey = (name: string) => {
+                const kn = Object.keys(nameToID).find(k => k.toLowerCase() === name.toLowerCase());
+                return kn ? nameToID[kn] : undefined;
+            };
+            const fatherKV = keyValues.find((kv: any) => kv.key.id === findKey("Father"));
             if (!fatherKV) throw new Error("未找到 Father 字段");
-            const sourceFatherVal = fatherKV.values.find((v: any) => v.blockID === sourceBlockID);
+
+            // Robust ID lookup
+            const sourceBlockCell = sourceRow.cells.find((c: any) => c.valueType === "block");
+            const cellBlockID = sourceBlockCell?.value?.block?.id;
+
+            // Check which ID has a value in Father column
+            let effectiveSourceID = sourceBlockID;
+            const hasVal = (id: string) => fatherKV.values.some((v: any) => v.blockID === id);
+
+            if (!hasVal(sourceBlockID) && cellBlockID && hasVal(cellBlockID)) {
+                effectiveSourceID = cellBlockID;
+            }
+
+            const sourceFatherVal = fatherKV.values.find((v: any) => v.blockID === effectiveSourceID);
             const targetFather = sourceFatherVal?.text?.content || "";
+
             targetBlockIDs = fatherKV.values
-                .filter((v: any) => (v.text?.content || "") === targetFather && v.blockID !== sourceBlockID)
+                .filter((v: any) => (v.text?.content || "") === targetFather && v.blockID !== effectiveSourceID)
                 .map((v: any) => v.blockID);
+
         } else if (mode === "descendants") {
-            const pathKV = keyValues.find((kv: any) => kv.key.id === nameToID["Path"]);
-            if (pathKV) {
+            const findKey = (name: string) => {
+                const kn = Object.keys(nameToID).find(k => k.toLowerCase() === name.toLowerCase());
+                return kn ? nameToID[kn] : undefined;
+            };
+            const pathKeyID = findKey("Path");
+            if (!pathKeyID) throw new Error("未找到 Path 字段 (Descendants 模式依赖 Path)");
+
+            const pathKV = keyValues.find((kv: any) => kv.key.id === pathKeyID);
+
+            // Robust ID lookup
+            const sourceBlockCell = sourceRow.cells.find((c: any) => c.valueType === "block");
+            const cellBlockID = sourceBlockCell?.value?.block?.id;
+            // Default to Row ID (which is sourceBlockID from outer scope)
+            let effectiveSourceID = sourceBlockID;
+
+            const blockPathMap = new Map<string, string>();
+            if (pathKV && pathKV.values) {
+                pathKV.values.forEach((v: any) => {
+                    if (v.blockID && v.text?.content) blockPathMap.set(v.blockID, v.text.content);
+                });
+            }
+
+            // Check which ID is in the map
+            // Use RowID if present, otherwise try CellBlockID
+            if (!blockPathMap.has(effectiveSourceID) && cellBlockID && blockPathMap.has(cellBlockID)) {
+                effectiveSourceID = cellBlockID;
+            }
+
+            if (blockPathMap.has(effectiveSourceID)) {
+                const sourcePath = blockPathMap.get(effectiveSourceID)!;
+                // Strict descendant check: starts with sourcePath + "/"
+                const prefix = `${sourcePath}/`;
                 targetBlockIDs = pathKV.values
-                    .filter((v: any) => v.text?.content?.includes(`/${sourceBlockID}/`) && v.blockID !== sourceBlockID)
+                    .filter((v: any) => {
+                        const p = v.text?.content;
+                        // Check if p starts with prefix, and is NOT the source block itself
+                        return p && p.startsWith(prefix) && v.blockID !== effectiveSourceID;
+                    })
                     .map((v: any) => v.blockID);
             } else {
-                // Fallback to Father recursion
-                const fatherKV = keyValues.find((kv: any) => kv.key.id === nameToID["Father"]);
-                if (fatherKV) {
-                    const parentMap = new Map<string, string>();
-                    fatherKV.values.forEach((v: any) => parentMap.set(v.blockID, v.text?.content || ""));
-                    const findRec = (pId: string) => {
-                        const res: string[] = [];
-                        for (const [cid, pid] of parentMap.entries()) {
-                            if (pid === pId) {
-                                res.push(cid, ...findRec(cid));
-                            }
-                        }
-                        return res;
-                    };
-                    targetBlockIDs = findRec(sourceBlockID);
-                }
+                console.warn(`[Sync-Descendants] Source ID ${effectiveSourceID} not found in Path map.`);
+                // If checking RowID failed, maybe user needs to check column content
             }
         } else {
             // filtered: 同步到当前视图的所有其他行
