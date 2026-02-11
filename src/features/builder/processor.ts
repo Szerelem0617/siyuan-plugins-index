@@ -2,6 +2,7 @@ import { client } from "../../shared/api-client";
 import { getProcessedDocIcon } from "../../shared/utils/icon-utils";
 import { stripMarkdownSyntax } from "../../shared/utils/markdown-utils";
 import { ATTR_LINKED_AV, ATTR_ITEM_ID } from "../../shared/constants";
+import { getColIDMap } from "../../shared/utils/av-utils";
 
 // Constants
 export const ATTR_INDEX = "custom-index-subdoc-id";
@@ -23,6 +24,7 @@ async function post(url: string, data: any) {
 
 export class IBlockProcessor {
     errors: string[];
+    avCache: Map<string, any> = new Map(); // Cache for AV data to support "all data" logic
 
     constructor(errors: string[]) {
         this.errors = errors;
@@ -44,33 +46,26 @@ export class IBlockProcessor {
         const itemId = itemAttrs[ATTR_ITEM_ID];
         if (!itemId) return null;
 
-        // 2. Get Keys to find col IDs
-        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
-        const keys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
-        
+        // 2. Use cached full AV data to ensure "all data" is respected, not just the current view
+        if (!this.avCache.has(avId)) {
+            this.avCache.set(avId, await getColIDMap(avId));
+        }
+        const { nameToID, keyValues } = this.avCache.get(avId);
+
+        // Map desired columns (Case-insensitive)
         const keyMap: any = {};
-        keys.forEach((k: any) => {
-            if (["icon", "title-img", "template"].includes(k.name)) {
-                keyMap[k.name] = k.id;
-            }
+        ["icon", "title-img", "template"].forEach(name => {
+            const kn = Object.keys(nameToID).find(k => k.toLowerCase() === name.toLowerCase());
+            if (kn) keyMap[name] = nameToID[kn];
         });
 
         if (Object.keys(keyMap).length === 0) return null;
 
-        // 3. Get Row Data (Iterate pages if necessary, but limit to first page/recent for perf)
-        const renderRes = await post("/api/av/renderAttributeView", { id: avId, pageSize: 200 });
-        const rows = renderRes.view ? renderRes.view.rows : (renderRes.rows || []);
-        const row = rows.find((r: any) => r.id === itemId);
-
-        if (!row) return null;
-
         const result: any = {};
-        const columns = renderRes.view ? renderRes.view.columns : (renderRes.columns || []);
-
         for (const [name, keyId] of Object.entries(keyMap)) {
-            const colIndex = columns.findIndex((c: any) => c.id === keyId);
-            if (colIndex > -1 && row.cells[colIndex]) {
-                const cellVal = row.cells[colIndex].value;
+            const kv = keyValues.find((v: any) => v.key.id === keyId);
+            if (kv && kv.values) {
+                const cellVal = kv.values.find((v: any) => v.blockID === itemId);
                 if (cellVal) {
                     if (cellVal.type === "text") result[name] = cellVal.text?.content;
                     else if (cellVal.type === "mAsset") result[name] = cellVal.mAsset?.[0]?.content; 
