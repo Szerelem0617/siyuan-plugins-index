@@ -1,5 +1,6 @@
 import { client } from "../../shared/api-client";
 import { IBlockProcessor, ATTR_INDEX, ATTR_OUTLINE } from "./processor";
+import { ATTR_LINKED_AV } from "../../shared/constants";
 
 async function changeSort(notebook: string, paths: string[]) {
     try {
@@ -34,6 +35,7 @@ export class ListProcessor {
             if (resultId) ctx.previousId = resultId;
 
             const childCtx = {
+                ...ctx,
                 previousId: ctx.previousId,
                 parentId: (actionType === "PUSH_TO_DOC" || actionType === "PUSH_COMBINED") ? resultId : ctx.parentId,
                 level: ctx.level + 1,
@@ -52,7 +54,13 @@ export class ListProcessor {
             return result;
 
         } else if (type === "NodeList" || type === "l") { 
-            await this.processListBatch(blockId, actionType, ctx);
+            // Detect AV linkage on the list block itself to support inheritance/overrides
+            let nextCtx = ctx;
+            const attrs = await client.getBlockAttrs({ id: blockId });
+            if (attrs.data && attrs.data[ATTR_LINKED_AV]) {
+                nextCtx = { ...ctx, avId: attrs.data[ATTR_LINKED_AV] };
+            }
+            await this.processListBatch(blockId, actionType, nextCtx);
         }
     }
 
@@ -208,6 +216,7 @@ export class ListProcessor {
 
                 // Handle Sub-lists (Recursion)
                 const childCtx = {
+                    ...ctx,
                     previousId: ctx.previousId,
                     parentId: (actionType === "PUSH_TO_DOC" || actionType === "PUSH_COMBINED") ? resultId : ctx.parentId,
                     level: ctx.level + 1,

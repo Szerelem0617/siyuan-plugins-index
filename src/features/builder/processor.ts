@@ -28,14 +28,17 @@ export class IBlockProcessor {
         this.errors = errors;
     }
 
-    async getLinkedAVData(listItemId: string, itemAttrs: any) {
-        // 1. Get Parent to find AV ID
-        const parentRes = await client.sql({ stmt: `SELECT parent_id FROM blocks WHERE id = '${listItemId}'` });
-        const parentId = parentRes.data?.[0]?.parent_id;
-        if (!parentId) return null;
+    async getLinkedAVData(listItemId: string, itemAttrs: any, avId?: string) {
+        if (!avId) {
+            // 1. Get Parent to find AV ID
+            const parentRes = await client.sql({ stmt: `SELECT parent_id FROM blocks WHERE id = '${listItemId}'` });
+            const parentId = parentRes.data?.[0]?.parent_id;
+            if (!parentId) return null;
 
-        const parentAttrsRes = await client.getBlockAttrs({ id: parentId });
-        const avId = parentAttrsRes.data?.[ATTR_LINKED_AV];
+            const parentAttrsRes = await client.getBlockAttrs({ id: parentId });
+            avId = parentAttrsRes.data?.[ATTR_LINKED_AV];
+        }
+        
         if (!avId) return null;
 
         const itemId = itemAttrs[ATTR_ITEM_ID];
@@ -169,7 +172,7 @@ export class IBlockProcessor {
         }
 
         // Fetch Linked AV Data
-        const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs);
+        const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs, ctx.avId);
         const targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
         
         // Revert to direct assignment as complex styles (like gradients) are already formatted in DB
