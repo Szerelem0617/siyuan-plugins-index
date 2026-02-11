@@ -6,6 +6,7 @@
   "indexSettings": "目录",
   "outlineSettings": "大纲",
   "builderSettings": "构建器 (测试)",
+  "dataSettings": "数据库（测试）",
   "cancel": "取消",
   "confirm": "确定",
   "update": "更新",

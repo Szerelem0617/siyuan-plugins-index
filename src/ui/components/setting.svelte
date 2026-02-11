@@ -71,7 +71,7 @@
         >
             <span class="fn__flex-1"></span>
             <span class="item__icon"><svg><use xlink:href="#iconDatabase" /></svg></span>
-            <span class="item__text">数据库</span>
+            <span class="item__text">数据库（测试）</span>
             <span class="fn__flex-1"></span>
         </div>
     </div>

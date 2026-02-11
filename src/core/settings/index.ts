@@ -20,7 +20,6 @@ export class SettingsProperty {
     iconNotebook: boolean;
     icon: boolean;
     iconOutline: boolean;
-    dbFocusLevel: number;
     dbAddTemplateCols: boolean;
 
     constructor(){
@@ -41,7 +40,6 @@ export class SettingsProperty {
         this.iconNotebook = true;
         this.icon = false;
         this.iconOutline = false;
-        this.dbFocusLevel = 0;
         this.dbAddTemplateCols = true;
     }
 
@@ -66,7 +64,6 @@ export class SettingsProperty {
         this.iconNotebook = settings.get("iconNotebook") ?? true;
         this.icon = settings.get("icon") ?? false;
         this.iconOutline = settings.get("iconOutline") ?? false;
-        this.dbFocusLevel = settings.get("dbFocusLevel") ?? 0;
         this.dbAddTemplateCols = settings.get("dbAddTemplateCols") ?? true;
     }
 }
@@ -107,7 +104,6 @@ class Settings {
         this.set("insertionMode", data.insertionMode ?? def.insertionMode);
         this.set("icon", data.icon ?? def.icon);
         this.set("builderAutoUpdate", data.builderAutoUpdate ?? def.builderAutoUpdate);
-        this.set("dbFocusLevel", data.dbFocusLevel ?? def.dbFocusLevel);
         this.set("dbAddTemplateCols", data.dbAddTemplateCols ?? def.dbAddTemplateCols);
     }
 

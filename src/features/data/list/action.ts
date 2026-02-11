@@ -318,9 +318,11 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
             fatherKeyId = await ensureKey("Father", "text", "iconLink");
             pathKeyId = await ensureKey("Path", "text", "iconMap");
             
+            // Always add icon column
+            iconKeyId = await ensureKey("icon", "text", "iconEmoji");
+
             // Optional template columns
             if (settings.get("dbAddTemplateCols")) {
-                iconKeyId = await ensureKey("icon", "text", "iconEmoji");
                 titleImgKeyId = await ensureKey("title-img", "text", "iconImage");
                 templateKeyId = await ensureKey("template", "text", "iconLayout");
             }
@@ -334,6 +336,9 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                  if (fatherKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: fatherKeyId, data: true });
                  if (pathKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: pathKeyId, data: true });
                  
+                 // Explicitly ensure icon is NOT hidden
+                 if (iconKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: iconKeyId, data: false });
+
                  if (hideOps.length > 0) {
                      await post("/api/transactions", {
                         app: "plugin-index",
@@ -388,24 +393,6 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                         data: formatDate(new Date())
                     }
                 ];
-
-                // Focus Level Configuration
-                const focusLevel = settings.get("dbFocusLevel");
-                if (focusLevel > 0) {
-                    ops.push({
-                        action: "setAttrViewFilters",
-                        avID: realAvID,
-                        blockID: viewID,
-                        data: [{
-                            column: levelKeyId,
-                            operator: "=",
-                            value: {
-                                type: "number",
-                                number: { content: Number(focusLevel), isNotEmpty: true } // Ensure proper number casting
-                            }
-                        }]
-                    });
-                }
 
                 await post("/api/transactions", {
                     app: "plugin-index",
