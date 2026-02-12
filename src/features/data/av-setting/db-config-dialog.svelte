@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { saveDbConfig, type DbConfig } from "./db-config";
+    import { saveDbConfig, syncInheritanceToDb, type DbConfig } from "./db-config";
     import { showMessage } from "siyuan";
     import { buildAvHierarchy, resolveInheritance, getColIDMap } from "../../../shared/utils/av-utils";
 
@@ -200,7 +200,20 @@
         };
 
         await saveDbConfig(blockId, config);
-        showMessage("设置已保存 / Settings Saved");
+        
+        // Trigger Materialized Sync
+        try {
+            showMessage("⚙️ 正在应用继承规则...", 2000);
+            const updatedCount = await syncInheritanceToDb(avId, config, blockId);
+            if (updatedCount > 0) {
+                showMessage(`✅ 设置已保存并同步 (${updatedCount} 个单元格已更新)`);
+            } else {
+                showMessage("✅ 设置已保存 (数据已是最新)");
+            }
+        } catch (e) {
+            showMessage("⚠️ 设置已保存，但同步过程中出现错误", 3000, "error");
+        }
+        
         dialog.destroy();
     };
 

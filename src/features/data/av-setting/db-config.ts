@@ -1,7 +1,9 @@
 import { client } from "../../../shared/api-client";
-import { Dialog } from "siyuan";
+import { Dialog, showMessage } from "siyuan";
 import DbConfigDialog from "./db-config-dialog.svelte";
-import { getColIDMap } from "../../../shared/utils/av-utils";
+import { getColIDMap, buildAvHierarchy, resolveInheritance, isValueEmpty } from "../../../shared/utils/av-utils";
+import { post } from "../../../shared/api-client/request";
+import { formatDate } from "../../../shared/utils";
 
 export const ATTR_DB_CONFIG = "custom-index-db-config";
 
@@ -19,6 +21,103 @@ export interface DbConfig {
     typeFieldId?: string; // Column ID used to determine type
     typeMappings?: TypeMapping[]; // Mappings for values -> type names
     inheritanceRules?: InheritanceRule[];
+}
+
+export async function syncInheritanceToDb(avId: string, config: DbConfig, avBlockId?: string) {
+    if (!config.inheritanceRules || config.inheritanceRules.length === 0) {
+        console.log("[Materialized Sync] No inheritance rules defined. Skipping.");
+        return;
+    }
+
+    try {
+        console.log(`[Materialized Sync] Starting full sync for AV: ${avId}`);
+        const colInfo = await getColIDMap(avId);
+        const parentMap = await buildAvHierarchy(colInfo.keyValues, colInfo.itemToBlock);
+        
+        // Find all unique block IDs from the mappings
+        const allBlockIds = Array.from(colInfo.blockToItem.keys());
+        console.log(`[Materialized Sync] Processing ${allBlockIds.length} blocks in AV.`);
+
+        const updateOps: any[] = [];
+        
+        // Helper for normalized display
+        const getValStr = (v: any) => {
+            if (!v) return "";
+            if (typeof v === 'string') return v;
+            return v.text?.content || v.number?.content || v.mOption?.[0]?.content || v.content || "";
+        };
+
+        for (const bid of allBlockIds) {
+            for (const rule of config.inheritanceRules) {
+                if (rule.mode === 'none') continue;
+
+                // 1. Get current local raw value (for Dirty Check)
+                const kv = colInfo.keyValues.find((v: any) => v.key.id === rule.colId);
+                const rowId = colInfo.blockToItem.get(bid);
+                const cell = kv?.values?.find((v: any) => (v.blockID === bid || (rowId && v.itemID === rowId)));
+                
+                // 2. Resolve inheritance
+                const resolvedVal = resolveInheritance(bid, rule.colId, rule.mode, colInfo.keyValues, parentMap, colInfo.blockToItem);
+                
+                if (!isValueEmpty(resolvedVal)) {
+                    let isDifferent = false;
+                    if (!cell || isValueEmpty(cell)) {
+                        isDifferent = true;
+                    } else {
+                        // Compare normalized content strings
+                        const localStr = getValStr(cell);
+                        const resolvedStr = getValStr(resolvedVal);
+                        
+                        if (String(localStr) !== String(resolvedStr)) {
+                            isDifferent = true;
+                        }
+                    }
+
+                    if (isDifferent) {
+                        const localDisplay = getValStr(cell) || "(Empty)";
+                        const resolvedDisplay = getValStr(resolvedVal) || "(Empty)";
+                        console.log(`[Materialized Sync] Update: Block ${bid}, Col ${rule.colId}. Local: ${localDisplay} -> Resolved: ${resolvedDisplay}`);
+                        
+                        updateOps.push({
+                            keyID: rule.colId,
+                            itemID: bid, // Use Siyuan Block ID as identifier for updates
+                            value: resolvedVal
+                        });
+                    }
+                }
+            }
+        }
+
+        if (updateOps.length > 0) {
+            console.log(`[Materialized Sync] Committing ${updateOps.length} updates to DB.`);
+            await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                avID: avId,
+                values: updateOps
+            });
+
+            // Force UI refresh by updating the AV block's timestamp
+            if (avBlockId) {
+                await post("/api/transactions", {
+                    app: "plugin-index",
+                    reqId: Date.now(),
+                    transactions: [{ 
+                        doOperations: [{ 
+                            action: "doUpdateUpdated", 
+                            id: avBlockId, 
+                            data: formatDate(new Date()) 
+                        }] 
+                    }]
+                });
+            }
+            return updateOps.length;
+        } else {
+            console.log("[Materialized Sync] No changes detected.");
+        }
+        return 0;
+    } catch (e) {
+        console.error("[Materialized Sync] Failed", e);
+        throw e;
+    }
 }
 
 export async function loadDbConfig(blockId: string): Promise<DbConfig> {

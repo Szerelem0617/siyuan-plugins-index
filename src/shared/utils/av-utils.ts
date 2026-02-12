@@ -1,18 +1,43 @@
 import { post } from "../api-client/request";
 
 /**
- * 获取数据库列映射
+ * 获取数据库列映射及数据
  */
 export async function getColIDMap(avID: string) {
     const avRawData = await post("/api/av/getAttributeView", { id: avID });
     const keyValues = (avRawData.av || avRawData).keyValues || [];
     const nameToID: Record<string, string> = {};
     const idToType: Record<string, string> = {};
+    
+    // Build row ID to Siyuan Block ID mappings
+    const itemToBlock = new Map<string, string>();
+    const blockToItem = new Map<string, string>();
+    
     keyValues.forEach((kv: any) => {
         nameToID[kv.key.name] = kv.key.id;
         idToType[kv.key.id] = kv.key.type;
+        
+        if (kv.values) {
+            kv.values.forEach((v: any) => {
+                // Robust ID detection: try multiple possible property names
+                const rowId = v.itemID || v.itemId || v.id;
+                const bid = v.block?.id || v.blockID || v.block_id || v.blockId || (v.type === 'block' ? v.content : null);
+                
+                if (rowId && bid) {
+                    itemToBlock.set(rowId, bid);
+                    blockToItem.set(bid, rowId);
+                }
+            });
+        }
     });
-    return { nameToID, idToType, keyValues };
+
+    if (itemToBlock.size === 0 && keyValues.length > 0) {
+        console.warn("[AV Utils] Found 0 mappings. Sample cell data:", keyValues[0]?.values?.[0]);
+    } else {
+        console.log(`[AV Utils] getColIDMap for ${avID}: Found ${itemToBlock.size} mappings.`);
+    }
+    
+    return { nameToID, idToType, keyValues, itemToBlock, blockToItem };
 }
 
 /**
@@ -53,26 +78,34 @@ export function isValueEmpty(val: any) {
 /**
  * 构建 AV 层级关系 (parentMap)
  */
-export async function buildAvHierarchy(keyValues: any[]) {
+export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string, string>) {
     const parentMap = new Map<string, string>();
+    const blockIDToPath = new Map<string, string>();
+    const pathToBlockID = new Map<string, string>();
     
     // 1. 尝试使用 Path 列
     const pathKV = keyValues.find(kv => kv.key.name.toLowerCase() === "path");
     if (pathKV && pathKV.values) {
-        const blockPathMap = new Map<string, string>();
         pathKV.values.forEach((v: any) => {
-            if (v.blockID && v.text?.content) blockPathMap.set(v.blockID, v.text.content);
+            const rowId = v.itemID || v.itemId || v.id;
+            const bid = v.blockID || v.block_id || v.blockId || itemToBlock.get(rowId);
+            const path = v.text?.content;
+            if (bid && path) {
+                blockIDToPath.set(bid, path);
+                pathToBlockID.set(path, bid);
+            }
         });
         
-        for (const [bid, path] of blockPathMap.entries()) {
+        console.log("[AV Hierarchy] Path Lookup Table:", Object.fromEntries(blockIDToPath));
+
+        for (const [bid, path] of blockIDToPath.entries()) {
             const lastSlash = path.lastIndexOf("/");
             if (lastSlash > 0) {
                 const parentPath = path.substring(0, lastSlash);
-                for (const [pbid, ppath] of blockPathMap.entries()) {
-                    if (ppath === parentPath) {
-                        parentMap.set(bid, pbid);
-                        break;
-                    }
+                const pbid = pathToBlockID.get(parentPath);
+                if (pbid) {
+                    parentMap.set(bid, pbid);
+                    console.log(`[AV Hierarchy] Path Match: Child ${bid} -> Parent ${pbid} (via ${parentPath})`);
                 }
             }
         }
@@ -82,45 +115,57 @@ export async function buildAvHierarchy(keyValues: any[]) {
     const fatherKV = keyValues.find(kv => kv.key.name.toLowerCase() === "father");
     if (fatherKV && fatherKV.values) {
         fatherKV.values.forEach((v: any) => {
+            const rowId = v.itemID || v.itemId || v.id;
+            const bid = v.blockID || v.block_id || v.blockId || itemToBlock.get(rowId);
             const pid = v.text?.content || v.relation?.blockIDs?.[0] || "";
-            if (v.blockID && pid && !parentMap.has(v.blockID)) {
-                parentMap.set(v.blockID, pid);
+            if (bid && pid && !parentMap.has(bid)) {
+                parentMap.set(bid, pid);
+                console.log(`[AV Hierarchy] Father Match: Child ${bid} -> Parent ${pid}`);
             }
         });
     }
 
+    console.log(`[AV Hierarchy] Build complete. Parent Map:`, Object.fromEntries(parentMap));
     return parentMap;
 }
 
 /**
  * 解析继承后的属性值
- * 弱继承：如果当前为空，则继承祖先
- * 强继承：优先继承祖先不为空的属性
  */
 export function resolveInheritance(
     blockId: string,
     colId: string,
     mode: "none" | "weak" | "strong",
     keyValues: any[],
-    parentMap: Map<string, string>
+    parentMap: Map<string, string>,
+    blockToItem: Map<string, string>
 ) {
     const getLocal = (bid: string) => {
         const kv = keyValues.find(v => v.key.id === colId);
         if (!kv || !kv.values) return null;
-        const cell = kv.values.find((v: any) => v.blockID === bid);
+        
+        const rowId = blockToItem.get(bid);
+        const cell = kv.values.find((v: any) => {
+            const vRowId = v.itemID || v.itemId || v.id;
+            const vBlockId = v.blockID || v.block_id || v.blockId || (v.block?.id);
+            return (vBlockId === bid || (rowId && vRowId === rowId));
+        });
         return cell ? cleanValue(cell) : null;
     };
 
     const localVal = getLocal(blockId);
     if (mode === "none" || !mode) return localVal;
 
-    // 寻找最近的非空祖先值
     let nearestAncestorVal = null;
     let curr = parentMap.get(blockId);
+    
+    // console.log(`[Inheritance Resolve] Resolving ${blockId} for Col ${colId}. Local exists: ${!isValueEmpty(localVal)}`);
+
     while (curr) {
         const val = getLocal(curr);
         if (!isValueEmpty(val)) {
             nearestAncestorVal = val;
+            console.log(`[Inheritance Resolve] Found Ancestor Value for ${blockId} from ${curr}:`, val);
             break;
         }
         curr = parentMap.get(curr);
