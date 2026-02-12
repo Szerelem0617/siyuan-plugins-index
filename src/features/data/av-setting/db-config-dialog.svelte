@@ -1,7 +1,9 @@
 <script lang="ts">
     import { saveDbConfig, type DbConfig } from "./db-config";
     import { showMessage } from "siyuan";
+    import { buildAvHierarchy, resolveInheritance, getColIDMap } from "../../../shared/utils/av-utils";
 
+    export let avId: string;
     export let blockId: string;
     export let currentConfig: DbConfig;
     export let columns: any[];
@@ -155,6 +157,37 @@
         console.log("[DbConfig] Final Mappings for UI:", typeMappings);
     }
 
+    async function testInheritance(colId: string, colName: string, mode: any) {
+        try {
+            console.log(`[Inheritance Test] Starting test for column: ${colName} (Mode: ${mode})`);
+            const colInfo = await getColIDMap(avId);
+            const parentMap = await buildAvHierarchy(colInfo.keyValues);
+            
+            // Find all block IDs in this AV
+            const allBlockIds = new Set<string>();
+            colInfo.keyValues.forEach(kv => {
+                kv.values?.forEach((v: any) => {
+                    if (v.blockID) allBlockIds.add(v.blockID);
+                });
+            });
+
+            console.log(`[Inheritance Test] Resolving ${allBlockIds.size} items...`);
+            const results = [];
+            for (const bid of allBlockIds) {
+                const resolved = resolveInheritance(bid, colId, mode, colInfo.keyValues, parentMap);
+                results.push({
+                    blockId: bid,
+                    resolvedValue: resolved
+                });
+            }
+            console.table(results);
+            showMessage("测试结果已打印到控制台 (Test results printed to console)");
+        } catch (e) {
+            console.error("[Inheritance Test] Failed", e);
+            showMessage("测试失败 / Test Failed", 3000, "error");
+        }
+    }
+
     const save = async () => {
         const finalInheritanceRules = inheritanceList
             .filter((i) => i.mode !== "none")
@@ -285,8 +318,15 @@
                         style="margin-bottom: 8px; align-items: center; border-bottom: 1px dashed var(--b3-theme-surface-lighter); padding-bottom: 4px;"
                     >
                         <div class="fn__flex-1">
-                            <div style="font-weight: bold;">
+                            <div style="font-weight: bold; display: flex; align-items: center;">
                                 {item.col.col?.name || item.col.name}
+                                <button 
+                                    class="b3-button b3-button--text" 
+                                    style="margin-left: 8px; padding: 2px 4px; font-size: 10px; height: 18px; line-height: 14px;"
+                                    on:click={() => testInheritance(item.col.id, item.col.name, item.mode)}
+                                >
+                                    Test
+                                </button>
                             </div>
                             <div
                                 class="b3-label__text"

@@ -172,6 +172,7 @@ export async function openDbConfigDialog(avId: string, blockId: string) {
     new DbConfigDialog({
         target: dialog.element.querySelector("#db-config-container"),
         props: {
+            avId,
             blockId,
             currentConfig,
             columns,
