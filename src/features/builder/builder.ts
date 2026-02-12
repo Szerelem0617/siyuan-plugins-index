@@ -1,6 +1,7 @@
 import { client } from "../../shared/api-client";
 import { IBlockProcessor, ATTR_INDEX, ATTR_OUTLINE } from "./processor";
 import { ATTR_LINKED_AV } from "../../shared/constants";
+import { loadDbConfig, type DbConfig } from "../data/av-setting/db-config";
 
 async function changeSort(notebook: string, paths: string[]) {
     try {
@@ -26,11 +27,11 @@ export class ListProcessor {
         if (!ctx) {
             ctx = { previousId: null, parentId: null, level: 1 };
         }
-        
+
         if (type === "NodeListItem" || type === "i") {
             // Standard single item processing (Fallback or for updates)
             const result = await this.ibp.processSingleItem(blockId, actionType, ctx);
-            
+
             const resultId = (result && typeof result === 'object') ? result.id : result;
             if (resultId) ctx.previousId = resultId;
 
@@ -39,7 +40,7 @@ export class ListProcessor {
                 previousId: ctx.previousId,
                 parentId: (actionType === "PUSH_TO_DOC" || actionType === "PUSH_COMBINED") ? resultId : ctx.parentId,
                 level: ctx.level + 1,
-                parentInfo: ( (actionType === "PUSH_TO_DOC" || actionType === "PUSH_COMBINED") && result && typeof result === 'object') ? result : ctx.parentInfo
+                parentInfo: ((actionType === "PUSH_TO_DOC" || actionType === "PUSH_COMBINED") && result && typeof result === 'object') ? result : ctx.parentInfo
             };
 
             let childrenRes = await client.sql({
@@ -53,12 +54,14 @@ export class ListProcessor {
             }
             return result;
 
-        } else if (type === "NodeList" || type === "l") { 
+        } else if (type === "NodeList" || type === "l") {
             // Detect AV linkage on the list block itself to support inheritance/overrides
-            let nextCtx = ctx;
+            let nextCtx = { ...ctx }; // Clone ctx
             const attrs = await client.getBlockAttrs({ id: blockId });
             if (attrs.data && attrs.data[ATTR_LINKED_AV]) {
-                nextCtx = { ...ctx, avId: attrs.data[ATTR_LINKED_AV] };
+                nextCtx.avId = attrs.data[ATTR_LINKED_AV];
+                // Load DB Config
+                nextCtx.dbConfig = await loadDbConfig(blockId);
             }
             await this.processListBatch(blockId, actionType, nextCtx);
         }
@@ -84,7 +87,7 @@ export class ListProcessor {
         if (children.length === 0) return;
 
         const itemIds = children.map((c: any) => `'${c.id}'`).join(",");
-        
+
         // 1. Batch Fetch Source Info
         const [sourceItemsRes, sourceContentRes] = await Promise.all([
             client.sql({ stmt: `SELECT id, ial FROM blocks WHERE id IN (${itemIds})` }),
@@ -93,7 +96,7 @@ export class ListProcessor {
 
         const sourceMap = new Map();
         sourceItemsRes.data?.forEach((i: any) => sourceMap.set(i.id, i));
-        
+
         const contentMap = new Map(); // parent_id -> [p_block]
         sourceContentRes.data?.forEach((p: any) => {
             if (!contentMap.has(p.parent_id)) contentMap.set(p.parent_id, []);
@@ -106,7 +109,7 @@ export class ListProcessor {
             const ial = i.ial || "";
             const docMatch = ial.match(new RegExp(`${ATTR_INDEX}="([^"]+)"`));
             if (docMatch) targetIds.add(`'${docMatch[1]}'`);
-            
+
             const headingMatch = ial.match(new RegExp(`${ATTR_OUTLINE}="([^"]+)"`));
             if (headingMatch) targetIds.add(`'${headingMatch[1]}'`);
         });
@@ -114,8 +117,8 @@ export class ListProcessor {
         // 3. Batch Fetch Targets
         let targetMap = new Map();
         if (targetIds.size > 0) {
-            const targetRes = await client.sql({ 
-                stmt: `SELECT id, content, type, sort, ial, markdown, box, path, hpath FROM blocks WHERE id IN (${Array.from(targetIds).join(",")})` 
+            const targetRes = await client.sql({
+                stmt: `SELECT id, content, type, sort, ial, markdown, box, path, hpath FROM blocks WHERE id IN (${Array.from(targetIds).join(",")})`
             });
             targetRes.data?.forEach((t: any) => targetMap.set(t.id, t));
         }
@@ -127,10 +130,10 @@ export class ListProcessor {
         for (const child of children) {
             const sourceItem = sourceMap.get(child.id);
             const pBlocks = contentMap.get(child.id) || [];
-            
+
             // Parse Source
             const core = this.ibp.parseItemContent(child.id, pBlocks);
-            
+
             // Get Bound Targets
             let docTargetId = null;
             let headingTargetId = null;
@@ -143,6 +146,54 @@ export class ListProcessor {
 
             const docTarget = docTargetId ? targetMap.get(docTargetId) : null;
             const headingTarget = headingTargetId ? targetMap.get(headingTargetId) : null;
+
+            // --- Inheritance Logic ---
+            let currentInheritedAttrs = { ...(ctx.inheritedAttrs || {}) };
+
+            if (ctx.dbConfig?.inheritanceRules && ctx.avId) {
+                // Parse IAL to object for easier handling
+                const itemAttrs: any = {};
+                if (sourceItem?.ial) {
+                    const matches = sourceItem.ial.matchAll(/([a-zA-Z0-9-]+)="([^"]*)"/g);
+                    for (const m of matches) {
+                        itemAttrs[m[1]] = m[2];
+                    }
+                }
+
+                // Get values from AV for this item
+                // Use IBlockProcessor helper (we will add this method)
+                const itemValues = await this.ibp.getLinkedAVData(child.id, itemAttrs, ctx.avId);
+
+                if (itemValues) {
+                    for (const rule of ctx.dbConfig.inheritanceRules) {
+                        if (rule.mode === 'none') continue;
+
+                        const val = itemValues[rule.colId] || itemValues[rule.colName]; // Try both ID and Name if possible? 
+                        // Actually getLinkedAVData currently returns keyed by Name (e.g. "icon", "title-img").
+                        // We need to support generic columns.
+
+                        // For now, let's assume getLinkedAVData returns what we need or we pass the raw map?
+                        // Let's rely on processor modification to support generic column data retrieval.
+                        // Assuming itemValues has the data we need.
+
+                        // Map colID to name?? 
+                        // The rule uses colId. itemValues usually concept names or IDs?
+                        // If we use standard AV data, it's keyed by ColID usually, but our helper mapped to names?
+                        // processor.ts: `getLinkedAVData` maps specific keys to names.
+                        // We will update `getLinkedAVData` to return ALL data keyed by ID.
+
+                        if (val) {
+                            currentInheritedAttrs[rule.colId] = {
+                                value: val,
+                                mode: rule.mode
+                            };
+                        }
+                    }
+                }
+            }
+
+            // We need to pass the updated inheritance context to the recursive call
+            const itemCtx = { ...ctx, inheritedAttrs: currentInheritedAttrs };
 
             let needsUpdate = false;
 
@@ -164,7 +215,7 @@ export class ListProcessor {
                     }
                 }
             }
-            
+
             if (actionType === "PUSH_TO_BOTTOM" || actionType === "PUSH_COMBINED") {
                 if (!headingTarget) {
                     needsUpdate = true;
@@ -186,11 +237,11 @@ export class ListProcessor {
             if (needsUpdate) {
                 // Perform Update
                 // console.log(`[Builder] Update needed for ${child.id}`);
-                result = await this.processRecursive(child.id, "NodeListItem", actionType, ctx);
+                result = await this.processRecursive(child.id, "NodeListItem", actionType, itemCtx);
             } else {
                 // Skip Update - Construct Result Context manually
                 // console.log(`[Builder] Skipping ${child.id}`);
-                
+
                 const combinedResult: any = {};
 
                 if (docTarget) {
@@ -200,7 +251,7 @@ export class ListProcessor {
                     combinedResult.path = docTarget.path;
                     combinedResult.hpath = docTarget.hpath;
                 }
-                
+
                 if (headingTarget) {
                     // For Combined/Outline modes, ID must track the Heading for correct ordering
                     combinedResult.id = headingTarget.id;
@@ -220,7 +271,7 @@ export class ListProcessor {
                     previousId: ctx.previousId,
                     parentId: (actionType === "PUSH_TO_DOC" || actionType === "PUSH_COMBINED") ? resultId : ctx.parentId,
                     level: ctx.level + 1,
-                    parentInfo: ( (actionType === "PUSH_TO_DOC" || actionType === "PUSH_COMBINED") && result && typeof result === 'object') ? result : ctx.parentInfo
+                    parentInfo: ((actionType === "PUSH_TO_DOC" || actionType === "PUSH_COMBINED") && result && typeof result === 'object') ? result : ctx.parentInfo
                 };
 
                 let subListsRes = await client.sql({

@@ -10,6 +10,7 @@ import {
     BGS
 } from "./special/special-handlers";
 import { batchUpdateCellValue } from "./special/batch-update";
+import { openDbConfigDialog } from "../av-setting/db-config";
 
 class AVEventHandler {
     private onContextMenuBound = this.onContextMenu.bind(this);
@@ -206,6 +207,13 @@ class AVEventHandler {
                 icon: "iconSync",
                 label: syncLabel,
                 click: () => batchSyncToDescendants(avID, colID, avBlockID)
+            });
+
+            menu.addSeparator();
+            menu.addItem({
+                icon: "iconSettings",
+                label: "数据库高级设置 (Advanced Settings)",
+                click: () => openDbConfigDialog(avID, avBlockID)
             });
         } else {
             const syncSubmenu = [
