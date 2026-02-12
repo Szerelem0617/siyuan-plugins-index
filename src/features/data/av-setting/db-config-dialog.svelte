@@ -15,8 +15,8 @@
 
     // List of columns to exclude from Inheritance settings
     const inheritanceDenyList = new Set([
-        "level",
-        "icon",
+        "level", // Deny inheritance for Level
+        // "icon",  // Allow inheritance for Icon
         "father",
         "parent_id",
         "path",
