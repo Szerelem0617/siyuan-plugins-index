@@ -1,7 +1,16 @@
 <script lang="ts">
-    import { saveDbConfig, syncInheritanceToDb, type DbConfig } from "./db-config";
+    import {
+        saveDbConfig,
+        syncInheritanceToDb,
+        getGlobalTypeConfigs,
+        type DbConfig,
+    } from "./db-config";
     import { showMessage } from "siyuan";
-    import { buildAvHierarchy, resolveInheritance, getColIDMap } from "../../../shared/utils/av-utils";
+    import {
+        buildAvHierarchy,
+        resolveInheritance,
+        getColIDMap,
+    } from "../../../shared/utils/av-utils";
 
     export let avId: string;
     export let blockId: string;
@@ -159,29 +168,51 @@
 
     async function testInheritance(colId: string, colName: string, mode: any) {
         try {
-            console.log(`[Inheritance Test] Starting test for column: ${colName} (Mode: ${mode})`);
+            console.log(
+                `[Inheritance Test] Starting test for column: ${colName} (Mode: ${mode})`,
+            );
             const colInfo = await getColIDMap(avId);
-            const parentMap = await buildAvHierarchy(colInfo.keyValues);
-            
+            const parentMap = await buildAvHierarchy(
+                colInfo.keyValues,
+                colInfo.itemToBlock,
+            );
+
             // Find all block IDs in this AV
             const allBlockIds = new Set<string>();
-            colInfo.keyValues.forEach(kv => {
+            colInfo.keyValues.forEach((kv) => {
                 kv.values?.forEach((v: any) => {
-                    if (v.blockID) allBlockIds.add(v.blockID);
+                    const bid =
+                        v.blockID ||
+                        v.block_id ||
+                        v.blockId ||
+                        v.block?.id ||
+                        colInfo.itemToBlock.get(v.itemID || v.itemId || v.id);
+                    if (bid) allBlockIds.add(bid);
                 });
             });
 
-            console.log(`[Inheritance Test] Resolving ${allBlockIds.size} items...`);
+            console.log(
+                `[Inheritance Test] Resolving ${allBlockIds.size} items...`,
+            );
             const results = [];
             for (const bid of allBlockIds) {
-                const resolved = resolveInheritance(bid, colId, mode, colInfo.keyValues, parentMap);
+                const resolved = resolveInheritance(
+                    bid,
+                    colId,
+                    mode,
+                    colInfo.keyValues,
+                    parentMap,
+                    colInfo.blockToItem,
+                );
                 results.push({
                     blockId: bid,
-                    resolvedValue: resolved
+                    resolvedValue: resolved,
                 });
             }
             console.table(results);
-            showMessage("测试结果已打印到控制台 (Test results printed to console)");
+            showMessage(
+                "测试结果已打印到控制台 (Test results printed to console)",
+            );
         } catch (e) {
             console.error("[Inheritance Test] Failed", e);
             showMessage("测试失败 / Test Failed", 3000, "error");
@@ -189,31 +220,71 @@
     }
 
     const save = async () => {
+        const activeMappings = typeMappings.filter((m) => m.name.trim() !== "");
+
+        // 1. Validate internal uniqueness (within this DB)
+        const names = activeMappings.map((m) => m.name);
+        const internalDuplicates = names.filter(
+            (name, index) => names.indexOf(name) !== index,
+        );
+        if (internalDuplicates.length > 0) {
+            showMessage(
+                `❌ 内部命名冲突: 你在当前数据库中定义了多个 "${internalDuplicates[0]}"`,
+                3000,
+                "error",
+            );
+            return;
+        }
+
+        // 2. Validate global uniqueness (across other DBs)
+        showMessage("正在检查命名冲突...", 1000);
+        const globalConfigs = await getGlobalTypeConfigs();
+        for (const m of activeMappings) {
+            const conflict = globalConfigs.find(
+                (c) => c.typeName === m.name && c.blockId !== blockId,
+            );
+            if (conflict) {
+                showMessage(
+                    `❌ 命名冲突: 类型名 "${m.name}" 已在其他数据库中使用`,
+                    3000,
+                    "error",
+                );
+                return;
+            }
+        }
+
         const finalInheritanceRules = inheritanceList
             .filter((i) => i.mode !== "none")
             .map((i) => ({ colId: i.col.id, mode: i.mode }));
 
         const config: DbConfig = {
+            avId,
             typeFieldId,
-            typeMappings: typeMappings.filter((m) => m.name.trim() !== ""),
+            typeMappings: activeMappings,
             inheritanceRules: finalInheritanceRules as any,
         };
 
         await saveDbConfig(blockId, config);
-        
+
         // Trigger Materialized Sync
         try {
             showMessage("⚙️ 正在应用继承规则...", 2000);
-            const updatedCount = await syncInheritanceToDb(avId, config, blockId);
+            const updatedCount = await syncInheritanceToDb(
+                avId,
+                config,
+                blockId,
+            );
             if (updatedCount > 0) {
-                showMessage(`✅ 设置已保存并同步 (${updatedCount} 个单元格已更新)`);
+                showMessage(
+                    `✅ 设置已保存并同步 (${updatedCount} 个单元格已更新)`,
+                );
             } else {
                 showMessage("✅ 设置已保存 (数据已是最新)");
             }
         } catch (e) {
             showMessage("⚠️ 设置已保存，但同步过程中出现错误", 3000, "error");
         }
-        
+
         dialog.destroy();
     };
 
@@ -331,12 +402,19 @@
                         style="margin-bottom: 8px; align-items: center; border-bottom: 1px dashed var(--b3-theme-surface-lighter); padding-bottom: 4px;"
                     >
                         <div class="fn__flex-1">
-                            <div style="font-weight: bold; display: flex; align-items: center;">
+                            <div
+                                style="font-weight: bold; display: flex; align-items: center;"
+                            >
                                 {item.col.col?.name || item.col.name}
-                                <button 
-                                    class="b3-button b3-button--text" 
+                                <button
+                                    class="b3-button b3-button--text"
                                     style="margin-left: 8px; padding: 2px 4px; font-size: 10px; height: 18px; line-height: 14px;"
-                                    on:click={() => testInheritance(item.col.id, item.col.name, item.mode)}
+                                    on:click={() =>
+                                        testInheritance(
+                                            item.col.id,
+                                            item.col.name,
+                                            item.mode,
+                                        )}
                                 >
                                     Test
                                 </button>

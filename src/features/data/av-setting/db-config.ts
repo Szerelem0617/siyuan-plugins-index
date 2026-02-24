@@ -1,9 +1,9 @@
 import { client } from "../../../shared/api-client";
-import { Dialog, showMessage } from "siyuan";
+import { Dialog } from "siyuan";
 import DbConfigDialog from "./db-config-dialog.svelte";
 import { getColIDMap, buildAvHierarchy, resolveInheritance, isValueEmpty } from "../../../shared/utils/av-utils";
 import { post } from "../../../shared/api-client/request";
-import { formatDate } from "../../../shared/utils";
+import { formatDate, getAttrFromIAL } from "../../../shared/utils";
 
 export const ATTR_DB_CONFIG = "custom-index-db-config";
 
@@ -18,9 +18,18 @@ export interface TypeMapping {
 }
 
 export interface DbConfig {
+    avId?: string; // Add avId to config for easier lookup
     typeFieldId?: string; // Column ID used to determine type
     typeMappings?: TypeMapping[]; // Mappings for values -> type names
     inheritanceRules?: InheritanceRule[];
+}
+
+export interface TypeConfig {
+    typeName: string;
+    avId: string;
+    blockId: string;
+    typeFieldId: string;
+    mappedValue: string;
 }
 
 export async function syncInheritanceToDb(avId: string, config: DbConfig, avBlockId?: string) {
@@ -33,13 +42,13 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
         console.log(`[Materialized Sync] Starting full sync for AV: ${avId}`);
         const colInfo = await getColIDMap(avId);
         const parentMap = await buildAvHierarchy(colInfo.keyValues, colInfo.itemToBlock);
-        
+
         // Find all unique block IDs from the mappings
         const allBlockIds = Array.from(colInfo.blockToItem.keys());
         console.log(`[Materialized Sync] Processing ${allBlockIds.length} blocks in AV.`);
 
         const updateOps: any[] = [];
-        
+
         // Helper for normalized display
         const getValStr = (v: any) => {
             if (!v) return "";
@@ -55,10 +64,10 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
                 const kv = colInfo.keyValues.find((v: any) => v.key.id === rule.colId);
                 const rowId = colInfo.blockToItem.get(bid);
                 const cell = kv?.values?.find((v: any) => (v.blockID === bid || (rowId && v.itemID === rowId)));
-                
+
                 // 2. Resolve inheritance
                 const resolvedVal = resolveInheritance(bid, rule.colId, rule.mode, colInfo.keyValues, parentMap, colInfo.blockToItem);
-                
+
                 if (!isValueEmpty(resolvedVal)) {
                     let isDifferent = false;
                     if (!cell || isValueEmpty(cell)) {
@@ -67,7 +76,7 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
                         // Compare normalized content strings
                         const localStr = getValStr(cell);
                         const resolvedStr = getValStr(resolvedVal);
-                        
+
                         if (String(localStr) !== String(resolvedStr)) {
                             isDifferent = true;
                         }
@@ -77,7 +86,7 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
                         const localDisplay = getValStr(cell) || "(Empty)";
                         const resolvedDisplay = getValStr(resolvedVal) || "(Empty)";
                         console.log(`[Materialized Sync] Update: Block ${bid}, Col ${rule.colId}. Local: ${localDisplay} -> Resolved: ${resolvedDisplay}`);
-                        
+
                         updateOps.push({
                             keyID: rule.colId,
                             itemID: bid, // Use Siyuan Block ID as identifier for updates
@@ -100,12 +109,12 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
                 await post("/api/transactions", {
                     app: "plugin-index",
                     reqId: Date.now(),
-                    transactions: [{ 
-                        doOperations: [{ 
-                            action: "doUpdateUpdated", 
-                            id: avBlockId, 
-                            data: formatDate(new Date()) 
-                        }] 
+                    transactions: [{
+                        doOperations: [{
+                            action: "doUpdateUpdated",
+                            id: avBlockId,
+                            data: formatDate(new Date())
+                        }]
                     }]
                 });
             }
@@ -141,6 +150,48 @@ export async function saveDbConfig(blockId: string, config: DbConfig) {
         });
     } catch (e) {
         console.error("Failed to save DB config", e);
+    }
+}
+
+/**
+ * Retrieves all type mappings across the entire workspace.
+ * Used for uniqueness validation and Supertag resolution.
+ */
+export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
+    try {
+        const stmt = `SELECT id, ial FROM blocks WHERE ial LIKE '%${ATTR_DB_CONFIG}="%'`;
+        const res = await client.sql({ stmt });
+        const configs: TypeConfig[] = [];
+
+        if (res.data) {
+            for (const row of res.data) {
+                const configStr = getAttrFromIAL(row.ial, ATTR_DB_CONFIG);
+                if (configStr) {
+                    try {
+                        const config: DbConfig = JSON.parse(configStr);
+                        if (config.typeMappings && config.typeFieldId) {
+                            for (const m of config.typeMappings) {
+                                if (m.name) {
+                                    configs.push({
+                                        typeName: m.name,
+                                        avId: config.avId || row.id, // Fallback to blockId if avId not set
+                                        blockId: row.id,
+                                        typeFieldId: config.typeFieldId,
+                                        mappedValue: m.value
+                                    });
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse DB config for block:", row.id, e);
+                    }
+                }
+            }
+        }
+        return configs;
+    } catch (e) {
+        console.error("Failed to get global type configs", e);
+        return [];
     }
 }
 
@@ -185,19 +236,11 @@ export async function scanColumnValues(blockId: string, colId: string, colName: 
                 sampleCount++;
             }
 
-            // Simple regex to find key="value"
-            // We iterate potential keys to find a match
+            // Iterate potential keys to find a match
             for (const key of potentialKeys) {
-                // Regex: key="value" or key='value'
-                // We need to escape the key for regex
-                const escapedKey = key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                const regex = new RegExp(`(?:\\s|^)${escapedKey}=["']([^"']*)["']`, "i");
-                const match = row.ial.match(regex);
-                if (match) {
-                    values.add(match[1]);
-                    // Found a value for this row, stop checking other keys for this row? 
-                    // Maybe multiple keys exist? Usually just one is primary.
-                    // Let's collect all possible values.
+                const val = getAttrFromIAL(row.ial, key);
+                if (val) {
+                    values.add(val);
                 }
             }
 

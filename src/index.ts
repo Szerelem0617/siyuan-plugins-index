@@ -8,6 +8,7 @@ import { addAVMenuItems, avEventHandler } from "./features/data/attribute-view/e
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
+import { supertagMonitor } from "./features/data/av-setting/supertag";
 import { version } from "../plugin.json";
 
 export default class IndexPlugin extends Plugin {
@@ -27,13 +28,14 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.on("open-menu-av", addAVMenuItems);
         //监听文档载入事件
         this.eventBus.on("loaded-protyle-static", updateIndex);
-        
+
         this.switchHandler = this.onTabSwitch.bind(this);
         this.eventBus.on("switch-protyle", this.switchHandler);
 
         // this.eventBus.on("ws-main",this.eventBusLog);
         initEmojiEvent();
         avEventHandler.init();
+        supertagMonitor.init(this);
     }
     // onLayoutReady() {
     //     initObserver();
@@ -47,22 +49,23 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.off("switch-protyle", this.switchHandler);
         removeEmojiEvent();
         avEventHandler.destroy();
+        supertagMonitor.destroy();
         console.log("IndexPlugin onunload");
     }
 
     private async onTabSwitch({ detail }: any) {
         // Trigger update for the PREVIOUS doc
         if (this.lastActiveDoc) {
-             await execAutoUpdate(this.lastActiveDoc.rootId, this.lastActiveDoc.notebookId, this.lastActiveDoc.path);
+            await execAutoUpdate(this.lastActiveDoc.rootId, this.lastActiveDoc.notebookId, this.lastActiveDoc.path);
         }
 
         // Update current
         if (detail && detail.protyle && detail.protyle.block) {
-             this.lastActiveDoc = {
-                 rootId: detail.protyle.block.rootID,
-                 notebookId: detail.protyle.notebookId,
-                 path: detail.protyle.path
-             };
+            this.lastActiveDoc = {
+                rootId: detail.protyle.block.rootID,
+                notebookId: detail.protyle.notebookId,
+                path: detail.protyle.path
+            };
         }
     }
 
@@ -77,7 +80,7 @@ export default class IndexPlugin extends Plugin {
     }
 
     //获取i18n和插件类实例
-    init(){
+    init() {
         setI18n(this.i18n);
         setPlugin(this);
         addSlash();
@@ -88,7 +91,7 @@ export default class IndexPlugin extends Plugin {
     // private eventBusLog({detail}: any) {
     //     console.log(detail);
     // }
-    async openSetting(){
+    async openSetting() {
         await createDialog();
     }
 

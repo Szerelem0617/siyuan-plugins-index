@@ -45,3 +45,30 @@
 ---
 
 **总结**：我们已经跨过了“能不能用”的门槛，进入了“好不好用”和“稳不稳健”的精雕细琢阶段。当前的物化同步方案为用户提供了确定的、可搜索的数据价值。
+
+---
+
+## 4. 请教 SiYuan 核心源码专家的问题 (Supertag 功能开发)
+
+专家你好，我们在开发“**超级标签 (Supertag)**”功能时遇到了关于 `ws-main` 事件和标签精准抓取的技术问题。
+目前该功能的需求是：当用户在某个块中敲下一个形如 `#Type#` 的标签时，插件监听到这个动作立刻将此块自动添加到设定好的 AV 视图中。
+
+目前的实现逻辑：
+由于插件本身并没有 `this.eventBus` （我们之前误用了自己声明的局部 bus），现在已经成功将 Siyuan 全局的 `Plugin.eventBus` 传给了监听器，并监听了 `ws-main` 下的 `cmd === "transactions"`。在这些 actions (`update`, `insert` 等) 中，我们会获取到被修改块的 `id`，并通过 SQL 去查询它的 `ial` 提取 `tags="tag1 tag2"` 属性。然后对比是否命中了已注册的 Type 进而入库。
+
+**当前面临的挑战：如何识别哪些是“刚刚打上的新标签”？**
+
+当我们拦截到 `update` 事务或通过 SQL 拿到最新 `tags` 属性时，这个属性包含了该块上的所有历史标签和当前事务可能附加的新标签。这就导致如果用户修改了一个已经打好标签的块的内容，即使他没有动标签，我们拿到的 `tags` 也没有变化，但插件依然会遍历所有 tag 触发一次检查（虽然我们通过 `getAttributeViewItemIDsByBoundIDs` 做了防御从而不会重复入库，但会导致大量不必要的数据库查询和运算，不够优雅和高效）。
+
+**问题核心：**
+1. **如何从 `transactions` 数据结构本身，判断一个标签是刚“新增 (Added)”或“修改 (Modified)”的，而非一直存在于这个块上的？**
+   在 `doOperations` 数组里的 `op.data` 到底包含什么样的 Diff 信息可以让我们快速得出结论？
+2. 如果直接对比 `op.data` DOM 字符串或者 `op.ial`，思源是否提供了一种优雅的模型（Model）或辅助判定方法？
+3. Siyuan 后端在处理标签索引时（例如往 SQLite 的 `tags` 表或 `blocks` 里的 `ial` 写入时），是否会单独广播类似 `tag-added` 或 `tag-updated` 的轻量事件供特定插件监听？还是必须在海量的 `transactions` 中硬解？
+
+**【Update】目前的 Debug Plan**
+为了弄清楚打标签（直接在块内输入 `#标签#` 时）底层真正的 payload 是什么样的，我已在 `supertag.ts` 中加入了一条极其底层的拦截日志。只要任何事务的数据（`op.data`）中包含 `"tag"` 或 `"#"` 这个字符，就会被打印出来：
+`console.log("[Supertag] Inspecting potential tag op:", op.data)`
+
+目前我知道属性界面设置的是 bookmark 而不是 tag，所以我们的目标是**完全拦截通过编辑器正文录入 `#XXX#` 的动作**。
+请专家/开发者帮忙：尝试在页面正常敲击产生一个标签，然后把控制台中打出的 `[Supertag] Inspecting potential tag op:` 后面的完整 DOM/JSON 发给我，以便我直接针对性修改正则！
