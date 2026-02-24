@@ -3,6 +3,7 @@ import { post } from "../../../shared/api-client/request";
 import { getGlobalTypeConfigs, type TypeConfig } from "./db-config";
 import { showMessage } from "siyuan";
 import { formatDate } from "../../../shared/utils";
+import { getColIDMap } from "../../../shared/utils/av-utils";
 
 export class SupertagMonitor {
     private typeRegistry: TypeConfig[] = [];
@@ -170,8 +171,12 @@ export class SupertagMonitor {
                 await new Promise(r => setTimeout(r, 200));
             }
 
-            // 3. Set the attribute value
-            const valuePayload = this.formatValue(config.mappedValue);
+            // 3. Get actual column type
+            const { idToType } = await getColIDMap(config.avId);
+            const colType = idToType[config.typeFieldId] || "text"; // fallback
+
+            // 4. Set the attribute value
+            const valuePayload = this.formatValue(config.mappedValue, colType);
 
             const updateRes = await post("/api/av/batchSetAttributeViewBlockAttrs", {
                 avID: config.avId,
@@ -198,12 +203,32 @@ export class SupertagMonitor {
         }
     }
 
-    private formatValue(val: string) {
-        // Must include the 'type' field otherwise batchSetAttributeViewBlockAttrs may ignore it
-        return {
-            type: "mSelect",
-            mSelect: [{ content: val, color: "" }]
-        };
+    private formatValue(val: string, colType: string) {
+        console.log(`[Supertag] Formatting value "${val}" for column type "${colType}"`);
+
+        if (colType === "number") {
+            const numContent = Number(val);
+            return {
+                type: "number",
+                number: { content: isNaN(numContent) ? 0 : numContent, isNotEmpty: true }
+            };
+        } else if (colType === "text" || colType === "block") {
+            return {
+                type: "text",
+                text: { content: val }
+            };
+        } else if (colType === "select" || colType === "mSelect") {
+            return {
+                type: colType,
+                mSelect: [{ content: val, color: "" }]
+            };
+        } else {
+            // Best effort generic fallback for other column types
+            return {
+                type: "mSelect",
+                mSelect: [{ content: val, color: "" }]
+            };
+        }
     }
 }
 
