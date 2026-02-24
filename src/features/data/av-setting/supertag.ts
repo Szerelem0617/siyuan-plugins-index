@@ -2,7 +2,7 @@
 import { post } from "../../../shared/api-client/request";
 import { getGlobalTypeConfigs, type TypeConfig } from "./db-config";
 import { showMessage } from "siyuan";
-
+import { formatDate } from "../../../shared/utils";
 
 export class SupertagMonitor {
     private typeRegistry: TypeConfig[] = [];
@@ -162,7 +162,7 @@ export class SupertagMonitor {
 
                 const insertRes = await post("/api/av/addAttributeViewBlocks", {
                     avID: config.avId,
-                    srcs: [{ itemID: itemId, id: blockId }]
+                    srcs: [{ itemID: itemId, id: blockId, isDetached: false }]
                 });
                 console.log(`[Supertag] Insert Block Result:`, insertRes);
 
@@ -183,6 +183,13 @@ export class SupertagMonitor {
             });
             console.log(`[Supertag] Update Attribute Result:`, updateRes);
 
+            // 4. Force UI refresh for the AV block so the new row shows up immediately
+            await post("/api/transactions", {
+                app: "plugin-index",
+                reqId: Date.now(),
+                transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: config.blockId, data: formatDate(new Date()) }] }] // Sending doUpdateUpdated triggers a refresh
+            });
+
             console.log(`[Supertag] Successfully applied type "${config.typeName}" to block ${blockId}`);
             showMessage(`✨ Supertag: 已自动分类为 "${config.typeName}"`);
 
@@ -192,11 +199,10 @@ export class SupertagMonitor {
     }
 
     private formatValue(val: string) {
-        // Defaulting to mSelect structure as requested by expert for automatic option creation
-        // If the column is actually Text, SiYuan might still accept this or we might need a fallback.
-        // However, the expert said Select/MSelect uses this structure.
+        // Must include the 'type' field otherwise batchSetAttributeViewBlockAttrs may ignore it
         return {
-            mSelect: [{ content: val }]
+            type: "mSelect",
+            mSelect: [{ content: val, color: "" }]
         };
     }
 }
