@@ -46,8 +46,8 @@ export class SupertagMonitor {
 
         for (const trans of transactions) {
             for (const op of trans.doOperations) {
-                // Focus on operations that carry tag info: update (DOM), insert (DOM), setAttrs (JSON string)
-                if (op.action === "update" || op.action === "insert" || op.action === "setAttrs") {
+                // Focus on operations that carry tag info: update (DOM), insert (DOM), setAttrs (JSON string), updateAttrs (Object/JSON)
+                if (op.action === "update" || op.action === "insert" || op.action === "setAttrs" || op.action === "updateAttrs") {
                     const blockId = op.id;
                     if (!blockId || !op.data) continue;
 
@@ -83,15 +83,37 @@ export class SupertagMonitor {
 
     private extractTagsFromPayload(payload: any): Set<string> {
         const tags = new Set<string>();
+        if (!payload) return tags;
+
+        // Condition 0: payload is an object (common in updateAttrs)
+        if (typeof payload === "object") {
+            const rawTags = payload.new?.tags || payload.tags; // Expert: updateAttrs uses .new.tags
+            if (rawTags && typeof rawTags === "string") {
+                // Determine separator: updateAttrs uses comma, setAttrs/DOM uses space
+                const sep = rawTags.includes(',') ? ',' : ' ';
+                rawTags.split(sep).forEach((t: string) => {
+                    const clean = t.trim().replace(/#/g, '');
+                    if (clean) tags.add(clean);
+                });
+            }
+            return tags;
+        }
+
         if (typeof payload !== "string") return tags;
 
         // Condition 1: payload is a JSON string of attributes (action === "setAttrs")
         if (payload.trim().startsWith("{") && payload.trim().endsWith("}")) {
             try {
                 const attrs = JSON.parse(payload);
-                if (attrs.tags) {
-                    attrs.tags.split(" ").filter((t: string) => t.trim()).forEach((t: string) => tags.add(t));
+                const rawTags = attrs.new?.tags || attrs.tags;
+                if (rawTags && typeof rawTags === "string") {
+                    const sep = rawTags.includes(',') ? ',' : ' ';
+                    rawTags.split(sep).forEach((t: string) => {
+                        const clean = t.trim().replace(/#/g, '');
+                        if (clean) tags.add(clean);
+                    });
                 }
+                if (rawTags) return tags; // If we found tags via JSON, don't fallback to regex
             } catch (e) { } // Ignore passive failures
         }
 

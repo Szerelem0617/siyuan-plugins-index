@@ -72,3 +72,17 @@
 
 目前我知道属性界面设置的是 bookmark 而不是 tag，所以我们的目标是**完全拦截通过编辑器正文录入 `#XXX#` 的动作**。
 请专家/开发者帮忙：尝试在页面正常敲击产生一个标签，然后把控制台中打出的 `[Supertag] Inspecting potential tag op:` 后面的完整 DOM/JSON 发给我，以便我直接针对性修改正则！
+
+---
+
+## 5. 解决方案：检测“页面级别的 Tag (Page Tags)” (已完成)
+
+感谢专家提供的线索。页面标签的更新确实不同于普通块：
+- **动作类型**：使用的是 `updateAttrs` 而非 `update` 或 `setAttrs`。
+- **数据结构**：Payload 是一个包含 `old` 和 `new` 属性的对象（或 JSON 字符串）。
+- **分隔符**：页面标签在 IAL 中是以英文逗号 `,` 分隔的。
+
+**已实施的改进：**
+- 更新了 `supertag.ts` 中的 `handleWsMessage` 以监听 `updateAttrs` 动作。
+- 增强了 `extractTagsFromPayload` 方法，使其能识别 `data.new.tags` 结构，并自动根据内容选择逗号或空格作为分隔符。
+- 现在给页面（文档）添加标签也能像普通块一样触发超级标签自动分类逻辑。
