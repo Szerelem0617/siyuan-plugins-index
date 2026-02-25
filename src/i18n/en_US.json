@@ -115,5 +115,38 @@
       },
       "builderDesc": "📄 Sub-page link · ➖ Heading link"
     }
+  },
+  "dbConfig": {
+    "dialogTitle": "Database Advanced Settings",
+    "tabType": "Type Settings",
+    "tabInheritance": "Inheritance Settings",
+    "typeFieldLabel": "Type Determined By:",
+    "selectField": "-- Select Field --",
+    "systemProps": "System Properties",
+    "columns": "Columns",
+    "valueMappings": "Value Mappings:",
+    "typeNamePlaceholder": "Type Name",
+    "mapInfo": "Only values with mapped names will be saved.",
+    "testBtn": "Test",
+    "testPrinted": "Test results printed to console",
+    "testFailed": "Test failed",
+    "modeNone": "None",
+    "modeWeak": "Weak (Fill Empty)",
+    "modeStrong": "Strong (Overwrite)",
+    "cancel": "Cancel",
+    "save": "Save",
+    "errInternalConflict": "❌ Internal conflict: Multiple types defined for",
+    "checkingConflict": "Checking for naming conflicts...",
+    "errGlobalConflictType": "❌ Global conflict: Type name",
+    "errGlobalConflictUsed": "is already used in another database",
+    "savingRules": "⚙️ Applying inheritance rules...",
+    "saveSyncSuccess": "✅ Settings saved & synced (Updated",
+    "saveSyncSuccessCells": "cells)",
+    "saveNoChange": "✅ Settings saved (Data is up-to-date)",
+    "saveError": "⚠️ Settings saved, but error occurred during sync",
+    "testLog": "Test",
+    "setWeakInheritance": "Set current column to weak inheritance",
+    "applyingWeakInheritance": "⏳ Applying weak inheritance...",
+    "setWeakInheritanceError": "❌ Failed to set weak inheritance:"
   }
 }

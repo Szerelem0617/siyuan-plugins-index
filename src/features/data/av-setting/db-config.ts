@@ -3,7 +3,7 @@ import { Dialog } from "siyuan";
 import DbConfigDialog from "./db-config-dialog.svelte";
 import { getColIDMap, buildAvHierarchy, resolveInheritance, isValueEmpty } from "../../../shared/utils/av-utils";
 import { post } from "../../../shared/api-client/request";
-import { formatDate, getAttrFromIAL } from "../../../shared/utils";
+import { formatDate, getAttrFromIAL, i18n } from "../../../shared/utils";
 
 export const ATTR_DB_CONFIG = "custom-index-db-config";
 
@@ -150,6 +150,33 @@ export async function saveDbConfig(blockId: string, config: DbConfig) {
         });
     } catch (e) {
         console.error("Failed to save DB config", e);
+    }
+}
+
+export async function setColumnWeakInheritance(avId: string, colId: string, avBlockId: string) {
+    try {
+        console.log(`[DbConfig] Setting column ${colId} to weak inheritance`);
+        const config = await loadDbConfig(avBlockId);
+
+        if (!config.inheritanceRules) {
+            config.inheritanceRules = [];
+        }
+
+        const existingRuleIndex = config.inheritanceRules.findIndex(r => r.colId === colId);
+        if (existingRuleIndex !== -1) {
+            config.inheritanceRules[existingRuleIndex].mode = "weak";
+        } else {
+            config.inheritanceRules.push({ colId, mode: "weak" });
+        }
+
+        await saveDbConfig(avBlockId, config);
+
+        const updatedCount = await syncInheritanceToDb(avId, config, avBlockId);
+
+        return updatedCount;
+    } catch (e) {
+        console.error("[DbConfig] Failed to set weak inheritance", e);
+        throw e;
     }
 }
 
@@ -305,7 +332,7 @@ export async function openDbConfigDialog(avId: string, blockId: string) {
     const currentConfig = await loadDbConfig(blockId);
 
     const dialog = new Dialog({
-        title: "数据库高级设置 (Database Advanced Settings)",
+        title: i18n.dbConfig.dialogTitle,
         content: `<div class="b3-dialog__content" id="db-config-container"></div>`,
         width: "600px",
         height: "600px",

@@ -11,6 +11,7 @@
         resolveInheritance,
         getColIDMap,
     } from "../../../shared/utils/av-utils";
+    import { i18n } from "../../../shared/utils";
 
     export let avId: string;
     export let blockId: string;
@@ -210,12 +211,10 @@
                 });
             }
             console.table(results);
-            showMessage(
-                "测试结果已打印到控制台 (Test results printed to console)",
-            );
+            showMessage(i18n.dbConfig.testPrinted);
         } catch (e) {
             console.error("[Inheritance Test] Failed", e);
-            showMessage("测试失败 / Test Failed", 3000, "error");
+            showMessage(i18n.dbConfig.testFailed, 3000, "error");
         }
     }
 
@@ -229,7 +228,7 @@
         );
         if (internalDuplicates.length > 0) {
             showMessage(
-                `❌ 内部命名冲突: 你在当前数据库中定义了多个 "${internalDuplicates[0]}"`,
+                `${i18n.dbConfig.errInternalConflict} "${internalDuplicates[0]}"`,
                 3000,
                 "error",
             );
@@ -237,7 +236,7 @@
         }
 
         // 2. Validate global uniqueness (across other DBs)
-        showMessage("正在检查命名冲突...", 1000);
+        showMessage(i18n.dbConfig.checkingConflict, 1000);
         const globalConfigs = await getGlobalTypeConfigs();
         for (const m of activeMappings) {
             const conflict = globalConfigs.find(
@@ -245,7 +244,7 @@
             );
             if (conflict) {
                 showMessage(
-                    `❌ 命名冲突: 类型名 "${m.name}" 已在其他数据库中使用`,
+                    `${i18n.dbConfig.errGlobalConflictType} "${m.name}" ${i18n.dbConfig.errGlobalConflictUsed}`,
                     3000,
                     "error",
                 );
@@ -268,7 +267,7 @@
 
         // Trigger Materialized Sync
         try {
-            showMessage("⚙️ 正在应用继承规则...", 2000);
+            showMessage(i18n.dbConfig.savingRules, 2000);
             const updatedCount = await syncInheritanceToDb(
                 avId,
                 config,
@@ -276,13 +275,13 @@
             );
             if (updatedCount > 0) {
                 showMessage(
-                    `✅ 设置已保存并同步 (${updatedCount} 个单元格已更新)`,
+                    `${i18n.dbConfig.saveSyncSuccess} ${updatedCount} ${i18n.dbConfig.saveSyncSuccessCells}`,
                 );
             } else {
-                showMessage("✅ 设置已保存 (数据已是最新)");
+                showMessage(i18n.dbConfig.saveNoChange);
             }
         } catch (e) {
-            showMessage("⚠️ 设置已保存，但同步过程中出现错误", 3000, "error");
+            showMessage(i18n.dbConfig.saveError, 3000, "error");
         }
 
         dialog.destroy();
@@ -313,7 +312,7 @@
                 : ''}"
             on:click={() => (activeTab = "type")}
         >
-            Type Settings
+            {i18n.dbConfig.tabType}
         </button>
         <button
             class="b3-button b3-button--text {activeTab === 'inheritance'
@@ -321,7 +320,7 @@
                 : ''}"
             on:click={() => (activeTab = "inheritance")}
         >
-            Inheritance Settings
+            {i18n.dbConfig.tabInheritance}
         </button>
     </div>
 
@@ -330,7 +329,7 @@
             <div class="config-section">
                 <!-- Dropdown (unchanged) -->
                 <label class="b3-label">
-                    Type Determined By Check:
+                    {i18n.dbConfig.typeFieldLabel}
                     <div class="b3-form__icon">
                         <select
                             class="b3-select fn__block"
@@ -341,9 +340,10 @@
                                 onTypeFieldChange();
                             }}
                         >
-                            <option value="">-- Select Field --</option>
+                            <option value="">{i18n.dbConfig.selectField}</option
+                            >
 
-                            <optgroup label="System Properties">
+                            <optgroup label={i18n.dbConfig.systemProps}>
                                 {#each pinnedColumns as col}
                                     <option value={col.id}>
                                         📍 {col.name}
@@ -351,7 +351,7 @@
                                 {/each}
                             </optgroup>
 
-                            <optgroup label="Columns">
+                            <optgroup label={i18n.dbConfig.columns}>
                                 {#each normalColumns as col}
                                     <option value={col.id}>{col.name}</option>
                                 {/each}
@@ -362,7 +362,9 @@
 
                 {#if typeFieldId}
                     <div style="margin-top: 12px;">
-                        <div class="b3-label">Value Mappings:</div>
+                        <div class="b3-label">
+                            {i18n.dbConfig.valueMappings}
+                        </div>
                         <div class="fn__hr"></div>
                         {#each typeMappings as map}
                             <div
@@ -381,13 +383,14 @@
                                 <span style="margin: 0 8px;">→</span>
                                 <input
                                     class="b3-input fn__flex-1"
-                                    placeholder="Type Name"
+                                    placeholder={i18n.dbConfig
+                                        .typeNamePlaceholder}
                                     bind:value={map.name}
                                 />
                             </div>
                         {/each}
                         <div class="b3-label__text" style="margin-top: 8px;">
-                            Only values with mapped names will be saved.
+                            {i18n.dbConfig.mapInfo}
                         </div>
                     </div>
                 {/if}
@@ -416,7 +419,7 @@
                                             item.mode,
                                         )}
                                 >
-                                    Test
+                                    {i18n.dbConfig.testBtn}
                                 </button>
                             </div>
                             <div
@@ -431,9 +434,15 @@
                             style="width: 140px;"
                             bind:value={item.mode}
                         >
-                            <option value="none">None</option>
-                            <option value="weak">Weak (Fill Empty)</option>
-                            <option value="strong">Strong (Overwrite)</option>
+                            <option value="none"
+                                >{i18n.dbConfig.modeNone}</option
+                            >
+                            <option value="weak"
+                                >{i18n.dbConfig.modeWeak}</option
+                            >
+                            <option value="strong"
+                                >{i18n.dbConfig.modeStrong}</option
+                            >
                         </select>
                     </div>
                 {/each}
@@ -447,10 +456,10 @@
     >
         <button
             class="b3-button b3-button--cancel"
-            on:click={() => dialog.destroy()}>Cancel</button
+            on:click={() => dialog.destroy()}>{i18n.dbConfig.cancel}</button
         >
         <button class="b3-button" style="margin-left: 8px;" on:click={save}
-            >Save</button
+            >{i18n.dbConfig.save}</button
         >
     </div>
 </div>

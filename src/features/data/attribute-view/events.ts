@@ -1,5 +1,4 @@
-import { Menu } from "siyuan";
-import { batchSyncToDescendants } from "./batch/batch-sync";
+import { Menu, showMessage } from "siyuan";
 import { syncAttribute } from "./sync/attribute-sync";
 import {
     openEmojiDialog,
@@ -10,8 +9,7 @@ import {
     BGS
 } from "./special/special-handlers";
 import { batchUpdateCellValue } from "./special/batch-update";
-import { openDbConfigDialog } from "../av-setting/db-config";
-
+import { openDbConfigDialog, setColumnWeakInheritance } from "../av-setting/db-config";
 class AVEventHandler {
     private onContextMenuBound = this.onContextMenu.bind(this);
     private onMouseDownBound = this.onMouseDown.bind(this);
@@ -205,8 +203,20 @@ class AVEventHandler {
         if (isHeader) {
             menu.addItem({
                 icon: "iconSync",
-                label: syncLabel,
-                click: () => batchSyncToDescendants(avID, colID, avBlockID)
+                label: "设置当前列为弱继承",
+                click: async () => {
+                    try {
+                        showMessage("⏳ 正在应用弱继承...", 3000);
+                        const updatedCount = await setColumnWeakInheritance(avID, colID, avBlockID);
+                        if (updatedCount > 0) {
+                            showMessage(`✅ 设置已保存并同步 (${updatedCount} 个单元格已更新)`, 3000);
+                        } else {
+                            showMessage("✅ 设置已保存 (数据已是最新)", 3000);
+                        }
+                    } catch (e: any) {
+                        showMessage(`❌ 设置弱继承失败: ${e.message}`, 3000, "error");
+                    }
+                }
             });
 
             menu.addSeparator();
