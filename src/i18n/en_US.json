@@ -147,6 +147,8 @@
     "testLog": "Test",
     "setWeakInheritance": "Set current column to weak inheritance",
     "applyingWeakInheritance": "⏳ Applying weak inheritance...",
-    "setWeakInheritanceError": "❌ Failed to set weak inheritance:"
+    "setWeakInheritanceError": "❌ Failed to set weak inheritance:",
+    "setSupertag": "Toggle Supertag",
+    "cancelSupertag": "Toggle Supertag"
   }
 }

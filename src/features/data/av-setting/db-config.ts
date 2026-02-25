@@ -15,6 +15,7 @@ export interface InheritanceRule {
 export interface TypeMapping {
     value: string; // The raw value from the source column
     name: string;  // The user-defined display name/type name
+    isSupertag?: boolean; // True if this mapping is favorited as a global Supertag
 }
 
 export interface DbConfig {
@@ -198,7 +199,7 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                         const config: DbConfig = JSON.parse(configStr);
                         if (config.typeMappings && config.typeFieldId) {
                             for (const m of config.typeMappings) {
-                                if (m.name) {
+                                if (m.name && m.isSupertag) {
                                     configs.push({
                                         typeName: m.name,
                                         avId: config.avId || row.id, // Fallback to blockId if avId not set

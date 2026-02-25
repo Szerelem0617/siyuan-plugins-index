@@ -148,6 +148,8 @@
     "testLog": "测试",
     "setWeakInheritance": "设置当前列为弱继承",
     "applyingWeakInheritance": "⏳ 正在应用弱继承...",
-    "setWeakInheritanceError": "❌ 设置弱继承失败:"
+    "setWeakInheritanceError": "❌ 设置弱继承失败:",
+    "setSupertag": "取消/设为超级标签",
+    "cancelSupertag": "取消/设为超级标签"
   }
 }

@@ -140,6 +140,7 @@
             newMappings.push({
                 value: val,
                 name: existing?.name || "",
+                isSupertag: existing?.isSupertag || false,
             });
         });
 
@@ -235,20 +236,22 @@
             return;
         }
 
-        // 2. Validate global uniqueness (across other DBs)
+        // 2. Validate global uniqueness (across other DBs) ONLY for supertags
         showMessage(i18n.dbConfig.checkingConflict, 1000);
         const globalConfigs = await getGlobalTypeConfigs();
         for (const m of activeMappings) {
-            const conflict = globalConfigs.find(
-                (c) => c.typeName === m.name && c.blockId !== blockId,
-            );
-            if (conflict) {
-                showMessage(
-                    `${i18n.dbConfig.errGlobalConflictType} "${m.name}" ${i18n.dbConfig.errGlobalConflictUsed}`,
-                    3000,
-                    "error",
+            if (m.isSupertag) {
+                const conflict = globalConfigs.find(
+                    (c) => c.typeName === m.name && c.blockId !== blockId,
                 );
-                return;
+                if (conflict) {
+                    showMessage(
+                        `${i18n.dbConfig.errGlobalConflictType} "${m.name}" ${i18n.dbConfig.errGlobalConflictUsed}`,
+                        3000,
+                        "error",
+                    );
+                    return;
+                }
             }
         }
 
@@ -387,6 +390,28 @@
                                         .typeNamePlaceholder}
                                     bind:value={map.name}
                                 />
+                                <button
+                                    class="b3-button b3-button--text"
+                                    style="margin-left: 8px; padding: 4px; line-height: 1; color: {map.isSupertag
+                                        ? 'var(--b3-theme-primary)'
+                                        : 'var(--b3-theme-on-surface-light)'}; opacity: {map.isSupertag
+                                        ? '1'
+                                        : '0.5'};"
+                                    aria-label={map.isSupertag
+                                        ? i18n.dbConfig.cancelSupertag
+                                        : i18n.dbConfig.setSupertag}
+                                    title={map.isSupertag
+                                        ? i18n.dbConfig.cancelSupertag
+                                        : i18n.dbConfig.setSupertag}
+                                    on:click={() => {
+                                        map.isSupertag = !map.isSupertag;
+                                        typeMappings = [...typeMappings];
+                                    }}
+                                >
+                                    <svg style="width: 14px; height: 14px;"
+                                        ><use xlink:href="#iconStar"></use></svg
+                                    >
+                                </button>
                             </div>
                         {/each}
                         <div class="b3-label__text" style="margin-top: 8px;">
