@@ -42,9 +42,25 @@ export function getProcessedDocIcon(icon: string, hasChild: boolean) {
     }
 
     // 4. Unicode 十六进制序列 (Unicode Hex Sequence - e.g. "1f600")
-    if (/^[0-9a-fA-F-]+$/.test(icon)) {
-        return hexToEmoji(icon) || (hasChild ? "📑" : "📄");
+    // 增加长度判断：Emoji 的 Hex 通常至少 4 位，或者包含连字符
+    const isLikelyHex = /^[0-9a-fA-F]{4,}$/.test(icon) || /^[0-9a-fA-F]+-[0-9a-fA-F-]+$/.test(icon);
+    if (isLikelyHex) {
+        const asEmoji = hexToEmoji(icon);
+        const code = asEmoji?.codePointAt(0);
+        // 排除控制字符
+        if (code !== undefined && (code < 32 || (code >= 127 && code <= 159))) {
+            // Skip conversion
+        } else if (asEmoji && asEmoji !== icon) {
+            return asEmoji;
+        }
     }
 
-    return hasChild ? "📑" : "📄";
+    // 5. 原样返回 (可能是已转好的 Emoji，也可能是 1, 2, A 等纯文本)
+    // 拦截不可见控制字符
+    const firstCode = icon.codePointAt(0);
+    if (firstCode !== undefined && (firstCode < 32 || (firstCode >= 127 && firstCode <= 159))) {
+        return hasChild ? "📑" : "📄";
+    }
+
+    return icon;
 }

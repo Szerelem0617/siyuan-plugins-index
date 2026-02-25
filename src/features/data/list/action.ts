@@ -11,7 +11,7 @@ import { getBlockAttribute } from "../../../shared/utils/dom-utils";
  */
 export async function focusDatabaseView(blockId: string, protyle: any, mode: "level" | "siblings" | "descendants" = "level") {
     console.log(`[Data] Focusing [${blockId}] with mode [${mode}]`);
-    
+
     try {
         let currentId = blockId;
         let linkedAvId = null;
@@ -20,8 +20,8 @@ export async function focusDatabaseView(blockId: string, protyle: any, mode: "le
 
         // --- 1. 向上追溯计算层级并寻找绑定 AV ---
         while (currentId && loopCount < 40) {
-            const res = await client.sql({ 
-                stmt: `SELECT type, parent_id FROM blocks WHERE id = '${currentId}'` 
+            const res = await client.sql({
+                stmt: `SELECT type, parent_id FROM blocks WHERE id = '${currentId}'`
             });
             if (!res.data || res.data.length === 0) break;
 
@@ -36,7 +36,7 @@ export async function focusDatabaseView(blockId: string, protyle: any, mode: "le
             if (attrs[ATTR_LINKED_AV]) {
                 const avId = attrs[ATTR_LINKED_AV];
                 const avBlockId = attrs[ATTR_LINKED_AV_BLOCK];
-                
+
                 let isDeadLink = false;
                 if (avBlockId) {
                     try {
@@ -86,7 +86,7 @@ export async function focusDatabaseView(blockId: string, protyle: any, mode: "le
             const fatherKey = currentKeys.find((k: any) => k.name === "Father");
             if (!fatherKey) throw new Error("数据库中未找到 Father 字段，请先同步");
             filterColumn = fatherKey.id;
-            
+
             // 兄弟：Father = 当前块的父项 ID
             const currentBlockRes = await client.sql({ stmt: `SELECT type, parent_id FROM blocks WHERE id = '${blockId}'` });
             const currentBlock = currentBlockRes.data?.[0];
@@ -109,10 +109,10 @@ export async function focusDatabaseView(blockId: string, protyle: any, mode: "le
             // 后代：Path 包含当前块 ID 且带有分隔符
             const pathKey = currentKeys.find((k: any) => k.name === "Path");
             if (!pathKey) throw new Error("数据库中未找到 Path 字段，请重新同步以支持后代筛选");
-            
+
             filterColumn = pathKey.id;
             // 使用 /ID/ 匹配，由于 Path 格式为 /ID1/ID2，/ID1/ 会匹配所有后代但排除自身（自身末尾无 /）
-            filterValue = { type: "text", text: { content: `/${blockId}/` } }; 
+            filterValue = { type: "text", text: { content: `/${blockId}/` } };
             showMsg = `✅ 已聚焦: 所有后代项`;
         }
 
@@ -135,10 +135,10 @@ export async function focusDatabaseView(blockId: string, protyle: any, mode: "le
                 app: "plugin-index",
                 transactions: [{ doOperations }]
             });
-            
+
             // 兜底渲染
-            await post("/api/av/renderAttributeView", { 
-                id: linkedAvId, 
+            await post("/api/av/renderAttributeView", {
+                id: linkedAvId,
                 viewID: viewID,
                 page: 1
             });
@@ -159,7 +159,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
     if (!sourceBlockIds || sourceBlockIds.length === 0) return;
 
     const lastBlockId = sourceBlockIds[sourceBlockIds.length - 1];
-    
+
     try {
         // --- 0. 预检查：智能检测绑定关系 ---
         let existingAvID = null;
@@ -198,16 +198,16 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         }
 
         // --- 1. 递归解析列表项 ---
-        let allItems: any[] = []; 
+        let allItems: any[] = [];
         const traverse = (element: Element, level: number, parentId: string | null) => {
             for (let i = 0; i < element.children.length; i++) {
                 const child = element.children[i];
                 const type = child.getAttribute("data-type");
-                
+
                 if (type === "NodeListItem") {
                     const originalId = child.getAttribute("data-node-id");
                     let savedItemID = getBlockAttribute(child as HTMLElement, ATTR_ITEM_ID);
-                    
+
                     if (originalId) {
                         // @ts-ignore
                         const newItemID = window.Lute.NewNodeID();
@@ -237,7 +237,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         }
 
         let realAvID = existingAvID;
-        let blockID = existingAvBlockID || existingAvID; 
+        let blockID = existingAvBlockID || existingAvID;
         let viewID = null;
 
         if (!existingAvID) {
@@ -251,13 +251,13 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
             if (!createRes.data || !createRes.data[0]) throw new Error("初始化数据库块失败");
             blockID = createRes.data[0].doOperations[0].id;
             const createdHTML = createRes.data[0].doOperations[0].data;
-            realAvID = blockID; 
+            realAvID = blockID;
             const avIdMatch = createdHTML.match(/data-av-id="([^"]+)"/);
             if (avIdMatch && avIdMatch[1]) realAvID = avIdMatch[1];
 
             const initData = await post("/api/av/renderAttributeView", {
-                id: realAvID, 
-                page: 1, 
+                id: realAvID,
+                page: 1,
                 pageSize: 20
             });
             viewID = initData.views && initData.views[0] ? initData.views[0].id : null;
@@ -317,7 +317,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
             levelKeyId = await ensureKey("Level", "number", "iconSort");
             fatherKeyId = await ensureKey("Father", "text", "iconLink");
             pathKeyId = await ensureKey("Path", "text", "iconMap");
-            
+
             // Always add icon column
             iconKeyId = await ensureKey("icon", "text", "iconEmoji");
 
@@ -331,21 +331,24 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
 
             // Ensure Level, Father, Path are hidden
             if (viewID) {
-                 const hideOps: any[] = [];
-                 if (levelKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: levelKeyId, data: true });
-                 if (fatherKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: fatherKeyId, data: true });
-                 if (pathKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: pathKeyId, data: true });
-                 
-                 // Explicitly ensure icon is NOT hidden
-                 if (iconKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: iconKeyId, data: false });
+                const hideOps: any[] = [];
+                if (levelKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: levelKeyId, data: true });
+                if (fatherKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: fatherKeyId, data: true });
+                if (pathKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: pathKeyId, data: true });
 
-                 if (hideOps.length > 0) {
-                     await post("/api/transactions", {
+                // Explicitly ensure icon is NOT hidden
+                if (iconKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: iconKeyId, data: false });
+
+                // NEW: Hide entry icons for the primary key (Show Entry Icons = off)
+                hideOps.push({ action: "setAttrViewShowIcon", avID: realAvID, viewID: viewID, blockID: blockID, data: false });
+
+                if (hideOps.length > 0) {
+                    await post("/api/transactions", {
                         app: "plugin-index",
                         reqId: Date.now(),
                         transactions: [{ doOperations: hideOps }]
                     });
-                 }
+                }
             }
 
             if (!existingAvID && levelKeyId && viewID) {
@@ -384,7 +387,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                     {
                         action: "setAttrViewName",
                         // 陷阱：此处必须使用 id 而不是 avID，与大多数 AV Action 不一致
-                        id: realAvID, 
+                        id: realAvID,
                         data: avName
                     },
                     {
@@ -404,7 +407,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         } catch (e) {
             throw new Error("创建/检查字段或筛选失败");
         }
-        
+
         // --- 5. 插入与更新数据 ---
         // 重新遍历一次来计算 Path，或者直接修改 traverse
         // Since we need path, let's re-run traverse logic or adapt it.
@@ -412,16 +415,16 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         // We need to clear it and run traverse again with path logic, OR modify the first traverse.
         // Let's modify the first traverse.
         allItems = []; // Clear
-        
+
         const traverseWithContext = (element: Element, level: number, parentId: string | null, ancestorPath: string) => {
             for (let i = 0; i < element.children.length; i++) {
                 const child = element.children[i];
                 const type = child.getAttribute("data-type");
-                
+
                 if (type === "NodeListItem") {
                     const originalId = child.getAttribute("data-node-id");
                     let savedItemID = getBlockAttribute(child as HTMLElement, ATTR_ITEM_ID);
-                    
+
                     if (originalId) {
                         // @ts-ignore
                         const newItemID = window.Lute.NewNodeID();
@@ -445,20 +448,20 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                 if (tempDiv.firstElementChild) traverseWithContext(tempDiv.firstElementChild, 1, null, "");
             }
         }
-        
+
         let itemIDMap: Record<string, string> = {};
-        
+
         // Fix: If we are creating a NEW database (because the old one was dead or didn't exist),
         // we MUST ignore the savedItemID from the DOM because they belong to the old/dead AV.
         if (!existingAvID) {
             allItems.forEach(item => item.savedItemID = null);
         }
-        
+
         if (existingAvID) {
             try {
-                const renderRes = await post("/api/av/renderAttributeView", { 
-                    id: realAvID, 
-                    pageSize: 1000 
+                const renderRes = await post("/api/av/renderAttributeView", {
+                    id: realAvID,
+                    pageSize: 1000
                 });
                 const rows = renderRes.view ? renderRes.view.rows : renderRes.rows;
                 if (rows) {
@@ -471,7 +474,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                         }
                     });
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
 
         allItems.forEach(item => {
@@ -482,7 +485,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
 
         const newSrcs: any[] = [];
         const updateValues: any[] = [];
-        const itemIDToBlockID: Record<string, string> = {}; 
+        const itemIDToBlockID: Record<string, string> = {};
 
         for (const item of allItems) {
             let itemID = itemIDMap[item.originalId];
@@ -539,12 +542,12 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
 
         // --- 7. 双向绑定 ---
         for (const listId of sourceBlockIds) {
-            await client.setBlockAttrs({ 
-                id: listId, 
-                attrs: { 
+            await client.setBlockAttrs({
+                id: listId,
+                attrs: {
                     [ATTR_LINKED_AV]: realAvID,
                     [ATTR_LINKED_AV_BLOCK]: blockID
-                } 
+                }
             });
         }
 
