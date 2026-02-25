@@ -9,6 +9,7 @@ import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
 import { supertagMonitor } from "./features/data/av-setting/supertag";
+import { supertagManager } from "./features/data/av-setting/manage-supertag";
 import { version } from "../plugin.json";
 
 export default class IndexPlugin extends Plugin {
@@ -36,6 +37,7 @@ export default class IndexPlugin extends Plugin {
         initEmojiEvent();
         avEventHandler.init();
         supertagMonitor.init(this);
+        supertagManager.init();
     }
     // onLayoutReady() {
     //     initObserver();
@@ -50,6 +52,7 @@ export default class IndexPlugin extends Plugin {
         removeEmojiEvent();
         avEventHandler.destroy();
         supertagMonitor.destroy();
+        supertagManager.destroy();
         console.log("IndexPlugin onunload");
     }
 
