@@ -6,11 +6,6 @@
         type DbConfig,
     } from "./db-config";
     import { showMessage } from "siyuan";
-    import {
-        buildAvHierarchy,
-        resolveInheritance,
-        getColIDMap,
-    } from "../../../shared/utils/av-utils";
     import { i18n } from "../../../shared/utils";
 
     export let avId: string;
@@ -166,57 +161,6 @@
 
         typeMappings = newMappings;
         console.log("[DbConfig] Final Mappings for UI:", typeMappings);
-    }
-
-    async function testInheritance(colId: string, colName: string, mode: any) {
-        try {
-            console.log(
-                `[Inheritance Test] Starting test for column: ${colName} (Mode: ${mode})`,
-            );
-            const colInfo = await getColIDMap(avId);
-            const parentMap = await buildAvHierarchy(
-                colInfo.keyValues,
-                colInfo.itemToBlock,
-            );
-
-            // Find all block IDs in this AV
-            const allBlockIds = new Set<string>();
-            colInfo.keyValues.forEach((kv) => {
-                kv.values?.forEach((v: any) => {
-                    const bid =
-                        v.blockID ||
-                        v.block_id ||
-                        v.blockId ||
-                        v.block?.id ||
-                        colInfo.itemToBlock.get(v.itemID || v.itemId || v.id);
-                    if (bid) allBlockIds.add(bid);
-                });
-            });
-
-            console.log(
-                `[Inheritance Test] Resolving ${allBlockIds.size} items...`,
-            );
-            const results = [];
-            for (const bid of allBlockIds) {
-                const resolved = resolveInheritance(
-                    bid,
-                    colId,
-                    mode,
-                    colInfo.keyValues,
-                    parentMap,
-                    colInfo.blockToItem,
-                );
-                results.push({
-                    blockId: bid,
-                    resolvedValue: resolved,
-                });
-            }
-            console.table(results);
-            showMessage(i18n.dbConfig.testPrinted);
-        } catch (e) {
-            console.error("[Inheritance Test] Failed", e);
-            showMessage(i18n.dbConfig.testFailed, 3000, "error");
-        }
     }
 
     const save = async () => {
@@ -393,10 +337,10 @@
                                 <button
                                     class="b3-button b3-button--text"
                                     style="margin-left: 8px; padding: 4px; line-height: 1; color: {map.isSupertag
-                                        ? 'var(--b3-theme-primary)'
+                                        ? '#f5a623'
                                         : 'var(--b3-theme-on-surface-light)'}; opacity: {map.isSupertag
                                         ? '1'
-                                        : '0.5'};"
+                                        : '0.3'}; transition: all 0.2s ease;"
                                     aria-label={map.isSupertag
                                         ? i18n.dbConfig.cancelSupertag
                                         : i18n.dbConfig.setSupertag}
@@ -409,7 +353,11 @@
                                     }}
                                 >
                                     <svg style="width: 14px; height: 14px;"
-                                        ><use xlink:href="#iconStar"></use></svg
+                                        ><use
+                                            xlink:href={map.isSupertag
+                                                ? "#iconStar"
+                                                : "#iconStar"}
+                                        ></use></svg
                                     >
                                 </button>
                             </div>
@@ -434,18 +382,6 @@
                                 style="font-weight: bold; display: flex; align-items: center;"
                             >
                                 {item.col.col?.name || item.col.name}
-                                <button
-                                    class="b3-button b3-button--text"
-                                    style="margin-left: 8px; padding: 2px 4px; font-size: 10px; height: 18px; line-height: 14px;"
-                                    on:click={() =>
-                                        testInheritance(
-                                            item.col.id,
-                                            item.col.name,
-                                            item.mode,
-                                        )}
-                                >
-                                    {i18n.dbConfig.testBtn}
-                                </button>
                             </div>
                             <div
                                 class="b3-label__text"
