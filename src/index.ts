@@ -9,7 +9,7 @@ import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
 import { supertagMonitor } from "./features/data/av-setting/supertag";
-import { supertagManager } from "./features/data/av-setting/manage-supertag";
+import { supertagManager } from "./features/data/av-setting/supertag-manager";
 import { version } from "../plugin.json";
 
 export default class IndexPlugin extends Plugin {
