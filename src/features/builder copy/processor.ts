@@ -1,0 +1,438 @@
+import { client } from "../../shared/api-client";
+import { getProcessedDocIcon } from "../../shared/utils/icon-utils";
+import { stripMarkdownSyntax } from "../../shared/utils/markdown-utils";
+import { ATTR_LINKED_AV, ATTR_ITEM_ID } from "../../shared/constants";
+import { getColIDMap } from "../../shared/utils/av-utils";
+
+// Constants
+export const ATTR_INDEX = "custom-index-subdoc-id";
+export const ATTR_OUTLINE = "custom-index-heading-id";
+export const SEP_CHAR = "➖";
+export const DEFAULT_ICON = "📄";
+
+// API Helper
+async function post(url: string, data: any) {
+    const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    });
+    const res = await response.json();
+    if (res.code !== 0) throw new Error(res.msg);
+    return res.data;
+}
+
+export class IBlockProcessor {
+    errors: string[];
+    avCache: Map<string, any> = new Map(); // Cache for AV data to support "all data" logic
+
+    constructor(errors: string[]) {
+        this.errors = errors;
+    }
+
+    async getLinkedAVData(listItemId: string, itemAttrs: any, avId?: string) {
+        if (!avId) {
+            // 1. Get Parent to find AV ID
+            const parentRes = await client.sql({ stmt: `SELECT parent_id FROM blocks WHERE id = '${listItemId}'` });
+            const parentId = parentRes.data?.[0]?.parent_id;
+            if (!parentId) return null;
+
+            const parentAttrsRes = await client.getBlockAttrs({ id: parentId });
+            avId = parentAttrsRes.data?.[ATTR_LINKED_AV];
+        }
+        
+        if (!avId) return null;
+
+        const itemId = itemAttrs[ATTR_ITEM_ID];
+        if (!itemId) return null;
+
+        // 2. Use cached full AV data to ensure "all data" is respected, not just the current view
+        if (!this.avCache.has(avId)) {
+            this.avCache.set(avId, await getColIDMap(avId));
+        }
+        const { nameToID, keyValues } = this.avCache.get(avId);
+
+        // Map desired columns (Case-insensitive)
+        const keyMap: any = {};
+        ["icon", "title-img", "template"].forEach(name => {
+            const kn = Object.keys(nameToID).find(k => k.toLowerCase() === name.toLowerCase());
+            if (kn) keyMap[name] = nameToID[kn];
+        });
+
+        if (Object.keys(keyMap).length === 0) return null;
+
+        const result: any = {};
+        for (const [name, keyId] of Object.entries(keyMap)) {
+            const kv = keyValues.find((v: any) => v.key.id === keyId);
+            if (kv && kv.values) {
+                const cellVal = kv.values.find((v: any) => v.blockID === itemId);
+                if (cellVal) {
+                    if (cellVal.type === "text") result[name] = cellVal.text?.content;
+                    else if (cellVal.type === "mAsset") result[name] = cellVal.mAsset?.[0]?.content; 
+                    else if (cellVal.type === "template") result[name] = cellVal.template?.content;
+                    else if (cellVal.content) result[name] = cellVal.content; 
+                }
+            }
+        }
+        
+        return result;
+    }
+
+    async processSingleItem(listItemId: string, actionType: string, ctx: any) {
+        const core = await this.getCoreContentInfo(listItemId);
+        if (!core) return ctx.previousId;
+
+        const containerAttrsRes = await client.getBlockAttrs({ id: core.containerId });
+        const containerAttrs = containerAttrsRes.data;
+        let result = ctx.previousId;
+
+        switch (actionType) {
+            case "PUSH_TO_DOC":
+                result = await this.handlePushToDoc(core, containerAttrs, ctx);
+                break;
+            case "PUSH_TO_BOTTOM":
+                result = await this.handlePushToBottom(core, containerAttrs, ctx);
+                break;
+            case "PUSH_COMBINED":
+                const docResult = await this.handlePushToDoc(core, containerAttrs, ctx);
+                const headingId = await this.handlePushToBottom(core, containerAttrs, ctx);
+                result = { ...docResult, id: headingId }; 
+                break;
+        }
+        return result || ctx.previousId;
+    }
+
+    async handlePushToBottom(core: any, containerAttrs: any, ctx: any) {
+        let contentToPush = core.syncMd;
+        if (!contentToPush) contentToPush = "Untitled";
+
+        const prefix = "#".repeat(Math.min(ctx.level, 6));
+        const titleContent = `${prefix} ${contentToPush}`; 
+        
+        const coreAttrsRes = await client.getBlockAttrs({ id: core.contentId });
+        const stylesToKeep = this.filterSystemAttrs(coreAttrsRes.data);
+        let targetId = containerAttrs[ATTR_OUTLINE];
+        const previousTargetId = ctx.previousId;
+
+        let targetExists = false;
+        if (targetId) {
+             const checkRes = await client.sql({ stmt: `SELECT id FROM blocks WHERE id = '${targetId}' LIMIT 1` });
+             targetExists = !!checkRes.data[0];
+        }
+
+        if (!targetId || !targetExists) {
+            let r;
+            if (previousTargetId) {
+                r = await client.insertBlock({ previousID: previousTargetId, dataType: "markdown", data: titleContent });
+            } else {
+                const rootIdRes = await client.sql({ stmt: `SELECT root_id FROM blocks WHERE id = '${core.containerId}' LIMIT 1` });
+                const rootId = rootIdRes.data[0]?.root_id;
+                r = await client.appendBlock({ parentID: rootId, dataType: "markdown", data: titleContent });
+            }
+            
+            targetId = r?.data?.[0]?.doOperations?.[0]?.id;
+            if (targetId) {
+                const promises = [];
+                promises.push(client.setBlockAttrs({ id: core.containerId, attrs: { [ATTR_OUTLINE]: targetId } }));
+                if (Object.keys(stylesToKeep).length > 0) promises.push(client.setBlockAttrs({ id: targetId, attrs: stylesToKeep }));
+                await Promise.all(promises);
+            }
+        } else {
+            await client.updateBlock({ id: targetId, dataType: "markdown", data: titleContent });
+            if (Object.keys(stylesToKeep).length > 0) await client.setBlockAttrs({ id: targetId, attrs: stylesToKeep });
+        }
+
+        const finalMd = await this.constructListItemMarkdown(containerAttrs, targetId, core.syncMd, undefined, core.currentIcon);
+        const updatePromises = [];
+        updatePromises.push(client.updateBlock({ id: core.contentId, dataType: "markdown", data: finalMd }));
+        if (Object.keys(stylesToKeep).length > 0) updatePromises.push(client.setBlockAttrs({ id: core.contentId, attrs: stylesToKeep }));
+        await Promise.all(updatePromises);
+
+        return targetId;
+    }
+
+    async handlePushToDoc(core: any, containerAttrs: any, ctx: any) {
+        const title = core.syncText;
+        if (!title) return null;
+
+        const coreAttrsRes = await client.getBlockAttrs({ id: core.contentId });
+        const stylesToKeep = this.filterSystemAttrs(coreAttrsRes.data);
+        let docId = containerAttrs[ATTR_INDEX];
+        
+        if (docId) {
+            const checkRes = await client.sql({ stmt: `SELECT id FROM blocks WHERE id = '${docId}' LIMIT 1` });
+            if (!checkRes.data[0]) {
+                docId = null;
+            }
+        }
+
+        // Fetch Linked AV Data
+        const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs, ctx.avId);
+        const targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
+        
+        // Revert to direct assignment as complex styles (like gradients) are already formatted in DB
+        const targetImage = linkedData?.["title-img"] || null;
+
+        const templatePath = linkedData?.template || "";
+        
+        let finalMarkdown = "";
+        if (templatePath) {
+            // @ts-ignore
+            const dataDir = window.siyuan?.config?.system?.dataDir;
+            let absPath = templatePath;
+            
+            if (dataDir) {
+                let relPath = templatePath.startsWith("/") ? templatePath : "/" + templatePath;
+                // SiYuan templates are always stored in the 'templates' subfolder of the data directory.
+                // If the stored path doesn't include it, we must prepend it.
+                if (!relPath.startsWith("/templates/")) {
+                    relPath = "/templates" + relPath;
+                }
+                const fullPath = relPath.endsWith(".md") ? relPath : relPath + ".md";
+                
+                // Construct absolute path and normalize to Windows backslashes
+                absPath = (dataDir + fullPath).replace(/\//g, "\\").replace(/\\\\/g, "\\");
+            }
+
+            console.log("[Builder] Rendering template with absolute path:", absPath);
+            try {
+                const renderRes = await post("/api/template/render", {
+                    id: core.containerId,
+                    path: absPath,
+                    preview: false
+                });
+                const dom = renderRes.content || renderRes.dom || "";
+                if (dom) {
+                    // Convert Protyle DOM to Markdown using Lute
+                    // @ts-ignore
+                    const lute = window.Lute.New();
+                    finalMarkdown = lute.BlockDOM2Md(dom);
+                }
+            } catch (e) {
+                console.error("[Builder] Template render failed for path:", absPath, e);
+            }
+        }
+
+        if (docId) {
+            let notebook, path, hpath;
+            try {
+                const pathRes = await post("/api/filetree/getPathByID", { id: docId });
+                if (pathRes) {
+                    notebook = pathRes.notebook;
+                    path = pathRes.path;
+                    hpath = await post("/api/filetree/getHPathByID", { id: docId });
+
+                    await client.renameDoc({ notebook, path, title });
+                    
+                    const docAttrs: any = {};
+                    if (targetIcon) docAttrs.icon = targetIcon;
+                    if (targetImage) docAttrs["title-img"] = targetImage;
+                    
+                    if (Object.keys(docAttrs).length > 0) {
+                        await client.setBlockAttrs({ id: docId, attrs: docAttrs });
+                    }
+                }
+            } catch (e) {
+                console.error("[Sync] Rename/Icon Sync failed:", e);
+            }
+            
+            const displayIcon = getProcessedDocIcon(targetIcon || core.currentIcon || "", false);
+            const newMd = await this.constructListItemMarkdown(containerAttrs, containerAttrs[ATTR_OUTLINE], core.syncMd, docId, displayIcon);
+            const updatePromises = [];
+            updatePromises.push(client.updateBlock({ id: core.contentId, dataType: "markdown", data: newMd }));
+            if (Object.keys(stylesToKeep).length > 0) updatePromises.push(client.setBlockAttrs({ id: core.contentId, attrs: stylesToKeep }));
+            await Promise.all(updatePromises);
+            return { id: docId, notebook, path, hpath };
+        }
+
+        let notebook, path;
+        let hpath = "";
+
+        if (ctx.parentInfo) {
+            notebook = ctx.parentInfo.notebook;
+            hpath = `${ctx.parentInfo.hpath}/${title}`;
+            path = hpath;
+        } 
+        
+        if (!notebook || !path) {
+            if (ctx.parentId) {
+                const parentPathRes = await post("/api/filetree/getPathByID", { id: ctx.parentId });
+                const parentHPathRes = await post("/api/filetree/getHPathByID", { id: ctx.parentId });
+                if (parentPathRes && parentHPathRes) {
+                    notebook = parentPathRes.notebook;
+                    hpath = `${parentHPathRes}/${title}`;
+                    path = hpath;
+                }
+            }
+        }
+
+        if (!notebook || !path) {
+            const hPathRes = await post("/api/filetree/getHPathByID", { id: core.containerId });
+            const pathRes = await post("/api/filetree/getPathByID", { id: core.containerId });
+            notebook = pathRes.notebook;
+            hpath = `${hPathRes}/${title}`;
+            path = hpath;
+        }
+
+        const newIdRes = await client.createDocWithMd({ notebook, path, markdown: finalMarkdown });
+        const newId = newIdRes.data;
+
+        if (newId) {
+            let physicalPath = null;
+            try {
+                 const pRes = await post("/api/filetree/getPathByID", { id: newId });
+                 if (pRes) physicalPath = pRes.path;
+            } catch(e) {
+                console.error("Failed to get physical path for new doc", e);
+            }
+
+            const promises = [];
+            promises.push(client.setBlockAttrs({ id: core.containerId, attrs: { [ATTR_INDEX]: newId } }));
+            
+            const docAttrs: any = {};
+            if (targetIcon) docAttrs.icon = targetIcon;
+            if (targetImage) docAttrs["title-img"] = targetImage;
+            
+            if (Object.keys(docAttrs).length > 0) {
+                promises.push(client.setBlockAttrs({ id: newId, attrs: docAttrs }));
+            }
+            await Promise.all(promises);
+
+            const displayIcon = getProcessedDocIcon(targetIcon || core.currentIcon || "", false);
+            const newMd = await this.constructListItemMarkdown(containerAttrs, containerAttrs[ATTR_OUTLINE], core.syncMd, newId, displayIcon);
+            const updatePromises = [];
+            updatePromises.push(client.updateBlock({ id: core.contentId, dataType: "markdown", data: newMd }));
+            if (Object.keys(stylesToKeep).length > 0) updatePromises.push(client.setBlockAttrs({ id: core.contentId, attrs: stylesToKeep }));
+            await Promise.all(updatePromises);
+
+            return { id: newId, notebook, path: physicalPath, hpath: hpath || path };
+        }
+        return null;
+    }
+
+    emojiToHex(icon: string) {
+         if (!icon) return "";
+         if (icon.includes(".") || icon.includes("/")) return icon; 
+         if (/[^\u0000-\u007F]/.test(icon)) {
+             return Array.from(icon).map(c => c.codePointAt(0)?.toString(16)).join("-");
+         }
+         return icon;
+    }
+
+    async constructListItemMarkdown(containerAttrs: any, headingId: string, syncText: string, docId?: string, docIcon?: string) {
+        const parts = [];
+        
+        if (!docId) docId = containerAttrs[ATTR_INDEX];
+        
+        if (docId) {
+            let icon = docIcon || DEFAULT_ICON;
+            if (!docIcon) {
+                try {
+                     const docInfoRes = await client.getBlockAttrs({ id: docId });
+                     const rawIcon = docInfoRes.data.icon || DEFAULT_ICON;
+                     icon = getProcessedDocIcon(rawIcon, false);
+                } catch(e) {
+                }
+            }
+            parts.push(`[${icon}](siyuan://blocks/${docId})`);
+        } else if (docIcon) {
+            parts.push(docIcon);
+        }
+
+        if (headingId) {
+            parts.push(`[${SEP_CHAR}](siyuan://blocks/${headingId})`);
+        } else {
+            parts.push(SEP_CHAR);
+        }
+        parts.push(syncText.trim());
+        return parts.join(" ");
+    }
+
+    async getCoreContentInfo(listItemId: string) {
+        const selfRes = await client.sql({ stmt: `SELECT type FROM blocks WHERE id = '${listItemId}' LIMIT 1` });
+        if (!selfRes.data[0] || selfRes.data[0].type !== "i") return null;
+
+        const childrenRes = await client.sql({
+            stmt: `SELECT id, type, markdown, content FROM blocks WHERE parent_id = '${listItemId}' AND type = 'p' ORDER BY sort ASC`
+        });
+        const children = childrenRes.data;
+        if (!children || children.length === 0) return null;
+
+        return this.parseItemContent(listItemId, children);
+    }
+
+    parseItemContent(listItemId: string, children: any[]) {
+        const sepRegex = /(\[➖\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)|➖)/;
+        const iconRegex = /\s*\[.*?\]\(siyuan:\/\/blocks\/.*?\)\s*/; 
+
+        let targetBlock = children.find((child: any) => {
+            const md = child.markdown || "";
+            return sepRegex.test(md) || iconRegex.test(md);
+        });
+        if (!targetBlock) targetBlock = children[0];
+
+        const contentId = targetBlock.id;
+        const md = targetBlock.markdown || "";
+        const content = targetBlock.content || "";
+        
+        let tempMd = md.replace(/\s*\{:[^}]+\}\s*$/, "");
+        let hasSeparator = false;
+        let currentIcon = null;
+
+        const docLinkRegex = /^\s*\[(.*?)\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)\s*/;
+        const docMatch = tempMd.match(docLinkRegex);
+        if (docMatch) {
+            const anchor = docMatch[1];
+            if (anchor !== SEP_CHAR) {
+                if (anchor && anchor.length < 8) {
+                    currentIcon = anchor;
+                }
+                tempMd = tempMd.replace(docLinkRegex, "");
+            }
+        } else {
+             const explicitIconRegex = /^\s*(?:(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation})|(:[^:]+:))\s*/u;
+             const iconMatch = tempMd.match(explicitIconRegex);
+             if (iconMatch) {
+                 currentIcon = iconMatch[1] || iconMatch[2];
+                 tempMd = tempMd.replace(explicitIconRegex, "");
+             }
+        }
+
+        const sepLinkRegex = /^(.*?)(\[➖\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)|➖)\s*/u;
+        const sepMatch = tempMd.match(sepLinkRegex);
+        if (sepMatch) {
+            hasSeparator = true;
+            const prefix = sepMatch[1].trim();
+            if (!currentIcon && prefix) {
+                const emojiTest = /^(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation}|:[^:]+:)$/u;
+                if (emojiTest.test(prefix)) {
+                    currentIcon = prefix;
+                }
+            }
+            tempMd = tempMd.replace(sepLinkRegex, "");
+        }
+        
+        let syncMd = tempMd.trim();
+        let plain = stripMarkdownSyntax(syncMd);
+
+        return {
+            containerId: listItemId,
+            contentId: contentId,
+            hasSeparator,
+            syncText: plain.trim(),
+            syncMd,
+            markdown: md, 
+            content: content,
+            currentIcon 
+        };
+    }
+
+    filterSystemAttrs(attrs: any) {
+        const validAttrs: any = {};
+        const whitelist = new Set(["style", "class"]);
+        for (const [key, val] of Object.entries(attrs)) {
+            if (whitelist.has(key)) validAttrs[key] = val;
+        }
+        return validAttrs;
+    }
+}
