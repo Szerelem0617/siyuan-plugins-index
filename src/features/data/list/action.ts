@@ -457,6 +457,8 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
             allItems.forEach(item => item.savedItemID = null);
         }
 
+        const activeRowIds = new Set<string>();
+
         if (existingAvID) {
             try {
                 const renderRes = await post("/api/av/renderAttributeView", {
@@ -466,6 +468,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                 const rows = renderRes.view ? renderRes.view.rows : renderRes.rows;
                 if (rows) {
                     rows.forEach((row: any) => {
+                        activeRowIds.add(row.id);
                         if (row.cells) {
                             const blockCell = row.cells.find((c: any) => c.valueType === "block");
                             if (blockCell && blockCell.value && blockCell.value.block && blockCell.value.block.id) {
@@ -474,12 +477,20 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                         }
                     });
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.error("[Data] Failed to render AV to check rows", e);
+            }
         }
 
         allItems.forEach(item => {
+            // If the item had a saved itemID but it's not in the block map, verify if it still exists in the DB
             if (item.savedItemID && !itemIDMap[item.originalId]) {
-                itemIDMap[item.originalId] = item.savedItemID;
+                if (existingAvID && !activeRowIds.has(item.savedItemID)) {
+                    console.warn(`[Data] Dead saved ID detected for block ${item.originalId}: ${item.savedItemID}. Will regenerate.`);
+                    item.savedItemID = null; // Blank it out to force a new creation
+                } else {
+                    itemIDMap[item.originalId] = item.savedItemID;
+                }
             }
         });
 
