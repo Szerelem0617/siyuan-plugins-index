@@ -2,7 +2,7 @@
   "name": "siyuan-plugins-index",
   "author": "Szerelem0617",
   "url": "https://github.com/Szerelem0617/siyuan-plugins-index",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "minAppVersion": "3.3.0",
   "backends": [
     "all"
@@ -16,8 +16,8 @@
     "zh_CN": "目录插件"
   },
   "description": {
-    "default": "One click insert a index list in document",
-    "zh_CN": "一键在文档中插入目录或大纲列表"
+    "default": "Permanently open source and free. One-click index insertion, supports batch data management in attribute view.",
+    "zh_CN": "永久开源免费。一键在文档中插入目录，支持批量管理数据库数据。"
   },
   "readme": {
     "default": "README.md",

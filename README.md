@@ -12,6 +12,12 @@ Right click on the plugin icon, show more actions
 
 `CTRL + ALT + O` Insert current document outline
 
+# Version 1.9.1
+
+- **Sync Safety Enhancement**: Fixed a bug where moving sub-items caused database entries to disappear.
+- **Config Optimization**: Hidden columns (Level/Path) are now only reset during the initial database creation, preserving manual user visibility settings.
+- **Batch Data Management**: Improved list item identification in databases, supporting more stable batch template generation.
+
 # Version 1.9.0
 
 - **Database Integration（Beta）**: Added the ability to create attribute views (databases) from list blocks.
@@ -21,6 +27,14 @@ Right click on the plugin icon, show more actions
 # Changelog
 
 [CHANGELOG](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/CHANGELOG.md)
+
+# Support the Developer
+
+If you find this plugin helpful, consider supporting my work:
+
+- Give it a **Star** on [GitHub](https://github.com/Szerelem0617/siyuan-plugins-index) ⭐
+- **Github Sponsors**: [Sponsor Szerelem0617](https://github.com/sponsors/Szerelem0617)
+
 
 # Acknowledgments
 
