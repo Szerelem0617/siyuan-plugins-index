@@ -2,6 +2,7 @@ import { focusDatabaseView, createDatabaseWithBlocks } from "./action";
 import { ATTR_LINKED_AV } from "../../../shared/constants";
 import { getOutermostList, getBlockAttribute } from "../../../shared/utils/dom-utils";
 import { openDbConfigDialog } from "../av-setting/db-config";
+import { i18n } from "../../../shared/utils";
 
 /**
  * Data 功能的块菜单回调 (针对列表块)
@@ -20,7 +21,7 @@ export function addDataMenuItems({ detail }: any) {
         if (avId) {
             menu.addItem({
                 icon: "iconSettings",
-                label: "数据库高级设置 (Advanced Settings)",
+                label: i18n.dbConfig.dialogTitle,
                 click: () => openDbConfigDialog(avId, blockId)
             });
         }
@@ -39,7 +40,7 @@ export function addDataMenuItems({ detail }: any) {
     if (blockType === "NodeList" && blockId === outermostId) {
         menu.addItem({
             icon: "iconDatabase",
-            label: "📊 创建数据库",
+            label: i18n.dataMenu.createDatabase,
             click: () => createDatabaseWithBlocks([blockId], protyle)
         });
     }
@@ -58,21 +59,21 @@ export function addDataMenuItems({ detail }: any) {
     if (linkedAv) {
         menu.addItem({
             icon: "iconFilter",
-            label: "🔍 数据库聚焦",
+            label: i18n.dataMenu.dbFocus,
             submenu: [
                 {
                     icon: "iconSort",
-                    label: "同级",
+                    label: i18n.dataMenu.level,
                     click: () => focusDatabaseView(blockId, protyle, "level")
                 },
                 {
                     icon: "iconLink",
-                    label: "兄弟",
+                    label: i18n.dataMenu.siblings,
                     click: () => focusDatabaseView(blockId, protyle, "siblings")
                 },
                 {
                     icon: "iconDown",
-                    label: "后代",
+                    label: i18n.dataMenu.descendants,
                     click: () => focusDatabaseView(blockId, protyle, "descendants")
                 }
             ]

@@ -1,6 +1,7 @@
 
 import { post } from "../../../shared/api-client/request";
-import { getGlobalTypeConfigs, type TypeConfig } from "./db-config";
+import { getGlobalTypeConfigs } from "./db-config";
+import { type TypeConfig } from "./types";
 import { showMessage } from "siyuan";
 import { formatDate } from "../../../shared/utils";
 import { getColIDMap } from "../../../shared/utils/av-utils";

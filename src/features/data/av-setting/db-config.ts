@@ -7,31 +7,8 @@ import { formatDate, getAttrFromIAL, i18n } from "../../../shared/utils";
 
 export const ATTR_DB_CONFIG = "custom-index-db-config";
 
-export interface InheritanceRule {
-    colId: string;
-    mode: "none" | "weak" | "strong"; // weak: fill if empty; strong: overwrite
-}
-
-export interface TypeMapping {
-    value: string; // The raw value from the source column
-    name: string;  // The user-defined display name/type name
-    isSupertag?: boolean; // True if this mapping is favorited as a global Supertag
-}
-
-export interface DbConfig {
-    avId?: string; // Add avId to config for easier lookup
-    typeFieldId?: string; // Column ID used to determine type
-    typeMappings?: TypeMapping[]; // Mappings for values -> type names
-    inheritanceRules?: InheritanceRule[];
-}
-
-export interface TypeConfig {
-    typeName: string;
-    avId: string;
-    blockId: string;
-    typeFieldId: string;
-    mappedValue: string;
-}
+export type { DbConfig, TypeConfig, IDBTypeMapping, InheritanceRule } from "./types";
+import { type DbConfig, type TypeConfig } from "./types";
 
 export async function syncInheritanceToDb(avId: string, config: DbConfig, avBlockId?: string) {
     if (!config.inheritanceRules || config.inheritanceRules.length === 0) {

@@ -1,5 +1,6 @@
 import { Menu, showMessage } from "siyuan";
 import { syncAttribute } from "./sync/attribute-sync";
+import { i18n } from "../../../shared/utils";
 import {
     openEmojiDialog,
     openBuiltInImagesDialog,
@@ -145,7 +146,7 @@ class AVEventHandler {
             if (isIconCol) {
                 menu.addItem({
                     icon: "iconEmoji",
-                    label: isHeader ? "批量设置图标" : "选择图标 (Icon)",
+                    label: isHeader ? i18n.dataMenu.batchSetIcon : i18n.dataMenu.selectIcon,
                     click: () => openEmojiDialog(protyleInstance, avID, rowID || "", colID, isHeader, avBlockID)
                 });
             }
@@ -157,19 +158,19 @@ class AVEventHandler {
 
                 titleImgMenu.push({
                     icon: "iconLayout",
-                    label: "内置背景图 (Built-in)",
+                    label: i18n.dataMenu.builtinImages,
                     click: () => openBuiltInImagesDialog(protyleInstance, avID, rowID || "", colID, isHeader, avBlockID)
                 });
 
                 titleImgMenu.push({
                     icon: "iconImage",
-                    label: "资源文件 (Assets)",
+                    label: i18n.dataMenu.assetImage,
                     click: () => openAssetDialog(protyleInstance, avID, rowID || "", colID, isHeader, avBlockID)
                 });
 
                 titleImgMenu.push({
                     icon: "iconRefresh",
-                    label: "随机背景 (Random)",
+                    label: i18n.dataMenu.randomImage,
                     click: () => {
                         const randomBg = BGS[Math.floor(Math.random() * BGS.length)];
                         updateValueHandler(randomBg);
@@ -178,7 +179,7 @@ class AVEventHandler {
 
                 menu.addItem({
                     icon: "iconImage",
-                    label: isHeader ? "批量设置题头图" : "选择题头图 (Title Image)",
+                    label: isHeader ? i18n.dataMenu.batchSetTitleImg : i18n.dataMenu.selectTitleImg,
                     submenu: titleImgMenu
                 });
             }
@@ -188,7 +189,7 @@ class AVEventHandler {
             if (isTemplateCol) {
                 menu.addItem({
                     icon: "iconMath",
-                    label: isHeader ? "批量设置模板" : "选择模板 (Template)",
+                    label: isHeader ? i18n.dataMenu.batchSetTemplate : i18n.dataMenu.selectTemplate,
                     click: () => openTemplateDialog(protyleInstance, avID, rowID || "", colID, avBlockID, isHeader)
                 });
             }
@@ -198,23 +199,23 @@ class AVEventHandler {
             }
         }
 
-        const syncLabel = isHeader ? "批量同步到后代" : "数据同步到";
+        const syncLabel = isHeader ? i18n.dataMenu.batchSyncTo : i18n.dataMenu.syncTo;
 
         if (isHeader) {
             menu.addItem({
                 icon: "iconSync",
-                label: "设置当前列为弱继承",
+                label: i18n.dbConfig.setWeakInheritance,
                 click: async () => {
                     try {
-                        showMessage("⏳ 正在应用弱继承...", 3000);
+                        showMessage(i18n.dbConfig.applyingWeakInheritance, 3000);
                         const updatedCount = await setColumnWeakInheritance(avID, colID, avBlockID);
                         if (updatedCount > 0) {
-                            showMessage(`✅ 设置已保存并同步 (${updatedCount} 个单元格已更新)`, 3000);
+                            showMessage(`${i18n.dbConfig.saveSyncSuccess} ${updatedCount} ${i18n.dbConfig.saveSyncSuccessCells}`, 3000);
                         } else {
-                            showMessage("✅ 设置已保存 (数据已是最新)", 3000);
+                            showMessage(i18n.dbConfig.saveNoChange, 3000);
                         }
                     } catch (e: any) {
-                        showMessage(`❌ 设置弱继承失败: ${e.message}`, 3000, "error");
+                        showMessage(`${i18n.dbConfig.setWeakInheritanceError} ${e.message}`, 3000, "error");
                     }
                 }
             });
@@ -222,29 +223,29 @@ class AVEventHandler {
             menu.addSeparator();
             menu.addItem({
                 icon: "iconSettings",
-                label: "数据库高级设置 (Advanced Settings)",
+                label: i18n.dbConfig.dialogTitle,
                 click: () => openDbConfigDialog(avID, avBlockID)
             });
         } else {
             const syncSubmenu = [
                 {
                     icon: "iconSort",
-                    label: "同级",
+                    label: i18n.dataMenu.level,
                     click: () => syncAttribute(avID, rowID || "first", colID, "level", avBlockID)
                 },
                 {
                     icon: "iconLink",
-                    label: "兄弟",
+                    label: i18n.dataMenu.siblings,
                     click: () => syncAttribute(avID, rowID || "first", colID, "siblings", avBlockID)
                 },
                 {
                     icon: "iconDown",
-                    label: "后代",
+                    label: i18n.dataMenu.descendants,
                     click: () => syncAttribute(avID, rowID || "first", colID, "descendants", avBlockID)
                 },
                 {
                     icon: "iconFilter",
-                    label: "所有筛选出的项",
+                    label: i18n.dataMenu.filtered,
                     click: () => syncAttribute(avID, rowID || "first", colID, "filtered", avBlockID)
                 }
             ];

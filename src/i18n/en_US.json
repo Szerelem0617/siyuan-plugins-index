@@ -113,7 +113,7 @@
         "title": "Builder Auto Update",
         "content": "Auto sync content for Document Builder"
       },
-      "builderDesc": "📄 Sub-page link · ➖ Heading link"
+      "builderDesc": "📄 Open sub-page · ➖ Link to heading"
     }
   },
   "dbConfig": {
@@ -124,9 +124,9 @@
     "selectField": "-- Select Field --",
     "systemProps": "System Properties",
     "columns": "Columns",
-    "valueMappings": "Value Mappings:",
+    "valueMappings": "Naming Class:",
     "typeNamePlaceholder": "Type Name",
-    "mapInfo": "Only values with mapped names will be saved.",
+    "mapInfo": "Set naming class and click the star icon to set as Supertag.\nAdding the same tag to content will include it in this database.",
     "modeNone": "None",
     "modeWeak": "Weak (Fill Empty)",
     "modeStrong": "Strong (Overwrite)",
@@ -146,5 +146,25 @@
     "setWeakInheritanceError": "❌ Failed to set weak inheritance:",
     "setSupertag": "Mark as Supertag",
     "cancelSupertag": "Cancel Supertag"
+  },
+  "dataMenu": {
+    "createDatabase": "📊 Create Database",
+    "dbFocus": "🔍 Database Focus",
+    "level": "Level",
+    "siblings": "Siblings",
+    "descendants": "Descendants",
+    "filtered": "All Filtered Items",
+    "selectIcon": "Select Icon",
+    "batchSetIcon": "Batch Set Icon",
+    "builtinImages": "Built-in Images",
+    "assetImage": "Assets",
+    "randomImage": "Random",
+    "selectTitleImg": "Select Title Image",
+    "batchSetTitleImg": "Batch Set Title Image",
+    "selectTemplate": "Select Template",
+    "batchSetTemplate": "Batch Set Template",
+    "syncTo": "Sync to",
+    "batchSyncTo": "Batch sync to descendants",
+    "warning": "⚠️ The Database feature is currently in beta. Please be aware that structural changes within lists, such as **Outdenting** or **dragging blocks across different levels**, may cause database links to break or data loss. Please use with caution and recommend regular backups."
   }
 }

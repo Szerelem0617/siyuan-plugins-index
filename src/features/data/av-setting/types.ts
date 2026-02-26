@@ -1,0 +1,25 @@
+export interface InheritanceRule {
+    colId: string;
+    mode: "none" | "weak" | "strong"; // weak: fill if empty; strong: overwrite
+}
+
+export interface IDBTypeMapping {
+    value: string;
+    name: string;
+    isSupertag: boolean | undefined;
+}
+
+export interface DbConfig {
+    avId?: string; // Add avId to config for easier lookup
+    typeFieldId?: string; // Column ID used to determine type
+    typeMappings?: IDBTypeMapping[]; // Mappings for values -> type names
+    inheritanceRules?: InheritanceRule[];
+}
+
+export interface TypeConfig {
+    typeName: string;
+    avId: string;
+    blockId: string;
+    typeFieldId: string;
+    mappedValue: string;
+}

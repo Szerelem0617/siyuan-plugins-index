@@ -1,7 +1,7 @@
 import { client } from "../../shared/api-client";
 import { IBlockProcessor, ATTR_INDEX, ATTR_OUTLINE } from "./processor";
 import { ATTR_LINKED_AV, ATTR_LINKED_AV_BLOCK } from "../../shared/constants";
-import { loadDbConfig, type DbConfig } from "../data/av-setting/db-config";
+import { loadDbConfig } from "../data/av-setting/db-config";
 import { buildAvHierarchy, getColIDMap, isValueEmpty } from "../../shared/utils/av-utils";
 
 async function changeSort(notebook: string, paths: string[]) {

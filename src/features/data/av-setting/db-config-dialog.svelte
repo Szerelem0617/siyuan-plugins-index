@@ -3,8 +3,8 @@
         saveDbConfig,
         syncInheritanceToDb,
         getGlobalTypeConfigs,
-        type DbConfig,
     } from "./db-config";
+    import type { DbConfig, IDBTypeMapping } from "./types";
     import { showMessage } from "siyuan";
     import { i18n } from "../../../shared/utils";
 
@@ -17,7 +17,7 @@
     let activeTab = "type"; // type | inheritance
 
     let typeFieldId = currentConfig.typeFieldId || "";
-    let typeMappings = currentConfig.typeMappings || [];
+    let typeMappings: IDBTypeMapping[] = currentConfig.typeMappings || [];
     let inheritanceRules = currentConfig.inheritanceRules || [];
 
     // List of columns to exclude from Inheritance settings
@@ -129,7 +129,7 @@
         );
 
         // Merge with existing mappings
-        const newMappings: any[] = [];
+        const newMappings: IDBTypeMapping[] = [];
         potentialValues.forEach((val) => {
             const existing = typeMappings.find((m) => m.value === val);
             newMappings.push({
@@ -362,7 +362,10 @@
                                 </button>
                             </div>
                         {/each}
-                        <div class="b3-label__text" style="margin-top: 8px;">
+                        <div
+                            class="b3-label__text"
+                            style="margin-top: 8px; white-space: pre-wrap;"
+                        >
                             {i18n.dbConfig.mapInfo}
                         </div>
                     </div>

@@ -14,9 +14,9 @@ Right click on the plugin icon, show more actions
 
 # Version 1.9.1
 
-- **Sync Safety Enhancement**: Fixed a bug where moving sub-items caused database entries to disappear.
-- **Config Optimization**: Hidden columns (Level/Path) are now only reset during the initial database creation, preserving manual user visibility settings.
-- **Batch Data Management**: Improved list item identification in databases, supporting more stable batch template generation.
+- **Supertag Feature**: Added Supertag functionality similar to Tana, allowing for rapid database property alignment via Tags.
+- **Property Inheritance**: Supports configuring property inheritance rules for easier batch management and filling of hierarchical data.
+- **Builder Optimization**: Optimized the Builder's auto-sync logic to fully respect icons, title images, and templates configured in the database.
 
 # Version 1.9.0
 

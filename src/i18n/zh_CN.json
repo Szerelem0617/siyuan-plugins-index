@@ -125,9 +125,9 @@
     "selectField": "-- 选择列 --",
     "systemProps": "系统属性",
     "columns": "列",
-    "valueMappings": "值映射：",
+    "valueMappings": "命名类：",
     "typeNamePlaceholder": "类型名称",
-    "mapInfo": "只有映射了名称的值会被保存。",
+    "mapInfo": "设置命名类后点击右侧星标，设置此类为 Supertag。\n此后打上同名 Tag 将目标内容加入数据库。",
     "modeNone": "无",
     "modeWeak": "弱继承 (填充空值)",
     "modeStrong": "强继承 (完全覆盖)",
@@ -147,5 +147,25 @@
     "setWeakInheritanceError": "❌ 设置弱继承失败:",
     "setSupertag": "标记为超级标签",
     "cancelSupertag": "取消超级标签"
+  },
+  "dataMenu": {
+    "createDatabase": "📊 创建数据库",
+    "dbFocus": "🔍 数据库聚焦",
+    "level": "同级",
+    "siblings": "兄弟",
+    "descendants": "后代",
+    "filtered": "所有筛选出的项",
+    "selectIcon": "选择图标",
+    "batchSetIcon": "批量设置图标",
+    "builtinImages": "内置背景图",
+    "assetImage": "资源文件",
+    "randomImage": "随机背景",
+    "selectTitleImg": "选择题头图",
+    "batchSetTitleImg": "批量设置题头图",
+    "selectTemplate": "选择模板",
+    "batchSetTemplate": "批量设置模板",
+    "syncTo": "数据同步到",
+    "batchSyncTo": "批量同步到后代",
+    "warning": "⚠️ 数据库功能目前处于测试阶段。请注意：在列表内执行 **减少缩进 (Outdent)** 或 **跨层级拖拽项** 等结构调整操作，可能会导致数据库关联失效或数据丢失。请谨慎使用并建议定期备份。"
   }
 }
