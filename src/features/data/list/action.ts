@@ -155,7 +155,7 @@ export async function focusDatabaseView(blockId: string, protyle: any, mode: "le
 /**
  * 创建数据库逻辑
  */
-export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle: any) {
+export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle: any, silent: boolean = false) {
     if (!sourceBlockIds || sourceBlockIds.length === 0) return;
 
     const lastBlockId = sourceBlockIds[sourceBlockIds.length - 1];
@@ -232,7 +232,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         }
 
         if (allItems.length === 0) {
-            showMessage("未找到任何列表项", 3000, "info");
+            if (!silent) showMessage("未找到任何列表项", 3000, "info");
             return;
         }
 
@@ -275,7 +275,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                 await new Promise(resolve => setTimeout(resolve, 300));
             }
         } else {
-            showMessage(`正在更新现有数据库...`, 3000, "info");
+            if (!silent) showMessage(`正在更新现有数据库...`, 3000, "info");
             const initData = await post("/api/av/renderAttributeView", { id: realAvID });
             viewID = initData.views && initData.views[0] ? initData.views[0].id : null;
         }
@@ -556,10 +556,10 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
         }
 
         await post("/api/av/renderAttributeView", { id: realAvID, viewID: viewID, page: 1, pageSize: 50 });
-        showMessage(`✅ 数据库已同步: ${newSrcs.length} 新增, ${updateValues.length / 5} 更新`);
+        if (!silent) showMessage(`✅ 数据库已同步: ${newSrcs.length} 新增, ${updateValues.length / 5} 更新`);
 
     } catch (e: any) {
         console.error("[Data] Create DB Error:", e);
-        showMessage(`❌ 操作失败: ${e.message}`, 3000, "error");
+        if (!silent) showMessage(`❌ 操作失败: ${e.message}`, 3000, "error");
     }
 }

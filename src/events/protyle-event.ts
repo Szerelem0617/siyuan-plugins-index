@@ -1,14 +1,15 @@
 import { autoUpdateIndex } from "../features/index/action";
 import { autoUpdateOutline } from "../features/outline/action";
 import { autoUpdateBuilder } from "../features/builder/auto-update";
+import { autoUpdateListAVs } from "../features/data/list/auto-update";
 import { isMobile } from "../shared/utils";
 import { client } from "../shared/api-client";
 // import { settings } from "./settings";
 
 export async function execAutoUpdate(parentId: string, notebookId: string, path: string) {
-    // Single query for Index, Outline, and Builder
+    // Single query for Index, Outline, Builder, and bound List AVs
     let rs = await client.sql({
-        stmt: `SELECT * FROM blocks WHERE root_id = '${parentId}' AND (ial like '%custom-index-create%' OR ial like '%custom-outline-create%' OR ial like '%custom-tree-create%') order by updated desc limit 10`
+        stmt: `SELECT * FROM blocks WHERE root_id = '${parentId}' AND (ial like '%custom-index-create%' OR ial like '%custom-outline-create%' OR ial like '%custom-tree-create%' OR ial like '%custom-index-linked-av%') order by updated desc limit 50`
     });
 
     console.log(`[IndexPlugin] AutoUpdate Check for ${parentId}. Found ${rs.data?.length || 0} candidate blocks.`);
@@ -16,19 +17,23 @@ export async function execAutoUpdate(parentId: string, notebookId: string, path:
     let indexBlock = null;
     let outlineBlock = null;
     let builderBlock = null;
+    let listBlocks = [];
 
     if (rs.data) {
         for (const block of rs.data) {
             // console.log(`[IndexPlugin] Checking block ${block.id}: ${block.ial}`);
             if (block.ial.includes("custom-index-create") && !indexBlock) {
                 indexBlock = block;
-            } 
+            }
             if (block.ial.includes("custom-outline-create") && !outlineBlock) {
                 outlineBlock = block;
             }
             if (block.ial.includes("custom-tree-create") && !builderBlock) {
                 builderBlock = block;
                 console.log(`[IndexPlugin] Found Builder Block: ${block.id}`);
+            }
+            if (block.ial.includes("custom-index-linked-av")) {
+                listBlocks.push(block);
             }
         }
     }
@@ -44,6 +49,14 @@ export async function execAutoUpdate(parentId: string, notebookId: string, path:
         console.log(`[IndexPlugin] Triggering Builder Auto-Update...`);
         autoUpdateBuilder(parentId, builderBlock);
     }
+
+    // Auto sync lists mapped to AV
+    if (listBlocks.length > 0) {
+        console.log(`[IndexPlugin] Found ${listBlocks.length} list(s) bound to AV for auto-sync.`);
+        for (const listBlock of listBlocks) {
+            autoUpdateListAVs(listBlock);
+        }
+    }
 }
 
 /**
@@ -56,12 +69,12 @@ export async function updateIndex({ detail }: any) {
     // console.log(detail.protyle.element.className);
     //如果不为手机端且为聚焦状态，就直接返回，否则查询更新
     if (!isMobile) {
-        if(
+        if (
             //为搜索界面
             detail.protyle.element.className.indexOf("search") != -1 ||
             // 为浮窗
             // detail.model == undefined || 
-            detail.protyle.block.showAll){
+            detail.protyle.block.showAll) {
             // || !settings.get("autoUpdate")
             return;
         }
@@ -73,6 +86,6 @@ export async function updateIndex({ detail }: any) {
     let path = detail.protyle.path;
     // 获取文档块id
     let parentId = detail.protyle.block.rootID;
-    
+
     await execAutoUpdate(parentId, notebookId, path);
 }

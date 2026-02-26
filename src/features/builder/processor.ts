@@ -198,12 +198,25 @@ export class IBlockProcessor {
             }
         }
 
+        let isDocEmpty = false;
+        if (docId) {
+            const checkRes = await client.sql({ stmt: `SELECT id, type, content FROM blocks WHERE root_id = '${docId}' AND parent_id = '${docId}' ORDER BY sort ASC LIMIT 2` });
+            if (!checkRes.data || checkRes.data.length === 0) {
+                isDocEmpty = true;
+            } else if (checkRes.data.length === 1) {
+                const b = checkRes.data[0];
+                if (b.type === 'p' && (!b.content || b.content.trim() === '')) {
+                    isDocEmpty = true;
+                }
+            }
+        }
+
         const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs, ctx.avId, ctx);
         const targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
         const targetImage = linkedData?.["title-img"] || null;
 
-        // ONLY GET TEMPLATE IF WE ARE CREATING A NEW DOCUMENT
-        const templatePath = (!docId && linkedData?.template) ? linkedData.template : "";
+        // GET TEMPLATE IF WE ARE CREATING A NEW DOCUMENT OR IF EXISTING DOCUMENT IS EMPTY
+        const templatePath = ((!docId || isDocEmpty) && linkedData?.template) ? linkedData.template : "";
 
         let finalMarkdown = "";
         if (templatePath) {
@@ -223,6 +236,28 @@ export class IBlockProcessor {
                     // @ts-ignore
                     const lute = window.Lute.New();
                     finalMarkdown = lute.BlockDOM2Md(dom);
+                    if (isDocEmpty && docId) {
+                        try {
+                            const checkRs = await client.sql({
+                                stmt: `SELECT id, type, content FROM blocks WHERE root_id = '${docId}' AND parent_id = '${docId}' ORDER BY sort ASC`
+                            });
+                            let emptyBlockId: string | undefined;
+                            if (checkRs.data && checkRs.data.length === 1) {
+                                const b = checkRs.data[0];
+                                if (b.type === 'p' && (!b.content || b.content.trim() === '')) {
+                                    emptyBlockId = b.id;
+                                }
+                            }
+                            await client.prependBlock({
+                                data: finalMarkdown,
+                                dataType: 'markdown',
+                                parentID: docId
+                            });
+                            if (emptyBlockId) {
+                                await client.deleteBlock({ id: emptyBlockId });
+                            }
+                        } catch (e) { console.error("[Builder] Failed to apply template to empty doc", e); }
+                    }
                 }
             } catch (e) {
                 console.error("[Builder] Template render failed", e);
