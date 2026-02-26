@@ -57,11 +57,11 @@ export class ListProcessor {
         } else if (type === "NodeList" || type === "l") {
             let nextCtx = { ...ctx };
             const attrs = await client.getBlockAttrs({ id: blockId });
-            
+
             if (attrs.data && attrs.data[ATTR_LINKED_AV]) {
                 const avId = attrs.data[ATTR_LINKED_AV];
                 const avBlockId = attrs.data[ATTR_LINKED_AV_BLOCK] || blockId;
-                
+
                 nextCtx.avId = avId;
                 nextCtx.dbConfig = await loadDbConfig(avBlockId);
                 const colInfo = await getColIDMap(avId);
@@ -152,12 +152,12 @@ export class ListProcessor {
                 const itemAttrs = this.ibp.parseIAL(sourceItem?.ial);
                 // getLinkedAVData will now return local values from DB
                 const localValues = await this.ibp.getLinkedAVData(child.id, itemAttrs, ctx.avId, ctx);
-                
+
                 for (const rule of ctx.dbConfig.inheritanceRules) {
                     if (rule.mode === 'none') continue;
                     const localVal = localValues?.[rule.colId];
                     const ancestorVal = ctx.inheritedAttrs?.[rule.colId];
-                    
+
                     let finalVal = localVal;
                     if (rule.mode === 'weak' && isValueEmpty(localVal)) {
                         finalVal = ancestorVal;
@@ -168,8 +168,8 @@ export class ListProcessor {
                 }
             }
 
-            const itemCtx = { 
-                ...ctx, 
+            const itemCtx = {
+                ...ctx,
                 inheritedAttrs: currentItemResolved,
                 itemResolvedAttrs: currentItemResolved
             };
@@ -180,12 +180,26 @@ export class ListProcessor {
                 if (!docTarget) {
                     needsUpdate = true;
                 } else {
-                    if (docTarget.content !== core.syncText) needsUpdate = true;
-                    else {
+                    if (docTarget.content !== core.syncText) {
+                        needsUpdate = true;
+                    } else {
+                        const localValues = await this.ibp.getLinkedAVData(child.id, this.ibp.parseIAL(sourceItem?.ial), ctx.avId, itemCtx);
+
+                        const desiredIcon = localValues?.icon ? (/[^\u0000-\u007F]/.test(localValues.icon) ? this.ibp.emojiToHex(localValues.icon) : localValues.icon) : (core.currentIcon ? this.ibp.emojiToHex(core.currentIcon) : "");
+                        const desiredImg = localValues?.["title-img"] || "";
+
                         const iconMatch = (docTarget.ial || "").match(/icon="([^"]+)"/);
                         const currentDocIcon = iconMatch ? iconMatch[1] : "";
-                        const desiredIcon = core.currentIcon ? this.ibp.emojiToHex(core.currentIcon) : "";
-                        if (currentDocIcon !== desiredIcon) needsUpdate = true;
+                        const imgMatch = (docTarget.ial || "").match(/title-img="([^"]+)"/);
+                        const currentDocImg = imgMatch ? imgMatch[1] : "";
+
+                        if (currentDocIcon !== desiredIcon) {
+                            console.log(`[Builder] Update needed due to Icon mismatch for ${child.id}: ${currentDocIcon} !== ${desiredIcon}`);
+                            needsUpdate = true;
+                        } else if (currentDocImg !== desiredImg) {
+                            console.log(`[Builder] Update needed due to Image mismatch for ${child.id}: ${currentDocImg} !== ${desiredImg}`);
+                            needsUpdate = true;
+                        }
                     }
                 }
             }

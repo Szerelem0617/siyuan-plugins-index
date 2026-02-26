@@ -24,7 +24,7 @@ async function post(url: string, data: any) {
 
 export class IBlockProcessor {
     errors: string[];
-    avCache: Map<string, any> = new Map(); 
+    avCache: Map<string, any> = new Map();
 
     constructor(errors: string[]) {
         this.errors = errors;
@@ -48,51 +48,53 @@ export class IBlockProcessor {
         if (!this.avCache.has(avId)) {
             this.avCache.set(avId, await getColIDMap(avId));
         }
-        const { nameToID, keyValues, blockToItem } = this.avCache.get(avId);
+        const { nameToID, keyValues } = this.avCache.get(avId);
 
         const result: any = {};
 
-        if (keyValues) {
-            for (const kv of keyValues) {
-                const colId = kv.key.id;
-                const rowId = blockToItem?.get(listItemId);
-                const cellVal = kv.values.find((v: any) => (v.blockID === listItemId || (rowId && v.itemID === rowId)));
-                
-                if (cellVal) {
-                    if (cellVal.type === "text") result[colId] = cellVal.text?.content;
-                    else if (cellVal.type === "mAsset") result[colId] = cellVal.mAsset?.[0]?.content;
-                    else if (cellVal.type === "template") result[colId] = cellVal.template?.content;
-                    else if (cellVal.type === "select") result[colId] = cellVal.mOption?.[0]?.content;
-                    else if (cellVal.type === "mSelect") result[colId] = cellVal.mOption?.map((o: any) => o.content).join(",");
-                    else if (cellVal.content) result[colId] = cellVal.content;
+        // 1. Fetch values from AV using row ID stored in ATTR_ITEM_ID
+        const keyMap: any = {};
+        ["icon", "title-img", "template"].forEach(name => {
+            const kn = Object.keys(nameToID).find(k => k.toLowerCase() === name.toLowerCase());
+            if (kn) keyMap[name] = nameToID[kn];
+        });
+
+        if (Object.keys(keyMap).length > 0) {
+            for (const [name, keyId] of Object.entries(keyMap)) {
+                const kv = keyValues.find((v: any) => v.key.id === keyId);
+                if (kv && kv.values) {
+                    const cellVal = kv.values.find((v: any) => v.blockID === itemId);
+                    if (cellVal) {
+                        if (cellVal.type === "text") result[name] = cellVal.text?.content;
+                        else if (cellVal.type === "mAsset") result[name] = cellVal.mAsset?.[0]?.content;
+                        else if (cellVal.type === "template") result[name] = cellVal.template?.content;
+                        else if (cellVal.type === "select") result[name] = cellVal.mOption?.[0]?.content;
+                        else if (cellVal.type === "mSelect") result[name] = cellVal.mOption?.map((o: any) => o.content).join(",");
+                        else if (cellVal.content) result[name] = cellVal.content;
+                    }
                 }
             }
         }
 
-        // Apply Resolved Attributes from context (Materialized logic during build)
+        // 2. Apply Resolved Attributes from context (Materialized logic during build)
         if (ctx?.itemResolvedAttrs) {
             for (const [colId, val] of Object.entries(ctx.itemResolvedAttrs)) {
                 if (!isValueEmpty(val)) {
-                    result[colId] = val;
+                    // Map colId back to name if it's icon/title-img/template
+                    const name = Object.keys(keyMap).find(k => keyMap[k] === colId);
+                    if (name) {
+                        let valStr = val;
+                        if (valStr && typeof valStr === 'object') {
+                            if ((valStr as any).text) valStr = (valStr as any).text.content;
+                            else if ((valStr as any).mOption) valStr = (valStr as any).mOption[0]?.content;
+                            else if ((valStr as any).content) valStr = (valStr as any).content;
+                        }
+                        result[name] = valStr;
+                    }
+                    result[colId] = val; // Also keep raw col ID for property assignment
                 }
             }
         }
-
-        ["icon", "title-img", "template"].forEach(name => {
-            const kn = Object.keys(nameToID).find(k => k.toLowerCase() === name.toLowerCase());
-            if (kn) {
-                const colId = nameToID[kn];
-                if (result[colId]) {
-                    let valStr = result[colId];
-                    if (valStr && typeof valStr === 'object') {
-                        if (valStr.text) valStr = valStr.text.content;
-                        else if (valStr.mOption) valStr = valStr.mOption[0]?.content;
-                        else if (valStr.content) valStr = valStr.content;
-                    }
-                    result[name] = valStr;
-                }
-            }
-        });
 
         return result;
     }
@@ -199,7 +201,9 @@ export class IBlockProcessor {
         const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs, ctx.avId, ctx);
         const targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
         const targetImage = linkedData?.["title-img"] || null;
-        const templatePath = linkedData?.template || "";
+
+        // ONLY GET TEMPLATE IF WE ARE CREATING A NEW DOCUMENT
+        const templatePath = (!docId && linkedData?.template) ? linkedData.template : "";
 
         let finalMarkdown = "";
         if (templatePath) {
@@ -271,7 +275,7 @@ export class IBlockProcessor {
                     if (Object.keys(docAttrs).length > 0) await client.setBlockAttrs({ id: docId, attrs: docAttrs });
                     await applyInherited(docId);
                 }
-            } catch (e) {}
+            } catch (e) { }
             const displayIcon = getProcessedDocIcon(targetIcon || core.currentIcon || "", false);
             const newMd = await this.constructListItemMarkdown(containerAttrs, containerAttrs[ATTR_OUTLINE], core.syncMd, docId, displayIcon);
             await client.updateBlock({ id: core.contentId, dataType: "markdown", data: newMd });
@@ -310,7 +314,7 @@ export class IBlockProcessor {
             try {
                 const pRes = await post("/api/filetree/getPathByID", { id: newId });
                 if (pRes) physicalPath = pRes.path;
-            } catch (e) {}
+            } catch (e) { }
             await client.setBlockAttrs({ id: core.containerId, attrs: { [ATTR_INDEX]: newId } });
             const docAttrs: any = {};
             if (targetIcon) docAttrs.icon = targetIcon;
@@ -343,7 +347,7 @@ export class IBlockProcessor {
                 try {
                     const docInfoRes = await client.getBlockAttrs({ id: docId });
                     icon = getProcessedDocIcon(docInfoRes.data.icon || DEFAULT_ICON, false);
-                } catch (e) {}
+                } catch (e) { }
             }
             parts.push(`[${icon}](siyuan://blocks/${docId})`);
         } else if (docIcon) parts.push(docIcon);
