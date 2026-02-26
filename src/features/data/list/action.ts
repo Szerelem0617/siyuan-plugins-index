@@ -329,8 +329,8 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
 
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            // Ensure Level, Father, Path are hidden
-            if (viewID) {
+            // Ensure Level, Father, Path are hidden only on creation
+            if (viewID && !existingAvID) {
                 const hideOps: any[] = [];
                 if (levelKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: levelKeyId, data: true });
                 if (fatherKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: fatherKeyId, data: true });
@@ -339,7 +339,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], protyle
                 // Explicitly ensure icon is NOT hidden
                 if (iconKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: iconKeyId, data: false });
 
-                // NEW: Hide entry icons for the primary key (Show Entry Icons = off)
+                // Hide entry icons for the primary key (Show Entry Icons = off)
                 hideOps.push({ action: "setAttrViewShowIcon", avID: realAvID, viewID: viewID, blockID: blockID, data: false });
 
                 if (hideOps.length > 0) {
