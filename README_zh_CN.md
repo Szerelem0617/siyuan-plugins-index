@@ -30,7 +30,7 @@
 
 - 在 [GitHub](https://github.com/Szerelem0617/siyuan-plugins-index) 上点个 **Star** ⭐
 
-- **微信赞赏**: (备注微信号)
+- 微信赞赏: (备注微信号)
   
   <img src="./asset/qr.png" width="200" />
 

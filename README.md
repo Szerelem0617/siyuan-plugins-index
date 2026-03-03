@@ -30,7 +30,7 @@ Left-click to insert a directory list; right-click for more actions.
 If you find this plugin helpful, consider supporting my work:
 
 - Give it a **Star** on [GitHub](https://github.com/Szerelem0617/siyuan-plugins-index) ⭐
-- **Github Sponsors**: [Sponsor Szerelem0617](https://github.com/sponsors/Szerelem0617)
+- Github Sponsors: [Sponsor Szerelem0617](https://github.com/sponsors/Szerelem0617)
 
 
 # Acknowledgments
