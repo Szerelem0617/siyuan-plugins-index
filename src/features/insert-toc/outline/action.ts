@@ -1,10 +1,10 @@
-import { client, BlockService } from "../../shared/api-client";
-import { getBlocksData, collectOutlineIds, requestGetDocOutline } from "../../shared/api-client/query";
-import { getDocid, i18n, plugin, confirmDialog, getAttrFromIAL } from "../../shared/utils";
-import { extractAnchors, isValidSeparator } from "../../shared/utils/anchor-utils";
-import { settings, CONFIG } from "../../core/settings";
+import { client, BlockService } from "../../../shared/api-client";
+import { getBlocksData, collectOutlineIds, requestGetDocOutline } from "../../../shared/api-client/query";
+import { getDocid, i18n, plugin, confirmDialog, getAttrFromIAL } from "../../../shared/utils";
+import { extractAnchors, isValidSeparator } from "../../../shared/utils/anchor-utils";
+import { settings, CONFIG } from "../../../core/settings";
 import { generateOutlineMarkdown } from "./generator";
-import { bindTreeAttributes } from "../transformation/transformation";
+import { bindTreeAttributes } from "../../../shared/utils/transformation-utils";
 
 export async function insertOutlineAction(targetBlockId?: string) {
     await settings.load();

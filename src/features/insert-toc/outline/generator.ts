@@ -1,5 +1,5 @@
-import { settings } from "../../core/settings";
-import { stripMarkdownSyntax } from "../../shared/utils/markdown-utils";
+import { settings } from "../../../core/settings";
+import { stripMarkdownSyntax } from "../../../shared/utils/markdown-utils";
 
 function filterIAL(ialStr: string) {
     if (!ialStr) return "";

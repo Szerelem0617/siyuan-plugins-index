@@ -1,6 +1,6 @@
 import { generateIndex, queuePopAll, IndexConfig } from "../index/generator";
-import { IndexQueue } from "../../shared/utils/index-queue";
-import { client } from "../../shared/api-client";
+import { IndexQueue } from "../../../shared/utils/index-queue";
+import { client } from "../../../shared/api-client";
 
 export async function insertNotebookIndex(
     targetDocId: string,

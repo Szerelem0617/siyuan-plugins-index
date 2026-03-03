@@ -3,12 +3,10 @@ import {
     //  fetchSyncPost,
     //  openTab
 } from "siyuan";
-import { insertAction } from "../features/index/action";
-import { insertOutlineAction } from "../features/outline/action";
-import { onCreatenbiButton } from "../features/notebook/create-notebook-index";
+import { insertAction } from "../features/insert-toc/index/action";
+import { insertOutlineAction } from "../features/insert-toc/outline/action";
 import { i18n, isMobile, plugin } from "../shared/utils";
 import SettingsTab from "./components/setting.svelte"
-import { settings } from "../core/settings";
 
 // //tab类型
 // const TAB_TYPE = "custom_tab";

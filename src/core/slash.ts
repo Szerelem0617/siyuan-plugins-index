@@ -1,7 +1,7 @@
 import { Protyle } from "siyuan";
 import { i18n, plugin, isMobile } from "../shared/utils";
-import { insertAction } from "../features/index/action";
-import { insertOutlineAction } from "../features/outline/action";
+import { insertAction } from "../features/insert-toc/index/action";
+import { insertOutlineAction } from "../features/insert-toc/outline/action";
 // import { insert, insertDocButton } from "./creater/createIndex";
 
 function getCurrentBlockId(): string | null {

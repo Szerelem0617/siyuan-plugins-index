@@ -1,8 +1,8 @@
 import { Dialog } from "siyuan";
-import { client } from "../../shared/api-client";
-import { i18n, getDocid } from "../../shared/utils";
-import NotebookDialog from "../../ui/components/dialog/notebook-dialog.svelte"
-import { settings } from "../../core/settings";
+import { client } from "../../../shared/api-client";
+import { i18n, getDocid } from "../../../shared/utils";
+import NotebookDialog from "../../../ui/components/dialog/notebook-dialog.svelte"
+import { settings } from "../../../core/settings";
 import { insertNotebookIndex } from "./action";
 
 /**
@@ -53,7 +53,7 @@ async function onCreate(dialog: Dialog) {
     }
 
     let el: HTMLInputElement = dialog.element.querySelector("#notebook-get");
-    
+
     // Use new action from src
     const success = await insertNotebookIndex(parentId, el.value, {
         depth: settings.get("depthNotebook"),

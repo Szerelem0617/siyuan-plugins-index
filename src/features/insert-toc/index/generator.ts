@@ -1,10 +1,10 @@
-import { client } from "../../shared/api-client";
-import { escapeHtml } from "../../shared/utils";
-import { getProcessedDocIcon } from "../../shared/utils/icon-utils";
-import { IndexQueue, IndexQueueNode } from "../../shared/utils/index-queue";
-import { settings } from "../../core/settings";
+import { client } from "../../../shared/api-client";
+import { escapeHtml } from "../../../shared/utils";
+import { getProcessedDocIcon } from "../../../shared/utils/icon-utils";
+import { IndexQueue, IndexQueueNode } from "../../../shared/utils/index-queue";
+import { settings } from "../../../core/settings";
 import { generateOutlineMarkdown } from "../outline/generator";
-import { requestGetDocOutline, collectOutlineIds, getBlocksData } from "../../shared/api-client/query";
+import { requestGetDocOutline, collectOutlineIds, getBlocksData } from "../../../shared/api-client/query";
 
 export interface IndexConfig {
     depth?: number;

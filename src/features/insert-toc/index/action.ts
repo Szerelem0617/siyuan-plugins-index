@@ -1,10 +1,10 @@
-import { settings, CONFIG } from "../../core/settings";
-import { getDocid, i18n, plugin, confirmDialog, getAttrFromIAL } from "../../shared/utils";
-import { BlockService, client } from "../../shared/api-client";
-import { IndexQueue } from "../../shared/utils/index-queue";
+import { settings, CONFIG } from "../../../core/settings";
+import { getDocid, i18n, plugin, confirmDialog, getAttrFromIAL } from "../../../shared/utils";
+import { BlockService, client } from "../../../shared/api-client";
+import { IndexQueue } from "../../../shared/utils/index-queue";
 import { generateIndex, generateIndexAndOutline, queuePopAll } from "./generator";
 import { onCreatenbiButton } from "../notebook/create-notebook-index";
-import { bindTreeAttributes } from "../transformation/transformation";
+import { bindTreeAttributes } from "../../../shared/utils/transformation-utils";
 
 export async function insertAction(targetBlockId?: string) {
     await settings.load();

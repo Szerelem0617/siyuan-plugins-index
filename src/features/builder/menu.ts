@@ -1,8 +1,9 @@
 import { client } from "../../shared/api-client";
 import { ListProcessor } from "./builder";
-import { createDatabaseWithBlocks } from "../data/action";
+
 import { getOutermostList } from "../../shared/utils/dom-utils";
-import { confirmTransformation, transformToTree } from "../transformation/transformation";
+import { confirmTransformation } from "../../shared/utils/transformation-utils";
+import { transformToTree } from "./transformation";
 
 /**
  * 块标菜单回调

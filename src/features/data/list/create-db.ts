@@ -4,7 +4,8 @@ import { ATTR_LINKED_AV, ATTR_LINKED_AV_BLOCK, ATTR_LINKED_LIST, ATTR_ITEM_ID } 
 import { settings } from "../../../core/settings";
 import { post } from "../../../shared/api-client/request";
 import { formatDate } from "../../../shared/utils";
-import { confirmTransformation, transformToTree } from "../../transformation/transformation";
+import { confirmTransformation } from "../../../shared/utils/transformation-utils";
+import { transformToTree } from "../../builder/transformation";
 import { getBlockAttribute } from "../../../shared/utils/dom-utils";
 export interface DBItemProp {
     icon: string;

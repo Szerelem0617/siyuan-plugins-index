@@ -1,5 +1,5 @@
-import { autoUpdateIndex } from "../features/index/action";
-import { autoUpdateOutline } from "../features/outline/action";
+import { autoUpdateIndex } from "../features/insert-toc/index/action";
+import { autoUpdateOutline } from "../features/insert-toc/outline/action";
 import { autoUpdateBuilder } from "../features/builder/auto-update";
 import { autoUpdateListAVs } from "../features/data/list/auto-update";
 import { isMobile } from "../shared/utils";
