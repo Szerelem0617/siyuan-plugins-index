@@ -6,8 +6,8 @@
     export let settingsStrings: any;
 
     const addTemplateContent = {
-        title: "添加模板列",
-        content: "是否自动添加 title-img、template 列",
+        title: i18n.settingsTab.items.dbAddTemplateCols.title,
+        content: i18n.settingsTab.items.dbAddTemplateCols.content,
     };
 </script>
 

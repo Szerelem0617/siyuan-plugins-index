@@ -6,6 +6,7 @@
   "indexSettings": "Index",
   "outlineSettings": "Outline",
   "builderSettings": "Builder (Beta)",
+  "dataSettings": "Database (Beta)",
   "cancel": "Cancel",
   "confirm": "Confirm",
   "update": "Update",
@@ -115,8 +116,20 @@
         "title": "Builder Auto Update",
         "content": "Auto sync content for Document Builder"
       },
+      "dbAddTemplateCols": {
+        "title": "Add Template Columns",
+        "content": "Automatically add title-img and template columns"
+      },
       "builderDesc": "📄 Open sub-page · ➖ Link to heading"
     }
+  },
+  "builderMenu": {
+    "buildDoc": "👈 Build Subdocs",
+    "buildHeading": "👇 Build Heading Rows",
+    "syncSuccess": "✅ Sync Complete",
+    "syncPartial": "⚠️ Some items not updated due to complex format (x{n}), only icons updated",
+    "syncError": "Sync Failed: {error}",
+    "transformFail": "Transformation Failed"
   },
   "dbConfig": {
     "dialogTitle": "Database Advanced Settings",

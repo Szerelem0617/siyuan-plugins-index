@@ -3,6 +3,7 @@ import { ListProcessor } from "./builder";
 
 import { getOutermostList } from "../../shared/utils/dom-utils";
 import { confirmTransformation } from "../../shared/utils/transformation-utils";
+import { i18n } from "../../shared/utils";
 import { transformToTree } from "./transformation";
 
 /**
@@ -30,13 +31,13 @@ export function buildDoc({ detail }: any) {
 
     menu.addItem({
         icon: "iconLeft",
-        label: "👈 构建子文档",
+        label: i18n.builderMenu.buildDoc,
         click: () => syncManager(blockId, blockType, "PUSH_TO_DOC")
     });
 
     menu.addItem({
         icon: "iconDown",
-        label: "👇 构建标题行",
+        label: i18n.builderMenu.buildHeading,
         click: () => syncManager(blockId, blockType, "PUSH_TO_BOTTOM")
     });
 }
@@ -53,7 +54,7 @@ async function syncManager(sourceBlockId: string, sourceType: string, actionType
         const success = await transformToTree(sourceBlockId);
         if (!success) {
             // @ts-ignore
-            client.pushErrMsg({ msg: "转换失败", timeout: 3000 });
+            client.pushErrMsg({ msg: i18n.builderMenu.transformFail, timeout: 3000 });
             return;
         }
 
@@ -109,13 +110,13 @@ async function syncManager(sourceBlockId: string, sourceType: string, actionType
         if (processor.ibp.errors.length > 0) { // Access via ibp
             // @ts-ignore
             client.pushMsg({
-                msg: `⚠️ 部分条目因格式复杂未更新文本 (x${processor.ibp.errors.length})，仅更新了图标`,
+                msg: i18n.builderMenu.syncPartial.replace("{n}", processor.ibp.errors.length.toString()),
                 timeout: 5000
             });
         } else {
             // @ts-ignore
             client.pushMsg({
-                msg: "✅ 同步完成",
+                msg: i18n.builderMenu.syncSuccess,
                 timeout: 3000
             });
         }
@@ -123,7 +124,7 @@ async function syncManager(sourceBlockId: string, sourceType: string, actionType
         console.error(e);
         // @ts-ignore
         client.pushErrMsg({
-            msg: `同步失败: ${e.message}`,
+            msg: i18n.builderMenu.syncError.replace("{error}", e.message),
             timeout: 5000
         });
     }

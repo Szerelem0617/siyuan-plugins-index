@@ -116,8 +116,20 @@
         "title": "构建器自动更新",
         "content": "是否自动同步文档构建器内容"
       },
+      "dbAddTemplateCols": {
+        "title": "添加模板列",
+        "content": "是否自动添加 title-img、template 列"
+      },
       "builderDesc": "📄 跳转子文档 · ➖ 跳转标题行"
     }
+  },
+  "builderMenu": {
+    "buildDoc": "👈 构建子文档",
+    "buildHeading": "👇 构建标题行",
+    "syncSuccess": "✅ 同步完成",
+    "syncPartial": "⚠️ 部分条目因格式复杂未更新文本 (x{n})，仅更新了图标",
+    "syncError": "同步失败: {error}",
+    "transformFail": "转换失败"
   },
   "dbConfig": {
     "dialogTitle": "数据库高级设置",
