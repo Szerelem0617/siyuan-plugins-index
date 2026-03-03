@@ -178,9 +178,11 @@ export class ListProcessor {
 
             if (actionType === "PUSH_TO_DOC" || actionType === "PUSH_COMBINED") {
                 if (!docTarget) {
+                    console.log(`[Builder] Item ${child.id} has no target doc, PUSH needed.`);
                     needsUpdate = true;
                 } else {
                     if (docTarget.content !== core.syncText) {
+                        console.log(`[Builder] Item ${child.id} content mismatch: "${docTarget.content}" !== "${core.syncText}". Update needed.`);
                         needsUpdate = true;
                     } else {
                         const localValues = await this.ibp.getLinkedAVData(child.id, this.ibp.parseIAL(sourceItem?.ial), ctx.avId, itemCtx);

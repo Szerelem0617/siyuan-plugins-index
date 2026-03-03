@@ -36,7 +36,7 @@
 
 - **微信赞赏**: (备注微信号)
   
-  ![赞赏码](./asset/qr.png)
+  <img src="./asset/qr.png" width="200" />
 
 # 致谢
 

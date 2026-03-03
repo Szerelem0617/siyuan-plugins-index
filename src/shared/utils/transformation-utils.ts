@@ -3,12 +3,8 @@ import { client } from "../api-client";
 
 export async function confirmTransformation(type: 'builder' | 'database'): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
-        let msg = "该操作需要将目录/大纲重构为静态树（Tree），此后它将不再自动更新，作为最终的数据源。是否继续？";
-        if (type === 'builder') {
-            msg = "执行构建器前，" + msg;
-        } else if (type === 'database') {
-            msg = "创建数据库前，" + msg;
-        }
+        let action = type === 'builder' ? "执行构建器" : "创建数据库";
+        let msg = `${action}会将此列表设置为“真理源”。此后请直接在此列表内修改内容及层级来同步至文档树。是否继续？`;
 
         confirmDialog(
             "提示",

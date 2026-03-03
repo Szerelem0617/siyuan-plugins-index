@@ -38,24 +38,24 @@ export async function execAutoUpdate(parentId: string, notebookId: string, path:
         }
     }
 
-    // 自动插入
-    if (indexBlock) {
-        autoUpdateIndex(notebookId, path, parentId, indexBlock);
-    }
-    if (outlineBlock) {
-        autoUpdateOutline(parentId, outlineBlock);
-    }
-    if (builderBlock) {
-        console.log(`[IndexPlugin] Triggering Builder Auto-Update...`);
-        autoUpdateBuilder(parentId, builderBlock);
-    }
-
-    // Auto sync lists mapped to AV
+    // 1. Auto sync lists mapped to AV (Important to do this FIRST so builder has item IDs)
     if (listBlocks.length > 0) {
         console.log(`[IndexPlugin] Found ${listBlocks.length} list(s) bound to AV for auto-sync.`);
         for (const listBlock of listBlocks) {
-            autoUpdateListAVs(listBlock);
+            await autoUpdateListAVs(listBlock);
         }
+    }
+
+    // 2. Others
+    if (indexBlock) {
+        await autoUpdateIndex(notebookId, path, parentId, indexBlock);
+    }
+    if (outlineBlock) {
+        await autoUpdateOutline(parentId, outlineBlock);
+    }
+    if (builderBlock) {
+        console.log(`[IndexPlugin] Triggering Builder Auto-Update...`);
+        await autoUpdateBuilder(parentId, builderBlock);
     }
 }
 
