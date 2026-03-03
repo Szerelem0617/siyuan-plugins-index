@@ -54,16 +54,19 @@ export async function generateIndex(notebook: any, ppath: any, pitem: IndexQueue
                 data += "1. ";
             }
 
-            let iconStr = iconEnabled ? getProcessedDocIcon(icon, subFileCount != 0) : "";
-            let safeName = name.replace(/"/g, "&quot;");
-
             let linkType = linkTypeSetting == "ref" ? true : false;
             let isTree = linkTypeSetting == "tree";
 
+            let iconStr = (iconEnabled || isTree) ? getProcessedDocIcon(icon, subFileCount != 0) : "";
+            let safeName = name.replace(/"/g, "&quot;");
+
             if (isTree) {
                 // Builder format for Index: * [icon](siyuan://blocks/docId) ➖ Text
-                // (Note: block attributes will be bound post-insertion via API to prevent list splintering)
-                let displayIcon = iconStr ? iconStr : "📄";
+                // Check if iconStr is a valid unicode emoji, if not (alias/shortcode), use default text icon.
+                let displayIcon = iconStr;
+                if (!displayIcon || displayIcon.startsWith(":") && displayIcon.endsWith(":")) {
+                    displayIcon = subFileCount != 0 ? "📑" : "📄";
+                }
                 data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${name}\n`;
             } else if (linkType) {
                 data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;
@@ -127,16 +130,19 @@ export async function generateIndexAndOutline(notebook: any, ppath: any, pitem: 
                     data += "1. ";
                 }
 
-                let iconStr = iconEnabled ? getProcessedDocIcon(icon, subFileCount != 0) : "";
-                let safeName = name.replace(/"/g, "&quot;");
-
                 let linkType = linkTypeSetting == "ref" ? true : false;
                 let isTree = linkTypeSetting == "tree";
 
+                let iconStr = (iconEnabled || isTree) ? getProcessedDocIcon(icon, subFileCount != 0) : "";
+                let safeName = name.replace(/"/g, "&quot;");
+
                 if (isTree) {
                     // Tree index format: * [icon](siyuan://blocks/docId) ➖ Text
-                    // (Note: attributes bound post-insertion)
-                    let displayIcon = iconStr ? iconStr : "📄";
+                    // Check if iconStr is a valid unicode emoji, if not (alias/shortcode), use default text icon.
+                    let displayIcon = iconStr;
+                    if (!displayIcon || displayIcon.startsWith(":") && displayIcon.endsWith(":")) {
+                        displayIcon = subFileCount != 0 ? "📑" : "📄";
+                    }
                     data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${name}\n`;
                 } else if (linkType) {
                     data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;

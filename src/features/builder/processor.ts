@@ -191,10 +191,13 @@ export class IBlockProcessor {
         const stylesToKeep = this.filterSystemAttrs(coreAttrsRes.data);
         let docId = containerAttrs[ATTR_INDEX];
 
+        let existingDocIcon = "";
         if (docId) {
-            const checkRes = await client.sql({ stmt: `SELECT id FROM blocks WHERE id = '${docId}' LIMIT 1` });
+            const checkRes = await client.sql({ stmt: `SELECT id, icon FROM blocks WHERE id = '${docId}' LIMIT 1` });
             if (!checkRes.data[0]) {
                 docId = null;
+            } else {
+                existingDocIcon = checkRes.data[0].icon || "";
             }
         }
 
@@ -212,7 +215,13 @@ export class IBlockProcessor {
         }
 
         const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs, ctx.avId, ctx);
-        const targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
+        let targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
+
+        // Prevent default fallback icons from overwriting actual custom document image aliases
+        if ((core.currentIcon === "📄" || core.currentIcon === "📑") && existingDocIcon && (existingDocIcon.includes(".") || existingDocIcon.includes("/"))) {
+            targetIcon = null;
+        }
+
         const targetImage = linkedData?.["title-img"] || null;
 
         // GET TEMPLATE IF WE ARE CREATING A NEW DOCUMENT OR IF EXISTING DOCUMENT IS EMPTY
