@@ -79,7 +79,7 @@
           "index": "Index Only",
           "index_outline": "Index + Outline",
           "notebook": "Notebook Index",
-          "tree": "Static Tree"
+          "tree": "Sub-doc Tree"
         }
       },
       "autoUpdate": {
@@ -100,7 +100,7 @@
         "options": {
           "ref": "Link",
           "embed": "Reference",
-          "tree": "Static Tree"
+          "tree": "Heading Tree"
         }
       },
       "iconOutline": {

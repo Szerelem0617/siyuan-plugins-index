@@ -41,11 +41,15 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
 
         let indent = "";
         let subOutlineCount = outline.count;
+        let outlineType = settings.get("outlineType"); // "ref", "embed", "tree"
+
         for (let n = 1; n <= stab; n++) {
             indent += '    ';
         }
 
-        indent += "> ";
+        if (outlineType !== "tree") {
+            indent += "> ";
+        }
 
         for (let n = 1; n < tab - stab; n++) {
             indent += '    ';
@@ -54,7 +58,6 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
         let listType = settings.get("listTypeOutline") == "unordered" ? true : false;
         let listMarker = listType ? "* " : "1. ";
 
-        let outlineType = settings.get("outlineType"); // "ref", "embed"
         let ialStr = ial ? `\n${indent}   {: ${ial}}` : "";
 
         let iconEnabled = settings.get("iconOutline") ?? true;

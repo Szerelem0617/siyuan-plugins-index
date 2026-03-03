@@ -84,7 +84,7 @@ export class BlockService {
                 let attrTargetId = opId;
 
                 // If Outline (Blockquote), find inner List to bind attribute
-                if (type == "outline") {
+                if (type == "outline" && attrName !== "custom-tree-create") {
                     console.log(`[BlockService] Outline inserted (ID: ${opId}). Searching for inner list...`);
                     for (let i = 0; i < 15; i++) {
                         await sleep(500);
@@ -142,7 +142,7 @@ export class BlockService {
 
                 // Re-bind attributes to ensure they persist or update
                 let attrTargetId = updateTargetId;
-                if (type == "outline") {
+                if (type == "outline" && attrName !== "custom-tree-create") {
                     console.log(`[BlockService] Outline updated. Re-searching for NEW inner list in ${updateTargetId}...`);
                     let foundNew = false;
                     for (let i = 0; i < 15; i++) {

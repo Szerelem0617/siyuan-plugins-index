@@ -13,8 +13,11 @@
         i18n.settingsTab.items &&
         i18n.settingsTab.items.outlineType
     ) {
-        if (!i18n.settingsTab.items.outlineType.options.tree) {
-            i18n.settingsTab.items.outlineType.options.tree = "静态树";
+        if (
+            !i18n.settingsTab.items.outlineType.options.tree ||
+            i18n.settingsTab.items.outlineType.options.tree === "静态树"
+        ) {
+            i18n.settingsTab.items.outlineType.options.tree = "标题行树";
         }
     }
 </script>
