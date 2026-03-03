@@ -1,5 +1,5 @@
 import { Client } from "@siyuan-community/siyuan-sdk";
-import { sleep, i18n } from "../utils";
+import { sleep } from "../utils";
 
 export const client = new Client();
 

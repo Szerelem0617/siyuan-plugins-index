@@ -1,4 +1,5 @@
-import { focusDatabaseView, createDatabaseWithBlocks } from "./action";
+import { focusDatabaseView } from "./focus-db";
+import { createDatabaseWithBlocks } from "./create-db";
 import { ATTR_LINKED_AV } from "../../../shared/constants";
 import { getOutermostList, getBlockAttribute } from "../../../shared/utils/dom-utils";
 import { openDbConfigDialog } from "../av-setting/db-config";
@@ -41,7 +42,7 @@ export function addDataMenuItems({ detail }: any) {
         menu.addItem({
             icon: "iconDatabase",
             label: i18n.dataMenu.createDatabase,
-            click: () => createDatabaseWithBlocks([blockId], protyle)
+            click: () => createDatabaseWithBlocks([blockId])
         });
     }
 
