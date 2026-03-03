@@ -11,6 +11,7 @@ import {
 } from "./special/special-handlers";
 import { batchUpdateCellValue } from "./special/batch-update";
 import { openDbConfigDialog, setColumnWeakInheritance } from "../av-setting/db-config";
+import { getColIDMap } from "../../../shared/utils/av-utils";
 class AVEventHandler {
     private onContextMenuBound = this.onContextMenu.bind(this);
     private onMouseDownBound = this.onMouseDown.bind(this);
@@ -199,62 +200,81 @@ class AVEventHandler {
             }
         }
 
-        const syncLabel = isHeader ? i18n.dataMenu.batchSyncTo : i18n.dataMenu.syncTo;
-
         if (isHeader) {
-            menu.addItem({
-                icon: "iconSync",
-                label: i18n.dbConfig.setWeakInheritance,
-                click: async () => {
-                    try {
-                        showMessage(i18n.dbConfig.applyingWeakInheritance, 3000);
-                        const updatedCount = await setColumnWeakInheritance(avID, colID, avBlockID);
-                        if (updatedCount > 0) {
-                            showMessage(`${i18n.dbConfig.saveSyncSuccess} ${updatedCount} ${i18n.dbConfig.saveSyncSuccessCells}`, 3000);
-                        } else {
-                            showMessage(i18n.dbConfig.saveNoChange, 3000);
-                        }
-                    } catch (e: any) {
-                        showMessage(`${i18n.dbConfig.setWeakInheritanceError} ${e.message}`, 3000, "error");
-                    }
-                }
-            });
+            // Check if hierarchy columns exist to decide whether to show inheritance
+            const { nameToID } = await getColIDMap(avID);
+            const hierarchyKeys = ["level", "father", "path"];
+            const hasHierarchy = Object.keys(nameToID).some(k => hierarchyKeys.includes(k.toLowerCase()));
 
-            menu.addSeparator();
+            if (hasHierarchy) {
+                menu.addItem({
+                    icon: "iconSync",
+                    label: i18n.dbConfig.setWeakInheritance,
+                    click: async () => {
+                        try {
+                            showMessage(i18n.dbConfig.applyingWeakInheritance, 3000);
+                            const updatedCount = await setColumnWeakInheritance(avID, colID, avBlockID);
+                            if (updatedCount > 0) {
+                                showMessage(`${i18n.dbConfig.saveSyncSuccess} ${updatedCount} ${i18n.dbConfig.saveSyncSuccessCells}`, 3000);
+                            } else {
+                                showMessage(i18n.dbConfig.saveNoChange, 3000);
+                            }
+                        } catch (e: any) {
+                            showMessage(`${i18n.dbConfig.setWeakInheritanceError} ${e.message}`, 3000, "error");
+                        }
+                    }
+                });
+                menu.addSeparator();
+            }
+
             menu.addItem({
                 icon: "iconSettings",
                 label: i18n.dbConfig.dialogTitle,
                 click: () => openDbConfigDialog(avID, avBlockID)
             });
         } else {
-            const syncSubmenu = [
-                {
-                    icon: "iconSort",
-                    label: i18n.dataMenu.level,
-                    click: () => syncAttribute(avID, rowID || "first", colID, "level", avBlockID)
-                },
-                {
-                    icon: "iconLink",
-                    label: i18n.dataMenu.siblings,
-                    click: () => syncAttribute(avID, rowID || "first", colID, "siblings", avBlockID)
-                },
-                {
-                    icon: "iconDown",
-                    label: i18n.dataMenu.descendants,
-                    click: () => syncAttribute(avID, rowID || "first", colID, "descendants", avBlockID)
-                },
-                {
-                    icon: "iconFilter",
-                    label: i18n.dataMenu.filtered,
-                    click: () => syncAttribute(avID, rowID || "first", colID, "filtered", avBlockID)
-                }
-            ];
+            const { nameToID } = await getColIDMap(avID);
+            const hierarchyKeys = ["level", "father", "path"];
+            const hasHierarchy = Object.keys(nameToID).some(k => hierarchyKeys.includes(k.toLowerCase()));
 
-            menu.addItem({
-                icon: "iconSync",
-                label: syncLabel,
-                submenu: syncSubmenu
-            });
+            if (hasHierarchy) {
+                const syncSubmenu = [
+                    {
+                        icon: "iconSort",
+                        label: i18n.dataMenu.level,
+                        click: () => syncAttribute(avID, rowID || "first", colID, "level", avBlockID)
+                    },
+                    {
+                        icon: "iconLink",
+                        label: i18n.dataMenu.siblings,
+                        click: () => syncAttribute(avID, rowID || "first", colID, "siblings", avBlockID)
+                    },
+                    {
+                        icon: "iconDown",
+                        label: i18n.dataMenu.descendants,
+                        click: () => syncAttribute(avID, rowID || "first", colID, "descendants", avBlockID)
+                    },
+                    {
+                        icon: "iconFilter",
+                        label: i18n.dataMenu.filtered,
+                        click: () => syncAttribute(avID, rowID || "first", colID, "filtered", avBlockID)
+                    }
+                ];
+
+                const syncLabel = i18n.dataMenu.syncTo;
+                menu.addItem({
+                    icon: "iconFilter",
+                    label: syncLabel,
+                    submenu: syncSubmenu
+                });
+            } else {
+                // Unbound database: only show sync to filtered items
+                menu.addItem({
+                    icon: "iconFilter",
+                    label: i18n.dataMenu.syncToFiltered,
+                    click: () => syncAttribute(avID, rowID || "first", colID, "filtered", avBlockID)
+                });
+            }
         }
     }
 }
