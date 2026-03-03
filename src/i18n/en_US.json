@@ -182,5 +182,15 @@
     "batchSyncTo": "Batch sync to descendants",
     "syncToFiltered": "Sync to filtered items",
     "warning": "⚠️ The Database feature is currently in beta. Please be aware that structural changes within lists, such as **Outdenting** or **dragging blocks across different levels**, may cause database links to break or data loss. Please use with caution and recommend regular backups."
+  },
+  "supertagManager": {
+    "title": "Supertag Management",
+    "configRule": "Configure Rule",
+    "tagName": "Tag Name",
+    "targetDB": "Target Database",
+    "actions": "Actions",
+    "configTemplate": "Configure Template",
+    "noTags": "No Supertags configured",
+    "noTagsHint": "Mark mappings with a star in Database Settings to create Supertags"
   }
 }

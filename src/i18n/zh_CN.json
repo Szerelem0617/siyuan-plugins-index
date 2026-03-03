@@ -182,5 +182,15 @@
     "batchSyncTo": "批量同步到后代",
     "syncToFiltered": "同步到筛选出的项",
     "warning": "⚠️ 数据库功能目前处于测试阶段。请注意：在列表内执行 **减少缩进 (Outdent)** 或 **跨层级拖拽项** 等结构调整操作，可能会导致数据库关联失效或数据丢失。请谨慎使用并建议定期备份。"
+  },
+  "supertagManager": {
+    "title": "超级标签管理",
+    "configRule": "配置规则",
+    "tagName": "标签名",
+    "targetDB": "目标数据库",
+    "actions": "操作",
+    "configTemplate": "配置模板",
+    "noTags": "未发现已配置的超级标签",
+    "noTagsHint": "请在数据库高级设置中通过标记星标来创建超级标签"
   }
 }

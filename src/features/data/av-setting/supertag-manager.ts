@@ -1,4 +1,6 @@
 import { Dialog } from "siyuan";
+import SupertagManagerDialog from "./supertag-manager-dialog.svelte";
+import { i18n } from "../../../shared/utils";
 
 export class SupertagManager {
     private observer: MutationObserver | null = null;
@@ -26,8 +28,6 @@ export class SupertagManager {
         }
 
         // 定位标签面板的容器
-        // 尝试两种常见的思源 dock 标识： .sy__tag 类 或 data-type="tag"
-        // 兼容不同的思源大版本
         let tagPanels = Array.from(document.querySelectorAll('.sy__tag'));
         if (tagPanels.length === 0) {
             tagPanels = Array.from(document.querySelectorAll('.layout-tab-container > div[data-type="tag"], .layout-tab-container > div[data-type="dock-tag"]'));
@@ -39,13 +39,13 @@ export class SupertagManager {
             // 确保找到了标题栏，并且尚未注入过
             if (blockIcons && !panel.querySelector('#supertag-management')) {
                 const html = `
-                <div id="supertag-management" class="b3-list-item" style="margin: 4px 8px 0; cursor: pointer;">
-                    <svg class="b3-list-item__graphic"><use xlink:href="#iconSettings"></use></svg>
+                <div id="supertag-management" class="b3-list-item" style="margin: 4px 8px 0; cursor: pointer; transition: background-color 0.2s;">
+                    <svg class="b3-list-item__graphic" style="color: var(--b3-theme-primary);"><use xlink:href="#iconSettings"></use></svg>
                     <span class="b3-list-item__text" style="font-weight: bold; color: var(--b3-theme-primary);">
-                        超级标签管理
+                        ${i18n.supertagManager.title}
                     </span>
-                    <span class="b3-list-item__action" title="添加新规则">
-                        <svg><use xlink:href="#iconAdd"></use></svg>
+                    <span class="b3-list-item__action" title="${i18n.supertagManager.configRule}">
+                        <svg><use xlink:href="#iconLayout"></use></svg>
                     </span>
                 </div>`;
 
@@ -54,7 +54,7 @@ export class SupertagManager {
                 // 绑定点击事件
                 const mgmtBtn = panel.querySelector('#supertag-management');
                 if (mgmtBtn) {
-                    mgmtBtn.addEventListener("click", this.openDialog.bind(this));
+                    mgmtBtn.addEventListener("click", (e) => this.openDialog(e));
                 }
             }
         });
@@ -75,16 +75,18 @@ export class SupertagManager {
         e.stopPropagation();
         e.preventDefault();
 
-        new Dialog({
-            title: "超级标签管理",
-            content: `
-                <div class="b3-dialog__content" style="padding: 16px;">
-                    <p>配置你的超级标签规则...</p>
-                    <div id="supertag-config-list"></div>
-                </div>
-            `,
+        const dialog = new Dialog({
+            title: i18n.supertagManager.title,
+            content: `<div id="supertag-manager-container" style="height: 100%;"></div>`,
             width: "600px",
-            height: "400px",
+            height: "500px",
+        });
+
+        new SupertagManagerDialog({
+            target: dialog.element.querySelector("#supertag-manager-container"),
+            props: {
+                dialog
+            }
         });
     }
 }
