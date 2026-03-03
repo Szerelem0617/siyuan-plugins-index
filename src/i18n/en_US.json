@@ -99,7 +99,8 @@
         "content": "Generation method for outline",
         "options": {
           "ref": "Link",
-          "embed": "Reference"
+          "embed": "Reference",
+          "tree": "Static Tree"
         }
       },
       "iconOutline": {

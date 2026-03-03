@@ -3,8 +3,20 @@
     import { i18n } from "../../../shared/utils";
     import SettingItem from "../setting-item.svelte";
 
-    export let tabbarfocus : any;
-    export let settingsStrings : SettingsProperty;
+    export let tabbarfocus: any;
+    export let settingsStrings: SettingsProperty;
+
+    // Hotfix: Forcefully inject the 'tree' option if the global SiYuan API translation cache hasn't loaded it.
+    if (
+        i18n &&
+        i18n.settingsTab &&
+        i18n.settingsTab.items &&
+        i18n.settingsTab.items.outlineType
+    ) {
+        if (!i18n.settingsTab.items.outlineType.options.tree) {
+            i18n.settingsTab.items.outlineType.options.tree = "静态树";
+        }
+    }
 </script>
 
 <div

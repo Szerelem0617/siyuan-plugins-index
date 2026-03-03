@@ -84,7 +84,7 @@ export default defineConfig({
                             name: 'watch-external',
                             async buildStart() {
                                 const files = await fg([
-                                    'legacy/i18n/*.json',
+                                    'src/i18n/*.json',
                                     './README*.md',
                                     './plugin.json'
                                 ]);

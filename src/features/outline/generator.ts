@@ -77,14 +77,9 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
         let safeAnchorText = anchorText.replace(/"/g, "&quot;");
 
         if (outlineType == "tree") {
-            let displayIcon = anchorText;
-            if (displayIcon === "➖" || !iconEnabled || !displayIcon) {
-                displayIcon = "📄";
-            }
-            // Outline builder format for headings usually doesn't have a page icon visually inside Builder, 
-            // but for consistency with the Tree requested layout, we bind the heading link to the icon.
+            // Outline builder format for headings: Just a separator with the link bound to it.
             // (Note: custom attributes bound post-insertion to avoid markdown list splintering)
-            data += `${indent}${listMarker}[${displayIcon}](siyuan://blocks/${id}) ➖ ${name}\n`;
+            data += `${indent}${listMarker}[➖](siyuan://blocks/${id}) ${name}\n`;
         } else if (iconEnabled) {
             // Icon Enabled: Bind to Icon + Append Rich Text
             if (outlineType == "ref") {

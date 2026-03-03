@@ -96,11 +96,12 @@
         }
       },
       "outlineType": {
-        "title": "大纲类型",
+        "title": "大纲类型 (TEST)",
         "content": "选择大纲的生成方式",
         "options": {
           "ref": "链接",
-          "embed": "引用"
+          "embed": "引用",
+          "tree": "静态树"
         }
       },
       "iconOutline": {
