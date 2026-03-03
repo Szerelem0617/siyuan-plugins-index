@@ -40,7 +40,7 @@ export async function generateIndex(notebook: any, ppath: any, pitem: IndexQueue
             let icon = doc.icon;
             let subFileCount = doc.subFileCount;
             let path = doc.path;
-            
+
             for (let n = 1; n < tab; n++) {
                 data += '    ';
             }
@@ -58,7 +58,14 @@ export async function generateIndex(notebook: any, ppath: any, pitem: IndexQueue
             let safeName = name.replace(/"/g, "&quot;");
 
             let linkType = linkTypeSetting == "ref" ? true : false;
-            if (linkType) {
+            let isTree = linkTypeSetting == "tree";
+
+            if (isTree) {
+                // Builder format for Index: * [icon](siyuan://blocks/docId) ➖ Text
+                // (Note: block attributes will be bound post-insertion via API to prevent list splintering)
+                let displayIcon = iconStr ? iconStr : "📄";
+                data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${name}\n`;
+            } else if (linkType) {
                 data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;
             } else {
                 if (iconEnabled && iconStr) {
@@ -96,7 +103,7 @@ export async function generateIndexAndOutline(notebook: any, ppath: any, pitem: 
         }
 
         if (!docs?.data?.files?.length) return;
-        
+
         tab++;
 
         for (let doc of docs.data.files) {
@@ -124,7 +131,14 @@ export async function generateIndexAndOutline(notebook: any, ppath: any, pitem: 
                 let safeName = name.replace(/"/g, "&quot;");
 
                 let linkType = linkTypeSetting == "ref" ? true : false;
-                if (linkType) {
+                let isTree = linkTypeSetting == "tree";
+
+                if (isTree) {
+                    // Tree index format: * [icon](siyuan://blocks/docId) ➖ Text
+                    // (Note: attributes bound post-insertion)
+                    let displayIcon = iconStr ? iconStr : "📄";
+                    data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${name}\n`;
+                } else if (linkType) {
                     data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;
                 } else {
                     if (iconEnabled && iconStr) {
@@ -133,7 +147,7 @@ export async function generateIndexAndOutline(notebook: any, ppath: any, pitem: 
                         data += `((${id} "${safeName}"))\n`;
                     }
                 }
-                
+
                 let outlineData = await requestGetDocOutline(id);
                 let outlineIds = collectOutlineIds(outlineData);
                 let extraData = await getBlocksData(outlineIds);
@@ -145,7 +159,7 @@ export async function generateIndexAndOutline(notebook: any, ppath: any, pitem: 
                 // But for now, keeping it simple as per legacy which didn't pass it in createIndexandOutline.
                 // Wait, legacy createIndexandOutline DID accept existingAnchors in my previous fix!
                 // So I should add it here too.
-                data += generateOutlineMarkdown(outlineData, tab, tab, extraData); 
+                data += generateOutlineMarkdown(outlineData, tab, tab, extraData);
 
                 let item = new IndexQueueNode(tab, data);
                 pitem.push(item);
@@ -169,7 +183,7 @@ export function queuePopAll(queue: IndexQueue, data: string) {
     let temp = 0;
     let times = 0;
     let depth = queue.getFront().depth;
-    
+
     // Note: 'settings' here refers to global settings. Queue formatting usually respects global logic.
     if (depth == 1 && settings.get("col") != 1) {
         data += "{{{col\n";

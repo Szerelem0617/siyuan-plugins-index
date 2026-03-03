@@ -4,15 +4,15 @@ import { stripMarkdownSyntax } from "../../shared/utils/markdown-utils";
 function filterIAL(ialStr: string) {
     if (!ialStr) return "";
     const whitelist = new Set(["style", "class"]);
-    
+
     const parts = ialStr.match(/(\S+?)=\"([\s\S]*?)\"/g);
     if (!parts) return "";
-    
+
     const filtered = parts.filter(part => {
         const key = part.match(/^(\S+?)=/)?.[1];
         return key && whitelist.has(key);
     });
-    
+
     return filtered.join(" ");
 }
 
@@ -54,8 +54,6 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
         let listType = settings.get("listTypeOutline") == "unordered" ? true : false;
         let listMarker = listType ? "* " : "1. ";
 
-        data += indent + listMarker;
-
         let outlineType = settings.get("outlineType"); // "ref", "embed"
         let ialStr = ial ? `\n${indent}   {: ${ial}}` : "";
 
@@ -66,7 +64,7 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
         if (!iconEnabled) {
             // If existing anchor is the default icon, discard it
             if (anchorText === "➖") anchorText = undefined;
-            
+
             // If no custom anchor, use plain text
             if (!anchorText) {
                 anchorText = stripMarkdownSyntax(name);
@@ -78,22 +76,31 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
 
         let safeAnchorText = anchorText.replace(/"/g, "&quot;");
 
-        if (iconEnabled) {
+        if (outlineType == "tree") {
+            let displayIcon = anchorText;
+            if (displayIcon === "➖" || !iconEnabled || !displayIcon) {
+                displayIcon = "📄";
+            }
+            // Outline builder format for headings usually doesn't have a page icon visually inside Builder, 
+            // but for consistency with the Tree requested layout, we bind the heading link to the icon.
+            // (Note: custom attributes bound post-insertion to avoid markdown list splintering)
+            data += `${indent}${listMarker}[${displayIcon}](siyuan://blocks/${id}) ➖ ${name}\n`;
+        } else if (iconEnabled) {
             // Icon Enabled: Bind to Icon + Append Rich Text
             if (outlineType == "ref") {
-                data += `[${anchorText}](siyuan://blocks/${id}) ${name}${ialStr}\n`;
+                data += `${indent}${listMarker}[${anchorText}](siyuan://blocks/${id}) ${name}${ialStr}\n`;
             } else {
-                data += `((${id} "${safeAnchorText}")) ${name}${ialStr}\n`;
+                data += `${indent}${listMarker}((${id} "${safeAnchorText}")) ${name}${ialStr}\n`;
             }
         } else {
             // Icon Disabled: Bind to Plain Text (No append)
             if (outlineType == "ref") {
-                data += `[${anchorText}](siyuan://blocks/${id})${ialStr}\n`;
+                data += `${indent}${listMarker}[${anchorText}](siyuan://blocks/${id})${ialStr}\n`;
             } else {
-                data += `((${id} "${safeAnchorText}"))${ialStr}\n`;
+                data += `${indent}${listMarker}((${id} "${safeAnchorText}"))${ialStr}\n`;
             }
         }
-        
+
         if (subOutlineCount > 0) {
             if (outline.depth == 0) {
                 data += generateOutlineMarkdown(outline.blocks, tab, stab, extraData, existingAnchors);

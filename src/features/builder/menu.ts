@@ -2,6 +2,7 @@ import { client } from "../../shared/api-client";
 import { ListProcessor } from "./builder";
 import { createDatabaseWithBlocks } from "../data/action";
 import { getOutermostList } from "../../shared/utils/dom-utils";
+import { confirmTransformation, transformToTree } from "../transformation/transformation";
 
 /**
  * 块标菜单回调
@@ -40,17 +41,24 @@ export function buildDoc({ detail }: any) {
 }
 
 async function syncManager(sourceBlockId: string, sourceType: string, actionType: string) {
-    // Check for Index/Outline attributes to prevent conflict
+    // Check for Index/Outline attributes to intercept and transform
     const attrsRes = await client.getBlockAttrs({ id: sourceBlockId });
-    const attrs = attrsRes.data || {};
+    let attrs = attrsRes.data || {};
 
     if (attrs["custom-index-create"] || attrs["custom-outline-create"]) {
-        // @ts-ignore
-        client.pushErrMsg({
-            msg: "当前不支持在大纲/目录的基础上执行文档构建器",
-            timeout: 3000
-        });
-        return;
+        const confirmed = await confirmTransformation('builder');
+        if (!confirmed) return;
+
+        const success = await transformToTree(sourceBlockId);
+        if (!success) {
+            // @ts-ignore
+            client.pushErrMsg({ msg: "转换失败", timeout: 3000 });
+            return;
+        }
+
+        // Refresh attributes after transformation
+        const refreshedAttrs = await client.getBlockAttrs({ id: sourceBlockId });
+        attrs = refreshedAttrs.data || {};
     }
 
     // Update tree-create logic
@@ -70,7 +78,7 @@ async function syncManager(sourceBlockId: string, sourceType: string, actionType
             console.error("Failed to parse custom-tree-create", e);
         }
     }
-    
+
     let currentType = currentData.treeType;
 
     let newType = currentType;
@@ -94,28 +102,28 @@ async function syncManager(sourceBlockId: string, sourceType: string, actionType
     }
 
     try {
-      const processor = new ListProcessor();
-      await processor.processRecursive(sourceBlockId, sourceType, actionType);
-      
-      if (processor.ibp.errors.length > 0) { // Access via ibp
-          // @ts-ignore
-          client.pushMsg({
-              msg: `⚠️ 部分条目因格式复杂未更新文本 (x${processor.ibp.errors.length})，仅更新了图标`,
-              timeout: 5000
-          });
-      } else {
-          // @ts-ignore
-          client.pushMsg({
-              msg: "✅ 同步完成",
-              timeout: 3000
-          });
-      }
+        const processor = new ListProcessor();
+        await processor.processRecursive(sourceBlockId, sourceType, actionType);
+
+        if (processor.ibp.errors.length > 0) { // Access via ibp
+            // @ts-ignore
+            client.pushMsg({
+                msg: `⚠️ 部分条目因格式复杂未更新文本 (x${processor.ibp.errors.length})，仅更新了图标`,
+                timeout: 5000
+            });
+        } else {
+            // @ts-ignore
+            client.pushMsg({
+                msg: "✅ 同步完成",
+                timeout: 3000
+            });
+        }
     } catch (e) {
-      console.error(e);
-      // @ts-ignore
-      client.pushErrMsg({
-          msg: `同步失败: ${e.message}`,
-          timeout: 5000
-      });
+        console.error(e);
+        // @ts-ignore
+        client.pushErrMsg({
+            msg: `同步失败: ${e.message}`,
+            timeout: 5000
+        });
     }
 }

@@ -88,8 +88,8 @@ export class BlockService {
                     console.log(`[BlockService] Outline inserted (ID: ${opId}). Searching for inner list...`);
                     for (let i = 0; i < 15; i++) {
                         await sleep(500);
-                        let childRs = await client.sql({ 
-                            stmt: `SELECT id FROM blocks WHERE parent_id = '${opId}' AND type = 'l' LIMIT 1` 
+                        let childRs = await client.sql({
+                            stmt: `SELECT id FROM blocks WHERE parent_id = '${opId}' AND type = 'l' LIMIT 1`
                         });
                         if (childRs.data && childRs.data[0]) {
                             attrTargetId = childRs.data[0].id;
@@ -103,14 +103,14 @@ export class BlockService {
                     attrs: attrs,
                     id: attrTargetId
                 });
-                
+
                 // Remove empty block if identified
                 if (emptyBlockId) {
-                     await client.deleteBlock({ id: emptyBlockId });
+                    await client.deleteBlock({ id: emptyBlockId });
                 }
 
                 console.log(`[BlockService] Attributes bound to ${attrTargetId}`);
-                return { success: true, msg: "insert_success" };
+                return { success: true, id: attrTargetId, msg: "insert_success" };
 
             } else {
                 // === Case: Update Existing ===
@@ -128,10 +128,10 @@ export class BlockService {
                     // Or we can assume?
                     // Let's do a quick check if strictly needed.
                     let parentRs = await client.sql({ stmt: `SELECT id, type FROM blocks WHERE id = '${parentId}'` });
-                     if (parentRs.data[0] && parentRs.data[0].type === 'b') {
-                         updateTargetId = parentRs.data[0].id;
-                         console.log(`[BlockService] Updating parent blockquote: ${updateTargetId}`);
-                     }
+                    if (parentRs.data[0] && parentRs.data[0].type === 'b') {
+                        updateTargetId = parentRs.data[0].id;
+                        console.log(`[BlockService] Updating parent blockquote: ${updateTargetId}`);
+                    }
                 }
 
                 await client.updateBlock({
@@ -157,8 +157,8 @@ export class BlockService {
                         }
                     }
                     if (!foundNew) {
-                        let childRs = await client.sql({ 
-                            stmt: `SELECT id FROM blocks WHERE parent_id = '${updateTargetId}' AND type = 'l' LIMIT 1` 
+                        let childRs = await client.sql({
+                            stmt: `SELECT id FROM blocks WHERE parent_id = '${updateTargetId}' AND type = 'l' LIMIT 1`
                         });
                         if (childRs.data && childRs.data[0]) {
                             attrTargetId = childRs.data[0].id;
@@ -171,13 +171,13 @@ export class BlockService {
                     attrs: attrs,
                     id: attrTargetId
                 });
-                
+
                 if (targetBlockId && targetBlockId !== updateTargetId) {
                     await client.deleteBlock({ id: targetBlockId });
                 }
 
                 console.log(`[BlockService] Attributes re-bound to ${attrTargetId}`);
-                return { success: true, msg: "update_success" };
+                return { success: true, id: attrTargetId, msg: "update_success" };
             }
         } catch (error) {
             console.error("[BlockService] insertOrUpdate error:", error);

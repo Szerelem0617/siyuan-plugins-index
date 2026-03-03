@@ -79,7 +79,8 @@
         "options": {
           "index": "仅目录",
           "index_outline": "目录+大纲",
-          "notebook": "笔记本目录"
+          "notebook": "笔记本目录",
+          "tree": "作为静态树"
         }
       },
       "autoUpdate": {

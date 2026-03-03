@@ -4,6 +4,7 @@ import { BlockService, client } from "../../shared/api-client";
 import { IndexQueue } from "../../shared/utils/index-queue";
 import { generateIndex, generateIndexAndOutline, queuePopAll } from "./generator";
 import { onCreatenbiButton } from "../notebook/create-notebook-index";
+import { bindTreeAttributes } from "../transformation/transformation";
 
 export async function insertAction(targetBlockId?: string) {
     await settings.load();
@@ -15,6 +16,9 @@ export async function insertAction(targetBlockId?: string) {
     } else if (mode === "notebook") {
         // Use new notebook feature
         await onCreatenbiButton();
+        return;
+    } else if (mode === "tree") {
+        await insertStaticTreeAction(targetBlockId);
         return;
     }
 
@@ -32,40 +36,40 @@ export async function insertAction(targetBlockId?: string) {
     });
 
     if (rs.data[0]?.id != undefined) {
-         console.log("[IndexPlugin] Found existing index:", rs.data[0].id);
-         let ial = await client.getBlockAttrs({ id: rs.data[0].id });
-         let str = ial.data["custom-index-create"];
-         
-         let localSettings: any = {};
-         try {
-             localSettings = JSON.parse(str);
-             console.log("[IndexPlugin] Local settings:", localSettings);
-         } catch (e) {
-             console.error("[IndexPlugin] Error parsing settings", e);
-         }
+        console.log("[IndexPlugin] Found existing index:", rs.data[0].id);
+        let ial = await client.getBlockAttrs({ id: rs.data[0].id });
+        let str = ial.data["custom-index-create"];
 
-         const keysToCheck = ["depth", "listType", "linkType", "fold", "col", "icon"];
-         let mismatch = false;
-         for (const key of keysToCheck) {
-             if (localSettings[key] !== settings.get(key)) {
-                 console.log(`[IndexPlugin] Mismatch on ${key}: Local=${localSettings[key]}, Global=${settings.get(key)}`);
-                 mismatch = true;
-                 break;
-             }
-         }
-         
-         if (mismatch) {
-              await new Promise<void>((resolve) => {
-                 confirmDialog(i18n.confirmDialog.title, i18n.confirmDialog.content, () => {
-                     console.log("[IndexPlugin] User confirmed update to Global");
-                     resolve();
-                 }, () => {
-                     console.log("[IndexPlugin] User kept Local settings");
-                     settings.loadSettings(localSettings);
-                     resolve();
-                 }, i18n.update, i18n.keep);
-              });
-         }
+        let localSettings: any = {};
+        try {
+            localSettings = JSON.parse(str);
+            console.log("[IndexPlugin] Local settings:", localSettings);
+        } catch (e) {
+            console.error("[IndexPlugin] Error parsing settings", e);
+        }
+
+        const keysToCheck = ["depth", "listType", "linkType", "fold", "col", "icon"];
+        let mismatch = false;
+        for (const key of keysToCheck) {
+            if (localSettings[key] !== settings.get(key)) {
+                console.log(`[IndexPlugin] Mismatch on ${key}: Local=${localSettings[key]}, Global=${settings.get(key)}`);
+                mismatch = true;
+                break;
+            }
+        }
+
+        if (mismatch) {
+            await new Promise<void>((resolve) => {
+                confirmDialog(i18n.confirmDialog.title, i18n.confirmDialog.content, () => {
+                    console.log("[IndexPlugin] User confirmed update to Global");
+                    resolve();
+                }, () => {
+                    console.log("[IndexPlugin] User kept Local settings");
+                    settings.loadSettings(localSettings);
+                    resolve();
+                }, i18n.update, i18n.keep);
+            });
+        }
     } else {
         console.log("[IndexPlugin] No existing index found, creating new.");
     }
@@ -110,13 +114,48 @@ export async function insertIndexAndOutlineAction(targetBlockId?: string) {
         // Or just use prependBlock directly if we don't want to save "custom-index-create" for this mode?
         // Legacy behavior: No auto-update for Index+Outline.
         // So we just insert.
-        
+
         if (targetBlockId) {
-             await client.updateBlock({ data: data, dataType: "markdown", id: targetBlockId });
+            await client.updateBlock({ data: data, dataType: "markdown", id: targetBlockId });
         } else {
-             await client.prependBlock({ data: data, dataType: "markdown", parentID: parentId });
+            await client.prependBlock({ data: data, dataType: "markdown", parentID: parentId });
         }
         // client.pushMsg({ msg: i18n.msg_success });
+    } else {
+        client.pushMsg({ msg: i18n.msg_no_index, timeout: 3000 });
+    }
+}
+
+export async function insertStaticTreeAction(targetBlockId?: string) {
+    let parentId = getDocid();
+    if (!parentId) return;
+
+    let block = await client.getBlockInfo({ id: parentId });
+    if (!block.data) return;
+
+    // We force the generation logic to use "tree" mode regardless of other settings
+    let indexQueue = new IndexQueue();
+    await generateIndex(block.data.box, block.data.path, indexQueue, 0, { linkType: "tree" });
+    let data = queuePopAll(indexQueue, "");
+
+    if (data != '') {
+        const treeConfig = {
+            treeType: "doc-tree",
+            builderAutoUpdate: true
+        };
+
+        const result = await BlockService.insertOrUpdate(
+            parentId,
+            data,
+            "custom-tree-create",
+            treeConfig,
+            "index",
+            targetBlockId
+        );
+
+        if (result && result.success && result.id) {
+            await bindTreeAttributes(result.id, "custom-index-subdoc-id");
+        }
     } else {
         client.pushMsg({ msg: i18n.msg_no_index, timeout: 3000 });
     }
@@ -144,7 +183,7 @@ export async function autoUpdateIndex(notebookId: string, path: string, parentId
 
     if (id != undefined) {
         let str = getAttrFromIAL(ialStr, "custom-index-create");
-        
+
         let localSettings: any = {};
         try {
             if (str) localSettings = JSON.parse(str);

@@ -78,7 +78,8 @@
         "options": {
           "index": "Index Only",
           "index_outline": "Index + Outline",
-          "notebook": "Notebook Index"
+          "notebook": "Notebook Index",
+          "tree": "Static Tree"
         }
       },
       "autoUpdate": {
