@@ -2,27 +2,24 @@
 
 # Index Plugin
 
-After enabling the plugin, a plugin icon will be generated on the right side of the topbar
+The plugin will generate an icon on the right side of the topbar.
 
-Left click on the plugin icon , insert a index list to current document
-
-Right click on the plugin icon, show more actions
+Left-click to insert a directory list; right-click for more actions.
 
 `CTRL + ALT + I` Insert Index (Content depends on 'Insertion Content' setting)
 
 `CTRL + ALT + O` Insert current document outline
 
-# Version 1.9.1
+# 🚀 Version 1.9.2
 
-- **Supertag Feature**: Added Supertag functionality similar to Tana, allowing for rapid database property alignment via Tags.
-- **Property Inheritance**: Supports configuring property inheritance rules for easier batch management and filling of hierarchical data.
-- **Builder Optimization**: Optimized the Builder's auto-sync logic to fully respect icons, title images, and templates configured in the database.
+- Support running builder on TOC/Outline
+- Fixed the issue where data was not persistent after creating a database for TOC/Outline
 
-# Version 1.9.0
+# 🚀 Tutorial
 
-- **Database Integration（Beta）**: Added the ability to create attribute views (databases) from list blocks.
-- **Fast Trigger**: `Alt + Click` on database blocks or heading rows to trigger synchronization.
-- **Template Enhancement**: The builder now supports creating documents using specific templates based on database columns (`icon`, `title-img`, `template`).
+**Experimental Feature**: After adding to the database, use `alt + click` on cells to batch configure attributes.
+
+<img src="./asset/guide-create-db.jpg" width="500" />
 
 # Changelog
 
