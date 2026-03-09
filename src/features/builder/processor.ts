@@ -217,7 +217,20 @@ export class IBlockProcessor {
         const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs, ctx.avId, ctx);
         let targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
 
+        // USER REQUEST: Ignore default text emojis 📄 and 📑 completely, as well as the separator ➖.
+        if (targetIcon === "📄" || targetIcon === "📑" || targetIcon === "➖" || core.currentIcon === "📄" || core.currentIcon === "📑" || core.currentIcon === "➖") {
+            // Also need to check hex representation of these:
+            // 📄 is 1f4c4
+            // 📑 is 1f4d1
+            // ➖ is 2796
+            targetIcon = null;
+        }
+        if (targetIcon === "1f4c4" || targetIcon === "1f4d1" || targetIcon === "2796") {
+            targetIcon = null;
+        }
+
         // Prevent default fallback icons from overwriting actual custom document image aliases
+        // (This original check is now mostly redundant but kept for safety if someone uses other fallbacks)
         if ((core.currentIcon === "📄" || core.currentIcon === "📑") && existingDocIcon && (existingDocIcon.includes(".") || existingDocIcon.includes("/"))) {
             targetIcon = null;
         }

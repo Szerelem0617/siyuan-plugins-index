@@ -49,32 +49,39 @@ async function fetchDocumentIconsForDBItems(targetIds: string[]): Promise<Record
     const formattedIds = targetIds.filter(id => id).map(id => `'${id}'`);
     if (formattedIds.length === 0) return itemPropsMap;
 
+    console.log(`[Data-Debug] fetchDocumentIconsForDBItems requested for ${formattedIds.length} items`);
+
+    const chunkSize = 50;
     try {
-        const sqlStr = `SELECT id, ial, type FROM blocks WHERE id IN (${formattedIds.join(",")})`;
-        const sqlRes = await client.sql({ stmt: sqlStr });
+        for (let i = 0; i < formattedIds.length; i += chunkSize) {
+            const chunk = formattedIds.slice(i, i + chunkSize);
+            const sqlStr = `SELECT id, ial, type FROM blocks WHERE id IN (${chunk.join(",")})`;
+            const sqlRes = await client.sql({ stmt: sqlStr });
 
-        if (sqlRes && sqlRes.data) {
-            sqlRes.data.forEach((row: any) => {
-                let icon = "";
-                let titleImg = "";
+            if (sqlRes && sqlRes.data) {
+                sqlRes.data.forEach((row: any) => {
+                    let icon = "";
+                    let titleImg = "";
 
-                if (row.ial) {
-                    const iconMatch = row.ial.match(/icon="([^"]+)"/);
-                    if (iconMatch) {
-                        icon = iconMatch[1];
-                        // Translate backend hex to emoji if needed
-                        if (/^[0-9a-fA-F-]+$/.test(icon)) {
-                            icon = icon.split('-').map(code => String.fromCodePoint(parseInt(code, 16))).join('');
+                    if (row.ial) {
+                        const iconMatch = row.ial.match(/icon="([^"]+)"/);
+                        if (iconMatch) {
+                            icon = iconMatch[1];
+                            // Translate backend hex to emoji if needed
+                            if (/^[0-9a-fA-F-]+$/.test(icon)) {
+                                icon = icon.split('-').map(code => String.fromCodePoint(parseInt(code, 16))).join('');
+                            }
                         }
+
+                        const imgMatch = row.ial.match(/title-img="([^"]+)"/);
+                        if (imgMatch) titleImg = imgMatch[1];
                     }
 
-                    const imgMatch = row.ial.match(/title-img="([^"]+)"/);
-                    if (imgMatch) titleImg = imgMatch[1];
-                }
-
-                itemPropsMap[row.id] = { icon, titleImg };
-            });
+                    itemPropsMap[row.id] = { icon, titleImg };
+                });
+            }
         }
+        console.log(`[Data-Debug] fetchDocumentIconsForDBItems successfully retrieved icons for ${Object.keys(itemPropsMap).length} items`);
     } catch (e) {
         console.error("[db-icon-sync] Error fetching document icons for DB bulk insert", e);
     }
@@ -383,8 +390,6 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                         const pChild = child.querySelector('div[data-type="NodeParagraph"]');
                         let subDocId = extractBoundBlockIdFromDOM(pChild);
 
-                        console.log(`[Path-Debug] Item: ${originalId}, Rank: ${currentItemRank}, Path: ${currentPath} (Level ${level})`);
-
                         allItems.push({ originalId, newItemID, level: level, parentId, savedItemID, path: currentPath, subDocId });
                         // 深入处理子项之前，注意：子项内部的 Rank 始终从 1 开始。
                         traverseWithContext(child, level, originalId, currentPath, 1);
@@ -553,7 +558,19 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
 
             // ONLY FOR NEW DB or if data needs to be populated
             if (!existingAvID) {
-                if (iconKeyId) updateValues.push({ keyID: iconKeyId, itemID: itemID, value: { type: "text", text: { content: itemProps?.icon || "" } } });
+                let finalIcon = itemProps?.icon || "";
+
+                // Debug: Log if a target document has no icon
+                if (item.subDocId && !itemProps?.icon) {
+                    console.log(`[Data-Debug] Target doc ${item.subDocId} (for list item ${item.originalId}) returned empty or null icon`);
+                }
+
+                // USER REQUEST: Ignore default text emojis 📄 and 📑, and the separator ➖, leave blank instead
+                if (finalIcon === "📄" || finalIcon === "📑" || finalIcon === "➖" || finalIcon === "2796") {
+                    finalIcon = "";
+                }
+
+                if (iconKeyId) updateValues.push({ keyID: iconKeyId, itemID: itemID, value: { type: "text", text: { content: finalIcon } } });
                 if (titleImgKeyId) updateValues.push({ keyID: titleImgKeyId, itemID: itemID, value: { type: "text", text: { content: itemProps?.titleImg || "" } } });
                 if (templateKeyId) updateValues.push({ keyID: templateKeyId, itemID: itemID, value: { type: "text", text: { content: "" } } });
             }
