@@ -141,7 +141,8 @@ export async function insertStaticTreeAction(targetBlockId?: string) {
     if (data != '') {
         const treeConfig = {
             treeType: "doc-tree",
-            builderAutoUpdate: true
+            // Keep builder disabled temporarily while we bind attributes to prevent concurrent indexing triggers
+            builderAutoUpdate: false
         };
 
         const result = await BlockService.insertOrUpdate(
@@ -154,7 +155,15 @@ export async function insertStaticTreeAction(targetBlockId?: string) {
         );
 
         if (result && result.success && result.id) {
+            // Bind all target document IDs to the list items synchronously from Memory DOM
             await bindTreeAttributes(result.id, "custom-index-subdoc-id");
+
+            // Now safely enable the auto-update flag on the root container
+            treeConfig.builderAutoUpdate = true;
+            await client.setBlockAttrs({
+                id: result.id,
+                attrs: { "custom-tree-create": JSON.stringify(treeConfig) }
+            });
         }
     } else {
         client.pushMsg({ msg: i18n.msg_no_index, timeout: 3000 });

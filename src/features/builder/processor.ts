@@ -413,6 +413,8 @@ export class IBlockProcessor {
     }
 
     parseItemContent(listItemId: string, children: any[]) {
+        if (!children || children.length === 0) return null;
+
         const sepRegex = /(\[➖\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)|➖)/;
         const iconRegex = /\s*\[.*?\]\(siyuan:\/\/blocks\/.*?\)\s*/;
         let targetBlock = children.find((child: any) => {
@@ -420,6 +422,9 @@ export class IBlockProcessor {
             return sepRegex.test(md) || iconRegex.test(md);
         });
         if (!targetBlock) targetBlock = children[0];
+
+        if (!targetBlock) return null; // Additional safety check
+
         const contentId = targetBlock.id;
         const md = targetBlock.markdown || "";
         const content = targetBlock.content || "";
