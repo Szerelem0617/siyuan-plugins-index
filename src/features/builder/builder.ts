@@ -192,7 +192,19 @@ export class ListProcessor {
                     } else {
                         const localValues = await this.ibp.getLinkedAVData(child.id, this.ibp.parseIAL(sourceItem?.ial), ctx.avId, itemCtx);
 
-                        const desiredIcon = localValues?.icon ? (/[^\u0000-\u007F]/.test(localValues.icon) ? this.ibp.emojiToHex(localValues.icon) : localValues.icon) : (core.currentIcon ? this.ibp.emojiToHex(core.currentIcon) : "");
+                        let desiredIcon = localValues?.icon ? (/[^\u0000-\u007F]/.test(localValues.icon) ? this.ibp.emojiToHex(localValues.icon) : localValues.icon) : (core.currentIcon ? this.ibp.emojiToHex(core.currentIcon) : "");
+
+                        // USER REQUEST: Ignore default text emojis 📄, 📑 and separator ➖ to prevent infinite update loop.
+                        if (desiredIcon === "📄" || desiredIcon === "📑" || desiredIcon === "➖" ||
+                            desiredIcon === "1f4c4" || desiredIcon === "1f4d1" || desiredIcon === "2796") {
+                            desiredIcon = "";
+                        }
+
+                        // USER REQUEST: Ignore dynamic icons and custom SVG images for target property inheritance.
+                        if (desiredIcon.startsWith("api/icon/") || desiredIcon.includes(".")) {
+                            desiredIcon = "";
+                        }
+
                         const desiredImg = localValues?.["title-img"] || "";
 
                         const iconMatch = (docTarget.ial || "").match(/icon="([^"]+)"/);

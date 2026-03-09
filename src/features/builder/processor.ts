@@ -229,6 +229,11 @@ export class IBlockProcessor {
             targetIcon = null;
         }
 
+        // USER REQUEST: Ignore dynamic icons and custom SVG images
+        if (targetIcon && (targetIcon.startsWith("api/icon/") || targetIcon.includes("."))) {
+            targetIcon = null;
+        }
+
         // Prevent default fallback icons from overwriting actual custom document image aliases
         // (This original check is now mostly redundant but kept for safety if someone uses other fallbacks)
         if ((core.currentIcon === "📄" || core.currentIcon === "📑") && existingDocIcon && (existingDocIcon.includes(".") || existingDocIcon.includes("/"))) {

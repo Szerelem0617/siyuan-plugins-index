@@ -570,6 +570,11 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                     finalIcon = "";
                 }
 
+                // USER REQUEST: Ignore dynamic icons and custom SVG images for DB sync
+                if (finalIcon.startsWith("api/icon/") || finalIcon.includes(".")) {
+                    finalIcon = "";
+                }
+
                 if (iconKeyId) updateValues.push({ keyID: iconKeyId, itemID: itemID, value: { type: "text", text: { content: finalIcon } } });
                 if (titleImgKeyId) updateValues.push({ keyID: titleImgKeyId, itemID: itemID, value: { type: "text", text: { content: itemProps?.titleImg || "" } } });
                 if (templateKeyId) updateValues.push({ keyID: templateKeyId, itemID: itemID, value: { type: "text", text: { content: "" } } });

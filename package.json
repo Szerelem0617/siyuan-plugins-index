@@ -1,6 +1,6 @@
 {
   "name": "siyuan-plugins-index",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "type": "module",
   "description": "One click insert a index list in document",
   "repository": {
