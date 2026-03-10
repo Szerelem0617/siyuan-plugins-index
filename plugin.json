@@ -2,7 +2,7 @@
   "name": "siyuan-plugins-index",
   "author": "Szerelem0617",
   "url": "https://github.com/Szerelem0617/siyuan-plugins-index",
-  "version": "1.9.5",
+  "version": "1.9.6",
   "minAppVersion": "3.3.0",
   "backends": [
     "all"
