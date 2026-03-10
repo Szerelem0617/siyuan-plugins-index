@@ -169,6 +169,7 @@ export class ListProcessor {
                     } else if (rule.mode === 'strong' && !isValueEmpty(ancestorVal)) {
                         finalVal = ancestorVal;
                     }
+                    console.log(`[Builder-Inheritance Debug] child ${child.id} | colId: ${rule.colId} | mode: ${rule.mode} | localVal:`, localVal, `| ancestorVal:`, ancestorVal, `| isLocalEmpty:`, isValueEmpty(localVal), `| finalVal:`, finalVal);
                     currentItemResolved[rule.colId] = finalVal;
                 }
             }

@@ -8,21 +8,21 @@ export async function getColIDMap(avID: string) {
     const keyValues = (avRawData.av || avRawData).keyValues || [];
     const nameToID: Record<string, string> = {};
     const idToType: Record<string, string> = {};
-    
+
     // Build row ID to Siyuan Block ID mappings
     const itemToBlock = new Map<string, string>();
     const blockToItem = new Map<string, string>();
-    
+
     keyValues.forEach((kv: any) => {
         nameToID[kv.key.name] = kv.key.id;
         idToType[kv.key.id] = kv.key.type;
-        
+
         if (kv.values) {
             kv.values.forEach((v: any) => {
                 // Robust ID detection: try multiple possible property names
                 const rowId = v.itemID || v.itemId || v.id;
                 const bid = v.block?.id || v.blockID || v.block_id || v.blockId || (v.type === 'block' ? v.content : null);
-                
+
                 if (rowId && bid) {
                     itemToBlock.set(rowId, bid);
                     blockToItem.set(bid, rowId);
@@ -36,7 +36,7 @@ export async function getColIDMap(avID: string) {
     } else {
         console.log(`[AV Utils] getColIDMap for ${avID}: Found ${itemToBlock.size} mappings.`);
     }
-    
+
     return { nameToID, idToType, keyValues, itemToBlock, blockToItem };
 }
 
@@ -57,7 +57,10 @@ export function cleanValue(val: any) {
  * 判断 AV 单元格值是否为空
  */
 export function isValueEmpty(val: any) {
-    if (!val) return true;
+    if (val === undefined || val === null) return true;
+    if (typeof val === "string") return val.trim() === "";
+    if (typeof val === "number") return false;
+
     const type = val.type;
     switch (type) {
         case "text": return !val.text?.content;
@@ -68,7 +71,7 @@ export function isValueEmpty(val: any) {
         case "email": return !val.email?.content;
         case "phone": return !val.phone?.content;
         case "date": return !val.date?.content;
-        case "checkbox": return false; 
+        case "checkbox": return false;
         case "block": return !val.block?.id;
         case "mAsset": return !val.mAsset || val.mAsset.length === 0;
         default: return !val.content;
@@ -82,7 +85,7 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
     const parentMap = new Map<string, string>();
     const blockIDToPath = new Map<string, string>();
     const pathToBlockID = new Map<string, string>();
-    
+
     // 1. 尝试使用 Path 列
     const pathKV = keyValues.find(kv => kv.key.name.toLowerCase() === "path");
     if (pathKV && pathKV.values) {
@@ -95,7 +98,7 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
                 pathToBlockID.set(path, bid);
             }
         });
-        
+
         console.log("[AV Hierarchy] Path Lookup Table:", Object.fromEntries(blockIDToPath));
 
         for (const [bid, path] of blockIDToPath.entries()) {
@@ -110,7 +113,7 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
             }
         }
     }
-    
+
     // 2. 尝试使用 Father 列 (如果 parentMap 为空或不完整)
     const fatherKV = keyValues.find(kv => kv.key.name.toLowerCase() === "father");
     if (fatherKV && fatherKV.values) {
@@ -143,7 +146,7 @@ export function resolveInheritance(
     const getLocal = (bid: string) => {
         const kv = keyValues.find(v => v.key.id === colId);
         if (!kv || !kv.values) return null;
-        
+
         const rowId = blockToItem.get(bid);
         const cell = kv.values.find((v: any) => {
             const vRowId = v.itemID || v.itemId || v.id;
@@ -158,7 +161,7 @@ export function resolveInheritance(
 
     let nearestAncestorVal = null;
     let curr = parentMap.get(blockId);
-    
+
     // console.log(`[Inheritance Resolve] Resolving ${blockId} for Col ${colId}. Local exists: ${!isValueEmpty(localVal)}`);
 
     while (curr) {

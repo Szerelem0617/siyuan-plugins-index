@@ -65,12 +65,17 @@ export class IBlockProcessor {
                 if (kv && kv.values) {
                     const cellVal = kv.values.find((v: any) => v.blockID === itemId);
                     if (cellVal) {
-                        if (cellVal.type === "text") result[name] = cellVal.text?.content;
-                        else if (cellVal.type === "mAsset") result[name] = cellVal.mAsset?.[0]?.content;
-                        else if (cellVal.type === "template") result[name] = cellVal.template?.content;
-                        else if (cellVal.type === "select") result[name] = cellVal.mOption?.[0]?.content;
-                        else if (cellVal.type === "mSelect") result[name] = cellVal.mOption?.map((o: any) => o.content).join(",");
-                        else if (cellVal.content) result[name] = cellVal.content;
+                        let finalVal = null;
+                        if (cellVal.type === "text") finalVal = cellVal.text?.content;
+                        else if (cellVal.type === "mAsset") finalVal = cellVal.mAsset?.[0]?.content;
+                        else if (cellVal.type === "template") finalVal = cellVal.template?.content;
+                        else if (cellVal.type === "select") finalVal = cellVal.mOption?.[0]?.content;
+                        else if (cellVal.type === "mSelect") finalVal = cellVal.mOption?.map((o: any) => o.content).join(",");
+                        else if (cellVal.content) finalVal = cellVal.content;
+
+                        result[name] = finalVal;
+                        // Build tool expects raw ID for weak inheritance
+                        result[keyId as string] = finalVal;
                     }
                 }
             }
