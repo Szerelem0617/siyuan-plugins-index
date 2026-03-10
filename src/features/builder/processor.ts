@@ -245,7 +245,7 @@ export class IBlockProcessor {
             targetIcon = null;
         }
 
-        const targetImage = linkedData?.["title-img"] || null;
+        let targetImage = linkedData?.["title-img"] || null;
 
         // GET TEMPLATE IF WE ARE CREATING A NEW DOCUMENT OR IF EXISTING DOCUMENT IS EMPTY
         const templatePath = ((!docId || isDocEmpty) && linkedData?.template) ? linkedData.template : "";
@@ -296,9 +296,10 @@ export class IBlockProcessor {
             }
         }
 
-        const applyInherited = async (id: string) => {
-            if (!ctx.inheritedAttrs) return;
-            const docAttrs: any = {};
+        const applyInherited = async (id: string, existingDocAttrs: any = {}) => {
+            const resultOverrides: any = {};
+            if (!ctx.inheritedAttrs) return resultOverrides;
+            const docAttrs: any = { ...existingDocAttrs };
             let nameMap: any = null;
             if (ctx.avId && this.avCache.has(ctx.avId)) {
                 const cached = this.avCache.get(ctx.avId);
@@ -318,13 +319,23 @@ export class IBlockProcessor {
                 if (valStr) {
                     let attrName = colId;
                     if (nameMap && nameMap[colId]) attrName = nameMap[colId];
-                    attrName = `custom-${attrName.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase()}`;
-                    docAttrs[attrName] = valStr;
+                    const systemNames = ["icon", "title-img", "template"];
+                    const lowerName = attrName.toLowerCase();
+                    if (systemNames.includes(lowerName)) {
+                        docAttrs[lowerName] = valStr;
+                        if (lowerName === "icon") resultOverrides.icon = valStr;
+                        if (lowerName === "title-img") resultOverrides.titleImg = valStr;
+                        if (lowerName === "template") resultOverrides.template = valStr;
+                    } else {
+                        attrName = `custom-${attrName.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase()}`;
+                        docAttrs[attrName] = valStr;
+                    }
                 }
             }
             if (Object.keys(docAttrs).length > 0) {
                 await client.setBlockAttrs({ id, attrs: docAttrs });
             }
+            return resultOverrides;
         };
 
         if (docId) {
@@ -337,12 +348,14 @@ export class IBlockProcessor {
                     path = pathRes.path;
                     hpath = await post("/api/filetree/getHPathByID", { id: docId });
                     await client.renameDoc({ notebook, path, title });
-                    const docAttrs: any = {};
-                    docAttrs.icon = targetIcon || "";
-                    docAttrs["title-img"] = targetImage || "";
-                    console.log(`[Builder-Debug] Setting block attrs for ${docId}:`, docAttrs);
-                    await client.setBlockAttrs({ id: docId, attrs: docAttrs });
-                    await applyInherited(docId);
+
+                    const existingDocAttrs: any = {};
+                    existingDocAttrs.icon = targetIcon || "";
+                    existingDocAttrs["title-img"] = targetImage || "";
+
+                    const overrides = await applyInherited(docId, existingDocAttrs);
+                    if (overrides.icon !== undefined) targetIcon = overrides.icon;
+                    if (overrides.titleImg !== undefined) targetIcon = overrides.titleImg; // Note: targetImage not needed recursively, but good to have
                 }
             } catch (e) {
                 console.error(`[Builder-Debug] Error updating existing document ${docId}:`, e);
@@ -387,11 +400,14 @@ export class IBlockProcessor {
                 if (pRes) physicalPath = pRes.path;
             } catch (e) { }
             await client.setBlockAttrs({ id: core.containerId, attrs: { [ATTR_INDEX]: newId } });
-            const docAttrs: any = {};
-            docAttrs.icon = targetIcon || "";
-            docAttrs["title-img"] = targetImage || "";
-            await client.setBlockAttrs({ id: newId, attrs: docAttrs });
-            await applyInherited(newId);
+
+            const existingDocAttrs: any = {};
+            existingDocAttrs.icon = targetIcon || "";
+            existingDocAttrs["title-img"] = targetImage || "";
+
+            const overrides = await applyInherited(newId, existingDocAttrs);
+            if (overrides.icon !== undefined) targetIcon = overrides.icon;
+            if (overrides.titleImg !== undefined) targetImage = overrides.titleImg;
 
             const displayIcon = getProcessedDocIcon(targetIcon || core.currentIcon || "", false);
             const newMd = await this.constructListItemMarkdown(containerAttrs, containerAttrs[ATTR_OUTLINE], core.syncMd, newId, displayIcon);

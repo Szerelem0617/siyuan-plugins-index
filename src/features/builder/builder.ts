@@ -2,7 +2,7 @@ import { client } from "../../shared/api-client";
 import { IBlockProcessor, ATTR_INDEX, ATTR_OUTLINE } from "./processor";
 import { ATTR_LINKED_AV, ATTR_LINKED_AV_BLOCK } from "../../shared/constants";
 import { loadDbConfig } from "../data/av-setting/db-config";
-import { buildAvHierarchy, getColIDMap, isValueEmpty } from "../../shared/utils/av-utils";
+import { buildAvHierarchy, getColIDMap } from "../../shared/utils/av-utils";
 
 async function changeSort(notebook: string, paths: string[]) {
     try {
@@ -149,29 +149,13 @@ export class ListProcessor {
             const docTarget = docTargetId ? targetMap.get(docTargetId) : null;
             const headingTarget = headingTargetId ? targetMap.get(headingTargetId) : null;
 
-            // --- Simplified Scheme 2 Inheritance Application ---
-            // We still do Top-Down pass here to ensure that if the DB isn't updated for some reason, 
-            // the builder still provides correct values to the documents.
-            const currentItemResolved: any = {};
-            if (ctx.dbConfig?.inheritanceRules && ctx.avId) {
+            // --- Database-Driven Inheritance ---
+            // Inheritance is now fully handled in the database side (syncInheritanceToDb).
+            // We simply serve what the database provides to the documents!
+            let currentItemResolved: any = {};
+            if (ctx.avId) {
                 const itemAttrs = this.ibp.parseIAL(sourceItem?.ial);
-                // getLinkedAVData will now return local values from DB
-                const localValues = await this.ibp.getLinkedAVData(child.id, itemAttrs, ctx.avId, ctx);
-
-                for (const rule of ctx.dbConfig.inheritanceRules) {
-                    if (rule.mode === 'none') continue;
-                    const localVal = localValues?.[rule.colId];
-                    const ancestorVal = ctx.inheritedAttrs?.[rule.colId];
-
-                    let finalVal = localVal;
-                    if (rule.mode === 'weak' && isValueEmpty(localVal)) {
-                        finalVal = ancestorVal;
-                    } else if (rule.mode === 'strong' && !isValueEmpty(ancestorVal)) {
-                        finalVal = ancestorVal;
-                    }
-                    console.log(`[Builder-Inheritance Debug] child ${child.id} | colId: ${rule.colId} | mode: ${rule.mode} | localVal:`, localVal, `| ancestorVal:`, ancestorVal, `| isLocalEmpty:`, isValueEmpty(localVal), `| finalVal:`, finalVal);
-                    currentItemResolved[rule.colId] = finalVal;
-                }
+                currentItemResolved = await this.ibp.getLinkedAVData(child.id, itemAttrs, ctx.avId, ctx) || {};
             }
 
             const itemCtx = {
