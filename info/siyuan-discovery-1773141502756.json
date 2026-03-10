@@ -1,0 +1,1575 @@
+{
+  "exportTime": "10/03/2026, 19:18:22",
+  "categories": {
+    "pluginCommands": [
+      {
+        "plugin": "siyuan-plugins-index",
+        "label": "插入目录",
+        "id": "insertIndex",
+        "hotkey": "⌥⌘I"
+      },
+      {
+        "plugin": "siyuan-plugins-index",
+        "label": "插入大纲",
+        "id": "insertoutline",
+        "hotkey": "⌥⌘O"
+      },
+      {
+        "plugin": "siyuan-plugin-task-note-management",
+        "label": "打开日历视图",
+        "id": "shortcutOpenCalendarView",
+        "hotkey": ""
+      },
+      {
+        "plugin": "siyuan-plugin-task-note-management",
+        "label": "设置当前文档为任务",
+        "id": "shortcutSetDocumentAsTask",
+        "hotkey": ""
+      },
+      {
+        "plugin": "siyuan-plugin-task-note-management",
+        "label": "设置当前块为任务",
+        "id": "shortcutSetBlockAsTask",
+        "hotkey": ""
+      },
+      {
+        "plugin": "siyuan-plugin-task-note-management",
+        "label": "设置项目管理",
+        "id": "shortcutProjectManagement",
+        "hotkey": ""
+      }
+    ],
+    "systemKeymaps": [
+      {
+        "id": "editor.general.ai",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.aiWriting",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.alignCenter",
+        "hotkey": "⌥C"
+      },
+      {
+        "id": "editor.general.alignLeft",
+        "hotkey": "⌥L"
+      },
+      {
+        "id": "editor.general.alignRight",
+        "hotkey": "⌥R"
+      },
+      {
+        "id": "editor.general.attr",
+        "hotkey": "⌥⌘A"
+      },
+      {
+        "id": "editor.general.backlinks",
+        "hotkey": "⌥B"
+      },
+      {
+        "id": "editor.general.collapse",
+        "hotkey": "⌘↑"
+      },
+      {
+        "id": "editor.general.copyBlockEmbed",
+        "hotkey": "⇧⌘E"
+      },
+      {
+        "id": "editor.general.copyBlockRef",
+        "hotkey": "⇧⌘C"
+      },
+      {
+        "id": "editor.general.copyHPath",
+        "hotkey": "⇧⌘P"
+      },
+      {
+        "id": "editor.general.copyID",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.copyPlainText",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.copyProtocol",
+        "hotkey": "⇧⌘H"
+      },
+      {
+        "id": "editor.general.copyProtocolInMd",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.copyText",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.duplicate",
+        "hotkey": "⌘D"
+      },
+      {
+        "id": "editor.general.duplicateCompletely",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.exitFocus",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.expand",
+        "hotkey": "⌘↓"
+      },
+      {
+        "id": "editor.general.expandDown",
+        "hotkey": "⌥⇧↓"
+      },
+      {
+        "id": "editor.general.expandUp",
+        "hotkey": "⌥⇧↑"
+      },
+      {
+        "id": "editor.general.fullscreen",
+        "hotkey": "⌥Y"
+      },
+      {
+        "id": "editor.general.graphView",
+        "hotkey": "⌥G"
+      },
+      {
+        "id": "editor.general.hLayout",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.insertAfter",
+        "hotkey": "⇧⌘A"
+      },
+      {
+        "id": "editor.general.insertBefore",
+        "hotkey": "⇧⌘B"
+      },
+      {
+        "id": "editor.general.insertBottom",
+        "hotkey": "⌥⌘."
+      },
+      {
+        "id": "editor.general.insertRight",
+        "hotkey": "⌥."
+      },
+      {
+        "id": "editor.general.jumpToParent",
+        "hotkey": "⇧⌘J"
+      },
+      {
+        "id": "editor.general.jumpToParentNext",
+        "hotkey": "⇧⌘N"
+      },
+      {
+        "id": "editor.general.jumpToParentPrev",
+        "hotkey": "⇧⌘M"
+      },
+      {
+        "id": "editor.general.ltr",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.moveToDown",
+        "hotkey": "⇧⌘↓"
+      },
+      {
+        "id": "editor.general.moveToUp",
+        "hotkey": "⇧⌘↑"
+      },
+      {
+        "id": "editor.general.netAssets2LocalAssets",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.netImg2LocalAsset",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.newContentFile",
+        "hotkey": "F4"
+      },
+      {
+        "id": "editor.general.newNameFile",
+        "hotkey": "F3"
+      },
+      {
+        "id": "editor.general.newNameSettingFile",
+        "hotkey": "⌘F3"
+      },
+      {
+        "id": "editor.general.openBy",
+        "hotkey": "⌥,"
+      },
+      {
+        "id": "editor.general.openInNewTab",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.optimizeTypography",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.outline",
+        "hotkey": "⌥O"
+      },
+      {
+        "id": "editor.general.preview",
+        "hotkey": "⌥⌘9"
+      },
+      {
+        "id": "editor.general.quickMakeCard",
+        "hotkey": "⌥⌘F"
+      },
+      {
+        "id": "editor.general.redo",
+        "hotkey": "⌘Y"
+      },
+      {
+        "id": "editor.general.refPopover",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.refTab",
+        "hotkey": "⇧⌘."
+      },
+      {
+        "id": "editor.general.refresh",
+        "hotkey": "F5"
+      },
+      {
+        "id": "editor.general.rename",
+        "hotkey": "F2"
+      },
+      {
+        "id": "editor.general.rtl",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.showInFolder",
+        "hotkey": "⌥A"
+      },
+      {
+        "id": "editor.general.spaceRepetition",
+        "hotkey": "⌥F"
+      },
+      {
+        "id": "editor.general.switchAdjust",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.switchReadonly",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.undo",
+        "hotkey": "⌘Z"
+      },
+      {
+        "id": "editor.general.vLayout",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.general.wysiwyg",
+        "hotkey": "⌥⌘7"
+      },
+      {
+        "id": "editor.heading.heading1",
+        "hotkey": "⌥⌘1"
+      },
+      {
+        "id": "editor.heading.heading2",
+        "hotkey": "⌥⌘2"
+      },
+      {
+        "id": "editor.heading.heading3",
+        "hotkey": "⌥⌘3"
+      },
+      {
+        "id": "editor.heading.heading4",
+        "hotkey": "⌥⌘4"
+      },
+      {
+        "id": "editor.heading.heading5",
+        "hotkey": "⌥⌘5"
+      },
+      {
+        "id": "editor.heading.heading6",
+        "hotkey": "⌥⌘6"
+      },
+      {
+        "id": "editor.heading.paragraph",
+        "hotkey": "⌥⌘0"
+      },
+      {
+        "id": "editor.insert.appearance",
+        "hotkey": "⌥⌘X"
+      },
+      {
+        "id": "editor.insert.bold",
+        "hotkey": "⌘B"
+      },
+      {
+        "id": "editor.insert.check",
+        "hotkey": "⌘L"
+      },
+      {
+        "id": "editor.insert.clearInline",
+        "hotkey": "⌘\\"
+      },
+      {
+        "id": "editor.insert.code",
+        "hotkey": "⇧⌘K"
+      },
+      {
+        "id": "editor.insert.inline-code",
+        "hotkey": "⌘G"
+      },
+      {
+        "id": "editor.insert.inline-math",
+        "hotkey": "⌘M"
+      },
+      {
+        "id": "editor.insert.italic",
+        "hotkey": "⌘I"
+      },
+      {
+        "id": "editor.insert.kbd",
+        "hotkey": "⌘'"
+      },
+      {
+        "id": "editor.insert.lastUsed",
+        "hotkey": "⌥X"
+      },
+      {
+        "id": "editor.insert.link",
+        "hotkey": "⌘K"
+      },
+      {
+        "id": "editor.insert.list",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.insert.mark",
+        "hotkey": "⌥D"
+      },
+      {
+        "id": "editor.insert.memo",
+        "hotkey": "⌥⌘M"
+      },
+      {
+        "id": "editor.insert.ordered-list",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.insert.quote",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.insert.ref",
+        "hotkey": "⌥["
+      },
+      {
+        "id": "editor.insert.strike",
+        "hotkey": "⇧⌘S"
+      },
+      {
+        "id": "editor.insert.sub",
+        "hotkey": "⌘J"
+      },
+      {
+        "id": "editor.insert.sup",
+        "hotkey": "⌘H"
+      },
+      {
+        "id": "editor.insert.table",
+        "hotkey": "⌘O"
+      },
+      {
+        "id": "editor.insert.tag",
+        "hotkey": "⌘T"
+      },
+      {
+        "id": "editor.insert.underline",
+        "hotkey": "⌘U"
+      },
+      {
+        "id": "editor.list.checkToggle",
+        "hotkey": "⌘↩"
+      },
+      {
+        "id": "editor.list.indent",
+        "hotkey": "⇥"
+      },
+      {
+        "id": "editor.list.outdent",
+        "hotkey": "⇧⇥"
+      },
+      {
+        "id": "editor.table.delete-column",
+        "hotkey": "⇧⌘-"
+      },
+      {
+        "id": "editor.table.delete-row",
+        "hotkey": "⌘-"
+      },
+      {
+        "id": "editor.table.insertColumnLeft",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.table.insertColumnRight",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.table.insertRowAbove",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.table.insertRowBelow",
+        "hotkey": ""
+      },
+      {
+        "id": "editor.table.moveToDown",
+        "hotkey": "⌥⌘B"
+      },
+      {
+        "id": "editor.table.moveToLeft",
+        "hotkey": "⌥⌘L"
+      },
+      {
+        "id": "editor.table.moveToRight",
+        "hotkey": "⌥⌘R"
+      },
+      {
+        "id": "editor.table.moveToUp",
+        "hotkey": "⌥⌘T"
+      },
+      {
+        "id": "general.addToDatabase",
+        "hotkey": ""
+      },
+      {
+        "id": "general.backlinks",
+        "hotkey": "⌥7"
+      },
+      {
+        "id": "general.bookmark",
+        "hotkey": "⌥3"
+      },
+      {
+        "id": "general.closeAll",
+        "hotkey": ""
+      },
+      {
+        "id": "general.closeLeft",
+        "hotkey": ""
+      },
+      {
+        "id": "general.closeOthers",
+        "hotkey": ""
+      },
+      {
+        "id": "general.closeRight",
+        "hotkey": ""
+      },
+      {
+        "id": "general.closeTab",
+        "hotkey": "⌘W"
+      },
+      {
+        "id": "general.closeUnmodified",
+        "hotkey": ""
+      },
+      {
+        "id": "general.commandPanel",
+        "hotkey": "⌥⇧P"
+      },
+      {
+        "id": "general.config",
+        "hotkey": "⌥P"
+      },
+      {
+        "id": "general.dailyNote",
+        "hotkey": "⌥5"
+      },
+      {
+        "id": "general.dataHistory",
+        "hotkey": "⌥H"
+      },
+      {
+        "id": "general.editReadonly",
+        "hotkey": "⇧⌘G"
+      },
+      {
+        "id": "general.enter",
+        "hotkey": "⌥→"
+      },
+      {
+        "id": "general.enterBack",
+        "hotkey": "⌥←"
+      },
+      {
+        "id": "general.fileTree",
+        "hotkey": "⌥1"
+      },
+      {
+        "id": "general.globalGraph",
+        "hotkey": "⌥9"
+      },
+      {
+        "id": "general.globalSearch",
+        "hotkey": "⌘P"
+      },
+      {
+        "id": "general.goBack",
+        "hotkey": "⌘["
+      },
+      {
+        "id": "general.goForward",
+        "hotkey": "⌘]"
+      },
+      {
+        "id": "general.goToEditTabNext",
+        "hotkey": "⌃⇥"
+      },
+      {
+        "id": "general.goToEditTabPrev",
+        "hotkey": "⌃⇧⇥"
+      },
+      {
+        "id": "general.goToTab1",
+        "hotkey": "⌘1"
+      },
+      {
+        "id": "general.goToTab2",
+        "hotkey": "⌘2"
+      },
+      {
+        "id": "general.goToTab3",
+        "hotkey": "⌘3"
+      },
+      {
+        "id": "general.goToTab4",
+        "hotkey": "⌘4"
+      },
+      {
+        "id": "general.goToTab5",
+        "hotkey": "⌘5"
+      },
+      {
+        "id": "general.goToTab6",
+        "hotkey": "⌘6"
+      },
+      {
+        "id": "general.goToTab7",
+        "hotkey": "⌘7"
+      },
+      {
+        "id": "general.goToTab8",
+        "hotkey": "⌘8"
+      },
+      {
+        "id": "general.goToTab9",
+        "hotkey": "⌘9"
+      },
+      {
+        "id": "general.goToTabNext",
+        "hotkey": "⇧⌘]"
+      },
+      {
+        "id": "general.goToTabPrev",
+        "hotkey": "⇧⌘["
+      },
+      {
+        "id": "general.graphView",
+        "hotkey": "⌥8"
+      },
+      {
+        "id": "general.inbox",
+        "hotkey": "⌥6"
+      },
+      {
+        "id": "general.lockScreen",
+        "hotkey": "⌥N"
+      },
+      {
+        "id": "general.mainMenu",
+        "hotkey": "⌥\\"
+      },
+      {
+        "id": "general.move",
+        "hotkey": ""
+      },
+      {
+        "id": "general.newFile",
+        "hotkey": "⌘N"
+      },
+      {
+        "id": "general.outline",
+        "hotkey": "⌥2"
+      },
+      {
+        "id": "general.recentClosed",
+        "hotkey": "⇧⌘T"
+      },
+      {
+        "id": "general.recentDocs",
+        "hotkey": "⌘E"
+      },
+      {
+        "id": "general.replace",
+        "hotkey": "⌘R"
+      },
+      {
+        "id": "general.riffCard",
+        "hotkey": "⌥0"
+      },
+      {
+        "id": "general.search",
+        "hotkey": "⌘F"
+      },
+      {
+        "id": "general.selectOpen1",
+        "hotkey": ""
+      },
+      {
+        "id": "general.splitLR",
+        "hotkey": ""
+      },
+      {
+        "id": "general.splitMoveB",
+        "hotkey": ""
+      },
+      {
+        "id": "general.splitMoveR",
+        "hotkey": ""
+      },
+      {
+        "id": "general.splitTB",
+        "hotkey": ""
+      },
+      {
+        "id": "general.stickSearch",
+        "hotkey": "⇧⌘F"
+      },
+      {
+        "id": "general.syncNow",
+        "hotkey": "F9"
+      },
+      {
+        "id": "general.tabToWindow",
+        "hotkey": ""
+      },
+      {
+        "id": "general.tag",
+        "hotkey": "⌥4"
+      },
+      {
+        "id": "general.toggleDock",
+        "hotkey": ""
+      },
+      {
+        "id": "general.toggleWin",
+        "hotkey": "⌥M"
+      },
+      {
+        "id": "general.unsplit",
+        "hotkey": ""
+      },
+      {
+        "id": "general.unsplitAll",
+        "hotkey": ""
+      },
+      {
+        "id": "plugin.siyuan-plugins-index.insertIndex",
+        "hotkey": "⌥⌘I"
+      },
+      {
+        "id": "plugin.siyuan-plugins-index.insertoutline",
+        "hotkey": "⌥⌘O"
+      },
+      {
+        "id": "plugin.siyuan-plugin-task-note-management.shortcutOpenCalendarView",
+        "hotkey": ""
+      },
+      {
+        "id": "plugin.siyuan-plugin-task-note-management.shortcutSetDocumentAsTask",
+        "hotkey": ""
+      },
+      {
+        "id": "plugin.siyuan-plugin-task-note-management.shortcutSetBlockAsTask",
+        "hotkey": ""
+      },
+      {
+        "id": "plugin.siyuan-plugin-task-note-management.shortcutProjectManagement",
+        "hotkey": ""
+      }
+    ],
+    "slashCommands": [
+      {
+        "id": "template",
+        "label": "模板"
+      },
+      {
+        "id": "widget",
+        "label": "挂件"
+      },
+      {
+        "id": "assets",
+        "label": "资源文件"
+      },
+      {
+        "id": "ref",
+        "label": "块引用"
+      },
+      {
+        "id": "blockEmbed",
+        "label": "嵌入块"
+      },
+      {
+        "id": "database",
+        "label": "数据库"
+      },
+      {
+        "id": "heading1",
+        "label": "一级标题"
+      },
+      {
+        "id": "heading2",
+        "label": "二级标题"
+      },
+      {
+        "id": "heading3",
+        "label": "三级标题"
+      },
+      {
+        "id": "list",
+        "label": "无序列表"
+      },
+      {
+        "id": "orderedList",
+        "label": "有序列表"
+      },
+      {
+        "id": "check",
+        "label": "任务列表"
+      },
+      {
+        "id": "quote",
+        "label": "引述"
+      },
+      {
+        "id": "code",
+        "label": "代码块"
+      },
+      {
+        "id": "table",
+        "label": "表格"
+      },
+      {
+        "id": "emoji",
+        "label": "表情"
+      },
+      {
+        "id": "link",
+        "label": "链接"
+      },
+      {
+        "id": "bold",
+        "label": "粗体"
+      },
+      {
+        "id": "italic",
+        "label": "斜体"
+      },
+      {
+        "id": "underline",
+        "label": "下划线"
+      },
+      {
+        "id": "strike",
+        "label": "删除线"
+      },
+      {
+        "id": "mark",
+        "label": "标记"
+      },
+      {
+        "id": "tag",
+        "label": "标签"
+      },
+      {
+        "id": "math",
+        "label": "数学公式"
+      },
+      {
+        "id": "line",
+        "label": "分隔线"
+      },
+      {
+        "id": "calloutNote",
+        "label": "提示 (Note)"
+      },
+      {
+        "id": "infoStyle",
+        "label": "信息样式"
+      },
+      {
+        "id": "errorStyle",
+        "label": "错误样式"
+      }
+    ],
+    "apiEndpoints": [
+      {
+        "name": "获取文档信息",
+        "path": "/api/block/getDocInfo",
+        "desc": "获取文档的元数据信息"
+      },
+      {
+        "name": "获取块信息",
+        "path": "/api/block/getBlockInfo",
+        "desc": "获取特定块的元数据"
+      },
+      {
+        "name": "获取块Kramdown",
+        "path": "/api/block/getKramdown",
+        "desc": "获取块的 Kramdown 源码"
+      },
+      {
+        "name": "获取块属性",
+        "path": "/api/block/getBlockAttrs",
+        "desc": "获取指定块的所有属性"
+      },
+      {
+        "name": "设置块属性",
+        "path": "/api/block/setBlockAttrs",
+        "desc": "更新或添加块的属性值"
+      },
+      {
+        "name": "获取文档内容",
+        "path": "/api/filetree/getDoc",
+        "desc": "根据文档 ID 获取其所有的块内容"
+      },
+      {
+        "name": "创建文档",
+        "path": "/api/filetree/createDoc",
+        "desc": "在指定目录下创建一个新文档"
+      },
+      {
+        "name": "删除文档",
+        "path": "/api/filetree/removeDoc",
+        "desc": "将指定路径的文档移入回收站"
+      },
+      {
+        "name": "重命名文档",
+        "path": "/api/filetree/renameDoc",
+        "desc": "更改文档标题或路径名"
+      },
+      {
+        "name": "移动文档",
+        "path": "/api/filetree/moveDoc",
+        "desc": "在笔记本之间或目录之间移动文档"
+      },
+      {
+        "name": "搜索块",
+        "path": "/api/search/searchBlock",
+        "desc": "全文搜索块内容"
+      },
+      {
+        "name": "搜索引用块",
+        "path": "/api/search/searchRefBlock",
+        "desc": "搜索用于块引用的候选块"
+      },
+      {
+        "name": "搜索标签",
+        "path": "/api/search/searchTag",
+        "desc": "搜索已有标签列表"
+      },
+      {
+        "name": "列出笔记本",
+        "path": "/api/notebook/lsNotebooks",
+        "desc": "获取当前所有笔记本列表"
+      },
+      {
+        "name": "打开笔记本",
+        "path": "/api/notebook/openNotebook",
+        "desc": "挂载一个笔记本"
+      },
+      {
+        "name": "关闭笔记本",
+        "path": "/api/notebook/closeNotebook",
+        "desc": "卸载一个笔记本"
+      },
+      {
+        "name": "SQL 查询",
+        "path": "/api/query/sql",
+        "desc": "使用 SQL 语句查询块信息"
+      },
+      {
+        "name": "获取属性定义",
+        "path": "/api/av/getAttributeView",
+        "desc": "获取属性视图定义"
+      },
+      {
+        "name": "系统版本",
+        "path": "/api/system/version",
+        "desc": "获取内核当前版本号"
+      },
+      {
+        "name": "获取配置",
+        "path": "/api/system/getConf",
+        "desc": "获取内核详细配置信息"
+      },
+      {
+        "name": "内核退出",
+        "path": "/api/system/exit",
+        "desc": "安全关闭内核进程"
+      }
+    ],
+    "transactionActions": [
+      {
+        "name": "insert",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "update",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "delete",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "move",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "foldHeading",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "unfoldHeading",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrs",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "updateAttrs",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "append",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "insertAttrViewBlock",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "removeAttrViewBlock",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "addAttrViewCol",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "removeAttrViewCol",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "addFlashcards",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "removeFlashcards",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "updateAttrViewCell",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "updateAttrViewCol",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "updateAttrViewColTemplate",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "sortAttrViewRow",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "sortAttrViewCol",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "sortAttrViewKey",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewColPin",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewColHidden",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewColWrap",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewColWidth",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "updateAttrViewColOptions",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "removeAttrViewColOption",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "updateAttrViewColOption",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewName",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "doUpdateUpdated",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "duplicateAttrViewKey",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewColIcon",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewFilters",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewSorts",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewColCalc",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "updateAttrViewColNumberFormat",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "replaceAttrViewBlock",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "addAttrViewView",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewViewName",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "removeAttrViewView",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewViewIcon",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "duplicateAttrViewView",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "sortAttrViewView",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewPageSize",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "updateAttrViewColRelation",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "moveOutlineHeading",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "updateAttrViewColRollup",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "hideAttrViewName",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewCardSize",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewCoverFrom",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      },
+      {
+        "name": "setAttrViewGroup",
+        "desc": "内核底层数据操作动作",
+        "meta": "Action"
+      }
+    ],
+    "sniffedUI": [
+      {
+        "label": "粘贴",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "paste"
+      },
+      {
+        "label": "粘贴为纯文本",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "pasteAsPlainText"
+      },
+      {
+        "label": "粘贴转义文本",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "pasteEscaped"
+      },
+      {
+        "label": "全选",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "selectAll"
+      },
+      {
+        "label": "转换为",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "turnInto"
+      },
+      {
+        "label": "人工智能",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "ai"
+      },
+      {
+        "label": "复制",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "copy"
+      },
+      {
+        "label": "剪切",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "cut"
+      },
+      {
+        "label": "移动",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "move"
+      },
+      {
+        "label": "添加到数据库",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "addToDatabase"
+      },
+      {
+        "label": "删除",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "delete"
+      },
+      {
+        "label": "聚焦",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "enter"
+      },
+      {
+        "label": "聚焦到上层",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "enterBack"
+      },
+      {
+        "label": "上方插入块",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "insertBefore"
+      },
+      {
+        "label": "下方插入块",
+        "desc": "来自页签: 20260310184003-2tpu9yq.sy",
+        "meta": "insertAfter"
+      }
+    ],
+    "sniffedSlash": [
+      {
+        "label": "模板",
+        "desc": "触发词: 模板, template, 模板, moban, muban, mb",
+        "meta": "​"
+      },
+      {
+        "label": "挂件",
+        "desc": "触发词: 挂件, widget, 挂件, guajian, gj",
+        "meta": "​1"
+      },
+      {
+        "label": "资源",
+        "desc": "触发词: 资源, assets, 资源, ziyuan, zy",
+        "meta": "​2"
+      },
+      {
+        "label": "引用",
+        "desc": "触发词: 引用, block reference, 块引用, kuaiyinyong, kyy",
+        "meta": "(("
+      },
+      {
+        "label": "嵌入块",
+        "desc": "触发词: 嵌入块, embed block, 嵌入块, qianrukuai, qrk",
+        "meta": "{{"
+      },
+      {
+        "label": "AI 编写",
+        "desc": "触发词: AI 编写, ai writing, ai编写, aibianxie, aibx, 人工智能, rengongzhineng, rgzn",
+        "meta": "​5"
+      },
+      {
+        "label": "数据库",
+        "desc": "触发词: 数据库, database, db, 数据库, shujuku, sjk, 视图, view",
+        "meta": "<div data-type=\"NodeAttributeView\" data-av-type=\"table\"></div>"
+      },
+      {
+        "label": "新建文档并引用",
+        "desc": "触发词: 新建文档并引用, create new doc with reference, 新建文档并引用, xinjianwendangbingyinyong, xjwdbyy",
+        "meta": "​4"
+      },
+      {
+        "label": "新建子文档并引用",
+        "desc": "触发词: 新建子文档并引用, create sub doc with reference, 新建子文档并引用, xinjianziwendangbingyinyong, xjzwdbyy",
+        "meta": "​6"
+      },
+      {
+        "label": "一级标题",
+        "desc": "触发词: 一级标题, heading1, h1, 一级标题, yijibiaoti, yjbt",
+        "meta": "# ‸"
+      },
+      {
+        "label": "二级标题",
+        "desc": "触发词: 二级标题, heading2, h2, 二级标题, erjibiaoti, ejbt",
+        "meta": "## ‸"
+      },
+      {
+        "label": "三级标题",
+        "desc": "触发词: 三级标题, heading3, h3, 三级标题, sanjibiaoti, sjbt",
+        "meta": "### ‸"
+      },
+      {
+        "label": "四级标题",
+        "desc": "触发词: 四级标题, heading4, h4, 四级标题, sijibiaoti, sjbt",
+        "meta": "#### ‸"
+      },
+      {
+        "label": "五级标题",
+        "desc": "触发词: 五级标题, heading5, h5, 五级标题, wujibiaoti, wjbt",
+        "meta": "##### ‸"
+      },
+      {
+        "label": "六级标题",
+        "desc": "触发词: 六级标题, heading6, h6, 六级标题, liujibiaoti, ljbt",
+        "meta": "###### ‸"
+      },
+      {
+        "label": "无序列表",
+        "desc": "触发词: 无序列表, unordered list, 无序列表, wuxvliebiao, wuxuliebiao, wxlb",
+        "meta": "- ‸"
+      },
+      {
+        "label": "有序列表",
+        "desc": "触发词: 有序列表, order list, ordered list, 有序列表, youxvliebiao, youxuliebiao, yxlb",
+        "meta": "1. ‸"
+      },
+      {
+        "label": "任务列表",
+        "desc": "触发词: 任务列表, task list, todo list, 任务列表, renwuliebiao, rwlb",
+        "meta": "- [ ] ‸"
+      },
+      {
+        "label": "引述",
+        "desc": "触发词: 引述, blockquote, bq, 引述, yinshu, ys",
+        "meta": "> ‸"
+      },
+      {
+        "label": "提示 - Note",
+        "desc": "触发词: 提示, callout, ts, 提示, tishi, note",
+        "meta": "> [!NOTE]\n> ‸"
+      },
+      {
+        "label": "提示 - Tip",
+        "desc": "触发词: 提示, callout, ts, 提示, tishi, tip",
+        "meta": "> [!TIP]\n> ‸"
+      },
+      {
+        "label": "提示 - Important",
+        "desc": "触发词: 提示, callout, ts, 提示, tishi, important",
+        "meta": "> [!IMPORTANT]\n> ‸"
+      },
+      {
+        "label": "提示 - Warning",
+        "desc": "触发词: 提示, callout, ts, 提示, tishi, warning",
+        "meta": "> [!WARNING]\n> ‸"
+      },
+      {
+        "label": "提示 - Caution",
+        "desc": "触发词: 提示, callout, ts, 提示, tishi, caution",
+        "meta": "> [!CAUTION]\n> ‸"
+      },
+      {
+        "label": "代码块",
+        "desc": "触发词: 代码块, code block, 代码块, daimakuai, dmk",
+        "meta": "```"
+      },
+      {
+        "label": "表格",
+        "desc": "触发词: 表格, table, 表格, biaoge, bg",
+        "meta": "| ‸ |  |  |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |"
+      },
+      {
+        "label": "分隔线",
+        "desc": "触发词: 分隔线, thematic break, divider, 分隔线, 分割线, fengexian, fgx",
+        "meta": "---"
+      },
+      {
+        "label": "公式块",
+        "desc": "触发词: 公式块, formulas block, math block, 数学公式块, shuxuegongshikuai, sxgsk",
+        "meta": "$$"
+      },
+      {
+        "label": "HTML",
+        "desc": "触发词: html",
+        "meta": "<div>"
+      },
+      {
+        "label": "表情",
+        "desc": "触发词: 表情, emoji, 表情, biaoqing, bq",
+        "meta": "emoji"
+      },
+      {
+        "label": "链接",
+        "desc": "触发词: 链接, link, a, 链接, lianjie, lj",
+        "meta": "a"
+      },
+      {
+        "label": "粗体",
+        "desc": "触发词: 粗体, bold, strong, 粗体, cuti, ct, 加粗, jiacu, jc",
+        "meta": "strong"
+      },
+      {
+        "label": "斜体",
+        "desc": "触发词: 斜体, italic, em, 斜体, xieti, xt",
+        "meta": "em"
+      },
+      {
+        "label": "下划线",
+        "desc": "触发词: 下划线, underline, 下划线, xiahuaxian, xhx",
+        "meta": "u"
+      },
+      {
+        "label": "删除线",
+        "desc": "触发词: 删除线, strike, delete, 删除线, shanchuxian, scx",
+        "meta": "s"
+      },
+      {
+        "label": "标记",
+        "desc": "触发词: 标记, mark, 标记, biaoji, bj, 高亮, gaoliang, gl",
+        "meta": "mark"
+      },
+      {
+        "label": "上标",
+        "desc": "触发词: 上标, superscript, 上标, shangbiao, sb",
+        "meta": "sup"
+      },
+      {
+        "label": "下标",
+        "desc": "触发词: 下标, subscript, 下标, xiaobiao, xb",
+        "meta": "sub"
+      },
+      {
+        "label": "行级代码",
+        "desc": "触发词: 行级代码, inline code, 行级代码, hangjidaima, hjdm",
+        "meta": "code"
+      },
+      {
+        "label": "键盘",
+        "desc": "触发词: 键盘, kbd, 键盘, jianpan, jp",
+        "meta": "kbd"
+      },
+      {
+        "label": "标签",
+        "desc": "触发词: 标签, tags, 标签, biaoqian, bq",
+        "meta": "tag"
+      },
+      {
+        "label": "行级公式",
+        "desc": "触发词: 行级公式, inline formulas, inline math, 行级公式, hangjigongshi, hjgs, 行级数学公式, hangjishuxvegongshi, hangjishuxuegongshi, hjsxgs",
+        "meta": "inline-math"
+      },
+      {
+        "label": "插入图片或文件",
+        "desc": "触发词: 插入图片或文件, insert image or file, upload, 插入图片或文件, charutupianhuowenjian, crtphwj, 上传, sc",
+        "meta": "​3"
+      },
+      {
+        "label": "插入 IFrame 链接",
+        "desc": "触发词: 插入 IFrame 链接, insert iframe link, 插入 iframe 链接, charuiframelianjie, criframelj",
+        "meta": "<iframe sandbox=\"allow-forms allow-presentation allow-same-origin allow-scripts allow-modals allow-popups\" src=\"\" border=\"0\" frameborder=\"no\" framespacing=\"0\" allowfullscreen=\"true\"></iframe>"
+      },
+      {
+        "label": "插入图片链接",
+        "desc": "触发词: 插入图片链接, insert image link, image, img, 插入图片链接, charutupianlianjie, crtplj",
+        "meta": "![]()"
+      },
+      {
+        "label": "插入视频链接",
+        "desc": "触发词: 插入视频链接, insert video link, 插入视频链接, charushipinlianjie, crsplj",
+        "meta": "<video controls=\"controls\" src=\"\"></video>"
+      },
+      {
+        "label": "插入音频链接",
+        "desc": "触发词: 插入音频链接, insert audio link, 插入音频链接, charuyinpinlianjie, cryplj",
+        "meta": "<audio controls=\"controls\" src=\"\"></audio>"
+      },
+      {
+        "label": "ABC",
+        "desc": "触发词: 五线谱, staff, 五线谱, wuxianpu, wxp",
+        "meta": "```abc\n```"
+      },
+      {
+        "label": "Chart",
+        "desc": "触发词: 图表, chart, 图表, tubiao, tb",
+        "meta": "```echarts\n```"
+      },
+      {
+        "label": "FlowChart",
+        "desc": "触发词: flowchart, flow chart, 流程图, liuchengtu, lct",
+        "meta": "```flowchart\n```"
+      },
+      {
+        "label": "Graphviz",
+        "desc": "触发词: graphviz, 状态图, zhuangtaitu, ztt",
+        "meta": "```graphviz\n```"
+      },
+      {
+        "label": "Mermaid",
+        "desc": "触发词: mermaid, diagram, 图表, tubiao, tb",
+        "meta": "```mermaid\n```"
+      },
+      {
+        "label": "Mind map",
+        "desc": "触发词: 脑图, mindmap, 脑图, naotu, nt",
+        "meta": "```mindmap\n```"
+      },
+      {
+        "label": "PlantUML",
+        "desc": "触发词: plantuml, 建模语言, jianmoyuyan, jmyy",
+        "meta": "```plantuml\n```"
+      },
+      {
+        "label": "信息样式",
+        "desc": "触发词: 信息样式, info style, 信息样式, xinxiyangshi, xxys",
+        "meta": "style​color: var(--b3-card-info-color);background-color: var(--b3-card-info-background);"
+      },
+      {
+        "label": "成功样式",
+        "desc": "触发词: 成功样式, success style, 成功样式, chenggongyangshi, cgys",
+        "meta": "style​color: var(--b3-card-success-color);background-color: var(--b3-card-success-background);"
+      },
+      {
+        "label": "警告样式",
+        "desc": "触发词: 警告样式, warning style, 警告样式, jinggaoyangshi, jgys",
+        "meta": "style​color: var(--b3-card-warning-color);background-color: var(--b3-card-warning-background);"
+      },
+      {
+        "label": "错误样式",
+        "desc": "触发词: 错误样式, error style, 错误样式, cuowuyangshi, cwys",
+        "meta": "style​color: var(--b3-card-error-color);background-color: var(--b3-card-error-background);"
+      },
+      {
+        "label": "清除样式",
+        "desc": "触发词: 清除样式, clear style, 清除样式, qingchuyangshi, qcys",
+        "meta": "style​"
+      },
+      {
+        "label": "插入目录",
+        "desc": "触发词: insert index, 插入文档目录, crawml",
+        "meta": "plugin​siyuan-plugins-index​insertIndex"
+      },
+      {
+        "label": "插入大纲",
+        "desc": "触发词: insert outline, 插入文档大纲, crawdg",
+        "meta": "plugin​siyuan-plugins-index​insertOutline"
+      }
+    ]
+  }
+}
