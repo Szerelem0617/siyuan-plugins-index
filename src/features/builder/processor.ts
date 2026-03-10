@@ -322,6 +322,9 @@ export class IBlockProcessor {
                     const systemNames = ["icon", "title-img", "template"];
                     const lowerName = attrName.toLowerCase();
                     if (systemNames.includes(lowerName)) {
+                        if (lowerName === "icon" && /[^\u0000-\u007F]/.test(valStr)) {
+                            valStr = this.emojiToHex(valStr);
+                        }
                         docAttrs[lowerName] = valStr;
                         if (lowerName === "icon") resultOverrides.icon = valStr;
                         if (lowerName === "title-img") resultOverrides.titleImg = valStr;
