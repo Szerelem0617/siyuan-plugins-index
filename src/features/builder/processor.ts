@@ -218,7 +218,7 @@ export class IBlockProcessor {
         let targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
 
         // USER REQUEST: Ignore default text emojis 📄 and 📑 completely, as well as the separator ➖.
-        if (targetIcon === "📄" || targetIcon === "📑" || targetIcon === "➖" || core.currentIcon === "📄" || core.currentIcon === "📑" || core.currentIcon === "➖") {
+        if (targetIcon === "📄" || targetIcon === "📑" || targetIcon === "➖") {
             // Also need to check hex representation of these:
             // 📄 is 1f4c4
             // 📑 is 1f4d1
@@ -326,18 +326,22 @@ export class IBlockProcessor {
             let notebook, path, hpath;
             try {
                 const pathRes = await post("/api/filetree/getPathByID", { id: docId });
+                console.log(`[Builder-Debug] getPathByID for docId ${docId} returned:`, pathRes);
                 if (pathRes) {
                     notebook = pathRes.notebook;
                     path = pathRes.path;
                     hpath = await post("/api/filetree/getHPathByID", { id: docId });
                     await client.renameDoc({ notebook, path, title });
                     const docAttrs: any = {};
-                    if (targetIcon) docAttrs.icon = targetIcon;
-                    if (targetImage) docAttrs["title-img"] = targetImage;
-                    if (Object.keys(docAttrs).length > 0) await client.setBlockAttrs({ id: docId, attrs: docAttrs });
+                    docAttrs.icon = targetIcon || "";
+                    docAttrs["title-img"] = targetImage || "";
+                    console.log(`[Builder-Debug] Setting block attrs for ${docId}:`, docAttrs);
+                    await client.setBlockAttrs({ id: docId, attrs: docAttrs });
                     await applyInherited(docId);
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.error(`[Builder-Debug] Error updating existing document ${docId}:`, e);
+            }
             const displayIcon = getProcessedDocIcon(targetIcon || core.currentIcon || "", false);
             const newMd = await this.constructListItemMarkdown(containerAttrs, containerAttrs[ATTR_OUTLINE], core.syncMd, docId, displayIcon);
             await client.updateBlock({ id: core.contentId, dataType: "markdown", data: newMd });
@@ -379,9 +383,9 @@ export class IBlockProcessor {
             } catch (e) { }
             await client.setBlockAttrs({ id: core.containerId, attrs: { [ATTR_INDEX]: newId } });
             const docAttrs: any = {};
-            if (targetIcon) docAttrs.icon = targetIcon;
-            if (targetImage) docAttrs["title-img"] = targetImage;
-            if (Object.keys(docAttrs).length > 0) await client.setBlockAttrs({ id: newId, attrs: docAttrs });
+            docAttrs.icon = targetIcon || "";
+            docAttrs["title-img"] = targetImage || "";
+            await client.setBlockAttrs({ id: newId, attrs: docAttrs });
             await applyInherited(newId);
 
             const displayIcon = getProcessedDocIcon(targetIcon || core.currentIcon || "", false);

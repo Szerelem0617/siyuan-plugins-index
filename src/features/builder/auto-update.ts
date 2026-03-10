@@ -20,13 +20,11 @@ export async function autoUpdateBuilder(parentId: string, existingBlock?: any) {
     let localAutoUpdate = undefined;
 
     try {
-        const match = block.ial.match(/custom-tree-create="([^"]*)"/);
-        if (match && match[1]) {
-            let val = match[1];
-            // Robust decoding using DOM
-            const txt = document.createElement("textarea");
-            txt.innerHTML = val;
-            val = txt.value;
+        const attrsRes = await client.getBlockAttrs({ id: block.id });
+        const valRaw = attrsRes.data ? attrsRes.data["custom-tree-create"] : null;
+
+        if (valRaw) {
+            let val = valRaw;
 
             // Cleanup potential quoted mangling (both single and double)
             if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith("\"") && val.endsWith("\""))) {
