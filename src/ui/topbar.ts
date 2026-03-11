@@ -5,6 +5,7 @@ import {
 } from "siyuan";
 import { insertAction } from "../features/insert-toc/index/action";
 import { insertOutlineAction } from "../features/insert-toc/outline/action";
+import { appendInitSystemMenu } from "../features/command/registration";
 import { i18n, isMobile, plugin } from "../shared/utils";
 import SettingsTab from "./components/setting.svelte"
 
@@ -138,6 +139,9 @@ function addMenu(rect?: DOMRect) {
             insertOutlineAction();
         }
     });
+
+    appendInitSystemMenu(menu);
+
     menu.addSeparator();
     menu.addItem({
         icon: "iconSettings",

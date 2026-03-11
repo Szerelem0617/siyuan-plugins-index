@@ -2,6 +2,7 @@ import { Protyle } from "siyuan";
 import { i18n, plugin, isMobile } from "../shared/utils";
 import { insertAction } from "../features/insert-toc/index/action";
 import { insertOutlineAction } from "../features/insert-toc/outline/action";
+import { getInitSystemSlashCommand } from "../features/command/registration";
 // import { insert, insertDocButton } from "./creater/createIndex";
 
 function getCurrentBlockId(): string | null {
@@ -19,7 +20,7 @@ function getCurrentBlockId(): string | null {
 }
 
 export function addSlash() {
-    plugin.protyleSlash = [{
+    const protyleSlashContent: any[] = [{
         filter: ["insert index", "插入文档目录", "crawml"],
         html: `<div class="b3-list-item__first"><span class="b3-list-item__text">${i18n.insertIndex}</span><span class="b3-list-item__meta">${isMobile ? "" : "Ctrl+Alt+I"}</span></div>`,
         id: "insertIndex",
@@ -40,4 +41,11 @@ export function addSlash() {
             insertOutlineAction(blockId);
         }
     }];
+
+    const initSysSlash = getInitSystemSlashCommand();
+    if (initSysSlash) {
+        protyleSlashContent.push(initSysSlash);
+    }
+
+    plugin.protyleSlash = protyleSlashContent;
 }
