@@ -142,38 +142,69 @@ export async function constructCommandStorage() {
                         };
 
                         const commandIdKey = await addCol("Command ID", "text", "iconCode");
-                        await addCol("Command Type", "select", "iconTags");
-                        await addCol("Target Scope", "select", "iconFocus");
+                        const commandTypeKey = await addCol("Command Type", "text", "iconTags");
+                        const targetScopeKey = await addCol("Target Scope", "text", "iconFocus");
                         const enableKey = await addCol("Enable", "checkbox", "iconCheck");
 
                         // 5. Populate default data
-                        const configData: Record<string, string> = {
-                            "📌 转为待办任务": "editor.list.checkToggle",
-                            "🗃️ 添加到数据库": "general.addToDatabase",
-                            "⬇️ 下方插入同级块": "editor.general.insertAfter",
-                            "📑 复制当前块": "editor.general.duplicate",
-                            "🖇️ 复制块引用": "editor.general.copyBlockRef",
-                            "🔍 在右侧分屏打开": "general.splitLR"
+                        const configData: Record<string, { id: string, type: string, scope: string }> = {
+                            "转为待办任务": { id: "editor.list.checkToggle", type: "Native", scope: "Self" },
+                            "添加到数据库": { id: "general.addToDatabase", type: "Native", scope: "Self" },
+                            "下方插入同级块": { id: "editor.general.insertAfter", type: "Native", scope: "Sibling" },
+                            "复制当前块": { id: "editor.general.duplicate", type: "Native", scope: "Sibling" },
+                            "复制块引用": { id: "editor.general.copyBlockRef", type: "Native", scope: "Global" },
+                            "在右侧分屏打开": { id: "general.splitLR", type: "Native", scope: "Global" }
                         };
 
+                        await sleep(1000); // 额外等待，确保 AV 索引了刚插入的行
                         const renderRes = await post("/api/av/renderAttributeView", { id: avId });
                         const rows = renderRes.view?.rows || renderRes.rows || [];
                         const populateOps: any[] = [];
 
+                        console.log(`[IndexOS] Attempting to populate ${rows.length} rows...`);
+
                         for (const row of rows) {
-                            const label = (row.cells[0]?.value?.mText?.content || row.cells[0]?.value?.text?.content || "").trim();
-                            const cmdId = configData[label];
-                            if (cmdId) {
-                                populateOps.push({
-                                    keyID: commandIdKey,
-                                    itemID: row.id,
-                                    value: { type: "text", text: { content: cmdId } }
-                                });
-                                populateOps.push({
-                                    keyID: enableKey,
-                                    itemID: row.id,
-                                    value: { type: "checkbox", checkbox: { checked: true } }
-                                });
+                            // SiYuan AV 第一列通常是 Block 类型，内容在 value.block.content
+                            const firstCell = row.cells[0];
+                            let label = "";
+
+                            if (firstCell?.value?.type === "block") {
+                                label = firstCell.value.block?.content || "";
+                            } else {
+                                label = firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
+                            }
+
+                            // 清理内容：去掉 Emoji（如果不匹配的话）或者只匹配核心文字
+                            const cleanLabel = label.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "").trim();
+
+                            console.log(`[IndexOS] Row ID: ${row.id}, Raw Label: "${label}", Clean Label: "${cleanLabel}"`);
+
+                            // 这里的匹配逻辑要稍微宽松点，因为 label 里可能有 Emoji
+                            for (const [key, config] of Object.entries(configData)) {
+                                if (label.includes(key)) {
+                                    populateOps.push({
+                                        keyID: commandIdKey,
+                                        itemID: row.id,
+                                        value: { type: "text", text: { content: config.id } }
+                                    });
+                                    populateOps.push({
+                                        keyID: commandTypeKey,
+                                        itemID: row.id,
+                                        value: { type: "text", text: { content: config.type } }
+                                    });
+                                    populateOps.push({
+                                        keyID: targetScopeKey,
+                                        itemID: row.id,
+                                        value: { type: "text", text: { content: config.scope } }
+                                    });
+                                    populateOps.push({
+                                        keyID: enableKey,
+                                        itemID: row.id,
+                                        value: { type: "checkbox", checkbox: { checked: true } }
+                                    });
+                                    console.log(`[IndexOS] Matched! Assigning ${config.id} to row ${row.id}`);
+                                    break;
+                                }
                             }
                         }
 
