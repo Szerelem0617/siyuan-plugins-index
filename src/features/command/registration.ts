@@ -1,5 +1,6 @@
 import { constructCommandStorage } from "./construct-dir";
 import { i18n, plugin } from "../../shared/utils";
+import { post } from "../../shared/api-client/request";
 import type { Protyle, Menu } from "siyuan";
 
 // 设置为 false 即可在发布时轻易关停此处的入口注册
@@ -85,6 +86,96 @@ export function addCommandTestMenuItem({ detail }: any) {
                         console.error("执行命令失败", e);
                     }
                 }, 50);
+            }
+        }
+    });
+
+    menu.addItem({
+        icon: "iconRocket",
+        label: "🚀 (生产测) 执行数据库绑定的指令",
+        click: async () => {
+            const targetEl = blockElements[0] as HTMLElement;
+
+            // 打印所有属性辅助调试
+            const allAttrs: Record<string, string> = {};
+            for (let i = 0; i < targetEl.attributes.length; i++) {
+                allAttrs[targetEl.attributes[i].name] = targetEl.attributes[i].value;
+            }
+
+            const itemID = targetEl.getAttribute("custom-av-item-id");
+
+            // 调试日志：初次点击的信息
+            console.log("[IndexOS Debug] Clicked Block Full Info:", {
+                id: targetEl.getAttribute("data-node-id"),
+                type: targetEl.getAttribute("data-type"),
+                itemID: itemID,
+                allAttributes: allAttrs
+            });
+
+            // 向上溯源：寻找带有 custom-index-linked-av 的祖先块
+            let current: HTMLElement | null = targetEl;
+            let avID = null;
+            while (current && current !== document.body) {
+                avID = current.getAttribute("custom-index-linked-av");
+                if (avID) {
+                    console.log(`[IndexOS Debug] Found linked avID: ${avID} on block:`, {
+                        id: current.getAttribute("data-node-id"),
+                        type: current.getAttribute("data-type")
+                    });
+                    break;
+                }
+                current = current.parentElement;
+            }
+
+            if (!itemID || !avID) {
+                console.warn("[IndexOS] Execution failed: Missing Item ID or AV ID link.", { itemID, avID });
+                return;
+            }
+
+            try {
+                console.log(`[IndexOS] Fetching Command ID from AV [${avID}] for Item [${itemID}]...`);
+                // 1. 获取该 AV 的所有列，定位 "Command ID"
+                const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID });
+                const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
+                const cmdKey = currentKeys.find((k: any) => k.name === "Command ID");
+
+                if (!cmdKey) throw new Error("未找到 Command ID 列 (请检查列名是否完全匹配 'Command ID')");
+
+                // 2. 获取该行的内容
+                const renderRes = await post("/api/av/renderAttributeView", { id: avID });
+                const rows = renderRes.view?.rows || renderRes.rows || [];
+                const row = rows.find((r: any) => r.id === itemID);
+
+                if (!row) throw new Error(`在数据库 [${avID}] 中未找到对应行 ID: ${itemID}`);
+
+                const cell = row.cells.find((c: any) => c.keyID === cmdKey.id);
+
+                // 打印完整的 cell 对象结构，帮助锁定到底值在哪里
+                console.log("[IndexOS Debug] raw cell object:", JSON.stringify(cell));
+
+                // 极端兼容性提取：尝试所有可能的路径
+                const commandText: string =
+                    cell?.value?.text?.content ||
+                    cell?.value?.mText?.content ||
+                    cell?.value?.block?.content ||
+                    (cell?.value?.type === "text" ? cell.value.content : "") ||
+                    "";
+
+                if (!commandText || commandText.trim() === "") {
+                    console.warn("[IndexOS] Command execution skipped: Command ID cell is empty. Full cell data:", cell);
+                    return;
+                }
+
+                // 3. 执行
+                focusBlock(targetEl);
+                const finalCmd = commandText.trim();
+                console.log(`[IndexOS] 🚀 Triggering: [${finalCmd}] for block [${targetEl.getAttribute("data-node-id")}]`);
+                setTimeout(() => {
+                    (window as any).siyuan?.globalCommand?.(finalCmd, plugin.app);
+                }, 50);
+
+            } catch (e) {
+                console.error("[IndexOS] Command Dispatch Error:", e);
             }
         }
     });
