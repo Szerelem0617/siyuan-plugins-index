@@ -141,7 +141,7 @@
     "columns": "列",
     "valueMappings": "命名类：",
     "typeNamePlaceholder": "类型名称",
-    "mapInfo": "设置命名类后，该类将自动成为全局 Supertag。\n此后在笔记中打上该同名标签时，插件会自动将目标块加入数据库。\n如有重名分类，可以在“管理标签”中统一控制入库偏好。",
+    "mapInfo": "命名类后，为内容打上同名tag即可快速将其加入数据库",
     "modeNone": "无",
     "modeWeak": "弱继承 (填充空值)",
     "modeStrong": "强继承 (完全覆盖)",

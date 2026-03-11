@@ -164,27 +164,51 @@ export async function setColumnWeakInheritance(avId: string, colId: string, avBl
  */
 export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
     try {
-        const stmt = `SELECT id, ial FROM blocks WHERE ial LIKE '%${ATTR_DB_CONFIG}="%'`;
+        const stmt = `SELECT id, name, content, ial FROM blocks WHERE ial LIKE '%${ATTR_DB_CONFIG}="%'`;
         const res = await client.sql({ stmt });
         const configs: TypeConfig[] = [];
+        const avNameCache = new Map<string, string>();
 
         if (res.data) {
             for (const row of res.data) {
                 const configStr = getAttrFromIAL(row.ial, ATTR_DB_CONFIG);
-                const blockName = getAttrFromIAL(row.ial, "name") || "";
+                // The actual name of the AV could be in row.name or as a block attribute
+                const blockAttr = getAttrFromIAL(row.ial, "name") || getAttrFromIAL(row.ial, "custom-av-name") || "";
+
+                let dbName = row.name || blockAttr || "";
+
                 if (configStr) {
                     try {
                         const config: DbConfig = JSON.parse(configStr);
                         if (config.typeMappings && config.typeFieldId) {
                             for (const m of config.typeMappings) {
                                 if (m.name) {
+                                    const targetAvId = config.avId || row.id;
+                                    let finalAvName = dbName;
+
+                                    if (!finalAvName) {
+                                        if (avNameCache.has(targetAvId)) {
+                                            finalAvName = avNameCache.get(targetAvId) || "";
+                                        } else {
+                                            try {
+                                                const renderRes = await post("/api/av/renderAttributeView", { id: targetAvId });
+                                                finalAvName = renderRes?.name || "";
+                                                avNameCache.set(targetAvId, finalAvName);
+                                            } catch (e) {
+                                                avNameCache.set(targetAvId, "");
+                                            }
+                                        }
+                                    }
+
+                                    console.log(`[Supertag] Resolved DB Name for ${targetAvId}: "${finalAvName}"`);
+
                                     configs.push({
                                         typeName: m.name,
-                                        avId: config.avId || row.id, // Fallback to blockId if avId not set
+                                        avId: targetAvId, // Fallback to blockId if avId not set
                                         blockId: row.id,
                                         typeFieldId: config.typeFieldId,
                                         mappedValue: m.value,
-                                        avName: blockName
+                                        avName: finalAvName
                                     });
                                 }
                             }

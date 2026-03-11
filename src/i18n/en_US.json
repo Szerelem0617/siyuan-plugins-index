@@ -141,7 +141,7 @@
     "columns": "Columns",
     "valueMappings": "Naming Class:",
     "typeNamePlaceholder": "Type Name",
-    "mapInfo": "After setting a named class, it automatically becomes a global Supertag.\nAdding the same tag to content will automatically include it in this database.\nDuplicates can be managed in 'Manage tags'.",
+    "mapInfo": "After naming a class, simply tag content with the same name to add it to the database.",
     "modeNone": "None",
     "modeWeak": "Weak (Fill Empty)",
     "modeStrong": "Strong (Overwrite)",
