@@ -1,6 +1,6 @@
-import { Dialog } from "siyuan";
-import EmojiDialog from "../ui/components/dialog/emoji-dialog.svelte";
+import { openEmoji } from "siyuan";
 import { client } from "../shared/api-client";
+import { hexToEmoji } from "../shared/utils/av-utils";
 
 /**
  * Initialize the emoji event listener for Alt+Click
@@ -21,7 +21,7 @@ async function handleAltClick(event: MouseEvent) {
 
     // Ignore database cells (they have their own handling)
     if (target.closest(".av__cell")) return;
-    
+
     // Ignore the fixed separator character
     if (textContent === "➖") return;
 
@@ -38,42 +38,43 @@ async function handleAltClick(event: MouseEvent) {
     if (textContent && emojiRegex.test(textContent)) {
         event.preventDefault();
         event.stopPropagation();
-        
+
         const blockElement = target.closest('[data-node-id]');
         if (!blockElement) return;
-        
+
         const blockId = blockElement.getAttribute('data-node-id');
-        
+
         showEmojiMenu(event.clientX, event.clientY, blockId, textContent);
     }
 }
 
 function showEmojiMenu(x: number, y: number, blockId: string | null, oldEmoji: string) {
-    const dialog = new Dialog({
-        title: "",
-        content: `<div class="emoji-dialog-content" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-        width: "360px",
-        height: "460px",
-    });
-    
-    const target = dialog.element.querySelector(".emoji-dialog-content");
-    if (target) {
-        new EmojiDialog({
-            target: target,
-            props: {
-                onSelect: (emoji: string) => {
+    try {
+        if (typeof openEmoji === 'function') {
+            openEmoji({
+                position: {
+                    x: x,
+                    y: y
+                },
+                hideDynamicIcon: true,
+                hideCustomIcon: true,
+                selectedCB: (emoji: string) => {
                     if (blockId && emoji !== undefined) {
                         // If emoji is empty string, it means remove
                         if (emoji === "") {
-                             replaceEmojiInBlock(blockId, oldEmoji, "");
+                            replaceEmojiInBlock(blockId, oldEmoji, "");
                         } else {
-                             replaceEmojiInBlock(blockId, oldEmoji, emoji);
+                            const decodedEmoji = hexToEmoji(emoji);
+                            replaceEmojiInBlock(blockId, oldEmoji, decodedEmoji);
                         }
                     }
-                    dialog.destroy();
                 }
-            }
-        });
+            });
+        } else {
+            console.warn("[Emoji-Event] SiYuan version does not support openEmoji API or it is not exported. Please update SiYuan.");
+        }
+    } catch (e) {
+        console.error("Failed to show emoji menu via SiYuan API", e);
     }
 }
 
@@ -81,20 +82,20 @@ async function replaceEmojiInBlock(blockId: string, oldEmoji: string, newEmoji: 
     try {
         const response = await client.getBlockKramdown({ id: blockId });
         if (!response.data) return;
-        
+
         let kramdown = response.data.kramdown;
 
         // Simple text replacement for Unicode emojis
         if (kramdown.includes(oldEmoji)) {
             const newKramdown = kramdown.replace(oldEmoji, newEmoji);
-            
+
             await client.updateBlock({
                 id: blockId,
                 data: newKramdown,
                 dataType: "markdown"
             });
         } else {
-             console.warn("Could not find old emoji in kramdown", oldEmoji);
+            console.warn("Could not find old emoji in kramdown", oldEmoji);
         }
 
     } catch (e) {

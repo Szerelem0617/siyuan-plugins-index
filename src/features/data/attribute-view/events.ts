@@ -53,7 +53,7 @@ class AVEventHandler {
         event.stopPropagation();
 
         const menu = new Menu("av-sync-menu");
-        this.showSyncMenu(menu, cell);
+        this.showSyncMenu(menu, cell, event);
 
         const pos = {
             clientX: event.clientX || cell.getBoundingClientRect().left,
@@ -102,7 +102,7 @@ class AVEventHandler {
         }
     }
 
-    public async showSyncMenu(menu: Menu, cell: HTMLElement) {
+    public async showSyncMenu(menu: Menu, cell: HTMLElement, event?: MouseEvent) {
         const isHeader = !!cell.closest(".av__row--header");
         const row = cell.closest(".av__row") || cell.closest(".av__gallery-item") || cell.closest(".av__kanban-item");
         const avContainer = cell.closest(".av") as HTMLElement;
@@ -148,7 +148,7 @@ class AVEventHandler {
                 menu.addItem({
                     icon: "iconEmoji",
                     label: isHeader ? i18n.dataMenu.batchSetIcon : i18n.dataMenu.selectIcon,
-                    click: () => openEmojiDialog(protyleInstance, avID, rowID || "", colID, isHeader, avBlockID)
+                    click: () => openEmojiDialog(protyleInstance, avID, rowID || "", colID, isHeader, avBlockID, event)
                 });
             }
 

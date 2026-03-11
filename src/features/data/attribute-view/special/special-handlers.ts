@@ -1,6 +1,6 @@
-import { Dialog, showMessage } from "siyuan";
+import { Dialog, showMessage, openEmoji } from "siyuan";
 import { post } from "../../../../shared/api-client/request";
-import EmojiDialog from "../../../../ui/components/dialog/emoji-dialog.svelte";
+import { hexToEmoji } from "../../../../shared/utils/av-utils";
 import { batchUpdateCellValue } from "./batch-update";
 
 export const BGS = [
@@ -109,14 +109,14 @@ export async function updateCellValue(protyleInstance: any, avID: string, rowID:
         const row = rows.find((r: any) => r.id === rowID);
         const columns = view.columns || [];
         const cellIndex = columns.findIndex((c: any) => c.id === colID);
-        
+
         if (!row || cellIndex === -1) throw new Error("Row or Column not found in current view");
-        
+
         const cellData = row.cells[cellIndex];
         const cellValue = cellData.value || {};
         const cellType = cellValue.type || cellData.valueType || "text";
         const updateData: any = { id: cellData.id, type: cellType };
-        
+
         if (["text", "template", "url", "email", "phone"].includes(cellType)) {
             updateData[cellType] = { content: newValue };
         } else if (cellType === "mAsset") {
@@ -125,7 +125,7 @@ export async function updateCellValue(protyleInstance: any, avID: string, rowID:
             updateData.type = "text";
             updateData.text = { content: newValue };
         }
-        
+
         const operation = {
             action: "updateAttrViewCell",
             id: cellData.id, avID: avID, keyID: colID, rowID: rowID, data: updateData
@@ -147,31 +147,28 @@ export async function updateCellValue(protyleInstance: any, avID: string, rowID:
     }
 }
 
-export function openEmojiDialog(protyleInstance: any, avID: string, rowID: string, colID: string, isBatch = false, avBlockID = "") {
-    const dialog = new Dialog({
-        title: "",
-        content: `<div class="emoji-dialog-content" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-        width: "360px",
-        height: "460px",
-    });
+export function openEmojiDialog(protyleInstance: any, avID: string, rowID: string, colID: string, isBatch = false, avBlockID = "", event?: MouseEvent) {
+    if (typeof openEmoji === 'function') {
+        const x = event?.clientX || window.innerWidth / 2 - 150;
+        const y = event?.clientY || window.innerHeight / 2 - 200;
 
-    const target = dialog.element.querySelector(".emoji-dialog-content");
-    if (target) {
-        new EmojiDialog({
-            target: target,
-            props: {
-                onSelect: (emoji: string) => {
-                    if (emoji !== undefined) {
-                        if (isBatch) {
-                            batchUpdateCellValue(protyleInstance, avID, colID, emoji, "text", avBlockID);
-                        } else {
-                            updateCellValue(protyleInstance, avID, rowID, colID, emoji);
-                        }
+        openEmoji({
+            position: { x, y },
+            hideDynamicIcon: true,
+            hideCustomIcon: true,
+            selectedCB: (emoji: string) => {
+                if (emoji !== undefined) {
+                    const decodedEmoji = hexToEmoji(emoji);
+                    if (isBatch) {
+                        batchUpdateCellValue(protyleInstance, avID, colID, decodedEmoji, "text", avBlockID);
+                    } else {
+                        updateCellValue(protyleInstance, avID, rowID, colID, decodedEmoji);
                     }
-                    dialog.destroy();
                 }
             }
         });
+    } else {
+        console.warn("[AttributeView-Emoji] SiYuan version does not support openEmoji API. Please update SiYuan.");
     }
 }
 
@@ -180,7 +177,7 @@ export function openBuiltInImagesDialog(protyleInstance: any, avID: string, rowI
     BGS.forEach((item, index) => {
         html += `<div data-index="${index}" style="height: 128px;${item}; cursor: pointer; border-radius: 4px; border: 1px solid var(--b3-border-color);" class="b3-card b3-card--wrap"></div>`;
     });
-    
+
     const dialog = new Dialog({
         title: "选择内置背景",
         content: `<div class="built-in-bgs" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 16px; overflow-y: auto; max-height: 70vh;">${html}</div>`,
@@ -230,7 +227,7 @@ export function openAssetDialog(protyleInstance: any, avID: string, rowID: strin
 
     const renderList = (keyword = "") => {
         listEl.innerHTML = '<div class="fn__loading" style="padding: 20px;"><img width="32px" src="/stage/loading-pure.svg"></div>';
-        post("/api/search/searchAsset", { 
+        post("/api/search/searchAsset", {
             k: keyword,
             exts: [".png", ".jpg", ".jpeg", ".gif", ".webp"]
         }).then((res: any) => {

@@ -78,6 +78,21 @@ export function isValueEmpty(val: any) {
     }
 }
 
+export function hexToEmoji(hex: string): string {
+    if (!hex) return "";
+
+    // Hex sequence regex (only hex chars and hyphens)
+    const hexPattern = /^[0-9a-fA-F-]+$/;
+
+    if (hexPattern.test(hex)) {
+        try {
+            return hex.split("-").map(item => String.fromCodePoint(parseInt(item, 16))).join("");
+        } catch (e) {
+            return hex;
+        }
+    }
+    return hex;
+}
 /**
  * 构建 AV 层级关系 (parentMap)
  */
