@@ -8,6 +8,7 @@ import { addAVMenuItems, avEventHandler } from "./features/data/attribute-view/e
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
+import { addCommandTestMenuItem } from "./features/command/registration";
 import { supertagMonitor } from "./features/data/av-setting/supertag";
 import { supertagManager } from "./features/data/av-setting/supertag-manager";
 import { version } from "../plugin.json";
@@ -26,6 +27,7 @@ export default class IndexPlugin extends Plugin {
         //监听块菜单事件
         this.eventBus.on("click-blockicon", buildDocNew);
         this.eventBus.on("click-blockicon", addDataMenuItems);
+        this.eventBus.on("click-blockicon", addCommandTestMenuItem);
         this.eventBus.on("open-menu-av", addAVMenuItems);
         //监听文档载入事件
         this.eventBus.on("loaded-protyle-static", updateIndex);
@@ -46,6 +48,7 @@ export default class IndexPlugin extends Plugin {
     onunload() {
         this.eventBus.off("click-blockicon", buildDocNew);
         this.eventBus.off("click-blockicon", addDataMenuItems);
+        this.eventBus.off("click-blockicon", addCommandTestMenuItem);
         this.eventBus.off("open-menu-av", addAVMenuItems);
         this.eventBus.off("loaded-protyle-static", updateIndex);
         this.eventBus.off("switch-protyle", this.switchHandler);
