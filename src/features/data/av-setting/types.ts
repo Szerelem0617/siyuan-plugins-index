@@ -6,7 +6,7 @@ export interface InheritanceRule {
 export interface IDBTypeMapping {
     value: string;
     name: string;
-    isSupertag: boolean | undefined;
+    isSupertag?: boolean;
 }
 
 export interface DbConfig {
@@ -22,4 +22,5 @@ export interface TypeConfig {
     blockId: string;
     typeFieldId: string;
     mappedValue: string;
+    avName?: string;
 }

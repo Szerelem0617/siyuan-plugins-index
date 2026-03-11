@@ -3,6 +3,7 @@
     import { getGlobalTypeConfigs } from "./db-config";
     import { type TypeConfig } from "./types";
     import { i18n } from "../../../shared/utils";
+    import { supertagMonitor } from "./supertag";
 
     export let dialog: any;
     export let supertagManager: any;
@@ -10,14 +11,47 @@
     let supertags: TypeConfig[] = [];
     let loading = true;
 
+    interface TagGroup {
+        typeName: string;
+        configs: TypeConfig[];
+        selectedAvId: string;
+    }
+    let groupedTags: TagGroup[] = [];
+
     onMount(async () => {
         supertags = await getGlobalTypeConfigs();
+
+        // Group them
+        const map = new Map<string, TypeConfig[]>();
+        for (const t of supertags) {
+            if (!map.has(t.typeName)) map.set(t.typeName, []);
+            map.get(t.typeName)!.push(t);
+        }
+
+        const groups: TagGroup[] = [];
+        for (const [typeName, configs] of map.entries()) {
+            const pref = supertagMonitor.getPreferredConfig(typeName);
+            groups.push({
+                typeName,
+                configs,
+                selectedAvId: pref || configs[0].avId,
+            });
+        }
+        groups.sort((a, b) => a.typeName.localeCompare(b.typeName));
+        groupedTags = groups;
         loading = false;
     });
 
-    async function handleConfigureTemplate(tag: TypeConfig) {
-        console.log("Configuring template for:", tag);
-        await supertagManager.configureTemplate(tag);
+    async function handlePrefChange(typeName: string, avId: string) {
+        await supertagMonitor.setPreferredConfig(typeName, avId);
+    }
+
+    async function handleConfigureTemplate(group: TagGroup) {
+        const config =
+            group.configs.find((c) => c.avId === group.selectedAvId) ||
+            group.configs[0];
+        console.log("Configuring template for:", config);
+        await supertagManager.configureTemplate(config);
         dialog.destroy();
     }
 </script>
@@ -75,7 +109,7 @@
                     >
                 </div>
 
-                {#each supertags as tag}
+                {#each groupedTags as group}
                     <div class="b3-list-item">
                         <svg
                             class="b3-list-item__graphic"
@@ -84,22 +118,58 @@
                         >
                         <span
                             class="b3-list-item__text"
-                            style="font-weight: bold;"
+                            style="font-weight: bold; flex: 1; margin-right: 8px;"
                         >
-                            #{tag.typeName}#
+                            #{group.typeName}#
+                            {#if group.configs.length > 1}
+                                <span
+                                    class="b3-chip b3-chip--warning b3-chip--small"
+                                    style="margin-left: 4px; border: 1px solid var(--b3-theme-warning);"
+                                    >重名</span
+                                >
+                            {/if}
                         </span>
 
-                        <span
-                            class="b3-list-item__text"
-                            style="opacity: 0.7; font-size: 0.9em; flex: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-                        >
-                            ID: {tag.avId.substring(0, 8)}...
-                        </span>
+                        <div class="b3-list-item__text" style="flex: 1.5;">
+                            {#if group.configs.length > 1}
+                                <select
+                                    class="b3-select fn__block"
+                                    style="width: 100%; max-width: 200px; padding: 0 4px; height: 24px; line-height: 24px;"
+                                    bind:value={group.selectedAvId}
+                                    on:change={() =>
+                                        handlePrefChange(
+                                            group.typeName,
+                                            group.selectedAvId,
+                                        )}
+                                >
+                                    {#each group.configs as cfg}
+                                        <option value={cfg.avId}
+                                            >{cfg.avName ||
+                                                "ID: " +
+                                                    cfg.avId.substring(0, 8) +
+                                                    "..."}</option
+                                        >
+                                    {/each}
+                                </select>
+                            {:else}
+                                <span
+                                    style="opacity: 0.7; font-size: 0.9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                                >
+                                    {group.configs[0].avName ||
+                                        "ID: " +
+                                            group.configs[0].avId.substring(
+                                                0,
+                                                8,
+                                            ) +
+                                            "..."}
+                                </span>
+                            {/if}
+                        </div>
 
                         <div class="fn__flex">
                             <button
                                 class="b3-button b3-button--outline b3-button--small fn__flex-center"
-                                on:click={() => handleConfigureTemplate(tag)}
+                                on:click={() => handleConfigureTemplate(group)}
                                 style="margin-left: 8px; white-space: nowrap;"
                             >
                                 <svg

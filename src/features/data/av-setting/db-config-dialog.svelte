@@ -1,9 +1,5 @@
 <script lang="ts">
-    import {
-        saveDbConfig,
-        syncInheritanceToDb,
-        getGlobalTypeConfigs,
-    } from "./db-config";
+    import { saveDbConfig, syncInheritanceToDb } from "./db-config";
     import type { DbConfig, IDBTypeMapping } from "./types";
     import { showMessage } from "siyuan";
     import { i18n } from "../../../shared/utils";
@@ -135,7 +131,6 @@
             newMappings.push({
                 value: val,
                 name: existing?.name || "",
-                isSupertag: existing?.isSupertag || false,
             });
         });
 
@@ -180,24 +175,7 @@
             return;
         }
 
-        // 2. Validate global uniqueness (across other DBs) ONLY for supertags
-        showMessage(i18n.dbConfig.checkingConflict, 1000);
-        const globalConfigs = await getGlobalTypeConfigs();
-        for (const m of activeMappings) {
-            if (m.isSupertag) {
-                const conflict = globalConfigs.find(
-                    (c) => c.typeName === m.name && c.blockId !== blockId,
-                );
-                if (conflict) {
-                    showMessage(
-                        `${i18n.dbConfig.errGlobalConflictType} "${m.name}" ${i18n.dbConfig.errGlobalConflictUsed}`,
-                        3000,
-                        "error",
-                    );
-                    return;
-                }
-            }
-        }
+        // Global uniqueness validation removed: duplicate types are allowed and resolved in Supertag Manager.
 
         const finalInheritanceRules = inheritanceList
             .filter((i) => i.mode !== "none")
@@ -334,32 +312,6 @@
                                         .typeNamePlaceholder}
                                     bind:value={map.name}
                                 />
-                                <button
-                                    class="b3-button b3-button--text"
-                                    style="margin-left: 8px; padding: 4px; line-height: 1; color: {map.isSupertag
-                                        ? '#f5a623'
-                                        : 'var(--b3-theme-on-surface-light)'}; opacity: {map.isSupertag
-                                        ? '1'
-                                        : '0.3'}; transition: all 0.2s ease;"
-                                    aria-label={map.isSupertag
-                                        ? i18n.dbConfig.cancelSupertag
-                                        : i18n.dbConfig.setSupertag}
-                                    title={map.isSupertag
-                                        ? i18n.dbConfig.cancelSupertag
-                                        : i18n.dbConfig.setSupertag}
-                                    on:click={() => {
-                                        map.isSupertag = !map.isSupertag;
-                                        typeMappings = [...typeMappings];
-                                    }}
-                                >
-                                    <svg style="width: 14px; height: 14px;"
-                                        ><use
-                                            xlink:href={map.isSupertag
-                                                ? "#iconStar"
-                                                : "#iconStar"}
-                                        ></use></svg
-                                    >
-                                </button>
                             </div>
                         {/each}
                         <div

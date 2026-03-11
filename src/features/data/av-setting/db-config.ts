@@ -171,18 +171,20 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
         if (res.data) {
             for (const row of res.data) {
                 const configStr = getAttrFromIAL(row.ial, ATTR_DB_CONFIG);
+                const blockName = getAttrFromIAL(row.ial, "name") || "";
                 if (configStr) {
                     try {
                         const config: DbConfig = JSON.parse(configStr);
                         if (config.typeMappings && config.typeFieldId) {
                             for (const m of config.typeMappings) {
-                                if (m.name && m.isSupertag) {
+                                if (m.name) {
                                     configs.push({
                                         typeName: m.name,
                                         avId: config.avId || row.id, // Fallback to blockId if avId not set
                                         blockId: row.id,
                                         typeFieldId: config.typeFieldId,
-                                        mappedValue: m.value
+                                        mappedValue: m.value,
+                                        avName: blockName
                                     });
                                 }
                             }

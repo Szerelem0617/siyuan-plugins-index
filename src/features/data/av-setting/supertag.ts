@@ -24,14 +24,32 @@ export class SupertagMonitor {
     private boundHandler = this.handleWsMessage.bind(this);
     private pluginInstance: any = null;
 
+    private prefs: Record<string, string> = {};
+
     init(plugin: any) {
         this.pluginInstance = plugin;
         if (this.pluginInstance && this.pluginInstance.eventBus) {
             this.pluginInstance.eventBus.on("ws-main", this.boundHandler);
             console.log("[Supertag] Monitor started processing global ws-main events.");
+
+            // Load preferences
+            this.pluginInstance.loadData("supertag-prefs.json").then((data: any) => {
+                if (data) this.prefs = data;
+            }).catch(() => { });
         } else {
             console.error("[Supertag] Failed to start monitor: Plugin eventbus not provided.");
         }
+    }
+
+    async setPreferredConfig(typeName: string, avId: string) {
+        this.prefs[typeName] = avId;
+        if (this.pluginInstance) {
+            await this.pluginInstance.saveData("supertag-prefs.json", this.prefs);
+        }
+    }
+
+    public getPreferredConfig(typeName: string) {
+        return this.prefs[typeName];
     }
 
     destroy() {
@@ -51,10 +69,6 @@ export class SupertagMonitor {
                 if (op.action === "update" || op.action === "insert" || op.action === "setAttrs" || op.action === "updateAttrs") {
                     const blockId = op.id;
                     if (!blockId || !op.data) continue;
-
-                    if (typeof op.data === 'string' && (op.data.includes('tag') || op.data.includes('#'))) {
-                        // console.debug(`[Supertag] Inspecting potential tag op: [${op.action}] on ${blockId}`, op.data);
-                    }
 
                     // Extract all tags currently embedded in the operation payload
                     const newTags = this.extractTagsFromPayload(op.data);
@@ -155,7 +169,19 @@ export class SupertagMonitor {
             }
 
             const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-            const config = this.typeRegistry.find(c => c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim() === cleanTag);
+
+            // Check for matched configs
+            let matchedConfigs = this.typeRegistry.filter(c => c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim() === cleanTag);
+            let config = null;
+
+            if (matchedConfigs.length > 0) {
+                const pref = this.prefs[cleanTag];
+                if (pref) {
+                    config = matchedConfigs.find(c => c.avId === pref) || matchedConfigs[0];
+                } else {
+                    config = matchedConfigs[0];
+                }
+            }
 
             if (config) {
                 console.log(`[Supertag] ✨ MATCH! Tag "${cleanTag}" matches type "${config.typeName}". Triggering DB sync...`, config);
