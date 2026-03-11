@@ -138,12 +138,51 @@ export async function constructCommandStorage() {
                             });
                             lastKeyID = newID;
                             await sleep(200);
+                            return newID;
                         };
 
-                        await addCol("Command ID", "text", "iconCode");
+                        const commandIdKey = await addCol("Command ID", "text", "iconCode");
                         await addCol("Command Type", "select", "iconTags");
                         await addCol("Target Scope", "select", "iconFocus");
-                        await addCol("Enable", "checkbox", "iconCheck");
+                        const enableKey = await addCol("Enable", "checkbox", "iconCheck");
+
+                        // 5. Populate default data
+                        const configData: Record<string, string> = {
+                            "📌 转为待办任务": "editor.list.checkToggle",
+                            "🗃️ 添加到数据库": "general.addToDatabase",
+                            "⬇️ 下方插入同级块": "editor.general.insertAfter",
+                            "📑 复制当前块": "editor.general.duplicate",
+                            "🖇️ 复制块引用": "editor.general.copyBlockRef",
+                            "🔍 在右侧分屏打开": "general.splitLR"
+                        };
+
+                        const renderRes = await post("/api/av/renderAttributeView", { id: avId });
+                        const rows = renderRes.view?.rows || renderRes.rows || [];
+                        const populateOps: any[] = [];
+
+                        for (const row of rows) {
+                            const label = (row.cells[0]?.value?.mText?.content || row.cells[0]?.value?.text?.content || "").trim();
+                            const cmdId = configData[label];
+                            if (cmdId) {
+                                populateOps.push({
+                                    keyID: commandIdKey,
+                                    itemID: row.id,
+                                    value: { type: "text", text: { content: cmdId } }
+                                });
+                                populateOps.push({
+                                    keyID: enableKey,
+                                    itemID: row.id,
+                                    value: { type: "checkbox", checkbox: { checked: true } }
+                                });
+                            }
+                        }
+
+                        if (populateOps.length > 0) {
+                            await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                                avID: avId,
+                                values: populateOps
+                            });
+                        }
 
                         showMessage(`[IndexOS] 命令大盘数据库初始化完毕！`, 3000);
                     }
