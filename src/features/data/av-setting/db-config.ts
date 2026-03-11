@@ -126,6 +126,7 @@ export async function saveDbConfig(blockId: string, config: DbConfig) {
             id: blockId,
             attrs: { [ATTR_DB_CONFIG]: JSON.stringify(config) }
         });
+        window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
     } catch (e) {
         console.error("Failed to save DB config", e);
     }
@@ -180,36 +181,56 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                 if (configStr) {
                     try {
                         const config: DbConfig = JSON.parse(configStr);
-                        if (config.typeMappings && config.typeFieldId) {
-                            for (const m of config.typeMappings) {
-                                if (m.name) {
-                                    const targetAvId = config.avId || row.id;
-                                    let finalAvName = dbName;
+                        const targetAvId = config.avId || row.id;
 
-                                    if (!finalAvName) {
-                                        if (avNameCache.has(targetAvId)) {
-                                            finalAvName = avNameCache.get(targetAvId) || "";
-                                        } else {
-                                            try {
-                                                const renderRes = await post("/api/av/renderAttributeView", { id: targetAvId });
-                                                finalAvName = renderRes?.name || "";
-                                                avNameCache.set(targetAvId, finalAvName);
-                                            } catch (e) {
-                                                avNameCache.set(targetAvId, "");
-                                            }
-                                        }
+                        // Helper to resolve the DB name dynamically
+                        const resolveDBName = async () => {
+                            let finalAvName = dbName;
+                            if (!finalAvName) {
+                                if (avNameCache.has(targetAvId)) {
+                                    finalAvName = avNameCache.get(targetAvId) || "";
+                                } else {
+                                    try {
+                                        const renderRes = await post("/api/av/renderAttributeView", { id: targetAvId });
+                                        finalAvName = renderRes?.name || "";
+                                        avNameCache.set(targetAvId, finalAvName);
+                                    } catch (e) {
+                                        avNameCache.set(targetAvId, "");
                                     }
+                                }
+                            }
+                            return finalAvName;
+                        };
 
-                                    console.log(`[Supertag] Resolved DB Name for ${targetAvId}: "${finalAvName}"`);
+                        if (config.mode !== "multi" && config.singleClassName) {
+                            // Single mode
+                            const finalAvName = await resolveDBName();
+                            console.log(`[Supertag] Resolved DB Name for ${targetAvId} (Single Mode): "${finalAvName}"`);
+                            configs.push({
+                                typeName: config.singleClassName,
+                                avId: targetAvId,
+                                blockId: row.id,
+                                typeFieldId: undefined,
+                                mappedValue: undefined,
+                                avName: finalAvName
+                            });
+                        } else if (config.mode === "multi" || (config.typeMappings && config.typeFieldId)) {
+                            // Multi mode (or legacy with no mode explicitly set but has mappings)
+                            if (config.typeMappings && config.typeFieldId) {
+                                for (const m of config.typeMappings) {
+                                    if (m.name) {
+                                        const finalAvName = await resolveDBName();
+                                        console.log(`[Supertag] Resolved DB Name for ${targetAvId}: "${finalAvName}"`);
 
-                                    configs.push({
-                                        typeName: m.name,
-                                        avId: targetAvId, // Fallback to blockId if avId not set
-                                        blockId: row.id,
-                                        typeFieldId: config.typeFieldId,
-                                        mappedValue: m.value,
-                                        avName: finalAvName
-                                    });
+                                        configs.push({
+                                            typeName: m.name,
+                                            avId: targetAvId, // Fallback to blockId if avId not set
+                                            blockId: row.id,
+                                            typeFieldId: config.typeFieldId,
+                                            mappedValue: m.value,
+                                            avName: finalAvName
+                                        });
+                                    }
                                 }
                             }
                         }

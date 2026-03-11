@@ -11,8 +11,11 @@ export class SupertagMonitor {
     private lastUpdate = 0;
     private tagCache = new Map<string, Set<string>>();
 
+    private refreshBoundHandler = this.refreshRegistry.bind(this);
+
     constructor() {
         this.refreshRegistry();
+        window.addEventListener("index-plugin-refresh-supertags", this.refreshBoundHandler);
     }
 
     async refreshRegistry() {
@@ -56,6 +59,7 @@ export class SupertagMonitor {
         if (this.pluginInstance && this.pluginInstance.eventBus) {
             this.pluginInstance.eventBus.off("ws-main", this.boundHandler);
         }
+        window.removeEventListener("index-plugin-refresh-supertags", this.refreshBoundHandler);
     }
 
     private async handleWsMessage({ detail }: any) {
@@ -220,22 +224,24 @@ export class SupertagMonitor {
                 await new Promise(r => setTimeout(r, 200));
             }
 
-            // 3. Get actual column type
-            const { idToType } = await getColIDMap(config.avId);
-            const colType = idToType[config.typeFieldId] || "text"; // fallback
+            if (config.typeFieldId && config.mappedValue !== undefined) {
+                // 3. Get actual column type
+                const { idToType } = await getColIDMap(config.avId);
+                const colType = idToType[config.typeFieldId] || "text"; // fallback
 
-            // 4. Set the attribute value
-            const valuePayload = this.formatValue(config.mappedValue, colType);
+                // 4. Set the attribute value
+                const valuePayload = this.formatValue(config.mappedValue, colType);
 
-            const updateRes = await post("/api/av/batchSetAttributeViewBlockAttrs", {
-                avID: config.avId,
-                values: [{
-                    keyID: config.typeFieldId,
-                    itemID: itemId,
-                    value: valuePayload
-                }]
-            });
-            console.log(`[Supertag] Update Attribute Result:`, updateRes);
+                const updateRes = await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                    avID: config.avId,
+                    values: [{
+                        keyID: config.typeFieldId,
+                        itemID: itemId,
+                        value: valuePayload
+                    }]
+                });
+                console.log(`[Supertag] Update Attribute Result:`, updateRes);
+            }
 
             // 4. Force UI refresh for the AV block so the new row shows up immediately
             await post("/api/transactions", {

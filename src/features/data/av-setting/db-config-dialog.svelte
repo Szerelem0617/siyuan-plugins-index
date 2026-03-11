@@ -11,7 +11,13 @@
     export let dialog: any;
 
     let activeTab = "type"; // type | inheritance
-
+    // Auto-detect mode for backward compatibility
+    let mode: "single" | "multi" =
+        currentConfig.mode ||
+        (currentConfig.typeMappings && currentConfig.typeMappings.length > 0
+            ? "multi"
+            : "single");
+    let singleClassName = currentConfig.singleClassName || "";
     let typeFieldId = currentConfig.typeFieldId || "";
     let typeMappings: IDBTypeMapping[] = currentConfig.typeMappings || [];
     let inheritanceRules = currentConfig.inheritanceRules || [];
@@ -162,17 +168,19 @@
         const activeMappings = typeMappings.filter((m) => m.name.trim() !== "");
 
         // 1. Validate internal uniqueness (within this DB)
-        const names = activeMappings.map((m) => m.name);
-        const internalDuplicates = names.filter(
-            (name, index) => names.indexOf(name) !== index,
-        );
-        if (internalDuplicates.length > 0) {
-            showMessage(
-                `${i18n.dbConfig.errInternalConflict} "${internalDuplicates[0]}"`,
-                3000,
-                "error",
+        if (mode === "multi") {
+            const names = activeMappings.map((m) => m.name);
+            const internalDuplicates = names.filter(
+                (name, index) => names.indexOf(name) !== index,
             );
-            return;
+            if (internalDuplicates.length > 0) {
+                showMessage(
+                    `${i18n.dbConfig.errInternalConflict} "${internalDuplicates[0]}"`,
+                    3000,
+                    "error",
+                );
+                return;
+            }
         }
 
         // Global uniqueness validation removed: duplicate types are allowed and resolved in Supertag Manager.
@@ -183,7 +191,9 @@
 
         const config: DbConfig = {
             avId,
-            typeFieldId,
+            mode,
+            singleClassName: singleClassName.trim(),
+            typeFieldId: typeFieldId,
             typeMappings: activeMappings,
             inheritanceRules: finalInheritanceRules as any,
         };
@@ -212,7 +222,6 @@
         dialog.destroy();
     };
 
-    // Derived lists for Dropdown
     $: pinnedColumns = columns.filter((c) => c.isPinned);
     $: normalColumns = columns.filter((c) => {
         if (c.isPinned) return false;
@@ -220,6 +229,12 @@
         if (c.isSystem) return false; // Filter out other system columns if any
         return true;
     });
+
+    function toggleMode() {
+        if (window.confirm(i18n.dbConfig.switchModePrompt)) {
+            mode = mode === "single" ? "multi" : "single";
+        }
+    }
 </script>
 
 <div
@@ -252,75 +267,143 @@
     <div style="flex: 1; overflow-y: auto; overflow-x: hidden;">
         {#if activeTab === "type"}
             <div class="config-section">
-                <!-- Dropdown (unchanged) -->
-                <label class="b3-label">
-                    {i18n.dbConfig.typeFieldLabel}
-                    <div class="b3-form__icon">
-                        <select
-                            class="b3-select fn__block"
-                            bind:value={typeFieldId}
-                            on:change={() => {
-                                // Clear existing mappings when switching column manually
-                                typeMappings = [];
-                                onTypeFieldChange();
-                            }}
+                <!-- Mode Selection -->
+                <div
+                    class="fn__flex"
+                    style="margin-bottom: 16px; align-items: center; justify-content: space-between;"
+                >
+                    <span
+                        class="b3-label"
+                        style="margin: 0; font-weight: bold; font-size: 14px;"
+                    >
+                        {mode === "single"
+                            ? i18n.dbConfig.modeSingle
+                            : i18n.dbConfig.modeMulti}
+                        <span
+                            style="font-size: 12px; font-weight: normal; margin-left: 8px; color: var(--b3-theme-on-surface-light);"
+                            >( 当前生效模式 )</span
                         >
-                            <option value="">{i18n.dbConfig.selectField}</option
-                            >
+                    </span>
+                    <button
+                        class="b3-button b3-button--cancel"
+                        style="padding: 4px 8px;"
+                        on:click={toggleMode}
+                    >
+                        <svg
+                            class="b3-list-item__graphic"
+                            style="height: 14px; width: 14px; margin-right: 4px;"
+                            ><use xlink:href="#iconRefresh"></use></svg
+                        >
+                        切换至 {mode === "single"
+                            ? i18n.dbConfig.modeMulti
+                            : i18n.dbConfig.modeSingle}
+                    </button>
+                </div>
 
-                            <optgroup label={i18n.dbConfig.systemProps}>
-                                {#each pinnedColumns as col}
-                                    <option value={col.id}>
-                                        📍 {col.name}
-                                    </option>
-                                {/each}
-                            </optgroup>
+                <div class="fn__hr"></div>
 
-                            <optgroup label={i18n.dbConfig.columns}>
-                                {#each normalColumns as col}
-                                    <option value={col.id}>{col.name}</option>
-                                {/each}
-                            </optgroup>
-                        </select>
-                    </div>
-                </label>
-
-                {#if typeFieldId}
-                    <div style="margin-top: 12px;">
-                        <div class="b3-label">
-                            {i18n.dbConfig.valueMappings}
-                        </div>
-                        <div class="fn__hr"></div>
-                        {#each typeMappings as map}
+                {#if mode === "single"}
+                    <!-- Single Mode Config -->
+                    <div style="margin-top: 12px; padding: 0 4px;">
+                        <div
+                            class="fn__flex"
+                            style="align-items: center; justify-content: space-between; gap: 16px;"
+                        >
                             <div
-                                class="fn__flex"
-                                style="margin-bottom: 8px; align-items: center;"
+                                class="b3-label"
+                                style="margin: 0; font-weight: bold; flex-shrink: 0;"
                             >
-                                <div
-                                    style="width: 200px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex-shrink: 0;"
-                                    title="{selectedColumn?.name}-{map.value}"
-                                >
-                                    <span class="b3-chip b3-chip--secondary">
-                                        {selectedColumn?.name}
-                                        - {map.value || "(Empty/Null)"}
-                                    </span>
-                                </div>
-                                <span style="margin: 0 8px;">→</span>
-                                <input
-                                    class="b3-input fn__flex-1"
-                                    placeholder={i18n.dbConfig
-                                        .typeNamePlaceholder}
-                                    bind:value={map.name}
-                                />
+                                {i18n.dbConfig.singleClassLabel}
                             </div>
-                        {/each}
+                            <input
+                                class="b3-input fn__flex-1"
+                                placeholder={i18n.dbConfig.typeNamePlaceholder}
+                                bind:value={singleClassName}
+                            />
+                        </div>
                         <div
                             class="b3-label__text"
-                            style="margin-top: 8px; white-space: pre-wrap;"
+                            style="margin-top: 12px; white-space: pre-wrap;"
                         >
                             {i18n.dbConfig.mapInfo}
                         </div>
                     </div>
+                {:else}
+                    <!-- Multi Mode Config (unchanged) -->
+                    <label class="b3-label">
+                        {i18n.dbConfig.typeFieldLabel}
+                        <div class="b3-form__icon">
+                            <select
+                                class="b3-select fn__block"
+                                bind:value={typeFieldId}
+                                on:change={() => {
+                                    // Clear existing mappings when switching column manually
+                                    typeMappings = [];
+                                    onTypeFieldChange();
+                                }}
+                            >
+                                <option value=""
+                                    >{i18n.dbConfig.selectField}</option
+                                >
+
+                                <optgroup label={i18n.dbConfig.systemProps}>
+                                    {#each pinnedColumns as col}
+                                        <option value={col.id}>
+                                            📍 {col.name}
+                                        </option>
+                                    {/each}
+                                </optgroup>
+
+                                <optgroup label={i18n.dbConfig.columns}>
+                                    {#each normalColumns as col}
+                                        <option value={col.id}
+                                            >{col.name}</option
+                                        >
+                                    {/each}
+                                </optgroup>
+                            </select>
+                        </div>
+                    </label>
+
+                    {#if typeFieldId}
+                        <div style="margin-top: 12px;">
+                            <div class="b3-label">
+                                {i18n.dbConfig.valueMappings}
+                            </div>
+                            <div class="fn__hr"></div>
+                            {#each typeMappings as map}
+                                <div
+                                    class="fn__flex"
+                                    style="margin-bottom: 8px; align-items: center;"
+                                >
+                                    <div
+                                        style="width: 200px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex-shrink: 0;"
+                                        title="{selectedColumn?.name}-{map.value}"
+                                    >
+                                        <span
+                                            class="b3-chip b3-chip--secondary"
+                                        >
+                                            {selectedColumn?.name}
+                                            - {map.value || "(Empty/Null)"}
+                                        </span>
+                                    </div>
+                                    <span style="margin: 0 8px;">→</span>
+                                    <input
+                                        class="b3-input fn__flex-1"
+                                        placeholder={i18n.dbConfig
+                                            .typeNamePlaceholder}
+                                        bind:value={map.name}
+                                    />
+                                </div>
+                            {/each}
+                            <div
+                                class="b3-label__text"
+                                style="margin-top: 8px; white-space: pre-wrap;"
+                            >
+                                {i18n.dbConfig.mapInfo}
+                            </div>
+                        </div>
+                    {/if}
                 {/if}
             </div>
         {/if}
