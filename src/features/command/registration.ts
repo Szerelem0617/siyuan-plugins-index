@@ -166,12 +166,17 @@ export function addCommandTestMenuItem({ detail }: any) {
                     protyleFound: !!protyleEl
                 });
 
-                // 强制关闭上下文菜单，交还焦点给主编辑器
-                document.querySelectorAll(".b3-menu").forEach(menu => menu.remove());
-
-                // 强制给文档外层容器重新赋予焦点
-                if (protyleEl instanceof HTMLElement) {
-                    protyleEl.focus();
+                // 使用思源官方 API 关闭菜单，保证内部 isOpen 状态被正确重置。
+                // 直接 DOM remove 会导致 menu.isOpen 仍为 true，后续所有块标点击均失效。
+                try {
+                    const syMenu = (window as any).siyuan?.menus?.menu;
+                    if (syMenu) {
+                        syMenu.remove();
+                        console.log("[IndexOS Debug] siyuan.menus.menu.remove() called — menu state reset.");
+                    }
+                } catch (e) {
+                    console.warn("[IndexOS Debug] Menu remove failed, trying DOM fallback:", e);
+                    document.querySelectorAll(".b3-menu").forEach((m: any) => m.remove());
                 }
 
                 // 给思源内部状态刷新留出时间

@@ -24,7 +24,10 @@ export default class IndexPlugin extends Plugin {
         await initTopbar();
         // await this.initSettings();
         await settings.initData();
-        //监听块菜单事件
+        //监听块菜单事件 (debug: trace every fire)
+        this.eventBus.on("click-blockicon", (e: any) => {
+            console.log(`[IndexOS Debug] click-blockicon FIRED. blocks: ${e.detail?.blockElements?.length}, protyle: ${!!e.detail?.protyle}`);
+        });
         this.eventBus.on("click-blockicon", buildDocNew);
         this.eventBus.on("click-blockicon", addDataMenuItems);
         this.eventBus.on("click-blockicon", addCommandTestMenuItem);
