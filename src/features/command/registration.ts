@@ -4,7 +4,7 @@ import { post } from "../../shared/api-client/request";
 import { globalCommand } from "siyuan";
 import type { Protyle, Menu } from "siyuan";
 
-export const DEV_ENABLE_INIT_SYS = true;
+export const DEV_ENABLE_INIT_SYS = false;
 
 /** 
  * 生成用于 Slash (/) 召唤出的初始构建指令选项
@@ -57,37 +57,15 @@ export function addCommandTestMenuItem({ detail }: any) {
         icon: "iconRocket",
         label: "🚀 (生产测) 执行数据库绑定的指令",
         click: async () => {
-            console.log(`[IndexOS Debug] 🚀 Rocket menu item clicked. activeElement: ${(document.activeElement as HTMLElement)?.tagName}.${(document.activeElement as HTMLElement)?.className?.split(' ')[0]}`);
             const targetEl = blockElements[0] as HTMLElement;
-
-            // 打印所有属性辅助调试
-            const allAttrs: Record<string, string> = {};
-            for (let i = 0; i < targetEl.attributes.length; i++) {
-                allAttrs[targetEl.attributes[i].name] = targetEl.attributes[i].value;
-            }
-
             const itemID = targetEl.getAttribute("custom-av-item-id");
-
-            // 调试日志：初次点击的信息
-            console.log("[IndexOS Debug] Clicked Block Full Info:", {
-                id: targetEl.getAttribute("data-node-id"),
-                type: targetEl.getAttribute("data-type"),
-                itemID: itemID,
-                allAttributes: allAttrs
-            });
 
             // 向上溯源：寻找带有 custom-index-linked-av 的祖先块
             let current: HTMLElement | null = targetEl;
-            let avID = null;
+            let avID: string | null = null;
             while (current && current !== document.body) {
                 avID = current.getAttribute("custom-index-linked-av");
-                if (avID) {
-                    console.log(`[IndexOS Debug] Found linked avID: ${avID} on block:`, {
-                        id: current.getAttribute("data-node-id"),
-                        type: current.getAttribute("data-type")
-                    });
-                    break;
-                }
+                if (avID) break;
                 current = current.parentElement;
             }
 
@@ -147,52 +125,35 @@ export function addCommandTestMenuItem({ detail }: any) {
                 }
 
                 // 5. 执行
-                const protyleEl = targetEl.closest('.protyle-content');
-                focusBlock(targetEl);
-
-                // 思源的 globalCommand() 只接受裸命令名（如 "graphView"、"splitLR"），
-                // 不接受 keymap 的点分格式（如 "general.graphView"）。
-                // 所以我们把数据库里存的 "general.graphView" 取最后一段即可。
+                const protyleEl = targetEl.closest('.protyle-content') as HTMLElement | null;
                 const fullCmd = commandText.trim();
-                const finalCmd = fullCmd.includes(".")
-                    ? fullCmd.split(".").pop()!
-                    : fullCmd;
 
-                console.log(`[IndexOS Debug] Execution Probe:`, {
-                    rawCommand: fullCmd,
-                    resolvedCommand: finalCmd,
-                    appObject: !!plugin.app,
-                    targetBlockID: targetEl.getAttribute("data-node-id"),
-                    protyleFound: !!protyleEl
-                });
-
-                // 使用思源官方 API 关闭菜单，保证内部 isOpen 状态被正确重置。
-                // 直接 DOM remove 会导致 menu.isOpen 仍为 true，后续所有块标点击均失效。
+                // 先关菜单（同步），保证 isOpen 被正确重置
                 try {
-                    const syMenu = (window as any).siyuan?.menus?.menu;
-                    if (syMenu) {
-                        syMenu.remove();
-                        console.log("[IndexOS Debug] siyuan.menus.menu.remove() called — menu state reset.");
-                    }
-                } catch (e) {
-                    console.warn("[IndexOS Debug] Menu remove failed, trying DOM fallback:", e);
+                    (window as any).siyuan?.menus?.menu?.remove();
+                } catch (_) {
                     document.querySelectorAll(".b3-menu").forEach((m: any) => m.remove());
                 }
 
-                // 给思源内部状态刷新留出时间
+                // 在菜单完全关闭后再设置焦点并派发命令
+                // 这样 contentEl.focus() + addRange() 才能真正落到 contenteditable 里
                 console.log(`[IndexOS] 🚀 Dispatching [${fullCmd}]...`);
                 setTimeout(() => {
                     try {
-                        const result = dispatchSiyuanCommand(fullCmd, targetEl, protyleEl as HTMLElement | null);
+                        // 菜单已关闭，现在可以安全地把焦点切到目标块
+                        focusBlock(targetEl, protyleEl);
+                        console.log(`[IndexOS Debug] After focusBlock — activeElement: ${(document.activeElement as HTMLElement)?.tagName}.${(document.activeElement as HTMLElement)?.className?.split(' ')[0]}, hasSelection: ${window.getSelection()?.rangeCount}`);
+
+                        // 派发命令
+                        const result = dispatchSiyuanCommand(fullCmd, targetEl, protyleEl);
                         console.log(`[IndexOS] Command dispatched. Result:`, result);
                     } catch (err) {
                         console.error("[IndexOS] Command Execution Failed:", err);
                     } finally {
-                        // 无论成功失败，都必须清理我们留下的状态，否则下次右键会出现异常
-                        console.log("[IndexOS Debug] Cleaning up focus state...");
-                        cleanupFocusState();
+                        // 稍后清理，避免在键盘事件处理器还在运行时就清掉 Selection
+                        setTimeout(() => cleanupFocusState(), 100);
                     }
-                }, 250);
+                }, 150);
 
             } catch (e) {
                 console.error("[IndexOS] Action Dispatch Error:", e);
@@ -271,69 +232,99 @@ function dispatchSiyuanCommand(
 }
 
 /**
- * 将 SiYuan 快捷键字符串（Mac 符号格式）转换为 KeyboardEventInit
- * ⌘=Meta/Ctrl, ⇧=Shift, ⌥=Alt, ⌫=Backspace, ⌦=Delete, ↩=Enter, ⇥=Tab
+ * 将 SiYuan 快捷键字符串（Mac 符号格式）转换为 KeyboardEvent
+ *
+ * 平台差异（参见 SiYuan 源码 isOnlyMeta）：
+ *   - Mac:     ⌘ → metaKey=true,  ctrlKey=false
+ *   - Windows: ⌘ → metaKey=false, ctrlKey=true
+ * ⌃ 始终映射为 ctrlKey=true（仅 Mac 独有按键）
  */
 function hotkeyToKeyboardEvent(hotkey: string): KeyboardEvent | null {
     try {
+        const isMacPlatform = navigator.platform.toUpperCase().indexOf("MAC") > -1;
+
         let ctrlKey = false, shiftKey = false, altKey = false, metaKey = false;
         let keyStr = hotkey;
-        if (keyStr.includes("⌘")) { ctrlKey = true; metaKey = true; keyStr = keyStr.replace("⌘", ""); }
+
+        // ⌃ 始终是 ctrlKey（Mac 上的 Control 键）
+        if (keyStr.includes("⌃")) { ctrlKey = true; keyStr = keyStr.replace("⌃", ""); }
+
+        // ⌘ 在 Mac 上是 metaKey，在 Windows 上是 ctrlKey
+        if (keyStr.includes("⌘")) {
+            if (isMacPlatform) {
+                metaKey = true;
+            } else {
+                ctrlKey = true;  // Windows: isOnlyMeta() 要求 !metaKey && ctrlKey
+            }
+            keyStr = keyStr.replace("⌘", "");
+        }
+
         if (keyStr.includes("⇧")) { shiftKey = true; keyStr = keyStr.replace("⇧", ""); }
         if (keyStr.includes("⌥")) { altKey = true; keyStr = keyStr.replace("⌥", ""); }
+
         const keyMap: Record<string, string> = {
             "↩": "Enter", "⌫": "Backspace", "⌦": "Delete", "⇥": "Tab",
             "↑": "ArrowUp", "↓": "ArrowDown", "←": "ArrowLeft", "→": "ArrowRight",
-            "F1": "F1", "F2": "F2", "F3": "F3", "F4": "F4", "F5": "F5",
         };
         const key = keyMap[keyStr] || keyStr || "Unidentified";
+
+        // keyCode 供旧版检测路径使用（现代 SiYuan 主要用 key 字段）
+        let keyCode = 0;
+        if (key.length === 1) keyCode = key.toUpperCase().charCodeAt(0);
+        else if (key === "Enter") keyCode = 13;
+        else if (key === "Backspace") keyCode = 8;
+        else if (key === "Delete") keyCode = 46;
+        else if (key === "Tab") keyCode = 9;
+
+        console.log(`[IndexOS Debug] hotkeyToKeyboardEvent: "${hotkey}" → key="${key}" ctrl=${ctrlKey} shift=${shiftKey} alt=${altKey} meta=${metaKey} (${isMacPlatform ? "Mac" : "Win"})`);
+
         return new KeyboardEvent("keydown", {
             key, ctrlKey, shiftKey, altKey, metaKey,
             bubbles: true, cancelable: true, composed: true,
-            keyCode: key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0,
+            keyCode,
         });
     } catch (e) {
-        console.warn(`[IndexOS Debug] hotkeyToKeyboardEvent failed for "${hotkey}":`, e);
+        console.warn(`[IndexOS] hotkeyToKeyboardEvent failed for "${hotkey}":`, e);
         return null;
     }
 }
 
 
+
 /**
- * 让 SiYuan 编辑器的焦点指向目标块，使命令可以正确获取到"当前块"。
- * 注意：故意不派发 mousedown/mouseup/click 事件，因为它们会冒泡进
- * SiYuan 的 wysiwyg 事件处理器，触发额外的选区和编辑状态变化，
- * 导致后续右键操作异常。只通过 Selection API 设置光标即可。
+ * 让 SiYuan 编辑器的焦点指向目标块，使 KeyboardEvent 可以正确定位到当前块。
+ * 此函数应当在菜单完全关闭之后才被调用（在 setTimeout 回调内），
+ * 这样 contentEl.focus() 才不会干扰菜单的 isOpen 状态。
  */
-function focusBlock(blockEl: HTMLElement) {
+function focusBlock(blockEl: HTMLElement, protyleEl: HTMLElement | null = null) {
     if (!blockEl) return;
 
-    console.log(`[IndexOS Debug] focusBlock called on: ${blockEl.getAttribute("data-node-id")}`);
-
-    // 1. 挂上选中态 Class（让思源认为该块处于焦点状态）
+    // 1. 挂上选中态 class，让思源认为该块被选中
     document.querySelectorAll(".protyle-wysiwyg--select").forEach(el => el.classList.remove("protyle-wysiwyg--select"));
     blockEl.classList.add("protyle-wysiwyg--select");
 
-    // 2. 通过 Selection API 把光标折叠到块开头，避免模拟点击
-    try {
-        const contentEl = blockEl.querySelector('[contenteditable="true"]') || blockEl;
+    // 2. 先 focus wysiwyg container，让浏览器知道焦点在编辑器区域
+    const wysiwygEl = (protyleEl?.querySelector('.protyle-wysiwyg')
+        || blockEl.closest('.protyle-wysiwyg')) as HTMLElement | null;
+    if (wysiwygEl) {
+        wysiwygEl.focus({ preventScroll: true });
+    }
 
+    // 3. 把光标通过 Selection API 折叠到块开头
+    // 此时 contenteditable 的父元素已有焦点，addRange 可以正确生效
+    try {
+        const contentEl = (blockEl.querySelector('[contenteditable="true"]') || wysiwygEl || blockEl) as HTMLElement;
         const range = document.createRange();
         range.selectNodeContents(contentEl);
-        range.collapse(true); // 折叠到开头
+        range.collapse(true);
 
         const sel = window.getSelection();
         if (sel) {
             sel.removeAllRanges();
             sel.addRange(range);
         }
-
-        // 注意：故意不调用 contentEl.focus()，因为会把焦点锁定在 contenteditable 元素上，
-        // 导致后续对其他块的右键触发 blockicon click 事件时，activeElement 指向错误，菜单无法弹出。
-        // 思源的 wysiwyg keydown 处理器通过 getSelection().getRangeAt(0) 来定位块，不需要 focus()。
-
-        console.log(`[IndexOS Debug] Cursor collapsed in: ${blockEl.getAttribute("data-node-id")} | activeElement: ${(document.activeElement as HTMLElement)?.tagName}.${(document.activeElement as HTMLElement)?.className?.split(' ')[0]}`);
     } catch (e) {
-        console.warn("[IndexOS Debug] Focus application failed", e);
+        console.warn("[IndexOS] focusBlock: failed to set range", e);
     }
 }
+

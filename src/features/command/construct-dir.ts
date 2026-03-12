@@ -68,7 +68,6 @@ export async function constructCommandStorage() {
 
 * 🌐 全局关系图 (无上下文测试)
 * 📥 收集箱 (无上下文测试)
-* 📌 转为待办任务
 * 🗃️ 添加到数据库
 * ⬇️ 下方插入同级块
 * 📑 复制当前块
@@ -152,7 +151,6 @@ export async function constructCommandStorage() {
                         const configData: Record<string, { id: string, type: string, scope: string }> = {
                             "全局关系图 (无上下文测试)": { id: "general.graphView", type: "Native", scope: "Global" },
                             "收集箱 (无上下文测试)": { id: "general.inbox", type: "Native", scope: "Global" },
-                            "转为待办任务": { id: "editor.list.checkToggle", type: "Native", scope: "Self" },
                             "在右侧分屏打开": { id: "general.splitLR", type: "Native", scope: "Global" },
                             "添加到数据库": { id: "general.addToDatabase", type: "Native", scope: "Self" },
                             "下方插入同级块": { id: "editor.general.insertAfter", type: "Native", scope: "Sibling" },
