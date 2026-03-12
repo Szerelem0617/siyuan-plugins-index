@@ -57,6 +57,7 @@ export function addCommandTestMenuItem({ detail }: any) {
         icon: "iconRocket",
         label: "🚀 (生产测) 执行数据库绑定的指令",
         click: async () => {
+            console.log(`[IndexOS Debug] 🚀 Rocket menu item clicked. activeElement: ${(document.activeElement as HTMLElement)?.tagName}.${(document.activeElement as HTMLElement)?.className?.split(' ')[0]}`);
             const targetEl = blockElements[0] as HTMLElement;
 
             // 打印所有属性辅助调试
@@ -174,21 +175,17 @@ export function addCommandTestMenuItem({ detail }: any) {
                 }
 
                 // 给思源内部状态刷新留出时间
-                console.log(`[IndexOS] 🚀 Dispatching [${finalCmd}] (from ${fullCmd})...`);
+                console.log(`[IndexOS] 🚀 Dispatching [${fullCmd}]...`);
                 setTimeout(() => {
                     try {
-                        let result;
-                        if (typeof globalCommand === "function") {
-                            result = globalCommand(finalCmd, plugin.app);
-                        } else {
-                            throw new Error("siyuan.globalCommand 导入失败或不可用");
-                        }
-                        console.log(`[IndexOS] Command dispatched. Return value:`, result);
-                        if (result === false) {
-                            console.warn(`[IndexOS] Command [${finalCmd}] returned false – command not found or no valid context.`);
-                        }
+                        const result = dispatchSiyuanCommand(fullCmd, targetEl, protyleEl as HTMLElement | null);
+                        console.log(`[IndexOS] Command dispatched. Result:`, result);
                     } catch (err) {
                         console.error("[IndexOS] Command Execution Failed:", err);
+                    } finally {
+                        // 无论成功失败，都必须清理我们留下的状态，否则下次右键会出现异常
+                        console.log("[IndexOS Debug] Cleaning up focus state...");
+                        cleanupFocusState();
                     }
                 }, 250);
 
@@ -200,28 +197,125 @@ export function addCommandTestMenuItem({ detail }: any) {
 }
 
 /**
- * 伪造焦点，让 SiYuan 内核认为当前块被选中，从而能正确应用命令
+ * 清理执行命令后留下的临时焦点状态，避免影响后续交互
+ */
+function cleanupFocusState() {
+    try {
+        // 移除我们自己加的选中 class
+        document.querySelectorAll(".protyle-wysiwyg--select").forEach(el => {
+            el.classList.remove("protyle-wysiwyg--select");
+        });
+        // 清空 Selection，避免范围残留
+        window.getSelection()?.removeAllRanges();
+        console.log("[IndexOS Debug] Focus state cleaned up.");
+    } catch (e) {
+        console.warn("[IndexOS Debug] Cleanup failed:", e);
+    }
+}
+
+/**
+ * 核心命令分发器。
+ * - 对于编辑器内命令（editor.general.*、editor.list.* 等），
+ *   先查出对应的快捷键，再通过模拟 KeyboardEvent 触发 wysiwyg 的 keydown 处理器。
+ * - 对于全局命令（general.*），回退到 globalCommand()。
+ */
+function dispatchSiyuanCommand(
+    fullCmd: string,
+    blockEl: HTMLElement,
+    protyleEl: HTMLElement | null
+): string {
+    const siyuan = (window as any).siyuan;
+    const keymap = siyuan?.config?.keymap;
+
+    // 1. 尝试在 keymap 里查找快捷键（按点分路径走）
+    let hotkey: string | null = null;
+    if (keymap && fullCmd.includes(".")) {
+        const parts = fullCmd.split("."); // e.g. ["editor","list","checkToggle"]
+        let node: any = keymap;
+        for (const part of parts) {
+            node = node?.[part];
+            if (!node) break;
+        }
+        // keymap leaf 节点形如 { default: "⌘↩", custom: "⌘↩" }
+        hotkey = node?.custom || node?.default || null;
+        console.log(`[IndexOS Debug] Keymap lookup [${fullCmd}] → hotkey: ${hotkey}`);
+    }
+
+    // 2. 如果找到快捷键，通过模拟 keydown 事件触发
+    if (hotkey) {
+        const synthTarget = (protyleEl?.querySelector('.protyle-wysiwyg')
+            || blockEl.closest('.protyle-wysiwyg')) as HTMLElement | null;
+
+        if (synthTarget) {
+            const keyEvent = hotkeyToKeyboardEvent(hotkey);
+            if (keyEvent) {
+                console.log(`[IndexOS] Synthesizing KeyboardEvent for [${fullCmd}]: key=${keyEvent.key} ctrl=${keyEvent.ctrlKey} shift=${keyEvent.shiftKey} alt=${keyEvent.altKey} meta=${keyEvent.metaKey}`);
+                synthTarget.dispatchEvent(keyEvent);
+                return `keyboard:${hotkey}`;
+            }
+        } else {
+            console.warn(`[IndexOS Debug] No wysiwyg element found for keyboard event dispatch.`);
+        }
+    }
+
+    // 3. 回退：用 SDK 导入的 globalCommand（适用于全局命令，如 splitLR/graphView/inbox）
+    const bareCmd = fullCmd.includes(".") ? fullCmd.split(".").pop()! : fullCmd;
+    console.log(`[IndexOS Debug] Falling back to globalCommand(${bareCmd})`);
+    globalCommand(bareCmd, plugin.app);
+    return `global:${bareCmd}`;
+}
+
+/**
+ * 将 SiYuan 快捷键字符串（Mac 符号格式）转换为 KeyboardEventInit
+ * ⌘=Meta/Ctrl, ⇧=Shift, ⌥=Alt, ⌫=Backspace, ⌦=Delete, ↩=Enter, ⇥=Tab
+ */
+function hotkeyToKeyboardEvent(hotkey: string): KeyboardEvent | null {
+    try {
+        let ctrlKey = false, shiftKey = false, altKey = false, metaKey = false;
+        let keyStr = hotkey;
+        if (keyStr.includes("⌘")) { ctrlKey = true; metaKey = true; keyStr = keyStr.replace("⌘", ""); }
+        if (keyStr.includes("⇧")) { shiftKey = true; keyStr = keyStr.replace("⇧", ""); }
+        if (keyStr.includes("⌥")) { altKey = true; keyStr = keyStr.replace("⌥", ""); }
+        const keyMap: Record<string, string> = {
+            "↩": "Enter", "⌫": "Backspace", "⌦": "Delete", "⇥": "Tab",
+            "↑": "ArrowUp", "↓": "ArrowDown", "←": "ArrowLeft", "→": "ArrowRight",
+            "F1": "F1", "F2": "F2", "F3": "F3", "F4": "F4", "F5": "F5",
+        };
+        const key = keyMap[keyStr] || keyStr || "Unidentified";
+        return new KeyboardEvent("keydown", {
+            key, ctrlKey, shiftKey, altKey, metaKey,
+            bubbles: true, cancelable: true, composed: true,
+            keyCode: key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0,
+        });
+    } catch (e) {
+        console.warn(`[IndexOS Debug] hotkeyToKeyboardEvent failed for "${hotkey}":`, e);
+        return null;
+    }
+}
+
+
+/**
+ * 让 SiYuan 编辑器的焦点指向目标块，使命令可以正确获取到"当前块"。
+ * 注意：故意不派发 mousedown/mouseup/click 事件，因为它们会冒泡进
+ * SiYuan 的 wysiwyg 事件处理器，触发额外的选区和编辑状态变化，
+ * 导致后续右键操作异常。只通过 Selection API 设置光标即可。
  */
 function focusBlock(blockEl: HTMLElement) {
     if (!blockEl) return;
 
-    // 1. 模拟完整鼠标点击链
-    ['mousedown', 'mouseup', 'click'].forEach(evtType => {
-        const evt = new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window });
-        blockEl.dispatchEvent(evt);
-    });
+    console.log(`[IndexOS Debug] focusBlock called on: ${blockEl.getAttribute("data-node-id")}`);
 
-    // 2. 挂上选中态 Class
+    // 1. 挂上选中态 Class（让思源认为该块处于焦点状态）
     document.querySelectorAll(".protyle-wysiwyg--select").forEach(el => el.classList.remove("protyle-wysiwyg--select"));
     blockEl.classList.add("protyle-wysiwyg--select");
 
-    // 3. 将光标折叠进该元素
+    // 2. 通过 Selection API 把光标折叠到块开头，避免模拟点击
     try {
-        const range = document.createRange();
         const contentEl = blockEl.querySelector('[contenteditable="true"]') || blockEl;
 
+        const range = document.createRange();
         range.selectNodeContents(contentEl);
-        range.collapse(true);
+        range.collapse(true); // 折叠到开头
 
         const sel = window.getSelection();
         if (sel) {
@@ -229,10 +323,11 @@ function focusBlock(blockEl: HTMLElement) {
             sel.addRange(range);
         }
 
-        // 强制 Focus
-        if (contentEl instanceof HTMLElement) contentEl.focus();
+        // 注意：故意不调用 contentEl.focus()，因为会把焦点锁定在 contenteditable 元素上，
+        // 导致后续对其他块的右键触发 blockicon click 事件时，activeElement 指向错误，菜单无法弹出。
+        // 思源的 wysiwyg keydown 处理器通过 getSelection().getRangeAt(0) 来定位块，不需要 focus()。
 
-        console.log(`[IndexOS Debug] Cursor collapsed in: ${blockEl.getAttribute("data-node-id")}`);
+        console.log(`[IndexOS Debug] Cursor collapsed in: ${blockEl.getAttribute("data-node-id")} | activeElement: ${(document.activeElement as HTMLElement)?.tagName}.${(document.activeElement as HTMLElement)?.className?.split(' ')[0]}`);
     } catch (e) {
         console.warn("[IndexOS Debug] Focus application failed", e);
     }
