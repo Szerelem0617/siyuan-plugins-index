@@ -68,7 +68,6 @@ export async function constructCommandStorage() {
 
 * 🌐 全局关系图 (无上下文测试)
 * 📥 收集箱 (无上下文测试)
-* 🗃️ 添加到数据库
 * ⬇️ 下方插入同级块
 * 📑 复制当前块
 * 🖇️ 复制块引用
@@ -143,16 +142,19 @@ export async function constructCommandStorage() {
                         };
 
                         const commandIdKey = await addCol("Command ID", "text", "iconCode");
+                        const commandParamKey = await addCol("Command Param", "text", "iconEdit");
                         const commandTypeKey = await addCol("Command Type", "text", "iconTags");
                         const targetScopeKey = await addCol("Target Scope", "text", "iconFocus");
                         const enableKey = await addCol("Enable", "checkbox", "iconCheck");
 
                         // 5. Populate default data
-                        const configData: Record<string, { id: string, type: string, scope: string }> = {
+                        // param: JSON string for commands that need runtime parameters.
+                        //   e.g. { "markdown": "Hello" } for api.block.insertBlock
+                        //   Leave empty string for keyboard-driven commands (context fills params at runtime)
+                        const configData: Record<string, { id: string, type: string, scope: string, param?: string }> = {
                             "全局关系图 (无上下文测试)": { id: "general.graphView", type: "Native", scope: "Global" },
                             "收集箱 (无上下文测试)": { id: "general.inbox", type: "Native", scope: "Global" },
                             "在右侧分屏打开": { id: "general.splitLR", type: "Native", scope: "Global" },
-                            "添加到数据库": { id: "general.addToDatabase", type: "Native", scope: "Self" },
                             "下方插入同级块": { id: "editor.general.insertAfter", type: "Native", scope: "Sibling" },
                             "复制当前块": { id: "editor.general.duplicate", type: "Native", scope: "Sibling" },
                             "复制块引用": { id: "editor.general.copyBlockRef", type: "Native", scope: "Global" }
@@ -189,6 +191,13 @@ export async function constructCommandStorage() {
                                         itemID: row.id,
                                         value: { type: "text", text: { content: config.id } }
                                     });
+                                    if (config.param !== undefined) {
+                                        populateOps.push({
+                                            keyID: commandParamKey,
+                                            itemID: row.id,
+                                            value: { type: "text", text: { content: config.param } }
+                                        });
+                                    }
                                     populateOps.push({
                                         keyID: commandTypeKey,
                                         itemID: row.id,
