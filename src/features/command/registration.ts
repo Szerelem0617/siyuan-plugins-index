@@ -1,9 +1,9 @@
 import { constructCommandStorage } from "./construct-dir";
 import { i18n, plugin } from "../../shared/utils";
 import { post } from "../../shared/api-client/request";
+import { globalCommand } from "siyuan";
 import type { Protyle, Menu } from "siyuan";
 
-// 设置为 false 即可在发布时轻易关停此处的入口注册
 export const DEV_ENABLE_INIT_SYS = true;
 
 /** 
@@ -51,44 +51,7 @@ export function addCommandTestMenuItem({ detail }: any) {
     const menu = detail.menu;
     if (!blockElements || blockElements.length === 0 || !menu) return;
 
-    // 为了更便捷地做跑通测试：
-    // 我们在这个菜单里增加一个“▶ 测试执行块内命令”。
-    // 您可以在思源的一个 Block 里输入类似 'editor.general.duplicate' 的纯文本，然后右键这个块，点击执行测试。
     menu.addSeparator();
-    menu.addItem({
-        icon: "iconPlay",
-        label: "▶️ (测试) 执行原生命令: 复制块",
-        click: () => {
-            // 默认测试动作: 复制当前块
-            focusBlock(blockElements[0]);
-            setTimeout(() => {
-                (window as any).siyuan?.globalCommand?.("editor.general.duplicate", plugin.app);
-                console.log("[IndexOS Test] Triggered duplicate on block.");
-            }, 50);
-        }
-    });
-
-    menu.addItem({
-        icon: "iconPlay",
-        label: "▶️ (测试) 将选中块视为 Command ID 并执行",
-        click: () => {
-            // 读取选择块的纯文本，作为命令 ID 尝试运行
-            // 过滤掉不可见字符
-            const text = blockElements[0].textContent?.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-            if (text) {
-                focusBlock(blockElements[0]);
-                console.log(`[IndexOS Test] Trying to execute global command: [${text}]`);
-                setTimeout(() => {
-                    try {
-                        (window as any).siyuan?.globalCommand?.(text, plugin.app);
-                        // showMessage(`尝试调度原生指令: ${text}`);
-                    } catch (e) {
-                        console.error("执行命令失败", e);
-                    }
-                }, 50);
-            }
-        }
-    });
 
     menu.addItem({
         icon: "iconRocket",
@@ -133,25 +96,41 @@ export function addCommandTestMenuItem({ detail }: any) {
             }
 
             try {
-                console.log(`[IndexOS] Fetching Command ID from AV [${avID}] for Item [${itemID}]...`);
-                // 1. 获取该 AV 的所有列，定位 "Command ID"
-                const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID });
-                const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
-                const cmdKey = currentKeys.find((k: any) => k.name === "Command ID");
+                console.log(`[IndexOS] Rendering AV [${avID}] to find Item [${itemID}]...`);
 
-                if (!cmdKey) throw new Error("未找到 Command ID 列 (请检查列名是否完全匹配 'Command ID')");
-
-                // 2. 获取该行的内容
+                // 1. 直接渲染属性视图，它包含了列定义和行数据
                 const renderRes = await post("/api/av/renderAttributeView", { id: avID });
-                const rows = renderRes.view?.rows || renderRes.rows || [];
+                const view = renderRes.view || renderRes;
+                const rows = view.rows || [];
+                const columns = view.columns || [];
+
+                if (!columns || columns.length === 0) throw new Error("数据库未包含任何列定义");
+
+                // 2. 定位 "Command ID" 列的索引
+                // 注意：在 renderAttributeView 的返回中，列 ID 字段名为 keyID 或 id
+                const cmdColIdx = columns.findIndex((col: any) =>
+                    (col.name === "Command ID") || (col.keyName === "Command ID")
+                );
+
+                if (cmdColIdx === -1) {
+                    console.error("[IndexOS Debug] Columns list:", columns.map((c: any) => `${c.name || c.keyName} (${c.keyID || c.id})`));
+                    throw new Error("未找到 Command ID 列 (请确保列名完全匹配)");
+                }
+
+                const cmdCol = columns[cmdColIdx];
+                const cmdKeyID = cmdCol.keyID || cmdCol.id;
+
+                // 3. 寻找行
                 const row = rows.find((r: any) => r.id === itemID);
+                if (!row) {
+                    console.error(`[IndexOS Debug] Row NOT found. itemID: ${itemID}. Available row IDs:`, rows.map((r: any) => r.id));
+                    throw new Error(`在数据库中未找到对应条目`);
+                }
 
-                if (!row) throw new Error(`在数据库 [${avID}] 中未找到对应行 ID: ${itemID}`);
+                // 4. 按索引提取单元格
+                const cell = row.cells[cmdColIdx];
 
-                const cell = row.cells.find((c: any) => c.keyID === cmdKey.id);
-
-                // 打印完整的 cell 对象结构，帮助锁定到底值在哪里
-                console.log("[IndexOS Debug] raw cell object:", JSON.stringify(cell));
+                console.log(`[IndexOS Debug] Found Cell at index ${cmdColIdx} for key ${cmdKeyID}:`, JSON.stringify(cell));
 
                 // 极端兼容性提取：尝试所有可能的路径
                 const commandText: string =
@@ -162,20 +141,59 @@ export function addCommandTestMenuItem({ detail }: any) {
                     "";
 
                 if (!commandText || commandText.trim() === "") {
-                    console.warn("[IndexOS] Command execution skipped: Command ID cell is empty. Full cell data:", cell);
+                    console.warn("[IndexOS] Command execution skipped: Command ID cell is empty. Full cell data:", JSON.stringify(cell));
                     return;
                 }
 
-                // 3. 执行
+                // 5. 执行
+                const protyleEl = targetEl.closest('.protyle-content');
                 focusBlock(targetEl);
-                const finalCmd = commandText.trim();
-                console.log(`[IndexOS] 🚀 Triggering: [${finalCmd}] for block [${targetEl.getAttribute("data-node-id")}]`);
+
+                // 思源的 globalCommand() 只接受裸命令名（如 "graphView"、"splitLR"），
+                // 不接受 keymap 的点分格式（如 "general.graphView"）。
+                // 所以我们把数据库里存的 "general.graphView" 取最后一段即可。
+                const fullCmd = commandText.trim();
+                const finalCmd = fullCmd.includes(".")
+                    ? fullCmd.split(".").pop()!
+                    : fullCmd;
+
+                console.log(`[IndexOS Debug] Execution Probe:`, {
+                    rawCommand: fullCmd,
+                    resolvedCommand: finalCmd,
+                    appObject: !!plugin.app,
+                    targetBlockID: targetEl.getAttribute("data-node-id"),
+                    protyleFound: !!protyleEl
+                });
+
+                // 强制关闭上下文菜单，交还焦点给主编辑器
+                document.querySelectorAll(".b3-menu").forEach(menu => menu.remove());
+
+                // 强制给文档外层容器重新赋予焦点
+                if (protyleEl instanceof HTMLElement) {
+                    protyleEl.focus();
+                }
+
+                // 给思源内部状态刷新留出时间
+                console.log(`[IndexOS] 🚀 Dispatching [${finalCmd}] (from ${fullCmd})...`);
                 setTimeout(() => {
-                    (window as any).siyuan?.globalCommand?.(finalCmd, plugin.app);
-                }, 50);
+                    try {
+                        let result;
+                        if (typeof globalCommand === "function") {
+                            result = globalCommand(finalCmd, plugin.app);
+                        } else {
+                            throw new Error("siyuan.globalCommand 导入失败或不可用");
+                        }
+                        console.log(`[IndexOS] Command dispatched. Return value:`, result);
+                        if (result === false) {
+                            console.warn(`[IndexOS] Command [${finalCmd}] returned false – command not found or no valid context.`);
+                        }
+                    } catch (err) {
+                        console.error("[IndexOS] Command Execution Failed:", err);
+                    }
+                }, 250);
 
             } catch (e) {
-                console.error("[IndexOS] Command Dispatch Error:", e);
+                console.error("[IndexOS] Action Dispatch Error:", e);
             }
         }
     });
@@ -187,17 +205,35 @@ export function addCommandTestMenuItem({ detail }: any) {
 function focusBlock(blockEl: HTMLElement) {
     if (!blockEl) return;
 
-    // 1. 挂上选中态 Class
+    // 1. 模拟完整鼠标点击链
+    ['mousedown', 'mouseup', 'click'].forEach(evtType => {
+        const evt = new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window });
+        blockEl.dispatchEvent(evt);
+    });
+
+    // 2. 挂上选中态 Class
     document.querySelectorAll(".protyle-wysiwyg--select").forEach(el => el.classList.remove("protyle-wysiwyg--select"));
     blockEl.classList.add("protyle-wysiwyg--select");
 
-    // 2. 将光标折叠进该元素
+    // 3. 将光标折叠进该元素
     try {
         const range = document.createRange();
-        range.selectNodeContents(blockEl);
-        range.collapse(false); // 光标置于末尾
+        const contentEl = blockEl.querySelector('[contenteditable="true"]') || blockEl;
+
+        range.selectNodeContents(contentEl);
+        range.collapse(true);
+
         const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-    } catch (e) { }
+        if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+
+        // 强制 Focus
+        if (contentEl instanceof HTMLElement) contentEl.focus();
+
+        console.log(`[IndexOS Debug] Cursor collapsed in: ${blockEl.getAttribute("data-node-id")}`);
+    } catch (e) {
+        console.warn("[IndexOS Debug] Focus application failed", e);
+    }
 }

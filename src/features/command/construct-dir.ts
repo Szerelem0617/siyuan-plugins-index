@@ -66,6 +66,8 @@ export async function constructCommandStorage() {
 
 该页面由 IndexOS 自动生成。请勿轻易删除此页面。您可以在此组织和配置在节点上可用的快捷动作库。
 
+* 🌐 全局关系图 (无上下文测试)
+* 📥 收集箱 (无上下文测试)
 * 📌 转为待办任务
 * 🗃️ 添加到数据库
 * ⬇️ 下方插入同级块
@@ -148,12 +150,14 @@ export async function constructCommandStorage() {
 
                         // 5. Populate default data
                         const configData: Record<string, { id: string, type: string, scope: string }> = {
+                            "全局关系图 (无上下文测试)": { id: "general.graphView", type: "Native", scope: "Global" },
+                            "收集箱 (无上下文测试)": { id: "general.inbox", type: "Native", scope: "Global" },
                             "转为待办任务": { id: "editor.list.checkToggle", type: "Native", scope: "Self" },
+                            "在右侧分屏打开": { id: "general.splitLR", type: "Native", scope: "Global" },
                             "添加到数据库": { id: "general.addToDatabase", type: "Native", scope: "Self" },
                             "下方插入同级块": { id: "editor.general.insertAfter", type: "Native", scope: "Sibling" },
                             "复制当前块": { id: "editor.general.duplicate", type: "Native", scope: "Sibling" },
-                            "复制块引用": { id: "editor.general.copyBlockRef", type: "Native", scope: "Global" },
-                            "在右侧分屏打开": { id: "general.splitLR", type: "Native", scope: "Global" }
+                            "复制块引用": { id: "editor.general.copyBlockRef", type: "Native", scope: "Global" }
                         };
 
                         await sleep(1000); // 额外等待，确保 AV 索引了刚插入的行
