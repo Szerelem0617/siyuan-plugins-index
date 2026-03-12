@@ -9,6 +9,7 @@ import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
 import { addCommandTestMenuItem } from "./features/command/registration";
+import { commandRegistry } from "./features/command/registry/command-registry";
 import { supertagMonitor } from "./features/data/av-setting/supertag";
 import { supertagManager } from "./features/data/av-setting/supertag-manager";
 import { version } from "../plugin.json";
@@ -20,6 +21,8 @@ export default class IndexPlugin extends Plugin {
     //加载插件
     async onload() {
         console.log(`IndexPlugin onload v${version}`);
+        // 内置命令表先行加载，其他所有模块（Dispatcher、第三方插件）均可安全地调用 getCommand()
+        commandRegistry.loadBuiltins();
         this.init();
         await initTopbar();
         // await this.initSettings();

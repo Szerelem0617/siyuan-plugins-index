@@ -1,0 +1,222 @@
+/**
+ * command-registry.ts
+ *
+ * 命令注册表 —— 系统的 Source of Truth。
+ *
+ * 职责：
+ *   1. 在插件启动时加载 commands.json 中定义的内置命令到内存 Map。
+ *   2. 提供 registerCommand() 供第三方插件注册自定义命令。
+ *   3. 提供 getCommand() 供 Dispatcher 查询命令的执行方式和约束。
+ *
+ * 不负责：执行命令、渲染 UI、读写 AV 数据库。
+ */
+
+import commandsData from "./commands.json";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types & Interfaces
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 参数的获取/注入方式 */
+export type ParamMode =
+    | "static"      // 写死在 AV Command Param 列里，执行时原样传入
+    | "injected"    // Dispatcher 从运行上下文（blockEl / protyleEl）中自动提取
+    | "template"    // 字符串含 {{占位符}}，Dispatcher 在执行前实时解析替换
+    | "interactive"; // 执行前弹出 UI 让用户手动填写
+
+/** 命令的调度方式 */
+export type DispatchMethod = "keyboard" | "global" | "api" | "custom";
+
+/** 命令对块的作用域 */
+export type CommandScope = "global" | "self" | "sibling" | "parent";
+
+/** 命令所属功能分类 */
+export type CommandCategory =
+    | "navigation" | "view" | "edit"
+    | "clipboard" | "attribute" | "custom";
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 一个参数的 Schema 描述（对应 commands.json 中 params[] 的每一项） */
+export interface ParamSchema {
+    /** 传给 API 时使用的字段名，如 "dataType" */
+    key: string;
+    /** 展示给用户看的名称，如 "内容类型" */
+    label: string;
+    /** 数据类型 */
+    type: "text" | "blockid" | "enum" | "object" | "number" | "boolean";
+    /** 是否必填 */
+    required: boolean;
+    /** 参数获取方式 */
+    paramMode: ParamMode;
+    /** type=enum 时的可选值 */
+    values?: string[];
+    /** 默认值（static 类型参数的缺省） */
+    default?: unknown;
+    /** paramMode=injected 时指明从哪个上下文字段取值，如 "context.blockEl" */
+    injectedFrom?: string;
+    /** paramMode=template 时列出可用的占位符，如 ["{{date}}", "{{block_id}}"] */
+    templateVars?: string[];
+    /** 参数的描述文字，显示在 command-db UI 的 tooltip 里 */
+    description?: string;
+}
+
+/** 命令的调度配置，决定 Dispatcher 走哪条执行路径 */
+export interface DispatchConfig {
+    method: DispatchMethod;
+    /** keyboard: 在 keymap 中的层级路径，如 ["editor","general","duplicate"] */
+    keymapPath?: string[];
+    /** global: 传给 globalCommand() 的裸命令名，如 "graphView" */
+    target?: string;
+    /** api: 思源后端接口路径，如 "/api/block/insertBlock" */
+    endpoint?: string;
+    /**
+     * custom: 第三方插件注册时直接提供的执行函数。
+     * 仅存在于内存中，不序列化到 JSON。
+     */
+    executor?: (
+        params: Record<string, unknown>,
+        context: { blockEl: HTMLElement; protyleEl: HTMLElement | null }
+    ) => Promise<unknown>;
+}
+
+/** 命令执行的约束条件，Dispatcher 在执行前做前置检查 */
+export interface CommandConstraints {
+    /** 是否必须先把编辑器焦点设置到目标块才能执行 */
+    requiresFocus: boolean;
+    /** 是否只能在 UI 可见时执行（定时任务/后台任务不适用） */
+    uiOnly: boolean;
+    /** 是否可以被定时任务调度 */
+    schedulable: boolean;
+    /** 补充说明，供开发者阅读 */
+    comment?: string;
+}
+
+/** 命令的元信息，供 command-db 展示和筛选使用 */
+export interface CommandMeta {
+    /** 命令作用的块范围 */
+    scope: CommandScope;
+    /** 功能分类 */
+    category: CommandCategory;
+    /** 命令来源 */
+    source: "builtin" | "plugin";
+    /** source=plugin 时，记录插件名 */
+    plugin?: string;
+    /**
+     * 如果该命令是 UI-only 且不可调度，这里指出功能等效的 API 版本 ID，
+     * 供用户切换到 schedulable 替代方案时参考。
+     */
+    apiEquivalent?: string;
+}
+
+/** 完整的命令定义（Registry 中的存储单元） */
+export interface CommandDef {
+    /** 唯一 ID，点分路径，如 "editor.general.duplicate" 或 "api.block.insertBlock" */
+    id: string;
+    /** 展示名称 */
+    name: string;
+    /** 描述，面向用户说明这个命令做什么 */
+    description?: string;
+    /** 调度配置 */
+    dispatch: DispatchConfig;
+    /** 参数 Schema 列表（顺序即调用顺序） */
+    params: ParamSchema[];
+    /** 执行约束 */
+    constraints: CommandConstraints;
+    /** 元信息 */
+    meta: CommandMeta;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Registry Implementation
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CommandRegistry {
+    private readonly store = new Map<string, CommandDef>();
+
+    /**
+     * 插件启动时调用。
+     * 将 commands.json 中定义的内置命令全部载入内存 Map。
+     */
+    loadBuiltins(): void {
+        let loaded = 0;
+        for (const raw of (commandsData as any).commands) {
+            const def = raw as CommandDef;
+            if (!def.id) {
+                console.warn("[Registry] Skipped a command entry with no id:", raw);
+                continue;
+            }
+            this.store.set(def.id, def);
+            loaded++;
+        }
+        console.log(`[Registry] Loaded ${loaded} builtin commands.`);
+    }
+
+    /**
+     * 供第三方插件调用，动态注册一个自定义命令。
+     *
+     * @example
+     * // 在第三方插件的 onload() 里：
+     * const indexOS = app.plugins.find(p => p.name === "siyuan-plugins-index") as any;
+     * indexOS?.commandRegistry.registerCommand({
+     *     id: "myplugin.doSomething",
+     *     name: "做某事",
+     *     dispatch: { method: "custom", executor: async (params, ctx) => { ... } },
+     *     params: [],
+     *     constraints: { requiresFocus: false, uiOnly: false, schedulable: true },
+     *     meta: { scope: "global", category: "custom", source: "plugin", plugin: "myplugin" }
+     * });
+     */
+    registerCommand(def: CommandDef): void {
+        if (!def.id) throw new Error("[Registry] registerCommand: 'id' is required.");
+        if (this.store.has(def.id)) {
+            console.warn(`[Registry] Command "${def.id}" is being overwritten.`);
+        }
+        this.store.set(def.id, def);
+        console.log(`[Registry] Registered: ${def.id} (${def.meta.source})`);
+    }
+
+    /**
+     * 卸载插件时调用，移除该插件注册的所有命令。
+     */
+    unregisterPlugin(pluginName: string): void {
+        let removed = 0;
+        for (const [id, def] of this.store) {
+            if (def.meta.source === "plugin" && def.meta.plugin === pluginName) {
+                this.store.delete(id);
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            console.log(`[Registry] Unregistered ${removed} commands from plugin "${pluginName}".`);
+        }
+    }
+
+    /** 按 ID 查询命令定义。找不到时返回 undefined。 */
+    getCommand(id: string): CommandDef | undefined {
+        return this.store.get(id);
+    }
+
+    /** 检查某个命令 ID 是否存在于注册表中 */
+    hasCommand(id: string): boolean {
+        return this.store.has(id);
+    }
+
+    /** 获取所有已注册命令的副本（用于 UI 浏览和 command-db 渲染） */
+    getAllCommands(): CommandDef[] {
+        return Array.from(this.store.values());
+    }
+
+    /** 按分类筛选命令 */
+    getCommandsByCategory(category: CommandCategory): CommandDef[] {
+        return this.getAllCommands().filter(c => c.meta.category === category);
+    }
+
+    /** 只返回可定时调度的命令（作为定时任务引擎的候选集） */
+    getSchedulableCommands(): CommandDef[] {
+        return this.getAllCommands().filter(c => c.constraints.schedulable);
+    }
+}
+
+// 单例导出，全局唯一
+export const commandRegistry = new CommandRegistry();
