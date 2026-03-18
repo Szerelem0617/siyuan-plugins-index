@@ -79,7 +79,7 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
 
         let safeAnchorText = anchorText.replace(/"/g, "&quot;");
 
-        let useDynamic = settings.get("useDynamicAnchor") ?? false;
+        let useDynamic = settings.get("useDynamicAnchorOutline") ?? false;
 
         if (outlineType == "tree") {
             // Outline builder format for headings: Just a separator with the link bound to it.

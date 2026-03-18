@@ -123,7 +123,11 @@
       },
       "useDynamicAnchor": {
         "title": "动态锚文本",
-        "content": "开启后，生成目录和大纲将使用内容的块引用 (动态链接)"
+        "content": "开启后，生成目录将使用内容的块引用 (动态引用)"
+      },
+      "useDynamicAnchorOutline": {
+        "title": "动态锚文本",
+        "content": "开启后，生成大纲将使用内容的块引用 (动态引用)"
       },
       "builderDesc": "📄 跳转子文档 · ➖ 跳转标题行"
     }

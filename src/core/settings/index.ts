@@ -22,6 +22,7 @@ export class SettingsProperty {
     iconOutline: boolean;
     dbAddTemplateCols: boolean;
     useDynamicAnchor: boolean;
+    useDynamicAnchorOutline: boolean;
 
     constructor() {
         this.depth = 0;
@@ -43,6 +44,7 @@ export class SettingsProperty {
         this.iconOutline = false;
         this.dbAddTemplateCols = true;
         this.useDynamicAnchor = false;
+        this.useDynamicAnchorOutline = false;
     }
 
     getAll() {
@@ -68,6 +70,7 @@ export class SettingsProperty {
         this.iconOutline = settings.get("iconOutline") ?? false;
         this.dbAddTemplateCols = settings.get("dbAddTemplateCols") ?? true;
         this.useDynamicAnchor = settings.get("useDynamicAnchor") ?? false;
+        this.useDynamicAnchorOutline = settings.get("useDynamicAnchorOutline") ?? false;
     }
 }
 
@@ -109,6 +112,7 @@ class Settings {
         this.set("builderAutoUpdate", data.builderAutoUpdate ?? def.builderAutoUpdate);
         this.set("dbAddTemplateCols", data.dbAddTemplateCols ?? def.dbAddTemplateCols);
         this.set("useDynamicAnchor", data.useDynamicAnchor ?? def.useDynamicAnchor);
+        this.set("useDynamicAnchorOutline", data.useDynamicAnchorOutline ?? def.useDynamicAnchorOutline);
     }
 
     loadSettingsforOutline(data: any) {
