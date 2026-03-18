@@ -4,7 +4,7 @@ import { post } from "../../shared/api-client/request";
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
 import type { Protyle, Menu } from "siyuan";
 
-export const DEV_ENABLE_INIT_SYS = true;
+export const DEV_ENABLE_INIT_SYS = false;
 
 /** 
  * 生成用于 Slash (/) 召唤出的初始构建指令选项
