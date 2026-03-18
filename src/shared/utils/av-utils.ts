@@ -114,8 +114,6 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
             }
         });
 
-        console.log("[AV Hierarchy] Path Lookup Table:", Object.fromEntries(blockIDToPath));
-
         for (const [bid, path] of blockIDToPath.entries()) {
             const lastSlash = path.lastIndexOf("/");
             if (lastSlash > 0) {
@@ -123,7 +121,6 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
                 const pbid = pathToBlockID.get(parentPath);
                 if (pbid) {
                     parentMap.set(bid, pbid);
-                    console.log(`[AV Hierarchy] Path Match: Child ${bid} -> Parent ${pbid} (via ${parentPath})`);
                 }
             }
         }
@@ -138,12 +135,10 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
             const pid = v.text?.content || v.relation?.blockIDs?.[0] || "";
             if (bid && pid && !parentMap.has(bid)) {
                 parentMap.set(bid, pid);
-                console.log(`[AV Hierarchy] Father Match: Child ${bid} -> Parent ${pid}`);
             }
         });
     }
 
-    console.log(`[AV Hierarchy] Build complete. Parent Map:`, Object.fromEntries(parentMap));
     return parentMap;
 }
 
@@ -183,7 +178,6 @@ export function resolveInheritance(
         const val = getLocal(curr);
         if (!isValueEmpty(val)) {
             nearestAncestorVal = val;
-            console.log(`[Inheritance Resolve] Found Ancestor Value for ${blockId} from ${curr}:`, val);
             break;
         }
         curr = parentMap.get(curr);

@@ -202,7 +202,7 @@
     "tagName": "标签名",
     "targetDB": "目标数据库",
     "actions": "操作",
-    "configTemplate": "配置模板",
+    "configTemplate": "配置模板（未上线）",
     "noTags": "未发现已配置的超级标签",
     "noTagsHint": "请在数据库高级设置中通过标记星标来创建超级标签"
   }
