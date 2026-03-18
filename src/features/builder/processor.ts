@@ -81,26 +81,6 @@ export class IBlockProcessor {
             }
         }
 
-        // 2. Apply Resolved Attributes from context (Materialized logic during build)
-        if (ctx?.itemResolvedAttrs) {
-            for (const [colId, val] of Object.entries(ctx.itemResolvedAttrs)) {
-                if (!isValueEmpty(val)) {
-                    // Map colId back to name if it's icon/title-img/template
-                    const name = Object.keys(keyMap).find(k => keyMap[k] === colId);
-                    if (name) {
-                        let valStr = val;
-                        if (valStr && typeof valStr === 'object') {
-                            if ((valStr as any).text) valStr = (valStr as any).text.content;
-                            else if ((valStr as any).mOption) valStr = (valStr as any).mOption[0]?.content;
-                            else if ((valStr as any).content) valStr = (valStr as any).content;
-                        }
-                        result[name] = valStr;
-                    }
-                    result[colId] = val; // Also keep raw col ID for property assignment
-                }
-            }
-        }
-
         return result;
     }
 
