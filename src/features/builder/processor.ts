@@ -358,7 +358,7 @@ export class IBlockProcessor {
 
                     const overrides = await applyInherited(docId, existingDocAttrs);
                     if (overrides.icon !== undefined) targetIcon = overrides.icon;
-                    if (overrides.titleImg !== undefined) targetIcon = overrides.titleImg; // Note: targetImage not needed recursively, but good to have
+                    if (overrides.titleImg !== undefined) targetImage = overrides.titleImg;
                 }
             } catch (e) {
                 console.error(`[Builder-Debug] Error updating existing document ${docId}:`, e);
