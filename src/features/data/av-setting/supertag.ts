@@ -75,7 +75,8 @@ export class SupertagMonitor {
                     if (!blockId || !op.data) continue;
 
                     // Extract all tags currently embedded in the operation payload
-                    const newTags = this.extractTagsFromPayload(op.data);
+                    const newTags = this.extractTagsFromPayload(op.data, op.action);
+                    if (newTags === null) continue; // Skip if this operation doesn't carry definitive tag information
 
                     // Compare with virtual cache
                     const cachedTags = this.tagCache.get(blockId) || new Set<string>();
@@ -91,8 +92,8 @@ export class SupertagMonitor {
                         for (const tag of addedTags) {
                             this.processNewTag(blockId, tag);
                         }
-                    } else if (newTags.size !== cachedTags.size) {
-                        // Some tags were removed, just update the cache
+                    } else {
+                        // All tags are already in cache or it's a removal
                         this.tagCache.set(blockId, newTags);
                     }
                 }
@@ -100,14 +101,17 @@ export class SupertagMonitor {
         }
     }
 
-    private extractTagsFromPayload(payload: any): Set<string> {
+    private extractTagsFromPayload(payload: any, action?: string): Set<string> | null {
         const tags = new Set<string>();
         if (!payload) return tags;
 
         // Condition 0: payload is an object (common in updateAttrs)
         if (typeof payload === "object") {
-            const rawTags = payload.new?.tags || payload.tags; // Expert: updateAttrs uses .new.tags
-            if (rawTags && typeof rawTags === "string") {
+            const hasTagsProp = (payload.new && payload.new.tags !== undefined) || payload.tags !== undefined;
+            if (!hasTagsProp) return null; // Authority: No tag info here, don't clear cache
+
+            const rawTags = payload.new?.tags !== undefined ? payload.new.tags : payload.tags;
+            if (typeof rawTags === "string") {
                 // Determine separator: updateAttrs uses comma, setAttrs/DOM uses space
                 const sep = rawTags.includes(',') ? ',' : ' ';
                 rawTags.split(sep).forEach((t: string) => {
@@ -124,45 +128,54 @@ export class SupertagMonitor {
         if (payload.trim().startsWith("{") && payload.trim().endsWith("}")) {
             try {
                 const attrs = JSON.parse(payload);
-                const rawTags = attrs.new?.tags || attrs.tags;
-                if (rawTags && typeof rawTags === "string") {
+                // Check if this JSON actually contains attribute data
+                const hasTagsProp = (attrs.new && attrs.new.tags !== undefined) || attrs.tags !== undefined;
+                if (!hasTagsProp && action === "updateAttrs") return null;
+
+                const rawTags = attrs.new?.tags !== undefined ? attrs.new.tags : attrs.tags;
+                if (typeof rawTags === "string") {
                     const sep = rawTags.includes(',') ? ',' : ' ';
                     rawTags.split(sep).forEach((t: string) => {
                         const clean = t.trim().replace(/#/g, '');
                         if (clean) tags.add(clean);
                     });
                 }
-                if (rawTags) return tags; // If we found tags via JSON, don't fallback to regex
+                if (hasTagsProp) return tags; // If we found (or explicitly didn't find) tags via JSON, return it
             } catch (e) { } // Ignore passive failures
         }
 
         // Condition 2: payload is DOM HTML (action === "update" | "insert")
-
-        // Match 1: <span data-type="tag">YourTag</span> (This is the actual structure based on SiYuan debug logs)
-        const regex1 = /<span[^>]*data-type="tag"[^>]*>([^<]+)<\/span>/ig;
-        let tagMatch;
-        while ((tagMatch = regex1.exec(payload)) !== null) {
-            if (tagMatch[1]) {
-                const tagText = tagMatch[1].replace(/#/g, ''); // Strip any # if present
-                tags.add(tagText);
+        // We only proceed here if it's NOT a recognized JSON but looks like HTML
+        if (payload.includes("<") && payload.includes(">")) {
+            // Match 1: <span data-type="tag">YourTag</span> (This is the actual structure based on SiYuan debug logs)
+            const regex1 = /<span[^>]*data-type="tag"[^>]*>([^<]+)<\/span>/ig;
+            let tagMatch;
+            while ((tagMatch = regex1.exec(payload)) !== null) {
+                if (tagMatch[1]) {
+                    const tagText = tagMatch[1].replace(/#/g, ''); // Strip any # if present
+                    tags.add(tagText);
+                }
             }
+
+            // Match 2: <span data-type="tag" data-content="YourTag"> (Fallback)
+            const regex2 = /data-type="[^"]*tag[^"]*"[^>]*data-content="([^"]+)"/ig;
+            let contentMatch;
+            while ((contentMatch = regex2.exec(payload)) !== null) {
+                if (contentMatch[1]) tags.add(contentMatch[1]);
+            }
+
+            // Match 3: <span data-type="NodeTag">#YourTag#</span> (Fallback)
+            const regex3 = /data-type="NodeTag"[^>]*>#([^<#]+)#<\/span>/ig;
+            let matchHash;
+            while ((matchHash = regex3.exec(payload)) !== null) {
+                if (matchHash[1]) tags.add(matchHash[1]);
+            }
+
+            return tags;
         }
 
-        // Match 2: <span data-type="tag" data-content="YourTag"> (Fallback)
-        const regex2 = /data-type="[^"]*tag[^"]*"[^>]*data-content="([^"]+)"/ig;
-        let contentMatch;
-        while ((contentMatch = regex2.exec(payload)) !== null) {
-            if (contentMatch[1]) tags.add(contentMatch[1]);
-        }
-
-        // Match 3: <span data-type="NodeTag">#YourTag#</span> (Fallback)
-        const regex3 = /data-type="NodeTag"[^>]*>#([^<#]+)#<\/span>/ig;
-        let matchHash;
-        while ((matchHash = regex3.exec(payload)) !== null) {
-            if (matchHash[1]) tags.add(matchHash[1]);
-        }
-
-        return tags;
+        // If it's a string but doesn't look like HTML and doesn't have tag info, return null to avoid clearing cache blindly
+        return (action === "updateAttrs" || action === "setAttrs") ? null : tags;
     }
 
     private async processNewTag(blockId: string, tag: string) {
@@ -200,13 +213,9 @@ export class SupertagMonitor {
 
     private async applySupertag(blockId: string, config: TypeConfig) {
         try {
-            // 1. Check if block is already in the AV
-            const membership = await post("/api/av/getAttributeViewItemIDsByBoundIDs", {
-                avID: config.avId,
-                blockIDs: [blockId]
-            });
-
-            let itemId = membership.data?.[blockId];
+            // 1. Get current state of the AV
+            const { blockToItem, keyValues, idToType } = await getColIDMap(config.avId);
+            let itemId = blockToItem.get(blockId);
 
             if (!itemId) {
                 // 2. Add block to AV if not present
@@ -222,14 +231,26 @@ export class SupertagMonitor {
 
                 // Wait a bit for backend to process
                 await new Promise(r => setTimeout(r, 200));
+            } else {
+                // 3. IDEMPOTENCY: Check if the value is already set correctly
+                if (config.typeFieldId && config.mappedValue !== undefined) {
+                    const colKV = keyValues.find(kv => kv.key.id === config.typeFieldId);
+                    if (colKV && colKV.values) {
+                        const cell = colKV.values.find((v: any) => (v.itemID || v.itemId || v.id) === itemId);
+                        if (cell) {
+                            const currentVal = (cell.mSelect?.[0]?.content || cell.text?.content || cell.number?.content || cell.content || "").toString();
+                            if (currentVal === config.mappedValue.toString()) {
+                                console.log(`[Supertag] Block ${blockId} already correctly categorized in ${config.avId}. Skipping.`);
+                                return;
+                            }
+                        }
+                    }
+                }
             }
 
             if (config.typeFieldId && config.mappedValue !== undefined) {
-                // 3. Get actual column type
-                const { idToType } = await getColIDMap(config.avId);
-                const colType = idToType[config.typeFieldId] || "text"; // fallback
-
                 // 4. Set the attribute value
+                const colType = idToType[config.typeFieldId] || "text";
                 const valuePayload = this.formatValue(config.mappedValue, colType);
 
                 const updateRes = await post("/api/av/batchSetAttributeViewBlockAttrs", {
@@ -243,11 +264,11 @@ export class SupertagMonitor {
                 console.log(`[Supertag] Update Attribute Result:`, updateRes);
             }
 
-            // 4. Force UI refresh for the AV block so the new row shows up immediately
+            // 5. Force UI refresh for the AV block so the new row shows up immediately
             await post("/api/transactions", {
                 app: "plugin-index",
                 reqId: Date.now(),
-                transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: config.blockId, data: formatDate(new Date()) }] }] // Sending doUpdateUpdated triggers a refresh
+                transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: config.blockId, data: formatDate(new Date()) }] }]
             });
 
             console.log(`[Supertag] Successfully applied type "${config.typeName}" to block ${blockId}`);
