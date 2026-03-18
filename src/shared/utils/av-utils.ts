@@ -110,14 +110,16 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
             const path = v.text?.content;
             if (bid && path) {
                 blockIDToPath.set(bid, path);
-                pathToBlockID.set(path, bid);
+                const purePath = path.replace(/\/\d+-/g, '/');
+                pathToBlockID.set(purePath, bid);
             }
         });
 
         for (const [bid, path] of blockIDToPath.entries()) {
-            const lastSlash = path.lastIndexOf("/");
+            const purePath = path.replace(/\/\d+-/g, '/');
+            const lastSlash = purePath.lastIndexOf("/");
             if (lastSlash > 0) {
-                const parentPath = path.substring(0, lastSlash);
+                const parentPath = purePath.substring(0, lastSlash);
                 const pbid = pathToBlockID.get(parentPath);
                 if (pbid) {
                     parentMap.set(bid, pbid);

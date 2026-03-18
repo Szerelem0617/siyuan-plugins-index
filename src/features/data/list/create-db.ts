@@ -386,6 +386,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                         const newItemID = window.Lute.NewNodeID();
                         const rankStr = currentItemRank.toString().padStart(3, '0');
                         const currentPath = ancestorPath ? `${ancestorPath}/${rankStr}-${originalId}` : `/${rankStr}-${originalId}`;
+                        const pureAncestorPath = ancestorPath ? `${ancestorPath}/${originalId}` : `/${originalId}`;
 
                         let savedItemID = getBlockAttribute(child as HTMLElement, ATTR_ITEM_ID);
                         const pChild = child.querySelector('div[data-type="NodeParagraph"]');
@@ -393,7 +394,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
 
                         allItems.push({ originalId, newItemID, level: level, parentId, savedItemID, path: currentPath, subDocId });
                         // 深入处理子项之前，注意：子项内部的 Rank 始终从 1 开始。
-                        traverseWithContext(child, level, originalId, currentPath, 1);
+                        traverseWithContext(child, level, originalId, pureAncestorPath, 1);
                         currentItemRank++;
                     }
                 } else if (type === "NodeList") {
@@ -426,12 +427,13 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                             const newItemID = window.Lute.NewNodeID();
                             const rankStr = rootLevelRank.toString().padStart(3, '0');
                             const currentPath = `/${rankStr}-${originalId}`;
+                            const pureAncestorPath = `/${originalId}`;
                             let savedItemID = getBlockAttribute(rootEl as HTMLElement, ATTR_ITEM_ID);
                             const pChild = rootEl.querySelector('div[data-type="NodeParagraph"]');
                             let subDocId = extractBoundBlockIdFromDOM(pChild);
 
                             allItems.push({ originalId, newItemID, level: 1, parentId: null, savedItemID, path: currentPath, subDocId });
-                            traverseWithContext(rootEl, 1, originalId, currentPath, 1);
+                            traverseWithContext(rootEl, 1, originalId, pureAncestorPath, 1);
                             rootLevelRank++;
                         }
                     } else {
