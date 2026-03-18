@@ -23,6 +23,7 @@ export class BlockService {
         existingBlockInfo?: { id: string, type: string, parent_id: string }
     ) {
         const attrs = { [attrName]: JSON.stringify(attrValue) };
+        console.log(`[BlockService] insertOrUpdate type=${type} data_length=${data.length} preview: ${data.slice(0, 200)}...`);
 
         try {
             // 1. Check for existing block

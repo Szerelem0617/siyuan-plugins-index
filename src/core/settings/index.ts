@@ -21,8 +21,9 @@ export class SettingsProperty {
     icon: boolean;
     iconOutline: boolean;
     dbAddTemplateCols: boolean;
+    useDynamicAnchor: boolean;
 
-    constructor(){
+    constructor() {
         this.depth = 0;
         this.listType = "unordered";
         this.linkType = "ref";
@@ -41,9 +42,10 @@ export class SettingsProperty {
         this.icon = false;
         this.iconOutline = false;
         this.dbAddTemplateCols = true;
+        this.useDynamicAnchor = false;
     }
 
-    getAll(){
+    getAll() {
         // Usually called to sync local instance with global settings
         // But get() is static-like on the instance.
         // This method seems redundant if we use settings.get() directly, but kept for compatibility.
@@ -65,6 +67,7 @@ export class SettingsProperty {
         this.icon = settings.get("icon") ?? false;
         this.iconOutline = settings.get("iconOutline") ?? false;
         this.dbAddTemplateCols = settings.get("dbAddTemplateCols") ?? true;
+        this.useDynamicAnchor = settings.get("useDynamicAnchor") ?? false;
     }
 }
 
@@ -77,23 +80,23 @@ class Settings {
         await this.load();
     }
 
-    set(key: any, value: any, config = CONFIG){
+    set(key: any, value: any, config = CONFIG) {
         plugin.data[config][key] = value;
     }
 
-    get(key: any, config = CONFIG){
+    get(key: any, config = CONFIG) {
         return plugin.data[config]?.[key];
     }
 
-    async load(config = CONFIG){
+    async load(config = CONFIG) {
         await plugin.loadData(config);
     }
 
-    async save(config = CONFIG){
+    async save(config = CONFIG) {
         await plugin.saveData(config, plugin.data[config]);
     }
 
-    loadSettings(data: any){
+    loadSettings(data: any) {
         const def = new SettingsProperty();
         this.set("depth", data.depth ?? def.depth);
         this.set("listType", data.listType ?? def.listType);
@@ -105,9 +108,10 @@ class Settings {
         this.set("icon", data.icon ?? def.icon);
         this.set("builderAutoUpdate", data.builderAutoUpdate ?? def.builderAutoUpdate);
         this.set("dbAddTemplateCols", data.dbAddTemplateCols ?? def.dbAddTemplateCols);
+        this.set("useDynamicAnchor", data.useDynamicAnchor ?? def.useDynamicAnchor);
     }
 
-    loadSettingsforOutline(data: any){
+    loadSettingsforOutline(data: any) {
         const def = new SettingsProperty();
         this.set("outlineType", data.outlineType ?? def.outlineType);
         this.set("outlineAutoUpdate", data.outlineAutoUpdate ?? def.outlineAutoUpdate);

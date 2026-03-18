@@ -120,6 +120,10 @@
         "title": "Add Template Columns",
         "content": "Automatically add title-img and template columns"
       },
+      "useDynamicAnchor": {
+        "title": "Dynamic Anchor Text",
+        "content": "Enable to use block references (dynamic links) for TOC and Outline"
+      },
       "builderDesc": "📄 Open sub-page · ➖ Link to heading"
     }
   },

@@ -11,6 +11,7 @@ export interface IndexConfig {
     listType?: string;
     linkType?: string;
     icon?: boolean;
+    useDynamicAnchor?: boolean;
 }
 
 export async function generateIndex(notebook: any, ppath: any, pitem: IndexQueue, tab = 0, config?: IndexConfig) {
@@ -60,22 +61,27 @@ export async function generateIndex(notebook: any, ppath: any, pitem: IndexQueue
             let iconStr = (iconEnabled || isTree) ? getProcessedDocIcon(icon, subFileCount != 0) : "";
             let safeName = name.replace(/"/g, "&quot;");
 
+            const useDynamic = config?.useDynamicAnchor !== undefined ? config.useDynamicAnchor : (settings.get("useDynamicAnchor") ?? false);
+            console.log(`[IndexGenerator] doc=${name} id=${id} useDynamic=${useDynamic}`);
+
             if (isTree) {
-                // Builder format for Index: * [icon](siyuan://blocks/docId) ➖ Text
-                // Check if iconStr is a valid unicode emoji, if not (alias/shortcode), use default text icon.
+                // Builder format for Index: [Icon](Link) ➖ Text
                 let displayIcon = iconStr;
                 if (!displayIcon || displayIcon.startsWith(":") && displayIcon.endsWith(":")) {
                     displayIcon = subFileCount != 0 ? "📑" : "📄";
                 }
-                data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${name}\n`;
+                const textPart = useDynamic
+                    ? `<span data-type="block-ref" data-id="${id}" data-subtype="d">${safeName}</span>`
+                    : name;
+                data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${textPart}\n`;
+            } else if (useDynamic) {
+                const dynamicRef = `<span data-type="block-ref" data-id="${id}" data-subtype="d">${safeName}</span>`;
+                data += `${iconStr ? iconStr + ' ' : ''}${dynamicRef}\n`;
+                console.log(`[IndexGenerator] Generated dynamic ref (HTML): ${dynamicRef}`);
             } else if (linkType) {
                 data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;
             } else {
-                if (iconEnabled && iconStr) {
-                    data += `${iconStr} ((${id} "${safeName}"))\n`;
-                } else {
-                    data += `((${id} "${safeName}"))\n`;
-                }
+                data += `${iconStr ? iconStr + ' ' : ''}((${id} "${safeName}"))\n`;
             }
 
             let item = new IndexQueueNode(tab, data);
@@ -136,22 +142,27 @@ export async function generateIndexAndOutline(notebook: any, ppath: any, pitem: 
                 let iconStr = (iconEnabled || isTree) ? getProcessedDocIcon(icon, subFileCount != 0) : "";
                 let safeName = name.replace(/"/g, "&quot;");
 
+                const useDynamic = config?.useDynamicAnchor !== undefined ? config.useDynamicAnchor : (settings.get("useDynamicAnchor") ?? false);
+                console.log(`[IndexAndOutlineGenerator] doc=${name} id=${id} useDynamic=${useDynamic}`);
+
                 if (isTree) {
-                    // Tree index format: * [icon](siyuan://blocks/docId) ➖ Text
-                    // Check if iconStr is a valid unicode emoji, if not (alias/shortcode), use default text icon.
+                    // Tree index format: [Icon](Link) ➖ Text
                     let displayIcon = iconStr;
                     if (!displayIcon || displayIcon.startsWith(":") && displayIcon.endsWith(":")) {
                         displayIcon = subFileCount != 0 ? "📑" : "📄";
                     }
-                    data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${name}\n`;
+                    const textPart = useDynamic
+                        ? `<span data-type="block-ref" data-id="${id}" data-subtype="d">${safeName}</span>`
+                        : name;
+                    data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${textPart}\n`;
+                } else if (useDynamic) {
+                    const dynamicRef = `<span data-type="block-ref" data-id="${id}" data-subtype="d">${safeName}</span>`;
+                    data += `${iconStr ? iconStr + ' ' : ''}${dynamicRef}\n`;
+                    console.log(`[IndexAndOutlineGenerator] Generated dynamic ref (HTML): ${dynamicRef}`);
                 } else if (linkType) {
                     data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;
                 } else {
-                    if (iconEnabled && iconStr) {
-                        data += `${iconStr} ((${id} "${safeName}"))\n`;
-                    } else {
-                        data += `((${id} "${safeName}"))\n`;
-                    }
+                    data += `${iconStr ? iconStr + ' ' : ''}((${id} "${safeName}"))\n`;
                 }
 
                 let outlineData = await requestGetDocOutline(id);

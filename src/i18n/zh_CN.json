@@ -121,6 +121,10 @@
         "title": "添加模板列",
         "content": "是否自动添加 title-img、template 列"
       },
+      "useDynamicAnchor": {
+        "title": "动态锚文本",
+        "content": "开启后，生成目录和大纲将使用内容的块引用 (动态链接)"
+      },
       "builderDesc": "📄 跳转子文档 · ➖ 跳转标题行"
     }
   },

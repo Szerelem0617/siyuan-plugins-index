@@ -3,8 +3,8 @@
     import { i18n } from "../../../shared/utils";
     import SettingItem from "../setting-item.svelte";
 
-    export let tabbarfocus : any;
-    export let settingsStrings : SettingsProperty;
+    export let tabbarfocus: any;
+    export let settingsStrings: SettingsProperty;
 </script>
 
 <div
@@ -24,6 +24,12 @@
         content={i18n.settingsTab.items.linkType}
         settingKey="linkType"
         settingValue={settingsStrings.linkType}
+    />
+    <SettingItem
+        type="switch"
+        content={i18n.settingsTab.items.useDynamicAnchor}
+        settingKey="useDynamicAnchor"
+        settingValue={settingsStrings.useDynamicAnchor}
     />
     <SettingItem
         type="switch"

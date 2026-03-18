@@ -79,10 +79,23 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
 
         let safeAnchorText = anchorText.replace(/"/g, "&quot;");
 
+        let useDynamic = settings.get("useDynamicAnchor") ?? false;
+
         if (outlineType == "tree") {
             // Outline builder format for headings: Just a separator with the link bound to it.
-            // (Note: custom attributes bound post-insertion to avoid markdown list splintering)
-            data += `${indent}${listMarker}[➖](siyuan://blocks/${id}) ${name}\n`;
+            const textPart = useDynamic
+                ? `<span data-type="block-ref" data-id="${id}" data-subtype="d">${name}</span>`
+                : name;
+            data += `${indent}${listMarker}[➖](siyuan://blocks/${id}) ${textPart}\n`;
+        } else if (useDynamic) {
+            // Dynamic Anchor: Use block reference span which is native to Protyle.
+            const dynamicRef = `<span data-type="block-ref" data-id="${id}" data-subtype="d">${name}</span>`;
+            if (iconEnabled) {
+                // Combined Icon + Dynamic Reference: [icon](link) <span...>
+                data += `${indent}${listMarker}[${anchorText}](siyuan://blocks/${id}) ${dynamicRef}${ialStr}\n`;
+            } else {
+                data += `${indent}${listMarker}${dynamicRef}${ialStr}\n`;
+            }
         } else if (iconEnabled) {
             // Icon Enabled: Bind to Icon + Append Rich Text
             if (outlineType == "ref") {

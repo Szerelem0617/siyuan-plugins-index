@@ -429,6 +429,9 @@ export class IBlockProcessor {
     }
 
     async constructListItemMarkdown(containerAttrs: any, headingId: string, syncText: string, docId?: string, docIcon?: string) {
+        const { settings } = await import("../../core/settings");
+        const useDynamic = settings.get("useDynamicAnchor") ?? false;
+
         const parts = [];
         if (!docId) docId = containerAttrs[ATTR_INDEX];
         if (docId) {
@@ -441,9 +444,18 @@ export class IBlockProcessor {
             }
             parts.push(`[${icon}](siyuan://blocks/${docId})`);
         } else if (docIcon) parts.push(docIcon);
+
         if (headingId) parts.push(`[${SEP_CHAR}](siyuan://blocks/${headingId})`);
         else parts.push(SEP_CHAR);
-        parts.push(syncText.trim());
+
+        if (useDynamic && docId) {
+            const dynamicRef = `<span data-type="block-ref" data-id="${docId}" data-subtype="d">${syncText.trim()}</span>`;
+            console.log(`[Builder] Using dynamic anchor (HTML) for doc: ${docId}`);
+            parts.push(dynamicRef);
+        } else {
+            parts.push(syncText.trim());
+        }
+
         return parts.join(" ");
     }
 
