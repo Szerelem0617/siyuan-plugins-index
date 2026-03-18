@@ -339,11 +339,13 @@ export function openTemplateDialog(protyleInstance: any, avID: string, rowID: st
 
     const renderList = (keyword = "") => {
         listEl.innerHTML = '<div class="fn__loading" style="padding: 20px;"><img width="32px" src="/stage/loading-pure.svg"></div>';
+        console.log(`[SpecialHandlers] Searching template with keyword: "${keyword}"`);
         post("/api/search/searchTemplate", { k: keyword }).then((res: any) => {
+            console.log(`[SpecialHandlers] Search results:`, res);
             let html = "";
-            const blocks = res.blocks || [];
-            if (blocks.length > 0) {
-                blocks.forEach((item: any, index: number) => {
+            const templates = res.templates || [];
+            if (templates.length > 0) {
+                templates.forEach((item: any, index: number) => {
                     const isFocus = index === 0 ? " b3-list-item--focus" : "";
                     html += `<div class="b3-list-item b3-list-item--hide-action${isFocus}" 
                         data-path="${item.path}" 
@@ -356,6 +358,7 @@ export function openTemplateDialog(protyleInstance: any, avID: string, rowID: st
                 html = `<div class="b3-list--empty" style="padding: 16px; text-align: center; color: var(--b3-theme-on-surface-light);">无匹配模板</div>`;
             }
             listEl.innerHTML = html;
+            console.log(`[SpecialHandlers] Total templates found: ${templates.length}`);
 
             const firstItem = listEl.querySelector(".b3-list-item") as HTMLElement;
             if (firstItem) {
