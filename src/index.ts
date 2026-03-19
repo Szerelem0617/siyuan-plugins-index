@@ -8,7 +8,7 @@ import { addAVMenuItems, avEventHandler } from "./features/data/attribute-view/e
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
-import { addCommandTestMenuItem } from "./features/command/registration";
+import { addCommandTestMenuItem, refreshSupertagRegistry } from "./features/command/registration";
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { supertagMonitor } from "./features/data/av-setting/supertag";
 import { supertagManager } from "./features/data/av-setting/supertag-manager";
@@ -23,6 +23,8 @@ export default class IndexPlugin extends Plugin {
         console.log(`IndexPlugin onload v${version}`);
         // 内置命令表先行加载，其他所有模块（Dispatcher、第三方插件）均可安全地调用 getCommand()
         commandRegistry.loadBuiltins();
+        // 预加载 Supertag 注册缓存，确保右键菜单能同步显示按钮
+        refreshSupertagRegistry();
         this.init();
         await initTopbar();
         // await this.initSettings();
