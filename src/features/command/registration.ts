@@ -67,8 +67,11 @@ export async function refreshSupertagRegistry() {
             }
 
             if (enableStatus && commandRef && typeTagRaw) {
+                // 清洗逻辑：移除所有 #，移除转义符，移除不可见字符，移除 | 之后的注释，取小写
+                const cleanTag = typeTagRaw.replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
+
                 newRegistry.push({
-                    typeTag: typeTagRaw.replace(/\\/g, "").replace(/#/g, "").trim().toLowerCase(),
+                    typeTag: cleanTag,
                     methodName,
                     commandRef,
                     paramMapping
