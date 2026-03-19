@@ -1,10 +1,11 @@
 import { constructCommandStorage } from "./construct-dir";
 import { i18n } from "../../shared/utils";
 import { post } from "../../shared/api-client/request";
+import { client } from "../../shared/api-client";
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
 import type { Protyle, Menu } from "siyuan";
 
-export const DEV_ENABLE_INIT_SYS = false;
+export const DEV_ENABLE_INIT_SYS = true;
 
 /** 
  * 生成用于 Slash (/) 召唤出的初始构建指令选项
@@ -44,100 +45,113 @@ export function appendInitSystemMenu(menu: Menu) {
  * 监听块图标点击，注入“执行测试”按钮 (方案 A 测试)
  * 通过 eventBus("click-blockicon") 触发
  */
-export function addCommandTestMenuItem({ detail }: any) {
+export async function addCommandTestMenuItem({ detail }: any) {
     if (!DEV_ENABLE_INIT_SYS) return;
 
     const blockElements = detail.blockElements;
     const menu = detail.menu;
     if (!blockElements || blockElements.length === 0 || !menu) return;
 
-    menu.addSeparator();
+    const targetEl = blockElements[0] as HTMLElement;
+    const textContent = targetEl.textContent || "";
+    const tags = Array.from(textContent.matchAll(/#([^\s#]+)/g)).map(m => "#" + m[1]);
 
-    menu.addItem({
-        icon: "iconRocket",
-        label: "🚀 (生产测) 执行数据库绑定的指令",
-        click: async () => {
-            const targetEl = blockElements[0] as HTMLElement;
-            const itemID = targetEl.getAttribute("custom-av-item-id");
+    // 如果没有任何标签，则不额外挂载方法
+    if (tags.length === 0) return;
 
-            // 向上溺源：寻找带有 custom-index-linked-av 的祖先块
-            let current: HTMLElement | null = targetEl;
-            let avID: string | null = null;
-            while (current && current !== document.body) {
-                avID = current.getAttribute("custom-index-linked-av");
-                if (avID) break;
-                current = current.parentElement;
-            }
+    try {
+        // 1. 获取 Type-DB 的 AV ID
+        const sql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
+        const existingDocs = await post("/api/query/sql", { stmt: sql });
+        if (!existingDocs || existingDocs.length === 0) return;
+        const docId = existingDocs[0].root_id;
 
-            if (!itemID || !avID) {
-                console.warn("[IndexOS] Execution failed: Missing Item ID or AV ID link.", { itemID, avID });
-                return;
-            }
+        const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' LIMIT 1`;
+        const listRes = await post("/api/query/sql", { stmt: listSql });
+        if (!listRes || listRes.length === 0) return;
+        const listId = listRes[0].id;
 
-            try {
-                // 1. 渲染数据库获取列定义和行数据
-                const renderRes = await post("/api/av/renderAttributeView", { id: avID });
-                const view = renderRes.view || renderRes;
-                const rows: any[] = view.rows || [];
-                const columns: any[] = view.columns || [];
+        const listAttrsRes = await client.getBlockAttrs({ id: listId });
+        const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
+        if (!avId) return;
 
-                if (!columns.length) throw new Error("数据库未包含任何列定义");
+        // 2. 获取 Type-DB 里的全部方法映射
+        const renderRes = await post("/api/av/renderAttributeView", { id: avId });
+        const view = renderRes.view || renderRes;
+        const rows: any[] = view.rows || [];
+        const columns: any[] = view.columns || [];
 
-                // 2. 定位列索引
-                const findCol = (name: string) => columns.findIndex(
-                    (c: any) => c.name === name || c.keyName === name
-                );
-                const cmdColIdx = findCol("Command ID");
-                const paramColIdx = findCol("Command Param");
+        let separatorAdded = false;
 
-                if (cmdColIdx === -1) throw new Error("未找到 Command ID 列");
+        // 3. 遍历当前块的标签，看有没有匹配的方法
+        for (const tag of tags) {
+            const matchedRows = rows.filter((r: any) => {
+                const firstCell = r.cells[0];
+                const label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
+                return label.includes(tag);
+            });
 
-                // 3. 定位行
-                const row = rows.find((r: any) => r.id === itemID);
-                if (!row) throw new Error(`在数据库中未找到该条目（id=${itemID}）`);
-
-                // 4. 提取单元格内容
-                const getCellText = (idx: number): string => {
-                    if (idx < 0) return "";
-                    const cell = row.cells[idx];
-                    return cell?.value?.text?.content
-                        || cell?.value?.mText?.content
-                        || cell?.value?.block?.content
-                        || "";
-                };
-
-                const commandId = getCellText(cmdColIdx).trim();
-                const rawParam = getCellText(paramColIdx).trim();
-
-                if (!commandId) {
-                    console.warn("[IndexOS] Command ID 单元格为空，跳过执行");
-                    return;
+            if (matchedRows.length > 0) {
+                if (!separatorAdded) {
+                    menu.addSeparator();
+                    separatorAdded = true;
                 }
 
-                const protyleEl = targetEl.closest(".protyle-content") as HTMLElement | null;
+                for (const row of matchedRows) {
+                    const getCellText = (colName: string): string => {
+                        const idx = columns.findIndex((c: any) => c.name === colName || c.keyName === colName);
+                        if (idx < 0) return "";
+                        const cell = row.cells[idx];
+                        return cell?.value?.text?.content || cell?.value?.mText?.content || cell?.value?.block?.content || "";
+                    };
 
-                // 5. 先关菜单（同步），保证 isOpen 状态被正确重置
-                try { (window as any).siyuan?.menus?.menu?.remove(); }
-                catch (_) { document.querySelectorAll(".b3-menu").forEach((m: any) => m.remove()); }
+                    const methodName = getCellText("Method Name");
+                    const commandRef = getCellText("Command Reference");
+                    const paramMapping = getCellText("Param Mapping");
 
-                // 6. 延迟：菜单关闭后再设置焦点并派发命令
-                console.log(`[IndexOS] 🚀 Dispatching [${commandId}]${rawParam ? ` param=${rawParam}` : ""}`);
-                setTimeout(async () => {
-                    try {
-                        focusBlockForDispatch(targetEl, protyleEl);
-                        const result = await dispatchCommand(commandId, rawParam, { blockEl: targetEl, protyleEl });
-                        console.log(`[IndexOS] Dispatch result:`, result);
-                    } catch (err) {
-                        console.error("[IndexOS] Command Execution Failed:", err);
-                    } finally {
-                        setTimeout(() => cleanupAfterDispatch(), 100);
+                    // 获取 Enable 复选框状态，默认开启
+                    const enableColIdx = columns.findIndex((c: any) => c.name === "Enable" || c.keyName === "Enable");
+                    let enableStatus = true;
+                    if (enableColIdx >= 0) {
+                        const cell = row.cells[enableColIdx];
+                        if (cell && cell.value && cell.value.checkbox) {
+                            enableStatus = cell.value.checkbox.checked;
+                        }
                     }
-                }, 150);
 
-            } catch (e) {
-                console.error("[IndexOS] Action Dispatch Error:", e);
+                    if (!enableStatus || !commandRef) continue;
+
+                    menu.addItem({
+                        icon: "iconPlay",
+                        label: `⚡ (${tag}) ${methodName}`,
+                        click: async () => {
+                            const protyleEl = targetEl.closest(".protyle-content") as HTMLElement | null;
+
+                            // 关闭右键菜单
+                            try { (window as any).siyuan?.menus?.menu?.remove(); }
+                            catch (_) { document.querySelectorAll(".b3-menu").forEach((m: any) => m.remove()); }
+
+                            console.log(`[IndexOS] 🚀 Dispatching [${commandRef}] for Supertag [${tag}]`);
+
+                            // 暂时将 Param Mapping 原样透传当做 param（以后这里是组装逻辑）
+                            setTimeout(async () => {
+                                try {
+                                    focusBlockForDispatch(targetEl, protyleEl);
+                                    const result = await dispatchCommand(commandRef, paramMapping, { blockEl: targetEl, protyleEl });
+                                    console.log(`[IndexOS] Dispatch result:`, result);
+                                } catch (err) {
+                                    console.error("[IndexOS] Command Execution Failed:", err);
+                                } finally {
+                                    setTimeout(() => cleanupAfterDispatch(), 100);
+                                }
+                            }, 150);
+                        }
+                    });
+                }
             }
         }
-    });
+    } catch (e) {
+        console.error("[IndexOS] Error fetching Type-DB methods:", e);
+    }
 }
 

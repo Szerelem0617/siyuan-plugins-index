@@ -93,10 +93,23 @@ async function fetchDocumentIconsForDBItems(targetIds: string[]): Promise<Record
 /**
  * 创建数据库逻辑
  */
-export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent: boolean = false) {
+export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent: boolean = false, skipTemplateCols: boolean = false) {
     if (!sourceBlockIds || sourceBlockIds.length === 0) return;
 
+    console.log(`[createDatabaseWithBlocks] Called with silent=${silent}, skipTemplateCols=${skipTemplateCols}, IDs=`, sourceBlockIds);
+
     const lastBlockId = sourceBlockIds[sourceBlockIds.length - 1];
+
+    try {
+        const sql = `SELECT root_id FROM attributes WHERE name IN ('custom-index-command-db', 'custom-index-type-db') AND root_id = (SELECT root_id FROM blocks WHERE id = '${lastBlockId}' LIMIT 1) LIMIT 1`;
+        const res = await post("/api/query/sql", { stmt: sql });
+        if (res && res.length > 0) {
+            console.log(`[createDatabaseWithBlocks] Detected system DB, forcing skipTemplateCols to true`);
+            skipTemplateCols = true;
+        }
+    } catch (e) {
+        console.warn(`[createDatabaseWithBlocks] Error checking system DB status:`, e);
+    }
 
     try {
         // --- 0. 预检查并执行可能需要的转换 (Index/Outline -> Static Tree) ---
@@ -254,6 +267,11 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                 lastKeyID = key.id;
                 return key.id;
             } else {
+                if (existingAvID) {
+                    console.log(`[createDatabaseWithBlocks] DB already exists, skipping creation of column: ${name}`);
+                    return null;
+                }
+
                 // @ts-ignore
                 const newID = window.Lute.NewNodeID();
                 await post("/api/av/addAttributeViewKey", {
@@ -278,9 +296,13 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
             iconKeyId = await ensureKey("icon", "text", "iconEmoji");
 
             // Optional template columns
-            if (settings.get("dbAddTemplateCols")) {
+            console.log(`[createDatabaseWithBlocks] Check template cols: settings=${settings.get("dbAddTemplateCols")}, skipTemplateCols=${skipTemplateCols}`);
+            if (settings.get("dbAddTemplateCols") && !skipTemplateCols) {
+                console.log(`[createDatabaseWithBlocks] Adding template cols...`);
                 titleImgKeyId = await ensureKey("title-img", "text", "iconImage");
                 templateKeyId = await ensureKey("template", "text", "iconLayout");
+            } else {
+                console.log(`[createDatabaseWithBlocks] Skipping template cols.`);
             }
 
             await new Promise(resolve => setTimeout(resolve, 300));
