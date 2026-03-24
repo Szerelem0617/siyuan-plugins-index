@@ -13,10 +13,10 @@ export interface SupertagCommand {
     methodName: string;   // UI 显示的方法名
     commandRef: string;   // 执行的命令 ID
     paramMapping: string;
-    autoSync: boolean;    // 是否在标签添加时自动入库
-    targetDbId: string;   // 目标数据库的源块 ID 或内容，用于路由
+    autoSync?: boolean;    // 是否在标签添加时自动入库
+    targetDbId?: string;   // 目标数据库的源块 ID 或内容，用于路由
     typeFieldId?: string; // 目标数据库的分类字段 ID (可选)
-    mappedValue?: string; // 映射值 (可选)
+    mappedValue?: any; // 映射值 (可选)
 }
 export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
 
@@ -60,7 +60,7 @@ export async function refreshSupertagRegistry() {
             const commandRef = getCellText("Command Reference");
             const paramMapping = getCellText("Param Mapping");
 
-            // 获取 Enable 复选框状态
+            // 识别行是否生效
             const enableColIdx = columns.findIndex((c: any) => c.name === "Enable" || c.keyName === "Enable");
             let enableStatus = true;
             if (enableColIdx >= 0) {
@@ -69,45 +69,6 @@ export async function refreshSupertagRegistry() {
                     enableStatus = cell.value.checkbox.checked;
                 }
             }
-
-            // 获取 Auto Sync 复选框状态
-            const autoSyncColIdx = columns.findIndex((c: any) => c.name === "Auto Sync" || c.keyName === "Auto Sync");
-            let autoSync = false;
-            if (autoSyncColIdx >= 0) {
-                const cell = row.cells[autoSyncColIdx];
-                if (cell && cell.value && cell.value.checkbox) {
-                    autoSync = cell.value.checkbox.checked;
-                }
-            }
-
-            // 获取 Target AV ID (Text，最高优先级)
-            let targetDbId = "";
-            const targetAvIdIdx = columns.findIndex((c: any) => c.name === "Target AV ID" || c.keyName === "Target AV ID");
-            if (targetAvIdIdx >= 0) {
-                const cell = row.cells[targetAvIdIdx];
-                targetDbId = cell?.value?.text?.content || cell?.value?.mText?.content || "";
-            }
-
-            // 获取 Target AV Block ID (Text，备选引用)
-            let targetBlockId = "";
-            const targetBlockIdIdx = columns.findIndex((c: any) => c.name === "Target AV Block ID" || c.keyName === "Target AV Block ID");
-            if (targetBlockIdIdx >= 0) {
-                const cell = row.cells[targetBlockIdIdx];
-                targetBlockId = cell?.value?.text?.content || cell?.value?.mText?.content || "";
-            }
-
-            // 如果 Target AV ID 为空，则尝试用 Block ID
-            if (!targetDbId && targetBlockId) {
-                targetDbId = targetBlockId;
-            }
-
-            // 获取 Type Column ID 和 Type Value (Multi-mode 支持)
-            let typeFieldId = "";
-            let mappedValue = "";
-            const fieldIdx = columns.findIndex((c: any) => c.name === "Type Column ID" || c.keyName === "Type Column ID");
-            const valueIdx = columns.findIndex((c: any) => c.name === "Type Value" || c.keyName === "Type Value");
-            if (fieldIdx >= 0) typeFieldId = row.cells[fieldIdx]?.value?.text?.content || row.cells[fieldIdx]?.value?.mText?.content || "";
-            if (valueIdx >= 0) mappedValue = row.cells[valueIdx]?.value?.text?.content || row.cells[valueIdx]?.value?.mText?.content || "";
 
             if (enableStatus && typeTagRaw) {
                 // 清洗逻辑：移除所有 #，移除转义符，移除不可见字符，移除 | 之后的注释，取小写
@@ -118,15 +79,11 @@ export async function refreshSupertagRegistry() {
                     methodName,
                     commandRef,
                     paramMapping,
-                    autoSync,
-                    targetDbId,
-                    typeFieldId: typeFieldId || undefined,
-                    mappedValue: mappedValue || undefined
                 });
             }
         }
         SUPERTAG_REGISTRY = newRegistry;
-        console.log(`[Supertag] Registry refreshed: ${SUPERTAG_REGISTRY.length} types.`, SUPERTAG_REGISTRY);
+        console.log(`[Supertag] Logic Registry refreshed: ${SUPERTAG_REGISTRY.length} routes.`, SUPERTAG_REGISTRY);
     } catch (e) {
         console.error("[Supertag] Failed to refresh registry:", e);
     }

@@ -9,7 +9,7 @@ import { formatDate } from "../../../shared/utils";
 import { getColIDMap } from "../../../shared/utils/av-utils";
 
 export class SupertagMonitor {
-    private typeRegistry: TypeConfig[] = [];
+    private dataRegistry: TypeConfig[] = [];
     private lastUpdate = 0;
     private tagCache = new Map<string, Set<string>>();
 
@@ -21,9 +21,14 @@ export class SupertagMonitor {
     }
 
     async refreshRegistry() {
+        // 1. Refresh Logic Registry (Layer 3)
         await refreshSupertagRegistry();
-        this.typeRegistry = await getGlobalTypeConfigs();
+
+        // 2. Refresh Data Component Registry (Layer 4 - Scanning individual DBs)
+        this.dataRegistry = await getGlobalTypeConfigs();
+
         this.lastUpdate = Date.now();
+        console.log(`[Supertag] Monitor registries refreshed. Logic: ${SUPERTAG_REGISTRY.length}, Data: ${this.dataRegistry.length}`);
     }
 
     private boundHandler = this.handleWsMessage.bind(this);
@@ -194,62 +199,47 @@ export class SupertagMonitor {
                 console.log(`[Supertag] Current Registry Tags:`, SUPERTAG_REGISTRY.map(c => c.typeTag));
             }
 
-            // Check for matched configs with autoSync === true AND valid targetDbId
-            let matchedConfigs = SUPERTAG_REGISTRY.filter(c => c.typeTag === cleanTag && c.autoSync && c.targetDbId);
-
-            if (matchedConfigs.length > 0) {
-                // If there are multiple mappings for the same tag, just unique the db ids to avoid duplicated inserts
-                // Note: If multiple configs point to same DB but different values, we should ideally handle them.
-                // For now, we group by targetDbId and take the first config for that DB.
-                const dbMap = new Map<string, typeof matchedConfigs[0]>();
-                for (const c of matchedConfigs) {
-                    if (!dbMap.has(c.targetDbId)) dbMap.set(c.targetDbId, c);
-                }
-
-                for (const [dbId, config] of dbMap.entries()) {
-                    console.log(`[Supertag] ✨ MATCH! Tag "${cleanTag}" matches Auto-Sync rule. Triggering DB sync for target ${dbId}...`);
-                    await this.applySupertag(blockId, cleanTag, config);
-                }
-                return;
+            // --- Path A: Logic Routing (Layer 3) ---
+            const logicMatches = SUPERTAG_REGISTRY.filter(c => c.typeTag === cleanTag);
+            if (logicMatches.length > 0) {
+                console.log(`[Supertag] ✨ Logic Match! Running ${logicMatches.length} command(s) for #${cleanTag}#`);
+                // Logic routing implementation (not strictly syncing to DB, just running commands)
+                // In a future step, we might trigger the actual command bus here.
+                // For now, logic is mainly represented by its presence in the registry.
             }
 
-            // Fallback to legacy
-            let legacyMatchedConfigs = this.typeRegistry.filter(c => c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag);
-            let legacyConfig = null;
+            // --- Path B: Data Component Persistence (Layer 4) ---
+            const dataMatches = this.dataRegistry.filter(c =>
+                c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag
+            );
 
-            if (legacyMatchedConfigs.length > 0) {
-                const pref = this.prefs[cleanTag];
-                if (pref) {
-                    legacyConfig = legacyMatchedConfigs.find(c => c.avId === pref) || legacyMatchedConfigs[0];
-                } else {
-                    legacyConfig = legacyMatchedConfigs[0];
+            if (dataMatches.length > 0) {
+                let targetConfig = dataMatches[0];
+
+                // If ambiguity exists, resolve via User Preferences
+                if (dataMatches.length > 1) {
+                    const prefAvId = this.prefs[cleanTag];
+                    if (prefAvId) {
+                        targetConfig = dataMatches.find(c => c.avId === prefAvId) || targetConfig;
+                    }
                 }
-            }
 
-            if (legacyConfig) {
-                console.log(`[Supertag] ✨ MATCH (Legacy)! Tag "${cleanTag}" matches type "${legacyConfig.typeName}". Triggering DB sync...`, legacyConfig);
-                await this.applySupertagLegacy(blockId, legacyConfig);
+                console.log(`[Supertag] ✨ Data Match! Target: ${targetConfig.avName || targetConfig.avId}. Triggering sync...`);
+                await this.applySupertag(blockId, cleanTag, targetConfig);
             } else {
-                console.log(`[Supertag] ℹ️ Tag "${cleanTag}" ignored. It is not mapped to any Auto-Sync rule in Type-DB nor legacy DB Config.`);
+                console.log(`[Supertag] ℹ️ Tag "${cleanTag}" ignore sync. No Data Component (Layer 4) mapping found.`);
             }
         } catch (e) {
             console.error("[Supertag] Failed to process new tag:", blockId, e);
         }
     }
 
-    private async applySupertag(blockId: string, cleanTag: string, config: any) {
+    private async applySupertag(blockId: string, cleanTag: string, config: TypeConfig) {
         try {
-            const targetDbId = config.targetDbId;
-            let avId = targetDbId;
-            // Test if targetDbId is actually a list block
-            const linkTest = await post("/api/query/sql", { stmt: `SELECT id FROM blocks WHERE id = '${targetDbId}' AND type = 'l' LIMIT 1` });
-            if (linkTest && linkTest.length > 0) {
-                const attrsRes = await client.getBlockAttrs({ id: targetDbId });
-                avId = (attrsRes.data || {})["custom-index-linked-av"] || avId;
-            }
+            const avId = config.avId;
 
             // 1. Get current state of the AV
-            const { blockToItem, idToType } = await getColIDMap(avId);
+            const { blockToItem, idToType, keyValues } = await getColIDMap(avId);
             let itemId = blockToItem.get(blockId);
 
             if (!itemId) {
@@ -264,13 +254,27 @@ export class SupertagMonitor {
                 });
                 console.log(`[Supertag] Insert Block Result:`, insertRes);
 
-                // Reduced delay to minimize performance impact
-                await new Promise(r => setTimeout(r, 50));
+                // Wait a bit for backend to process
+                await new Promise(r => setTimeout(r, 100));
             } else {
-                console.log(`[Supertag] Block ${blockId} already exists in AV ${avId} as item ${itemId}.`);
+                // 3. IDEMPOTENCY check
+                if (config.typeFieldId && config.mappedValue !== undefined) {
+                    const colKV = keyValues.find(kv => kv.key.id === config.typeFieldId);
+                    if (colKV && colKV.values) {
+                        const cell = colKV.values.find((v: any) => (v.itemID || v.itemId || v.id) === itemId);
+                        if (cell) {
+                            const currentVal = (cell.mSelect?.[0]?.content || cell.text?.content || cell.number?.content || cell.content || "").toString();
+                            if (currentVal === config.mappedValue.toString()) {
+                                console.log(`[Supertag] Idempotency Check: Block ${blockId} already correctly categorized in ${avId} with value "${currentVal}". Skipping update.`);
+                                return;
+                            }
+                        }
+                    }
+                }
+                console.log(`[Supertag] Block ${blockId} already exists in AV ${avId} as item ${itemId}, but may need value update.`);
             }
 
-            // 3. Set specific attribute value if multi-mode
+            // 4. Set specific attribute value
             if (config.typeFieldId && config.mappedValue !== undefined) {
                 const colType = idToType[config.typeFieldId] || "text";
                 const valuePayload = this.formatValue(String(config.mappedValue).trim(), colType);
@@ -287,88 +291,21 @@ export class SupertagMonitor {
                 console.log(`[Supertag] Batch Set Result:`, setRes);
             }
 
-            // 5. Force UI refresh for the original block 
+            // 5. Force UI refresh
             await post("/api/transactions", {
                 app: "plugin-index",
                 reqId: Date.now(),
                 transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: blockId, data: formatDate(new Date()) }] }]
             });
 
-            console.log(`[Supertag] Successfully applied auto-sync for "${cleanTag}" to block ${blockId}`);
-            showMessage(`✨ Supertag: 已自动同步至 "${cleanTag}" 数据组件`);
+            console.log(`[Supertag] Successfully applied Data Sync for "${cleanTag}" (Class: ${config.typeName}) to block ${blockId}`);
+            showMessage(`✨ Supertag: 已自动同步至 "${config.avName || cleanTag}"`);
 
         } catch (e) {
-            console.error("[Supertag] Failed to apply supertag:", e);
+            console.error("[Supertag] Failed to apply data sync:", e);
         }
     }
 
-    private async applySupertagLegacy(blockId: string, config: TypeConfig) {
-        try {
-            // 1. Get current state of the AV
-            const { blockToItem, keyValues, idToType } = await getColIDMap(config.avId);
-            let itemId = blockToItem.get(blockId);
-
-            if (!itemId) {
-                // 2. Add block to AV if not present
-                // @ts-ignore
-                itemId = window.Lute.NewNodeID();
-                console.log(`[Supertag] Adding block ${blockId} to AV ${config.avId} as item ${itemId}`);
-
-                const insertRes = await post("/api/av/addAttributeViewBlocks", {
-                    avID: config.avId,
-                    srcs: [{ itemID: itemId, id: blockId, isDetached: false }]
-                });
-                console.log(`[Supertag] Insert Block Result:`, insertRes);
-
-                // Wait a bit for backend to process
-                await new Promise(r => setTimeout(r, 200));
-            } else {
-                // 3. IDEMPOTENCY: Check if the value is already set correctly
-                if (config.typeFieldId && config.mappedValue !== undefined) {
-                    const colKV = keyValues.find(kv => kv.key.id === config.typeFieldId);
-                    if (colKV && colKV.values) {
-                        const cell = colKV.values.find((v: any) => (v.itemID || v.itemId || v.id) === itemId);
-                        if (cell) {
-                            const currentVal = (cell.mSelect?.[0]?.content || cell.text?.content || cell.number?.content || cell.content || "").toString();
-                            if (currentVal === config.mappedValue.toString()) {
-                                console.log(`[Supertag] Block ${blockId} already correctly categorized in ${config.avId}. Skipping.`);
-                                return;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (config.typeFieldId && config.mappedValue !== undefined) {
-                // 4. Set the attribute value
-                const colType = idToType[config.typeFieldId] || "text";
-                const valuePayload = this.formatValue(config.mappedValue, colType);
-
-                const updateRes = await post("/api/av/batchSetAttributeViewBlockAttrs", {
-                    avID: config.avId,
-                    values: [{
-                        keyID: config.typeFieldId,
-                        itemID: itemId,
-                        value: valuePayload
-                    }]
-                });
-                console.log(`[Supertag] Update Attribute Result:`, updateRes);
-            }
-
-            // 5. Force UI refresh for the AV block so the new row shows up immediately
-            await post("/api/transactions", {
-                app: "plugin-index",
-                reqId: Date.now(),
-                transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: config.blockId, data: formatDate(new Date()) }] }]
-            });
-
-            console.log(`[Supertag] Successfully applied type "${config.typeName}" to block ${blockId}`);
-            showMessage(`✨ Supertag: 已自动分类为 "${config.typeName}"`);
-
-        } catch (e) {
-            console.error("[Supertag] Failed to apply supertag:", e);
-        }
-    }
 
     private formatValue(val: string, colType: string) {
         console.log(`[Supertag] Formatting value "${val}" for column type "${colType}"`);

@@ -119,12 +119,7 @@ export async function constructCommandStorage() {
                 const methodNameKey = await addCol("Method Name", "text", "iconPlay", lastKeyID);
                 const commandRefKey = await addCol("Command Reference", "text", "iconLink", methodNameKey);
                 const paramMappingKey = await addCol("Param Mapping", "text", "iconList", commandRefKey);
-                const autoSyncKey = await addCol("Auto Sync", "checkbox", "iconRefresh", paramMappingKey);
-                const targetAvIdKey = await addCol("Target AV ID", "text", "iconEdit", autoSyncKey);
-                const targetBlockIdKey = await addCol("Target AV Block ID", "text", "iconLink", targetAvIdKey);
-                const typeFieldKey = await addCol("Type Column ID", "text", "iconLayout", targetBlockIdKey);
-                const typeValueKey = await addCol("Type Value", "text", "iconTag", typeFieldKey);
-                const enableKey = await addCol("Enable", "checkbox", "iconCheck", typeValueKey);
+                const enableKey = await addCol("Enable", "checkbox", "iconCheck", paramMappingKey);
 
                 await sleep(1000);
                 const renderRes = await post("/api/av/renderAttributeView", { id: avId });
@@ -141,14 +136,12 @@ export async function constructCommandStorage() {
                             // 第一个 Project：设为“右侧分屏打开”
                             populateOps.push({ keyID: methodNameKey, itemID: row.id, value: { type: "text", text: { content: "在右侧打开" } } });
                             populateOps.push({ keyID: commandRefKey, itemID: row.id, value: { type: "text", text: { content: "general.splitLR" } } });
-                            populateOps.push({ keyID: autoSyncKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
                             populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
                             // 用户在高级设置配置后会自动填入 ID
                         } else if (projectCount === 2) {
                             // 第二个 Project：设为“打开全局关系图”
                             populateOps.push({ keyID: methodNameKey, itemID: row.id, value: { type: "text", text: { content: "打开全局关系图" } } });
                             populateOps.push({ keyID: commandRefKey, itemID: row.id, value: { type: "text", text: { content: "general.graphView" } } });
-                            populateOps.push({ keyID: autoSyncKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: false } } });
                             populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
                         }
                     }
