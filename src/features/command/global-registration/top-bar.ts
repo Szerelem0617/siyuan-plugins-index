@@ -3,6 +3,7 @@ import { post } from "../../../shared/api-client/request";
 import { client } from "../../../shared/api-client";
 import { dispatchCommand } from "../command-dispatcher";
 import { updateInlineButtonList, InlineButtonCmd } from "./inline-button";
+import { updateCommandPaletteList, PaletteCommand } from "./command-palette";
 
 export interface TopBarCommand {
     id: string;
@@ -44,6 +45,7 @@ export async function refreshTopBarCommands() {
 
         const newTopBars: TopBarCommand[] = [];
         const newInlineBtns: InlineButtonCmd[] = [];
+        const newPaletteCmds: PaletteCommand[] = [];
 
         for (const row of rows) {
             const getCellText = (colName: string): string => {
@@ -89,8 +91,18 @@ export async function refreshTopBarCommands() {
                 }
             }
 
+            // Check if Command Palette is true
+            const paletteColIdx = columns.findIndex((c: any) => c.name === "Command Palette" || c.keyName === "Command Palette");
+            let paletteStatus = false;
+            if (paletteColIdx >= 0) {
+                const cell = row.cells[paletteColIdx];
+                if (cell && cell.value && cell.value.checkbox) {
+                    paletteStatus = cell.value.checkbox.checked;
+                }
+            }
+
             console.log(`[TopBar] Debug Row: Label="${label}", CmdID="${commandId}"`);
-            console.log(`[TopBar] Debug Cols: EnableIdx=${enableColIdx} (Status=${enableStatus}), TopBarIdx=${topBarColIdx} (Status=${topBarStatus}), InlineBtnIdx=${ibColIdx} (Status=${ibStatus})`);
+            console.log(`[TopBar] Debug Cols: Enable=${enableStatus}, TopBar=${topBarStatus}, InlineBtn=${ibStatus}, Palette=${paletteStatus}`);
 
             if (enableStatus && commandId) {
                 if (topBarStatus && label) {
@@ -107,6 +119,17 @@ export async function refreshTopBarCommands() {
 
                 if (ibStatus && label) {
                     newInlineBtns.push({
+                        id: row.id,
+                        label,
+                        commandId,
+                        commandParam,
+                        commandType
+                    });
+                }
+
+                // Only push to ;; palette if "Command Palette" column is ticked
+                if (paletteStatus && label) {
+                    newPaletteCmds.push({
                         id: row.id,
                         label,
                         commandId,
@@ -150,6 +173,8 @@ export async function refreshTopBarCommands() {
 
         // --- Push to Inline Button Registry ---
         updateInlineButtonList(newInlineBtns);
+        // --- Push all enabled commands to the ;; Command Palette ---
+        updateCommandPaletteList(newPaletteCmds);
 
     } catch (e) {
         console.error("[TopBar] Failed to refresh Top Bar registrations:", e);

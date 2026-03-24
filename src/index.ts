@@ -8,12 +8,13 @@ import { addAVMenuItems, avEventHandler } from "./features/data/attribute-view/e
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
-import { addCommandTestMenuItem, refreshSupertagRegistry } from "./features/command/registration";
+import { addCommandTestMenuItem, refreshSupertagRegistry, DEV_ENABLE_INIT_SYS } from "./features/command/registration";
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { supertagMonitor } from "./features/data/av-setting/supertag";
 import { supertagManager } from "./features/data/av-setting/supertag-manager";
 import { refreshTopBarCommands, handleTopBarEvents } from "./features/command/global-registration/top-bar";
 import { initInlineButtonListener, destroyInlineButtonListener } from "./features/command/global-registration/inline-button";
+import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
 import { version } from "../plugin.json";
 
 export default class IndexPlugin extends Plugin {
@@ -25,17 +26,20 @@ export default class IndexPlugin extends Plugin {
         console.log(`IndexPlugin onload v${version}`);
         // 内置命令表先行加载，其他所有模块（Dispatcher、第三方插件）均可安全地调用 getCommand()
         commandRegistry.loadBuiltins();
-        // 预加载 Supertag 注册缓存，确保右键菜单能同步显示按钮
-        refreshSupertagRegistry();
+        if (DEV_ENABLE_INIT_SYS) {
+            refreshSupertagRegistry();
+            await refreshTopBarCommands();
+        }
         this.init();
         await initTopbar();
-        await refreshTopBarCommands();
         // await this.initSettings();
         await settings.initData();
         //监听块菜单事件
         this.eventBus.on("click-blockicon", buildDocNew);
         this.eventBus.on("click-blockicon", addDataMenuItems);
-        this.eventBus.on("click-blockicon", addCommandTestMenuItem);
+        if (DEV_ENABLE_INIT_SYS) {
+            this.eventBus.on("click-blockicon", addCommandTestMenuItem);
+        }
         this.eventBus.on("open-menu-av", addAVMenuItems);
         //监听文档载入事件
         this.eventBus.on("loaded-protyle-static", updateIndex);
@@ -43,13 +47,18 @@ export default class IndexPlugin extends Plugin {
         this.switchHandler = this.onTabSwitch.bind(this);
         this.eventBus.on("switch-protyle", this.switchHandler);
 
-        this.eventBus.on("ws-main", handleTopBarEvents);
+        if (DEV_ENABLE_INIT_SYS) {
+            this.eventBus.on("ws-main", handleTopBarEvents);
+        }
 
         initEmojiEvent();
         avEventHandler.init();
         supertagMonitor.init(this);
         supertagManager.init();
-        initInlineButtonListener();
+        if (DEV_ENABLE_INIT_SYS) {
+            initInlineButtonListener();
+            initCommandPalette();
+        }
     }
     // onLayoutReady() {
     //     initObserver();
@@ -58,17 +67,24 @@ export default class IndexPlugin extends Plugin {
     onunload() {
         this.eventBus.off("click-blockicon", buildDocNew);
         this.eventBus.off("click-blockicon", addDataMenuItems);
-        this.eventBus.off("click-blockicon", addCommandTestMenuItem);
+        if (DEV_ENABLE_INIT_SYS) {
+            this.eventBus.off("click-blockicon", addCommandTestMenuItem);
+        }
         this.eventBus.off("open-menu-av", addAVMenuItems);
         this.eventBus.off("loaded-protyle-static", updateIndex);
         this.eventBus.off("switch-protyle", this.switchHandler);
-        this.eventBus.off("ws-main", handleTopBarEvents);
+        if (DEV_ENABLE_INIT_SYS) {
+            this.eventBus.off("ws-main", handleTopBarEvents);
+        }
 
         removeEmojiEvent();
         avEventHandler.destroy();
         supertagMonitor.destroy();
         supertagManager.destroy();
-        destroyInlineButtonListener();
+        if (DEV_ENABLE_INIT_SYS) {
+            destroyInlineButtonListener();
+            destroyCommandPalette();
+        }
         console.log("IndexPlugin onunload");
     }
 
