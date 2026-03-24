@@ -26,9 +26,6 @@
     let typeMappings: IDBTypeMapping[] = currentConfig.typeMappings || [];
     let inheritanceRules = currentConfig.inheritanceRules || [];
 
-    // Determine if the configuration is already established (locked)
-    let isLocked = !!currentConfig.mode;
-
     const reset = async () => {
         if (window.confirm(i18n.dbConfig.resetPrompt)) {
             await resetDbConfig(blockId, avId);
@@ -300,9 +297,7 @@
                     </span>
                     <button
                         class="b3-button b3-button--cancel"
-                        style="padding: 4px 8px; {isLocked
-                            ? 'display:none;'
-                            : ''}"
+                        style="padding: 4px 8px;"
                         on:click={toggleMode}
                     >
                         <svg
@@ -314,9 +309,6 @@
                             ? i18n.dbConfig.modeMulti
                             : i18n.dbConfig.modeSingle}
                     </button>
-                    {#if isLocked}
-                        <span class="b3-chip b3-chip--info">🔒 架构已锁定</span>
-                    {/if}
                 </div>
 
                 <div class="fn__hr"></div>
@@ -338,7 +330,6 @@
                                 class="b3-input fn__flex-1"
                                 placeholder={i18n.dbConfig.typeNamePlaceholder}
                                 bind:value={singleClassName}
-                                disabled={isLocked}
                             />
                         </div>
                         <div
@@ -356,7 +347,6 @@
                             <select
                                 class="b3-select fn__block"
                                 bind:value={typeFieldId}
-                                disabled={isLocked}
                                 on:change={() => {
                                     // Clear existing mappings when switching column manually
                                     typeMappings = [];
@@ -475,16 +465,14 @@
         style="margin-top: 16px; justify-content: space-between; flex-shrink: 0;"
     >
         <div class="fn__flex">
-            {#if isLocked}
-                <button class="b3-button b3-button--cancel" on:click={reset}>
-                    <svg
-                        class="b3-list-item__graphic"
-                        style="height: 14px; width: 14px; margin-right: 4px;"
-                        ><use xlink:href="#iconTrashcan"></use></svg
-                    >
-                    {i18n.dbConfig.reset}
-                </button>
-            {/if}
+            <button class="b3-button b3-button--cancel" on:click={reset}>
+                <svg
+                    class="b3-list-item__graphic"
+                    style="height: 14px; width: 14px; margin-right: 4px;"
+                    ><use xlink:href="#iconTrashcan"></use></svg
+                >
+                {i18n.dbConfig.reset}
+            </button>
         </div>
         <div class="fn__flex">
             <button

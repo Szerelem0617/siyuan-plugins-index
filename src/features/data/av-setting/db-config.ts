@@ -9,134 +9,10 @@ export const ATTR_DB_CONFIG = "custom-index-db-config";
 
 export type { DbConfig, TypeConfig, IDBTypeMapping, InheritanceRule } from "./types";
 import { type DbConfig, type TypeConfig } from "./types";
-import { refreshSupertagRegistry } from "../../command/registration";
 
-export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
-    try {
-        const sql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
-        const existingDocs = await post("/api/query/sql", { stmt: sql });
-        if (!existingDocs || existingDocs.length === 0) return;
-        const docId = existingDocs[0].root_id;
+// syncTypeToTypeDb logic removed to decouple Layer 4 from Layer 3.
+// Configuration is now stored exclusively in block attributes and discovered via scanning.
 
-        const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' LIMIT 1`;
-        const listRes = await post("/api/query/sql", { stmt: listSql });
-        if (!listRes || listRes.length === 0) return;
-        const listId = listRes[0].id;
-
-        const listAttrsRes = await client.getBlockAttrs({ id: listId });
-        const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
-        if (!avId) return;
-
-        let mappings: { name: string, fieldId?: string, value?: string }[] = [];
-        if (config.mode === "single" && config.singleClassName) {
-            mappings.push({ name: config.singleClassName.replace(/#/g, "").trim() });
-        } else if (config.mode === "multi" && config.typeMappings) {
-            config.typeMappings.forEach(m => {
-                if (m.name) mappings.push({
-                    name: m.name.replace(/#/g, "").trim(),
-                    fieldId: config.typeFieldId,
-                    value: m.value
-                });
-            });
-        }
-
-        const renderRes = await post("/api/av/renderAttributeView", { id: avId });
-        const view = renderRes.view || renderRes;
-        const rows = view.rows || [];
-        const columns = view.columns || [];
-
-        const pkKeyId = columns[0].id;
-        const autoSyncCol = columns.find((c: any) => c.name === "Auto Sync" || c.keyName === "Auto Sync");
-        const targetAvIdCol = columns.find((c: any) => c.name === "Target AV ID" || c.keyName === "Target AV ID");
-        const targetBlockIdCol = columns.find((c: any) => c.name === "Target AV Block ID" || c.keyName === "Target AV Block ID");
-        const typeFieldCol = columns.find((c: any) => c.name === "Type Column ID" || c.keyName === "Type Column ID");
-        const typeValueCol = columns.find((c: any) => c.name === "Type Value" || c.keyName === "Type Value");
-        const enableCol = columns.find((c: any) => c.name === "Enable" || c.keyName === "Enable");
-
-        console.log(`[DbConfig] Syncing ${mappings.length} mappings to Type-DB. Cols: field=${!!typeFieldCol}, value=${!!typeValueCol}`);
-
-        const ops: any[] = [];
-        for (const m of mappings) {
-            const tag = m.name;
-            const formattedTag = `#${tag}`;
-            const existingRow = rows.find((r: any) => {
-                const val = r.cells[0]?.value?.block?.content || r.cells[0]?.value?.mText?.content || r.cells[0]?.value?.text?.content || "";
-                return val.includes(tag) || val.includes(formattedTag);
-            });
-
-            if (!existingRow) {
-                console.log(`[DbConfig] Creating new row in Type-DB for #${tag}`);
-                // @ts-ignore
-                const newItemId = window.Lute.NewNodeID();
-                await post("/api/av/addAttributeViewBlocks", {
-                    avID: avId,
-                    srcs: [{ itemID: newItemId, id: newItemId, isDetached: true }]
-                });
-                await new Promise(r => setTimeout(r, 200));
-
-                ops.push({ keyID: pkKeyId, itemID: newItemId, value: { type: "block", block: { content: formattedTag } } });
-                if (autoSyncCol) ops.push({ keyID: autoSyncCol.id, itemID: newItemId, value: { type: "checkbox", checkbox: { checked: true } } });
-                if (targetAvIdCol) ops.push({ keyID: targetAvIdCol.id, itemID: newItemId, value: { type: "text", text: { content: config.avId || "" } } });
-                if (targetBlockIdCol) ops.push({ keyID: targetBlockIdCol.id, itemID: newItemId, value: { type: "text", text: { content: blockId } } });
-                if (typeFieldCol) ops.push({ keyID: typeFieldCol.id, itemID: newItemId, value: { type: "text", text: { content: m.fieldId || "" } } });
-                if (typeValueCol) ops.push({ keyID: typeValueCol.id, itemID: newItemId, value: { type: "text", text: { content: m.value || "" } } });
-                if (enableCol) ops.push({ keyID: enableCol.id, itemID: newItemId, value: { type: "checkbox", checkbox: { checked: true } } });
-            } else {
-                console.log(`[DbConfig] Updating existing row in Type-DB for #${tag}`);
-                if (targetAvIdCol) ops.push({ keyID: targetAvIdCol.id, itemID: existingRow.id, value: { type: "text", text: { content: config.avId || "" } } });
-                if (targetBlockIdCol) ops.push({ keyID: targetBlockIdCol.id, itemID: existingRow.id, value: { type: "text", text: { content: blockId } } });
-                if (typeFieldCol) ops.push({ keyID: typeFieldCol.id, itemID: existingRow.id, value: { type: "text", text: { content: m.fieldId || "" } } });
-                if (typeValueCol) ops.push({ keyID: typeValueCol.id, itemID: existingRow.id, value: { type: "text", text: { content: m.value || "" } } });
-            }
-        }
-
-        if (ops.length > 0) {
-            console.log(`[DbConfig] Committing ${ops.length} mapping updates to Type-DB.`);
-            await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: avId, values: ops });
-            await new Promise(r => setTimeout(r, 200));
-        }
-
-        // --- PHASE 2: RECONCILIATION ---
-        const currentTagStrings = new Set(mappings.map(m => `#${m.name}`));
-        const rowsToDelete: string[] = [];
-        const targetAvIdIdx = columns.findIndex((c: any) => c.name === "Target AV ID" || c.keyName === "Target AV ID");
-
-        if (targetAvIdIdx >= 0) {
-            rows.forEach((r: any) => {
-                const rowTag = r.cells[0]?.value?.block?.content || r.cells[0]?.value?.mText?.content || r.cells[0]?.value?.text?.content || "";
-                if (!rowTag.startsWith("#")) return;
-                const rowAvId = r.cells[targetAvIdIdx]?.value?.text?.content || r.cells[targetAvIdIdx]?.value?.mText?.content || "";
-
-                console.log(`[DbConfig] Checking orphan row in Type-DB: Tag='${rowTag}', TargetAvId='${rowAvId}'. OurAvId='${config.avId}'`);
-                if (rowAvId === (config.avId || "")) {
-                    if (!currentTagStrings.has(rowTag)) {
-                        console.log(`[DbConfig] Match found for deletion: ${rowTag} (ItemID: ${r.id})`);
-                        rowsToDelete.push(r.id);
-                    }
-                }
-            });
-        }
-
-        if (rowsToDelete.length > 0) {
-            console.log(`[DbConfig] RECONCILIATION: Attempting to delete ${rowsToDelete.length} orphan rows from Type-DB (AV: ${avId}). IDs:`, rowsToDelete);
-            // SiYuan API: /api/av/removeAttributeViewBlocks (plural) expects srcIDs (plural)
-            const deleteRes = await post("/api/av/removeAttributeViewBlocks", {
-                avID: avId,
-                srcIDs: rowsToDelete
-            });
-            console.log(`[DbConfig] Delete API Response:`, deleteRes);
-            if (deleteRes && (deleteRes as any).code === 0) {
-                console.log(`[DbConfig] RECONCILIATION SUCCESS: Orphan rows deleted.`);
-            } else {
-                console.warn(`[DbConfig] RECONCILIATION FAILED or returned non-zero code.`, deleteRes);
-            }
-        }
-
-        await refreshSupertagRegistry();
-    } catch (e) {
-        console.error("[DbConfig] Failed to sync Type-DB", e);
-    }
-}
 
 export async function syncInheritanceToDb(avId: string, config: DbConfig, avBlockId?: string) {
     if (!config.inheritanceRules || config.inheritanceRules.length === 0) {
@@ -254,7 +130,6 @@ export async function saveDbConfig(blockId: string, config: DbConfig) {
             id: blockId,
             attrs: { [ATTR_DB_CONFIG]: JSON.stringify(config) }
         });
-        await syncTypeToTypeDb(blockId, config);
         window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
     } catch (e) {
         console.error("Failed to save DB config", e);
@@ -268,9 +143,6 @@ export async function resetDbConfig(blockId: string, avId: string) {
             id: blockId,
             attrs: { [ATTR_DB_CONFIG]: "" }
         });
-
-        // Trigger reconciliation with empty mappings to cleanup Type-DB
-        await syncTypeToTypeDb(blockId, { avId, mode: "single", singleClassName: "", typeMappings: [], inheritanceRules: [] });
 
         window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
         showMessage(i18n.dbConfig.resetSuccess);
