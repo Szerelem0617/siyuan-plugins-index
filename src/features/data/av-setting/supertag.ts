@@ -189,15 +189,26 @@ export class SupertagMonitor {
 
             const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
 
+            console.log(`[Supertag] Processing tag: "${cleanTag}". Registry size: ${SUPERTAG_REGISTRY.length}`);
+            if (SUPERTAG_REGISTRY.length < 10) {
+                console.log(`[Supertag] Current Registry Tags:`, SUPERTAG_REGISTRY.map(c => c.typeTag));
+            }
+
             // Check for matched configs with autoSync === true AND valid targetDbId
             let matchedConfigs = SUPERTAG_REGISTRY.filter(c => c.typeTag === cleanTag && c.autoSync && c.targetDbId);
 
             if (matchedConfigs.length > 0) {
                 // If there are multiple mappings for the same tag, just unique the db ids to avoid duplicated inserts
-                const uniqueDbs = Array.from(new Set(matchedConfigs.map(c => c.targetDbId)));
-                for (const dbId of uniqueDbs) {
+                // Note: If multiple configs point to same DB but different values, we should ideally handle them.
+                // For now, we group by targetDbId and take the first config for that DB.
+                const dbMap = new Map<string, typeof matchedConfigs[0]>();
+                for (const c of matchedConfigs) {
+                    if (!dbMap.has(c.targetDbId)) dbMap.set(c.targetDbId, c);
+                }
+
+                for (const [dbId, config] of dbMap.entries()) {
                     console.log(`[Supertag] ✨ MATCH! Tag "${cleanTag}" matches Auto-Sync rule. Triggering DB sync for target ${dbId}...`);
-                    await this.applySupertag(blockId, cleanTag, dbId);
+                    await this.applySupertag(blockId, cleanTag, config);
                 }
                 return;
             }
@@ -226,8 +237,9 @@ export class SupertagMonitor {
         }
     }
 
-    private async applySupertag(blockId: string, cleanTag: string, targetDbId: string) {
+    private async applySupertag(blockId: string, cleanTag: string, config: any) {
         try {
+            const targetDbId = config.targetDbId;
             let avId = targetDbId;
             // Test if targetDbId is actually a list block
             const linkTest = await post("/api/query/sql", { stmt: `SELECT id FROM blocks WHERE id = '${targetDbId}' AND type = 'l' LIMIT 1` });
@@ -237,7 +249,7 @@ export class SupertagMonitor {
             }
 
             // 1. Get current state of the AV
-            const { blockToItem } = await getColIDMap(avId);
+            const { blockToItem, idToType } = await getColIDMap(avId);
             let itemId = blockToItem.get(blockId);
 
             if (!itemId) {
@@ -252,11 +264,27 @@ export class SupertagMonitor {
                 });
                 console.log(`[Supertag] Insert Block Result:`, insertRes);
 
-                // Wait a bit for backend to process
-                await new Promise(r => setTimeout(r, 200));
+                // Reduced delay to minimize performance impact
+                await new Promise(r => setTimeout(r, 50));
             } else {
-                console.log(`[Supertag] Block ${blockId} already correctly categorized in ${avId}. Skipping.`);
-                return;
+                console.log(`[Supertag] Block ${blockId} already exists in AV ${avId} as item ${itemId}.`);
+            }
+
+            // 3. Set specific attribute value if multi-mode
+            if (config.typeFieldId && config.mappedValue !== undefined) {
+                const colType = idToType[config.typeFieldId] || "text";
+                const valuePayload = this.formatValue(String(config.mappedValue).trim(), colType);
+
+                console.log(`[Supertag] Setting attribute value (Type: ${colType}) via Batch API. Payload:`, valuePayload);
+                const setRes = await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                    avID: avId,
+                    values: [{
+                        keyID: config.typeFieldId,
+                        itemID: itemId,
+                        value: valuePayload
+                    }]
+                });
+                console.log(`[Supertag] Batch Set Result:`, setRes);
             }
 
             // 5. Force UI refresh for the original block 

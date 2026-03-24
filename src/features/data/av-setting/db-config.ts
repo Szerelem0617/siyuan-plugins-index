@@ -27,15 +27,19 @@ export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
         const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
         if (!avId) return;
 
-        let targetTags: string[] = [];
+        let mappings: { name: string, fieldId?: string, value?: string }[] = [];
         if (config.mode === "single" && config.singleClassName) {
-            targetTags.push(config.singleClassName.replace(/#/g, "").trim());
+            mappings.push({ name: config.singleClassName.replace(/#/g, "").trim() });
         } else if (config.mode === "multi" && config.typeMappings) {
             config.typeMappings.forEach(m => {
-                if (m.name) targetTags.push(m.name.replace(/#/g, "").trim());
+                if (m.name) mappings.push({
+                    name: m.name.replace(/#/g, "").trim(),
+                    fieldId: config.typeFieldId,
+                    value: m.value
+                });
             });
         }
-        if (targetTags.length === 0) return;
+        if (mappings.length === 0) return;
 
         const renderRes = await post("/api/av/renderAttributeView", { id: avId });
         const view = renderRes.view || renderRes;
@@ -44,11 +48,17 @@ export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
 
         const pkKeyId = columns[0].id;
         const autoSyncCol = columns.find((c: any) => c.name === "Auto Sync" || c.keyName === "Auto Sync");
-        const targetDbCol = columns.find((c: any) => c.name === "Target Database" || c.keyName === "Target Database");
+        const targetAvIdCol = columns.find((c: any) => c.name === "Target AV ID" || c.keyName === "Target AV ID");
+        const targetBlockIdCol = columns.find((c: any) => c.name === "Target AV Block ID" || c.keyName === "Target AV Block ID");
+        const typeFieldCol = columns.find((c: any) => c.name === "Type Column ID" || c.keyName === "Type Column ID");
+        const typeValueCol = columns.find((c: any) => c.name === "Type Value" || c.keyName === "Type Value");
+        const enableCol = columns.find((c: any) => c.name === "Enable" || c.keyName === "Enable");
+
+        console.log(`[DbConfig] Syncing ${mappings.length} mappings to Type-DB. Cols: field=${!!typeFieldCol}, value=${!!typeValueCol}`);
 
         const ops: any[] = [];
-
-        for (const tag of targetTags) {
+        for (const m of mappings) {
+            const tag = m.name;
             const formattedTag = `#${tag}`;
             const existingRow = rows.find((r: any) => {
                 const val = r.cells[0]?.value?.block?.content || r.cells[0]?.value?.mText?.content || r.cells[0]?.value?.text?.content || "";
@@ -56,6 +66,7 @@ export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
             });
 
             if (!existingRow) {
+                console.log(`[DbConfig] Creating new row in Type-DB for #${tag}`);
                 // @ts-ignore
                 const newItemId = window.Lute.NewNodeID();
 
@@ -65,31 +76,25 @@ export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
                 });
                 await new Promise(r => setTimeout(r, 200));
 
-                console.log(`[DbConfig] Adding new tag row for: ${formattedTag}`);
                 ops.push({ keyID: pkKeyId, itemID: newItemId, value: { type: "block", block: { content: formattedTag } } });
-                if (autoSyncCol) {
-                    ops.push({ keyID: autoSyncCol.id, itemID: newItemId, value: { type: "checkbox", checkbox: { checked: true } } });
-                }
-                if (targetDbCol) {
-                    ops.push({ keyID: targetDbCol.id, itemID: newItemId, value: { type: "block", block: { content: `((${blockId} '${tag} DB'))` } } });
-                }
+                if (autoSyncCol) ops.push({ keyID: autoSyncCol.id, itemID: newItemId, value: { type: "checkbox", checkbox: { checked: true } } });
+                if (targetAvIdCol) ops.push({ keyID: targetAvIdCol.id, itemID: newItemId, value: { type: "text", text: { content: config.avId || "" } } });
+                if (targetBlockIdCol) ops.push({ keyID: targetBlockIdCol.id, itemID: newItemId, value: { type: "text", text: { content: blockId } } });
+                if (typeFieldCol) ops.push({ keyID: typeFieldCol.id, itemID: newItemId, value: { type: "text", text: { content: m.fieldId || "" } } });
+                if (typeValueCol) ops.push({ keyID: typeValueCol.id, itemID: newItemId, value: { type: "text", text: { content: m.value || "" } } });
+                if (enableCol) ops.push({ keyID: enableCol.id, itemID: newItemId, value: { type: "checkbox", checkbox: { checked: true } } });
             } else {
-                console.log(`[DbConfig] Found existing row for: ${formattedTag}, checking target database...`);
-                const tdbIdx = columns.findIndex((c: any) => c.name === "Target Database" || c.keyName === "Target Database");
-                if (tdbIdx >= 0 && targetDbCol) {
-                    const cell = existingRow.cells[tdbIdx];
-                    if (!cell?.value?.block?.content && !cell?.value?.block?.id) {
-                        console.log(`[DbConfig] Target Database was empty, updating to: ${blockId}`);
-                        ops.push({ keyID: targetDbCol.id, itemID: existingRow.id, value: { type: "block", block: { content: `((${blockId} '${tag} DB'))` } } });
-                    }
-                }
+                console.log(`[DbConfig] Updating existing row in Type-DB for #${tag}`);
+                if (targetAvIdCol) ops.push({ keyID: targetAvIdCol.id, itemID: existingRow.id, value: { type: "text", text: { content: config.avId || "" } } });
+                if (targetBlockIdCol) ops.push({ keyID: targetBlockIdCol.id, itemID: existingRow.id, value: { type: "text", text: { content: blockId } } });
+                if (typeFieldCol) ops.push({ keyID: typeFieldCol.id, itemID: existingRow.id, value: { type: "text", text: { content: m.fieldId || "" } } });
+                if (typeValueCol) ops.push({ keyID: typeValueCol.id, itemID: existingRow.id, value: { type: "text", text: { content: m.value || "" } } });
             }
         }
 
-        console.log(`[DbConfig] Type-DB sync ops:`, ops);
+        console.log(`[DbConfig] Finalizing Type-DB sync with ${ops.length} operations.`);
         if (ops.length > 0) {
-            const batchRes = await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: avId, values: ops });
-            console.log(`[DbConfig] Batch Result:`, batchRes);
+            await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: avId, values: ops });
             await new Promise(r => setTimeout(r, 200));
         }
         await refreshSupertagRegistry();

@@ -15,6 +15,8 @@ export interface SupertagCommand {
     paramMapping: string;
     autoSync: boolean;    // 是否在标签添加时自动入库
     targetDbId: string;   // 目标数据库的源块 ID 或内容，用于路由
+    typeFieldId?: string; // 目标数据库的分类字段 ID (可选)
+    mappedValue?: string; // 映射值 (可选)
 }
 export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
 
@@ -78,12 +80,34 @@ export async function refreshSupertagRegistry() {
                 }
             }
 
-            // 获取 Target Database (可能是一个块引用 text 或直接是块的内容)
-            let targetDbId = getCellText("Target Database");
-            const targetDbCell = row.cells.find((_: any, idx: number) => columns[idx] && (columns[idx].name === "Target Database" || columns[idx].keyName === "Target Database"));
-            if (targetDbCell && targetDbCell.value && targetDbCell.value.block) {
-                targetDbId = targetDbCell.value.block.id || targetDbCell.value.block.content || targetDbId;
+            // 获取 Target AV ID (Text，最高优先级)
+            let targetDbId = "";
+            const targetAvIdIdx = columns.findIndex((c: any) => c.name === "Target AV ID" || c.keyName === "Target AV ID");
+            if (targetAvIdIdx >= 0) {
+                const cell = row.cells[targetAvIdIdx];
+                targetDbId = cell?.value?.text?.content || cell?.value?.mText?.content || "";
             }
+
+            // 获取 Target AV Block ID (Text，备选引用)
+            let targetBlockId = "";
+            const targetBlockIdIdx = columns.findIndex((c: any) => c.name === "Target AV Block ID" || c.keyName === "Target AV Block ID");
+            if (targetBlockIdIdx >= 0) {
+                const cell = row.cells[targetBlockIdIdx];
+                targetBlockId = cell?.value?.text?.content || cell?.value?.mText?.content || "";
+            }
+
+            // 如果 Target AV ID 为空，则尝试用 Block ID
+            if (!targetDbId && targetBlockId) {
+                targetDbId = targetBlockId;
+            }
+
+            // 获取 Type Column ID 和 Type Value (Multi-mode 支持)
+            let typeFieldId = "";
+            let mappedValue = "";
+            const fieldIdx = columns.findIndex((c: any) => c.name === "Type Column ID" || c.keyName === "Type Column ID");
+            const valueIdx = columns.findIndex((c: any) => c.name === "Type Value" || c.keyName === "Type Value");
+            if (fieldIdx >= 0) typeFieldId = row.cells[fieldIdx]?.value?.text?.content || row.cells[fieldIdx]?.value?.mText?.content || "";
+            if (valueIdx >= 0) mappedValue = row.cells[valueIdx]?.value?.text?.content || row.cells[valueIdx]?.value?.mText?.content || "";
 
             if (enableStatus && typeTagRaw) {
                 // 清洗逻辑：移除所有 #，移除转义符，移除不可见字符，移除 | 之后的注释，取小写
@@ -95,7 +119,9 @@ export async function refreshSupertagRegistry() {
                     commandRef,
                     paramMapping,
                     autoSync,
-                    targetDbId
+                    targetDbId,
+                    typeFieldId: typeFieldId || undefined,
+                    mappedValue: mappedValue || undefined
                 });
             }
         }
