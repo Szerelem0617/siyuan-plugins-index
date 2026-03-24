@@ -168,7 +168,10 @@
     "applyingWeakInheritance": "⏳ Applying weak inheritance...",
     "setWeakInheritanceError": "❌ Failed to set weak inheritance:",
     "setSupertag": "Mark as Supertag",
-    "cancelSupertag": "Cancel Supertag"
+    "cancelSupertag": "Cancel Supertag",
+    "reset": "Reset Supertag Config",
+    "resetPrompt": "Sure to reset all Supertag mappings for this database? This will clear rules from Type-DB (existing data remains).",
+    "resetSuccess": "✅ Configuration Reset"
   },
   "dataMenu": {
     "createDatabase": "📊 Create Database",

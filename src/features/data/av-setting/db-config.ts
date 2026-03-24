@@ -1,5 +1,5 @@
 import { client } from "../../../shared/api-client";
-import { Dialog } from "siyuan";
+import { Dialog, showMessage } from "siyuan";
 import DbConfigDialog from "./db-config-dialog.svelte";
 import { getColIDMap, buildAvHierarchy, resolveInheritance, isValueEmpty } from "../../../shared/utils/av-utils";
 import { post } from "../../../shared/api-client/request";
@@ -39,7 +39,6 @@ export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
                 });
             });
         }
-        if (mappings.length === 0) return;
 
         const renderRes = await post("/api/av/renderAttributeView", { id: avId });
         const view = renderRes.view || renderRes;
@@ -69,7 +68,6 @@ export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
                 console.log(`[DbConfig] Creating new row in Type-DB for #${tag}`);
                 // @ts-ignore
                 const newItemId = window.Lute.NewNodeID();
-
                 await post("/api/av/addAttributeViewBlocks", {
                     avID: avId,
                     srcs: [{ itemID: newItemId, id: newItemId, isDetached: true }]
@@ -92,14 +90,40 @@ export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
             }
         }
 
-        console.log(`[DbConfig] Finalizing Type-DB sync with ${ops.length} operations.`);
         if (ops.length > 0) {
+            console.log(`[DbConfig] Committing ${ops.length} mapping updates to Type-DB.`);
             await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: avId, values: ops });
             await new Promise(r => setTimeout(r, 200));
         }
+
+        // --- PHASE 2: RECONCILIATION ---
+        const currentTagStrings = new Set(mappings.map(m => `#${m.name}`));
+        const rowsToDelete: string[] = [];
+        const targetAvIdIdx = columns.findIndex((c: any) => c.name === "Target AV ID" || c.keyName === "Target AV ID");
+
+        if (targetAvIdIdx >= 0) {
+            rows.forEach((r: any) => {
+                const rowTag = r.cells[0]?.value?.block?.content || r.cells[0]?.value?.mText?.content || r.cells[0]?.value?.text?.content || "";
+                if (!rowTag.startsWith("#")) return;
+                const rowAvId = r.cells[targetAvIdIdx]?.value?.text?.content || r.cells[targetAvIdIdx]?.value?.mText?.content || "";
+
+                if (rowAvId === (config.avId || "")) {
+                    if (!currentTagStrings.has(rowTag)) {
+                        console.log(`[DbConfig] Found orphan tag in Type-DB: ${rowTag}.`);
+                        rowsToDelete.push(r.id);
+                    }
+                }
+            });
+        }
+
+        if (rowsToDelete.length > 0) {
+            console.log(`[DbConfig] Deleting ${rowsToDelete.length} orphan rows from Type-DB.`);
+            await post("/api/av/removeAttributeViewBlock", { avID: avId, itemIDs: rowsToDelete });
+        }
+
         await refreshSupertagRegistry();
     } catch (e) {
-        console.error("[DbConfig] Failed to sync to Type-DB:", e);
+        console.error("[DbConfig] Failed to sync Type-DB", e);
     }
 }
 
@@ -223,6 +247,25 @@ export async function saveDbConfig(blockId: string, config: DbConfig) {
         window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
     } catch (e) {
         console.error("Failed to save DB config", e);
+    }
+}
+
+export async function resetDbConfig(blockId: string, avId: string) {
+    try {
+        const config = await loadDbConfig(blockId);
+        // Clear metadata
+        await client.setBlockAttrs({
+            id: blockId,
+            attrs: { [ATTR_DB_CONFIG]: "" }
+        });
+
+        // Trigger reconciliation with empty mappings to cleanup Type-DB
+        await syncTypeToTypeDb(blockId, { avId, mode: "single", singleClassName: "", typeMappings: [], inheritanceRules: [] });
+
+        window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
+        showMessage(i18n.dbConfig.resetSuccess);
+    } catch (e) {
+        console.error("Failed to reset DB config", e);
     }
 }
 

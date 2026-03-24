@@ -173,7 +173,10 @@
     "applyingWeakInheritance": "⏳ 正在应用弱继承...",
     "setWeakInheritanceError": "❌ 设置弱继承失败:",
     "setSupertag": "标记为超级标签",
-    "cancelSupertag": "取消超级标签"
+    "cancelSupertag": "取消超级标签",
+    "reset": "重置超级标签配置",
+    "resetPrompt": "确定要重置当前数据库的所有超级标签映射吗？这会从插件数据库中删除关联映射（不会删除已有数据）。",
+    "resetSuccess": "✅ 配置已重置"
   },
   "dataMenu": {
     "createDatabase": "📊 创建数据库",
