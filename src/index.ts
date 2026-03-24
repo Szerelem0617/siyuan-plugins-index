@@ -12,6 +12,8 @@ import { addCommandTestMenuItem, refreshSupertagRegistry } from "./features/comm
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { supertagMonitor } from "./features/data/av-setting/supertag";
 import { supertagManager } from "./features/data/av-setting/supertag-manager";
+import { refreshTopBarCommands, handleTopBarEvents } from "./features/command/global-registration/top-bar";
+import { initInlineButtonListener, destroyInlineButtonListener } from "./features/command/global-registration/inline-button";
 import { version } from "../plugin.json";
 
 export default class IndexPlugin extends Plugin {
@@ -27,6 +29,7 @@ export default class IndexPlugin extends Plugin {
         refreshSupertagRegistry();
         this.init();
         await initTopbar();
+        await refreshTopBarCommands();
         // await this.initSettings();
         await settings.initData();
         //监听块菜单事件
@@ -40,11 +43,13 @@ export default class IndexPlugin extends Plugin {
         this.switchHandler = this.onTabSwitch.bind(this);
         this.eventBus.on("switch-protyle", this.switchHandler);
 
-        // this.eventBus.on("ws-main",this.eventBusLog);
+        this.eventBus.on("ws-main", handleTopBarEvents);
+
         initEmojiEvent();
         avEventHandler.init();
         supertagMonitor.init(this);
         supertagManager.init();
+        initInlineButtonListener();
     }
     // onLayoutReady() {
     //     initObserver();
@@ -57,10 +62,13 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.off("open-menu-av", addAVMenuItems);
         this.eventBus.off("loaded-protyle-static", updateIndex);
         this.eventBus.off("switch-protyle", this.switchHandler);
+        this.eventBus.off("ws-main", handleTopBarEvents);
+
         removeEmojiEvent();
         avEventHandler.destroy();
         supertagMonitor.destroy();
         supertagManager.destroy();
+        destroyInlineButtonListener();
         console.log("IndexPlugin onunload");
     }
 

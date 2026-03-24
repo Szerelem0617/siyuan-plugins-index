@@ -55,6 +55,8 @@ export async function constructCommandStorage() {
                 const commandTypeKey = await addCol("Command Type", "text", "iconTags", commandParamKey);
                 const targetScopeKey = await addCol("Target Scope", "text", "iconFocus", commandTypeKey);
                 const enableKey = await addCol("Enable", "checkbox", "iconCheck", targetScopeKey);
+                const topBarKey = await addCol("Top Bar", "checkbox", "iconLayout", enableKey);
+                const buttonKey = await addCol("Inline Button", "checkbox", "iconPlay", topBarKey);
 
                 // Populate default data
                 const configData: Record<string, { id: string, type: string, scope: string, param?: string }> = {
@@ -84,6 +86,11 @@ export async function constructCommandStorage() {
                             populateOps.push({ keyID: commandTypeKey, itemID: row.id, value: { type: "text", text: { content: config.type } } });
                             populateOps.push({ keyID: targetScopeKey, itemID: row.id, value: { type: "text", text: { content: config.scope } } });
                             populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
+                            // If it's the global graph view, tick Top Bar and Inline Button by default as a demo
+                            if (key === "全局关系图") {
+                                populateOps.push({ keyID: topBarKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
+                                populateOps.push({ keyID: buttonKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
+                            }
                             break;
                         }
                     }
