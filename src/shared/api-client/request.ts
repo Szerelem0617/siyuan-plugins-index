@@ -4,7 +4,11 @@ export async function post(url: string, data: any) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data)
     });
-    const res = await response.json();
-    if (res.code !== 0) throw new Error(`API Error ${res.code}: ${res.msg}`);
-    return res.data;
+
+    const text = await response.text();
+    if (!text) return {}; // Handle empty response
+
+    const res = JSON.parse(text);
+    if (res.code !== 0 && res.code !== undefined) throw new Error(`API Error ${res.code}: ${res.msg}`);
+    return res.data || res;
 }

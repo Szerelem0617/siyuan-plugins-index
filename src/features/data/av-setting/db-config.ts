@@ -107,9 +107,10 @@ export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
                 if (!rowTag.startsWith("#")) return;
                 const rowAvId = r.cells[targetAvIdIdx]?.value?.text?.content || r.cells[targetAvIdIdx]?.value?.mText?.content || "";
 
+                console.log(`[DbConfig] Checking orphan row in Type-DB: Tag='${rowTag}', TargetAvId='${rowAvId}'. OurAvId='${config.avId}'`);
                 if (rowAvId === (config.avId || "")) {
                     if (!currentTagStrings.has(rowTag)) {
-                        console.log(`[DbConfig] Found orphan tag in Type-DB: ${rowTag}.`);
+                        console.log(`[DbConfig] Match found for deletion: ${rowTag} (ItemID: ${r.id})`);
                         rowsToDelete.push(r.id);
                     }
                 }
@@ -117,8 +118,18 @@ export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
         }
 
         if (rowsToDelete.length > 0) {
-            console.log(`[DbConfig] Deleting ${rowsToDelete.length} orphan rows from Type-DB.`);
-            await post("/api/av/removeAttributeViewBlock", { avID: avId, itemIDs: rowsToDelete });
+            console.log(`[DbConfig] RECONCILIATION: Attempting to delete ${rowsToDelete.length} orphan rows from Type-DB (AV: ${avId}). IDs:`, rowsToDelete);
+            // SiYuan API: /api/av/removeAttributeViewBlocks (plural) expects srcIDs (plural)
+            const deleteRes = await post("/api/av/removeAttributeViewBlocks", {
+                avID: avId,
+                srcIDs: rowsToDelete
+            });
+            console.log(`[DbConfig] Delete API Response:`, deleteRes);
+            if (deleteRes && (deleteRes as any).code === 0) {
+                console.log(`[DbConfig] RECONCILIATION SUCCESS: Orphan rows deleted.`);
+            } else {
+                console.warn(`[DbConfig] RECONCILIATION FAILED or returned non-zero code.`, deleteRes);
+            }
         }
 
         await refreshSupertagRegistry();
@@ -252,7 +263,6 @@ export async function saveDbConfig(blockId: string, config: DbConfig) {
 
 export async function resetDbConfig(blockId: string, avId: string) {
     try {
-        const config = await loadDbConfig(blockId);
         // Clear metadata
         await client.setBlockAttrs({
             id: blockId,
