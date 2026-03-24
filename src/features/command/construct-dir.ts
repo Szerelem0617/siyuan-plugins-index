@@ -119,7 +119,9 @@ export async function constructCommandStorage() {
                 const methodNameKey = await addCol("Method Name", "text", "iconPlay", lastKeyID);
                 const commandRefKey = await addCol("Command Reference", "text", "iconLink", methodNameKey);
                 const paramMappingKey = await addCol("Param Mapping", "text", "iconList", commandRefKey);
-                const enableKey = await addCol("Enable", "checkbox", "iconCheck", paramMappingKey);
+                const autoSyncKey = await addCol("Auto Sync", "checkbox", "iconRefresh", paramMappingKey);
+                const targetDbKey = await addCol("Target Database", "block", "iconDatabase", autoSyncKey);
+                const enableKey = await addCol("Enable", "checkbox", "iconCheck", targetDbKey);
 
                 await sleep(1000);
                 const renderRes = await post("/api/av/renderAttributeView", { id: avId });
@@ -136,6 +138,7 @@ export async function constructCommandStorage() {
                             // 第一个 Project：设为“右侧分屏打开”
                             populateOps.push({ keyID: methodNameKey, itemID: row.id, value: { type: "text", text: { content: "在右侧打开" } } });
                             populateOps.push({ keyID: commandRefKey, itemID: row.id, value: { type: "text", text: { content: "general.splitLR" } } });
+                            populateOps.push({ keyID: autoSyncKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
                             populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
                             // 同时清洗主键，确保只剩下 #Project
                             populateOps.push({ keyID: currentKeys[0].id, itemID: row.id, value: { type: "text", text: { content: "#Project" } } });
@@ -143,6 +146,7 @@ export async function constructCommandStorage() {
                             // 第二个 Project：设为“打开全局关系图”
                             populateOps.push({ keyID: methodNameKey, itemID: row.id, value: { type: "text", text: { content: "打开全局关系图" } } });
                             populateOps.push({ keyID: commandRefKey, itemID: row.id, value: { type: "text", text: { content: "general.graphView" } } });
+                            populateOps.push({ keyID: autoSyncKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: false } } });
                             populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
                             // 同时清洗主键
                             populateOps.push({ keyID: currentKeys[0].id, itemID: row.id, value: { type: "text", text: { content: "#Project" } } });

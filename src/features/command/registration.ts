@@ -8,13 +8,15 @@ import type { Protyle, Menu } from "siyuan";
 export const DEV_ENABLE_INIT_SYS = true;
 
 // --- 内存缓存：Supertag 注册表 ---
-interface SupertagCommand {
+export interface SupertagCommand {
     typeTag: string;      // 匹配的核心标签 (如 Project)
     methodName: string;   // UI 显示的方法名
     commandRef: string;   // 执行的命令 ID
     paramMapping: string;
+    autoSync: boolean;    // 是否在标签添加时自动入库
+    targetDbId: string;   // 目标数据库的源块 ID 或内容，用于路由
 }
-let SUPERTAG_REGISTRY: SupertagCommand[] = [];
+export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
 
 /**
  * 刷新 Supertag 注册表：从 Type-DB 加载数据到内存
@@ -66,7 +68,24 @@ export async function refreshSupertagRegistry() {
                 }
             }
 
-            if (enableStatus && commandRef && typeTagRaw) {
+            // 获取 Auto Sync 复选框状态
+            const autoSyncColIdx = columns.findIndex((c: any) => c.name === "Auto Sync" || c.keyName === "Auto Sync");
+            let autoSync = false;
+            if (autoSyncColIdx >= 0) {
+                const cell = row.cells[autoSyncColIdx];
+                if (cell && cell.value && cell.value.checkbox) {
+                    autoSync = cell.value.checkbox.checked;
+                }
+            }
+
+            // 获取 Target Database (可能是一个块引用 text 或直接是块的内容)
+            let targetDbId = getCellText("Target Database");
+            const targetDbCell = row.cells.find((_: any, idx: number) => columns[idx] && (columns[idx].name === "Target Database" || columns[idx].keyName === "Target Database"));
+            if (targetDbCell && targetDbCell.value && targetDbCell.value.block) {
+                targetDbId = targetDbCell.value.block.id || targetDbCell.value.block.content || targetDbId;
+            }
+
+            if (enableStatus && typeTagRaw) {
                 // 清洗逻辑：移除所有 #，移除转义符，移除不可见字符，移除 | 之后的注释，取小写
                 const cleanTag = typeTagRaw.replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
 
@@ -74,7 +93,9 @@ export async function refreshSupertagRegistry() {
                     typeTag: cleanTag,
                     methodName,
                     commandRef,
-                    paramMapping
+                    paramMapping,
+                    autoSync,
+                    targetDbId
                 });
             }
         }

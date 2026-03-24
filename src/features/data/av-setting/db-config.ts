@@ -9,6 +9,94 @@ export const ATTR_DB_CONFIG = "custom-index-db-config";
 
 export type { DbConfig, TypeConfig, IDBTypeMapping, InheritanceRule } from "./types";
 import { type DbConfig, type TypeConfig } from "./types";
+import { refreshSupertagRegistry } from "../../command/registration";
+
+export async function syncTypeToTypeDb(blockId: string, config: DbConfig) {
+    try {
+        const sql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
+        const existingDocs = await post("/api/query/sql", { stmt: sql });
+        if (!existingDocs || existingDocs.length === 0) return;
+        const docId = existingDocs[0].root_id;
+
+        const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' LIMIT 1`;
+        const listRes = await post("/api/query/sql", { stmt: listSql });
+        if (!listRes || listRes.length === 0) return;
+        const listId = listRes[0].id;
+
+        const listAttrsRes = await client.getBlockAttrs({ id: listId });
+        const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
+        if (!avId) return;
+
+        let targetTags: string[] = [];
+        if (config.mode === "single" && config.singleClassName) {
+            targetTags.push(config.singleClassName.replace(/#/g, "").trim());
+        } else if (config.mode === "multi" && config.typeMappings) {
+            config.typeMappings.forEach(m => {
+                if (m.name) targetTags.push(m.name.replace(/#/g, "").trim());
+            });
+        }
+        if (targetTags.length === 0) return;
+
+        const renderRes = await post("/api/av/renderAttributeView", { id: avId });
+        const view = renderRes.view || renderRes;
+        const rows = view.rows || [];
+        const columns = view.columns || [];
+
+        const pkKeyId = columns[0].id;
+        const autoSyncCol = columns.find((c: any) => c.name === "Auto Sync" || c.keyName === "Auto Sync");
+        const targetDbCol = columns.find((c: any) => c.name === "Target Database" || c.keyName === "Target Database");
+
+        const ops: any[] = [];
+
+        for (const tag of targetTags) {
+            const formattedTag = `#${tag}`;
+            const existingRow = rows.find((r: any) => {
+                const val = r.cells[0]?.value?.block?.content || r.cells[0]?.value?.mText?.content || r.cells[0]?.value?.text?.content || "";
+                return val.includes(tag) || val.includes(formattedTag);
+            });
+
+            if (!existingRow) {
+                // @ts-ignore
+                const newItemId = window.Lute.NewNodeID();
+
+                await post("/api/av/addAttributeViewBlocks", {
+                    avID: avId,
+                    srcs: [{ itemID: newItemId, id: newItemId, isDetached: true }]
+                });
+                await new Promise(r => setTimeout(r, 200));
+
+                console.log(`[DbConfig] Adding new tag row for: ${formattedTag}`);
+                ops.push({ keyID: pkKeyId, itemID: newItemId, value: { type: "block", block: { content: formattedTag } } });
+                if (autoSyncCol) {
+                    ops.push({ keyID: autoSyncCol.id, itemID: newItemId, value: { type: "checkbox", checkbox: { checked: true } } });
+                }
+                if (targetDbCol) {
+                    ops.push({ keyID: targetDbCol.id, itemID: newItemId, value: { type: "block", block: { content: `((${blockId} '${tag} DB'))` } } });
+                }
+            } else {
+                console.log(`[DbConfig] Found existing row for: ${formattedTag}, checking target database...`);
+                const tdbIdx = columns.findIndex((c: any) => c.name === "Target Database" || c.keyName === "Target Database");
+                if (tdbIdx >= 0 && targetDbCol) {
+                    const cell = existingRow.cells[tdbIdx];
+                    if (!cell?.value?.block?.content && !cell?.value?.block?.id) {
+                        console.log(`[DbConfig] Target Database was empty, updating to: ${blockId}`);
+                        ops.push({ keyID: targetDbCol.id, itemID: existingRow.id, value: { type: "block", block: { content: `((${blockId} '${tag} DB'))` } } });
+                    }
+                }
+            }
+        }
+
+        console.log(`[DbConfig] Type-DB sync ops:`, ops);
+        if (ops.length > 0) {
+            const batchRes = await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: avId, values: ops });
+            console.log(`[DbConfig] Batch Result:`, batchRes);
+            await new Promise(r => setTimeout(r, 200));
+        }
+        await refreshSupertagRegistry();
+    } catch (e) {
+        console.error("[DbConfig] Failed to sync to Type-DB:", e);
+    }
+}
 
 export async function syncInheritanceToDb(avId: string, config: DbConfig, avBlockId?: string) {
     if (!config.inheritanceRules || config.inheritanceRules.length === 0) {
@@ -126,6 +214,7 @@ export async function saveDbConfig(blockId: string, config: DbConfig) {
             id: blockId,
             attrs: { [ATTR_DB_CONFIG]: JSON.stringify(config) }
         });
+        await syncTypeToTypeDb(blockId, config);
         window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
     } catch (e) {
         console.error("Failed to save DB config", e);

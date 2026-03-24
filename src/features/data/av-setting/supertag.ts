@@ -1,5 +1,7 @@
 
 import { post } from "../../../shared/api-client/request";
+import { client } from "../../../shared/api-client";
+import { SUPERTAG_REGISTRY, refreshSupertagRegistry } from "../../command/registration";
 import { getGlobalTypeConfigs } from "./db-config";
 import { type TypeConfig } from "./types";
 import { showMessage } from "siyuan";
@@ -19,9 +21,9 @@ export class SupertagMonitor {
     }
 
     async refreshRegistry() {
+        await refreshSupertagRegistry();
         this.typeRegistry = await getGlobalTypeConfigs();
         this.lastUpdate = Date.now();
-        console.log(`[Supertag] Registry refreshed: ${this.typeRegistry.length} types.`, this.typeRegistry);
     }
 
     private boundHandler = this.handleWsMessage.bind(this);
@@ -181,37 +183,98 @@ export class SupertagMonitor {
     private async processNewTag(blockId: string, tag: string) {
         try {
             // Refresh registry if empty or periodically
-            if (this.typeRegistry.length === 0 || Date.now() - this.lastUpdate > 5 * 60 * 1000) {
+            if (SUPERTAG_REGISTRY.length === 0 || Date.now() - this.lastUpdate > 5 * 60 * 1000) {
                 await this.refreshRegistry();
             }
 
-            const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+            const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
 
-            // Check for matched configs
-            let matchedConfigs = this.typeRegistry.filter(c => c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim() === cleanTag);
-            let config = null;
+            // Check for matched configs with autoSync === true AND valid targetDbId
+            let matchedConfigs = SUPERTAG_REGISTRY.filter(c => c.typeTag === cleanTag && c.autoSync && c.targetDbId);
 
             if (matchedConfigs.length > 0) {
+                // If there are multiple mappings for the same tag, just unique the db ids to avoid duplicated inserts
+                const uniqueDbs = Array.from(new Set(matchedConfigs.map(c => c.targetDbId)));
+                for (const dbId of uniqueDbs) {
+                    console.log(`[Supertag] ✨ MATCH! Tag "${cleanTag}" matches Auto-Sync rule. Triggering DB sync for target ${dbId}...`);
+                    await this.applySupertag(blockId, cleanTag, dbId);
+                }
+                return;
+            }
+
+            // Fallback to legacy
+            let legacyMatchedConfigs = this.typeRegistry.filter(c => c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag);
+            let legacyConfig = null;
+
+            if (legacyMatchedConfigs.length > 0) {
                 const pref = this.prefs[cleanTag];
                 if (pref) {
-                    config = matchedConfigs.find(c => c.avId === pref) || matchedConfigs[0];
+                    legacyConfig = legacyMatchedConfigs.find(c => c.avId === pref) || legacyMatchedConfigs[0];
                 } else {
-                    config = matchedConfigs[0];
+                    legacyConfig = legacyMatchedConfigs[0];
                 }
             }
 
-            if (config) {
-                console.log(`[Supertag] ✨ MATCH! Tag "${cleanTag}" matches type "${config.typeName}". Triggering DB sync...`, config);
-                await this.applySupertag(blockId, config);
+            if (legacyConfig) {
+                console.log(`[Supertag] ✨ MATCH (Legacy)! Tag "${cleanTag}" matches type "${legacyConfig.typeName}". Triggering DB sync...`, legacyConfig);
+                await this.applySupertagLegacy(blockId, legacyConfig);
             } else {
-                console.log(`[Supertag] ℹ️ Tag "${cleanTag}" (Length: ${cleanTag.length}) ignored. It is not mapped to any Type in the Database settings.`);
+                console.log(`[Supertag] ℹ️ Tag "${cleanTag}" ignored. It is not mapped to any Auto-Sync rule in Type-DB nor legacy DB Config.`);
             }
         } catch (e) {
             console.error("[Supertag] Failed to process new tag:", blockId, e);
         }
     }
 
-    private async applySupertag(blockId: string, config: TypeConfig) {
+    private async applySupertag(blockId: string, cleanTag: string, targetDbId: string) {
+        try {
+            let avId = targetDbId;
+            // Test if targetDbId is actually a list block
+            const linkTest = await post("/api/query/sql", { stmt: `SELECT id FROM blocks WHERE id = '${targetDbId}' AND type = 'l' LIMIT 1` });
+            if (linkTest && linkTest.length > 0) {
+                const attrsRes = await client.getBlockAttrs({ id: targetDbId });
+                avId = (attrsRes.data || {})["custom-index-linked-av"] || avId;
+            }
+
+            // 1. Get current state of the AV
+            const { blockToItem } = await getColIDMap(avId);
+            let itemId = blockToItem.get(blockId);
+
+            if (!itemId) {
+                // 2. Add block to AV if not present
+                // @ts-ignore
+                itemId = window.Lute.NewNodeID();
+                console.log(`[Supertag] Adding block ${blockId} to AV ${avId} as item ${itemId}`);
+
+                const insertRes = await post("/api/av/addAttributeViewBlocks", {
+                    avID: avId,
+                    srcs: [{ itemID: itemId, id: blockId, isDetached: false }]
+                });
+                console.log(`[Supertag] Insert Block Result:`, insertRes);
+
+                // Wait a bit for backend to process
+                await new Promise(r => setTimeout(r, 200));
+            } else {
+                console.log(`[Supertag] Block ${blockId} already correctly categorized in ${avId}. Skipping.`);
+                return;
+            }
+
+            // 5. Force UI refresh for the original block 
+            await post("/api/transactions", {
+                app: "plugin-index",
+                reqId: Date.now(),
+                transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: blockId, data: formatDate(new Date()) }] }]
+            });
+
+            console.log(`[Supertag] Successfully applied auto-sync for "${cleanTag}" to block ${blockId}`);
+            showMessage(`✨ Supertag: 已自动同步至 "${cleanTag}" 数据组件`);
+
+        } catch (e) {
+            console.error("[Supertag] Failed to apply supertag:", e);
+        }
+    }
+
+    private async applySupertagLegacy(blockId: string, config: TypeConfig) {
         try {
             // 1. Get current state of the AV
             const { blockToItem, keyValues, idToType } = await getColIDMap(config.avId);
