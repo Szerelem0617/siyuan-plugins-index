@@ -1,5 +1,5 @@
 import { dispatchCommand } from "../command-dispatcher";
-import { showMessage } from "siyuan";
+import { showMessage, Dialog } from "siyuan";
 
 function getButtonCSS() {
     return `
@@ -38,49 +38,52 @@ function injectButtonCSS() {
     }
 }
 
+export interface InlineButtonCmd {
+    id: string;
+    label: string;
+    commandId: string;
+    commandParam: string;
+    commandType: string;
+}
+
+let availableInlineCommands: InlineButtonCmd[] = [];
+
+export function updateInlineButtonList(buttonCmds: InlineButtonCmd[]) {
+    availableInlineCommands = buttonCmds;
+}
+
 export function getInlineButtonSlashCommand() {
     return {
         filter: ["btn", "button", "按钮"],
-        html: `<div class="b3-list-item__first"><span class="b3-list-item__text">插入智能按钮 (全局关系图 Demo)</span><span class="b3-list-item__meta">插件</span></div>`,
+        html: `<div class="b3-list-item__first"><span class="b3-list-item__text">插入智能按钮 (基础配置块)</span><span class="b3-list-item__meta">插件</span></div>`,
         id: "insertSmartButton",
         callback: (protyle: any) => {
-            // First, clear the slash command string (e.g., "/btn")
             if (typeof protyle.insert === 'function') {
                 protyle.insert("");
             }
 
-            const configObj = { commandId: "general.graphView", commandType: "Native", param: "" };
+            const configObj = { commandId: "sys.configure", commandType: "System", param: "" };
             const encodedConfig = btoa(encodeURIComponent(JSON.stringify(configObj)));
             const btnHref = `siyuan-btn://${encodedConfig}`;
-            const btnText = `🌐 打开全局关系图`;
+            const btnText = `⚙️ 配置智能按钮`;
 
-            // Inserting a native SiYuan Link element with our custom protocol! 
-            // This natively survives Lute serialization in SiYuan 3.5.x perfectly.
             const inlineDOM = `<span data-type="a" data-href="${btnHref}">${btnText}</span>&#8203;`;
 
-            // Fetch the selection before we lose focus
             const selection = window.getSelection();
             let savedRange: Range | null = null;
             if (selection && selection.rangeCount > 0) {
                 savedRange = selection.getRangeAt(0).cloneRange();
             }
 
-            // Defer execution slightly to mimic the Dialog behavior and let Slash menu close
             setTimeout(() => {
                 try {
                     if (savedRange && selection) {
                         selection.removeAllRanges();
                         selection.addRange(savedRange);
-                        if (!selection.isCollapsed) {
-                            document.execCommand('delete');
-                        }
+                        if (!selection.isCollapsed) document.execCommand('delete');
                     }
-
-                    if (typeof protyle.insert === 'function') {
-                        protyle.insert(inlineDOM, false);
-                    } else {
-                        document.execCommand("insertHTML", false, inlineDOM);
-                    }
+                    if (typeof protyle.insert === 'function') protyle.insert(inlineDOM, false);
+                    else document.execCommand("insertHTML", false, inlineDOM);
                 } catch (e) {
                     console.error("[InlineButton] Insert failed:", e);
                 }
@@ -114,8 +117,21 @@ export function handleInlineButtonClick(event: MouseEvent) {
 
         console.log(`[InlineButton] Executing link command: `, config);
 
+        if (config.commandId === "sys.configure") {
+            const range = document.createRange();
+            range.selectNode(linkEl);
+            const selection = window.getSelection();
+            if (selection) {
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+
+            openButtonConfigurationDialog(range);
+            return;
+        }
+
         if (config.commandId) {
-            const mockContext = { blockEl: document.body, protyleEl: null };
+            const mockContext = { blockEl: linkEl.closest('[data-node-id]') || document.body, protyleEl: null };
             dispatchCommand(config.commandId, config.param, mockContext as any);
         } else {
             showMessage(`未知功能配置`, -1, "error");
@@ -123,6 +139,90 @@ export function handleInlineButtonClick(event: MouseEvent) {
     } catch (e) {
         console.error("[InlineButton] Error executing link button:", e);
     }
+}
+
+function openButtonConfigurationDialog(targetRange: Range) {
+    let optionsHtml = availableInlineCommands.map(cmd =>
+        `<option value="${cmd.id}">${cmd.label} (${cmd.commandId})</option>`
+    ).join("");
+
+    if (!optionsHtml) {
+        optionsHtml = `<option value="">没有启用的内联按钮，请前往 Command-DB 勾选</option>`;
+    }
+
+    const dialog = new Dialog({
+        title: "配置智能按钮",
+        content: `
+            <div class="b3-dialog__content">
+                <div class="fn__flex b3-label">
+                    <div class="fn__flex-1">
+                        选择要绑定的功能菜单：
+                        <div class="b3-label__text">该选项列表来源于 Command-DB 勾选的 Inline Button</div>
+                    </div>
+                    <select class="b3-select" id="btn-action-select" style="width: 200px;">
+                        ${optionsHtml}
+                    </select>
+                </div>
+                <div class="fn__flex b3-label">
+                    <div class="fn__flex-1">
+                        定制按钮显示名称（选填）:
+                    </div>
+                    <input class="b3-text-field" id="btn-custom-label" style="width: 200px;" placeholder="覆盖默认名称">
+                </div>
+                <div class="fn__flex b3-label">
+                    <div class="fn__flex-1">
+                        附加运行参数（选填）:
+                    </div>
+                    <input class="b3-text-field" id="btn-custom-param" style="width: 200px;" placeholder="选填参数">
+                </div>
+            </div>
+            <div class="b3-dialog__action">
+                <button class="b3-button b3-button--cancel">取消</button>
+                <button class="b3-button b3-button--text" id="btn-config-confirm">确认绑定</button>
+            </div>
+        `,
+        width: "520px"
+    });
+
+    const confirmBtn = dialog.element.querySelector("#btn-config-confirm");
+    if (!confirmBtn) return;
+
+    confirmBtn.addEventListener("click", () => {
+        const selectEl = dialog.element.querySelector("#btn-action-select") as HTMLSelectElement;
+        const customLabelEl = dialog.element.querySelector("#btn-custom-label") as HTMLInputElement;
+        const customParamEl = dialog.element.querySelector("#btn-custom-param") as HTMLInputElement;
+
+        const selectedId = selectEl.value;
+        const targetCmd = availableInlineCommands.find(c => c.id === selectedId);
+
+        if (!targetCmd) {
+            showMessage("请先选择一个功能关联", -1, "error");
+            return;
+        }
+
+        const finalLabel = customLabelEl.value.trim() || targetCmd.label;
+        const finalParam = customParamEl.value.trim() || targetCmd.commandParam;
+
+        const configObj = { commandId: targetCmd.commandId, commandType: targetCmd.commandType, param: finalParam };
+        const encodedConfig = btoa(encodeURIComponent(JSON.stringify(configObj)));
+        const btnHref = `siyuan-btn://${encodedConfig}`;
+
+        const inlineDOM = `<span data-type="a" data-href="${btnHref}">${finalLabel}</span>&#8203;`;
+
+        // Restore precisely the range covering the old button and overwrite it
+        const selection = window.getSelection();
+        if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(targetRange);
+            document.execCommand("insertHTML", false, inlineDOM);
+        }
+
+        dialog.destroy();
+    });
+
+    dialog.element.querySelector(".b3-button--cancel")?.addEventListener("click", () => {
+        dialog.destroy();
+    });
 }
 
 let listenerAttached = false;

@@ -2,6 +2,7 @@ import { plugin } from "../../../shared/utils";
 import { post } from "../../../shared/api-client/request";
 import { client } from "../../../shared/api-client";
 import { dispatchCommand } from "../command-dispatcher";
+import { updateInlineButtonList, InlineButtonCmd } from "./inline-button";
 
 export interface TopBarCommand {
     id: string;
@@ -42,6 +43,7 @@ export async function refreshTopBarCommands() {
         const columns: any[] = view.columns || [];
 
         const newTopBars: TopBarCommand[] = [];
+        const newInlineBtns: InlineButtonCmd[] = [];
 
         for (const row of rows) {
             const getCellText = (colName: string): string => {
@@ -51,7 +53,8 @@ export async function refreshTopBarCommands() {
                 return cell?.value?.text?.content || cell?.value?.mText?.content || cell?.value?.block?.content || "";
             };
 
-            const label = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
+            let label = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
+            label = label.replace(/#/g, "").split("|")[0].split("(")[0].trim(); // Apply label processing once
             const commandId = getCellText("Command ID");
             const commandParam = getCellText("Command Param");
             const commandType = getCellText("Command Type");
@@ -76,19 +79,41 @@ export async function refreshTopBarCommands() {
                 }
             }
 
-            console.log(`[TopBar] Debug Row: Label="${label}", CmdID="${commandId}"`);
-            console.log(`[TopBar] Debug Cols: EnableIdx=${enableColIdx} (Status=${enableStatus}), TopBarIdx=${topBarColIdx} (Status=${topBarStatus})`);
+            // Check if Inline Button is true
+            const ibColIdx = columns.findIndex((c: any) => c.name === "Inline Button" || c.keyName === "Inline Button");
+            let ibStatus = false;
+            if (ibColIdx >= 0) {
+                const cell = row.cells[ibColIdx];
+                if (cell && cell.value && cell.value.checkbox) {
+                    ibStatus = cell.value.checkbox.checked;
+                }
+            }
 
-            if (enableStatus && topBarStatus && label && commandId) {
-                newTopBars.push({
-                    id: row.id,
-                    label: label.replace(/#/g, "").split("|")[0].split("(")[0].trim(),
-                    commandId,
-                    commandParam,
-                    commandType
-                });
-            } else if (topBarStatus) {
-                console.warn(`[TopBar] Skipped row despite TopBar=true. enableStatus=${enableStatus}, label="${label}", commandId="${commandId}"`);
+            console.log(`[TopBar] Debug Row: Label="${label}", CmdID="${commandId}"`);
+            console.log(`[TopBar] Debug Cols: EnableIdx=${enableColIdx} (Status=${enableStatus}), TopBarIdx=${topBarColIdx} (Status=${topBarStatus}), InlineBtnIdx=${ibColIdx} (Status=${ibStatus})`);
+
+            if (enableStatus && commandId) {
+                if (topBarStatus && label) {
+                    newTopBars.push({
+                        id: row.id,
+                        label,
+                        commandId,
+                        commandParam,
+                        commandType
+                    });
+                } else if (topBarStatus) {
+                    console.warn(`[TopBar] Skipped row despite TopBar=true. label="${label}", commandId="${commandId}"`);
+                }
+
+                if (ibStatus && label) {
+                    newInlineBtns.push({
+                        id: row.id,
+                        label,
+                        commandId,
+                        commandParam,
+                        commandType
+                    });
+                }
             }
         }
 
@@ -122,6 +147,9 @@ export async function refreshTopBarCommands() {
                 console.log(`[TopBar] Registered: ${tb.label}`);
             }
         }
+
+        // --- Push to Inline Button Registry ---
+        updateInlineButtonList(newInlineBtns);
 
     } catch (e) {
         console.error("[TopBar] Failed to refresh Top Bar registrations:", e);

@@ -4,7 +4,6 @@ import { insertAction } from "../features/insert-toc/index/action";
 import { insertOutlineAction } from "../features/insert-toc/outline/action";
 import { getInitSystemSlashCommand } from "../features/command/registration";
 import { getInlineButtonSlashCommand } from "../features/command/global-registration/inline-button";
-// import { insert, insertDocButton } from "./creater/createIndex";
 
 function getCurrentBlockId(): string | null {
     const selection = window.getSelection();
@@ -18,6 +17,13 @@ function getCurrentBlockId(): string | null {
     const element = node as HTMLElement;
     const block = element.closest('[data-node-id]');
     return block ? block.getAttribute('data-node-id') : null;
+}
+
+let dynamicSlashCommands: any[] = [];
+
+export function updateDynamicSlashCommands(cmds: any[]) {
+    dynamicSlashCommands = cmds;
+    addSlash(); // rebuild the plugin.protyleSlash array
 }
 
 export function addSlash() {
@@ -49,6 +55,11 @@ export function addSlash() {
     }
 
     protyleSlashContent.push(getInlineButtonSlashCommand());
+
+    // Append all dynamically injected commands (e.g., from DB-checked Inline Buttons)
+    for (const dCmd of dynamicSlashCommands) {
+        protyleSlashContent.push(dCmd);
+    }
 
     plugin.protyleSlash = protyleSlashContent;
 }
