@@ -216,6 +216,26 @@ class CommandRegistry {
     getSchedulableCommands(): CommandDef[] {
         return this.getAllCommands().filter(c => c.constraints.schedulable);
     }
+
+    /**
+     * 折中查找：先按 ID 精确匹配，找不到则按 name 模糊匹配（忽略大小写）。
+     * 用于解析 siyuan-btn 链接中可能是 ID 也可能是中文名的标识符。
+     */
+    findByNameOrId(idOrName: string): CommandDef | undefined {
+        // 1. ID 精确匹配（最优先）
+        const byId = this.store.get(idOrName);
+        if (byId) return byId;
+        // 2. name 精确匹配
+        const lower = idOrName.toLowerCase();
+        for (const def of this.store.values()) {
+            if (def.name.toLowerCase() === lower) return def;
+        }
+        // 3. name 包含匹配（最宽松的备选）
+        for (const def of this.store.values()) {
+            if (def.name.toLowerCase().includes(lower) || lower.includes(def.name.toLowerCase())) return def;
+        }
+        return undefined;
+    }
 }
 
 // 单例导出，全局唯一

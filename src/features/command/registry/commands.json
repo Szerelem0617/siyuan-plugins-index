@@ -5,7 +5,7 @@
     "commands": [
         {
             "id": "general.graphView",
-            "name": "打开全局关系图",
+            "name": "全局关系图",
             "description": "呼出全局块关系图面板。",
             "dispatch": {
                 "method": "global",

@@ -20,7 +20,6 @@ let refreshTimer: any = null;
  * Scan the Command-DB (Layer 2) and read which commands should be placed on the Top Bar 
  */
 export async function refreshTopBarCommands() {
-    console.log("[TopBar] Scanning Command-DB for Top Bar registrations...");
     if (!plugin) return;
 
     try {
@@ -101,8 +100,6 @@ export async function refreshTopBarCommands() {
                 }
             }
 
-            console.log(`[TopBar] Debug Row: Label="${label}", CmdID="${commandId}"`);
-            console.log(`[TopBar] Debug Cols: Enable=${enableStatus}, TopBar=${topBarStatus}, InlineBtn=${ibStatus}, Palette=${paletteStatus}`);
 
             if (enableStatus && commandId) {
                 if (topBarStatus && label) {
@@ -140,12 +137,10 @@ export async function refreshTopBarCommands() {
             }
         }
 
-        console.log(`[TopBar] Found ${newTopBars.length} commands to mount:`, newTopBars);
 
         // 1. Remove commands that are no longer ticked
         const toRemove = registeredTopBars.filter(r => !newTopBars.find(n => n.id === r.id));
         for (const rem of toRemove) {
-            console.log(`[TopBar] Removing top bar item for ID: ${rem.id}`);
             if (rem.element) {
                 rem.element.remove();
             }
@@ -167,7 +162,6 @@ export async function refreshTopBarCommands() {
                     }
                 });
                 registeredTopBars.push({ id: tb.id, element: el });
-                console.log(`[TopBar] Registered: ${tb.label}`);
             }
         }
 
@@ -202,7 +196,6 @@ export function handleTopBarEvents({ detail }: any) {
     if (hasPotentialUpdate) {
         if (refreshTimer) clearTimeout(refreshTimer);
         refreshTimer = setTimeout(() => {
-            console.log("[TopBar] DB update detected, triggering auto-refresh...");
             refreshTopBarCommands();
         }, 1500); // 1.5s debounce to allow batch updates to settle
     }
