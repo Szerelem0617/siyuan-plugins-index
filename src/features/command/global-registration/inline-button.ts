@@ -86,29 +86,10 @@ function injectButtonCSS() {
             vertical-align: middle;
             user-select: none;
             text-decoration: none;
-            position: relative;
         }
         span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
             background-color: var(--b3-theme-hover, #f3f4f6);
             border-color: var(--b3-border-color-hover, #9ca3af);
-        }
-        /* 悬浮命令名 tooltip */
-        span[data-type~="a"][data-href^="siyuan-btn://"][data-btn-label]:hover::before {
-            content: attr(data-btn-label);
-            position: absolute;
-            bottom: calc(100% + 6px);
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(24, 24, 28, 0.92);
-            color: #fff;
-            padding: 3px 9px;
-            border-radius: 5px;
-            font-size: 0.78em;
-            white-space: nowrap;
-            pointer-events: none;
-            z-index: 9999;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-            letter-spacing: 0.02em;
         }
     `;
     document.head.appendChild(style);
@@ -376,7 +357,10 @@ function handleInlineButtonHover(event: MouseEvent) {
         if (def) label = def.name;
     }
 
+    // data-btn-label → CSS ::before tooltip
     linkEl.setAttribute("data-btn-label", label);
+    // aria-label → 覆盖思源原生 popover.ts 的 href tooltip（它优先读 aria-label）
+    linkEl.setAttribute("aria-label", label);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
