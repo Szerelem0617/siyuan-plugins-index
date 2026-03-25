@@ -3,6 +3,7 @@ import { getProcessedDocIcon } from "../../shared/utils/icon-utils";
 import { stripMarkdownSyntax } from "../../shared/utils/markdown-utils";
 import { ATTR_LINKED_AV, ATTR_ITEM_ID } from "../../shared/constants";
 import { getColIDMap, isValueEmpty } from "../../shared/utils/av-utils";
+import { settings } from "../../core/settings";
 
 // Constants
 export const ATTR_INDEX = "custom-index-subdoc-id";
@@ -409,7 +410,6 @@ export class IBlockProcessor {
     }
 
     async constructListItemMarkdown(containerAttrs: any, headingId: string, syncText: string, docId?: string, docIcon?: string) {
-        const { settings } = await import("../../core/settings");
         const useDynamic = settings.get("useDynamicAnchor") ?? false;
 
         const parts = [];
