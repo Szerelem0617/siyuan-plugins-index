@@ -56,7 +56,10 @@ export function addSlash() {
         protyleSlashContent.push(initSysSlash);
     }
 
-    protyleSlashContent.push(getInlineButtonSlashCommand());
+    const inlineBtnSlash = getInlineButtonSlashCommand();
+    if (inlineBtnSlash) {
+        protyleSlashContent.push(inlineBtnSlash);
+    }
 
     // Append all dynamically injected commands (e.g., from DB-checked Inline Buttons)
     for (const dCmd of dynamicSlashCommands) {

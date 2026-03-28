@@ -1,6 +1,7 @@
 import { dispatchCommand } from "../command-dispatcher";
 import { commandRegistry } from "../registry/command-registry";
 import { showMessage, Dialog } from "siyuan";
+import { DEV_ENABLE_INIT_SYS } from "../registration";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Protocol helpers
@@ -118,6 +119,8 @@ export function updateInlineButtonList(buttonCmds: InlineButtonCmd[]) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getInlineButtonSlashCommand() {
+    if (!DEV_ENABLE_INIT_SYS) return null;
+
     return {
         filter: ["btn", "button", "按钮"],
         html: `<div class="b3-list-item__first"><span class="b3-list-item__text">插入智能按钮 (基础配置块)</span><span class="b3-list-item__meta">插件</span></div>`,
