@@ -1,4 +1,4 @@
-import { Plugin } from "siyuan";
+import { Plugin, Dialog } from "siyuan";
 import { setI18n, setPlugin } from "./shared/utils";
 import { createDialog, initTopbar } from "./ui/topbar";
 import { settings, CONFIG } from "./core/settings";
@@ -15,6 +15,7 @@ import { supertagManager } from "./features/data/av-setting/supertag-manager";
 import { refreshTopBarCommands, handleTopBarEvents } from "./features/command/global-registration/top-bar";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
+import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
 import { version } from "../plugin.json";
 
 export default class IndexPlugin extends Plugin {
@@ -61,6 +62,9 @@ export default class IndexPlugin extends Plugin {
         }
         // paste 钩子始终激活：只对 siyuan-btn:// 链接生效，与实验模式无关
         this.eventBus.on("paste", handleBtnPaste);
+
+        // SQLite Entry Point: Alt + Click on Native Search Button
+        this.registerSqliteEntry();
     }
     // onLayoutReady() {
     //     initObserver();
@@ -131,6 +135,47 @@ export default class IndexPlugin extends Plugin {
     // }
     async openSetting() {
         await createDialog();
+    }
+
+    private handleSearchMouseDown = (e: MouseEvent) => {
+        if (e.altKey) {
+            e.stopPropagation();
+            e.preventDefault();
+            this.openSqliteStatus();
+        }
+    }
+
+    private registerSqliteEntry() {
+        const addListener = () => {
+            const btn = document.querySelector("#barSearch");
+            if (btn) {
+                btn.addEventListener("mousedown", this.handleSearchMouseDown, true);
+                return true;
+            }
+            return false;
+        };
+        if (!addListener()) {
+            const observer = new MutationObserver(() => {
+                if (addListener()) observer.disconnect();
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
+    private openSqliteStatus() {
+        const dialog = new Dialog({
+            title: "IndexOS - Database Diagnostic",
+            content: `<div id="sqlite-status-container" class="fn__flex-1" style="height: 100%;"></div>`,
+            width: "600px",
+            height: "500px",
+        });
+
+        const container = dialog.element.querySelector("#sqlite-status-container");
+        if (container) {
+            new SQLiteStatus({
+                target: container,
+            });
+        }
     }
 
 }

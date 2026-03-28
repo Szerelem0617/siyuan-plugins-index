@@ -31,10 +31,12 @@
     "typescript": "^5.5.4",
     "vite": "^5.3.5",
     "vite-plugin-static-copy": "^1.0.6",
-    "vite-plugin-zip-pack": "^1.2.3"
+    "vite-plugin-zip-pack": "^1.2.3",
+    "@types/sql.js": "^1.4.9"
   },
   "dependencies": {
     "@siyuan-community/siyuan-sdk": "^0.3.12",
-    "pnpm": "^9.6.0"
+    "pnpm": "^9.6.0",
+    "sql.js": "^1.8.0"
   }
 }
