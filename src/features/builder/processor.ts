@@ -1,6 +1,6 @@
 import { client } from "../../shared/api-client";
 import { getProcessedDocIcon } from "../../shared/utils/icon-utils";
-import { stripMarkdownSyntax } from "../../shared/utils/markdown-utils";
+
 import { ATTR_LINKED_AV, ATTR_ITEM_ID } from "../../shared/constants";
 import { getColIDMap, isValueEmpty } from "../../shared/utils/av-utils";
 import { settings } from "../../core/settings";
@@ -466,7 +466,7 @@ export class IBlockProcessor {
         const contentId = targetBlock.id;
         const md = targetBlock.markdown || "";
         const content = targetBlock.content || "";
-        let tempMd = md.replace(/\s*\{:[^}]+\}\s*$/, "");
+        let tempMd = md.replace(/\{:[^}]+\}/g, "").trim();
         let hasSeparator = false;
         let currentIcon = null;
         const docLinkRegex = /^\s*\[(.*?)\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)\s*/;
@@ -497,8 +497,13 @@ export class IBlockProcessor {
             tempMd = tempMd.replace(sepLinkRegex, "");
         }
         let syncMd = tempMd.trim();
-        let plain = stripMarkdownSyntax(syncMd);
-        return { containerId: listItemId, contentId: contentId, hasSeparator, syncText: plain.trim(), syncMd, markdown: md, content: content, currentIcon };
+        // Derive syncText from SQL `content` field (already plain text by SiYuan).
+        // Avoids false-stripping of literal * _ chars and handles block-refs / IAL correctly.
+        const sepCharIdx = content.indexOf("➖");
+        const syncText = sepCharIdx !== -1
+            ? content.substring(sepCharIdx + 1).trim()
+            : content.replace(/^(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation}|:[^:]+:)\s*/u, "").trim();
+        return { containerId: listItemId, contentId: contentId, hasSeparator, syncText, syncMd, markdown: md, content: content, currentIcon };
     }
 
     filterSystemAttrs(attrs: any) {

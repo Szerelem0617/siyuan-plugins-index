@@ -6,8 +6,12 @@
 export function stripMarkdownSyntax(md: string) {
     if (!md) return "";
     let plain = md;
+    // Remove inline IAL blocks: {: style="..."} or {: id="..."} etc. (anywhere in text)
+    plain = plain.replace(/\{:[^}]+\}/g, "");
     plain = plain.replace(/(\*\*|__|~~|==)/g, ""); 
     plain = plain.replace(/(\*|_)/g, "");
+    // For HTML tags: extract text content from known inline wrappers (e.g. block-ref spans), then strip remaining tags
+    plain = plain.replace(/<span[^>]*>([^<]*)<\/span>/g, "$1");
     plain = plain.replace(/<[^>]+>/g, "");
     plain = plain.replace(/\[([^\]]*)\]\([^\)]+\)/g, "");
     plain = plain.replace(/!\[([^\]]*)\]\([^\)]+\)/g, "");
