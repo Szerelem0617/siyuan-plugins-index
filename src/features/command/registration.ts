@@ -5,7 +5,7 @@ import { client } from "../../shared/api-client";
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
 import type { Protyle, Menu } from "siyuan";
 
-export const DEV_ENABLE_INIT_SYS = true;
+export const DEV_ENABLE_INIT_SYS = false;
 
 // --- 内存缓存：Supertag 注册表 ---
 export interface SupertagCommand {
