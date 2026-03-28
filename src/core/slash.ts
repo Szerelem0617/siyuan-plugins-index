@@ -31,23 +31,25 @@ export function addSlash() {
         filter: ["insert index", "插入文档目录", "crawml"],
         html: `<div class="b3-list-item__first"><span class="b3-list-item__text">${i18n.insertIndex}</span><span class="b3-list-item__meta">${isMobile ? "" : "Ctrl+Alt+I"}</span></div>`,
         id: "insertIndex",
-        callback(protyle: Protyle) {
+        async callback(_protyle: Protyle) {
             const blockId = getCurrentBlockId();
             console.log("[IndexPlugin] Slash insertIndex - blockId found:", blockId);
-            protyle.insert("");
-            insertAction(blockId);
+            // NOTE: SiYuan clears the slash "/" text from the block BEFORE calling this callback.
+            // Do NOT call protyle.insert("") here — it sends a redundant write that races with
+            // our updateBlock call and can cause the index content to be lost on quick exit/file move.
+            await insertAction(blockId);
         }
     }, {
         filter: ["insert outline", "插入文档大纲", "crawdg"],
         html: `<div class="b3-list-item__first"><span class="b3-list-item__text">${i18n.insertoutline}</span><span class="b3-list-item__meta">${isMobile ? "" : "Ctrl+Alt+P"}</span></div>`,
         id: "insertOutline",
-        callback(protyle: Protyle) {
+        async callback(_protyle: Protyle) {
             const blockId = getCurrentBlockId();
             console.log("[IndexPlugin] Slash insertOutline - blockId found:", blockId);
-            protyle.insert("");
-            insertOutlineAction(blockId);
+            await insertOutlineAction(blockId);
         }
     }];
+
 
     const initSysSlash = getInitSystemSlashCommand();
     if (initSysSlash) {
