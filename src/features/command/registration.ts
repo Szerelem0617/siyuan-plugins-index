@@ -8,42 +8,105 @@ import type { Protyle, Menu } from "siyuan";
 export const DEV_ENABLE_INIT_SYS = true;
 
 // --- 内存缓存：Supertag 注册表 ---
+export interface CommandDef {
+    methodName: string;
+    commandRef: string;
+    paramMapping: string;
+}
+
 export interface SupertagCommand {
-    typeTag: string;      // 匹配的核心标签 (如 Project)
+    typeTag: string;      // 匹配核心标签 (如 Project)
     methodName: string;   // UI 显示的方法名
     commandRef: string;   // 执行的命令 ID
     paramMapping: string;
-    autoSync?: boolean;    // 是否在标签添加时自动入库
-    targetDbId?: string;   // 目标数据库的源块 ID 或内容，用于路由
-    typeFieldId?: string; // 目标数据库的分类字段 ID (可选)
-    mappedValue?: any; // 映射值 (可选)
+    uiLocation: string;   // 绑定的界面位置
+    autoSync?: boolean;    
+    targetDbId?: string;   
+    typeFieldId?: string; 
+    mappedValue?: any; 
 }
+export let COMMAND_REGISTRY: Record<string, CommandDef> = {};
 export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
 
 /**
- * 刷新 Supertag 注册表：从 Type-DB 加载数据到内存
+ * 刷新 Supertag 注册表：从 Command-DB (Layer 2) 和 Type-DB (Layer 3) 联合加载数据
  */
 export async function refreshSupertagRegistry() {
-    console.log("[Supertag] Refreshing registry from Type-DB...");
+    console.log("[Supertag] Refreshing registry from Layer 2 & 3 DBs...");
     try {
+        // --- 1. Load Layer 2 (Command-DB) ---
+        const cmdSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
+        const cmdDocs = await post("/api/query/sql", { stmt: cmdSql });
+        if (cmdDocs && cmdDocs.length > 0) {
+            const docId = cmdDocs[0].root_id;
+            const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' LIMIT 1`;
+            const listRes = await post("/api/query/sql", { stmt: listSql });
+            if (listRes && listRes.length > 0) {
+                const listId = listRes[0].id;
+                const listAttrsRes = await client.getBlockAttrs({ id: listId });
+                const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
+                if (avId) {
+                    const renderRes = await post("/api/av/renderAttributeView", { id: avId });
+                    const view = renderRes.view || renderRes;
+                    const rows: any[] = view.rows || [];
+                    const columns: any[] = view.columns || [];
+
+                    COMMAND_REGISTRY = {};
+                    for (const row of rows) {
+                        const getCellText = (colName: string): string => {
+                            const idx = columns.findIndex((c: any) => c.name === colName || c.keyName === colName);
+                            if (idx < 0) return "";
+                            const cell = row.cells[idx];
+                            return cell?.value?.text?.content || cell?.value?.mText?.content || cell?.value?.block?.content || "";
+                        };
+                        const pk = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
+                        const cmdId = getCellText("Command ID");
+                        const paramMapping = getCellText("Param Mapping");
+                        
+                        if (pk && cmdId) {
+                            COMMAND_REGISTRY[pk.trim()] = {
+                                methodName: pk.trim(),
+                                commandRef: cmdId.trim(),
+                                paramMapping: paramMapping.trim()
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 2. Load Layer 3 (Type-DB) ---
         const sql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
         const existingDocs = await post("/api/query/sql", { stmt: sql });
-        if (!existingDocs || existingDocs.length === 0) return;
+        if (!existingDocs || existingDocs.length === 0) {
+            console.log("[Supertag] Type-DB (Layer 3) not found.");
+            return;
+        }
         const docId = existingDocs[0].root_id;
+        console.log(`[Supertag] Found Type-DB DocID: ${docId}`);
 
         const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' LIMIT 1`;
         const listRes = await post("/api/query/sql", { stmt: listSql });
-        if (!listRes || listRes.length === 0) return;
+        if (!listRes || listRes.length === 0) {
+            console.log("[Supertag] Type-DB list block not found.");
+            return;
+        }
         const listId = listRes[0].id;
 
         const listAttrsRes = await client.getBlockAttrs({ id: listId });
         const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
-        if (!avId) return;
+        if (!avId) {
+            console.log("[Supertag] Type-DB does not have custom-index-linked-av attribute.");
+            return;
+        }
+        console.log(`[Supertag] Rendering Type-DB AV: ${avId}`);
 
         const renderRes = await post("/api/av/renderAttributeView", { id: avId });
         const view = renderRes.view || renderRes;
         const rows: any[] = view.rows || [];
         const columns: any[] = view.columns || [];
+
+        console.log(`[Supertag] Type-DB Rows: ${rows.length}, Columns:`, columns.map((c: any) => c.name || c.keyName));
 
         const newRegistry: SupertagCommand[] = [];
 
@@ -56,11 +119,11 @@ export async function refreshSupertagRegistry() {
             };
 
             const typeTagRaw = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
-            const methodName = getCellText("Method Name");
-            const commandRef = getCellText("Command Reference");
-            const paramMapping = getCellText("Param Mapping");
+            const blockMenuRaw = getCellText("Block Icon Menu");
+            const pageMenuRaw = getCellText("Current Page Menu");
 
-            // 识别行是否生效
+            console.log(`[Supertag] Row processing [${typeTagRaw}] -> BlockMenu: "${blockMenuRaw}", PageMenu: "${pageMenuRaw}"`);
+
             const enableColIdx = columns.findIndex((c: any) => c.name === "Enable" || c.keyName === "Enable");
             let enableStatus = true;
             if (enableColIdx >= 0) {
@@ -71,15 +134,49 @@ export async function refreshSupertagRegistry() {
             }
 
             if (enableStatus && typeTagRaw) {
-                // 清洗逻辑：移除所有 #，移除转义符，移除不可见字符，移除 | 之后的注释，取小写
                 const cleanTag = typeTagRaw.replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
 
-                newRegistry.push({
-                    typeTag: cleanTag,
-                    methodName,
-                    commandRef,
-                    paramMapping,
-                });
+                // 解析 Block Icon Menu
+                if (blockMenuRaw) {
+                    const mappedCmds = blockMenuRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+                    for (const cmdName of mappedCmds) {
+                        const cmdNameLower = cmdName.toLowerCase();
+                        const foundKey = Object.keys(COMMAND_REGISTRY).find(k => k.toLowerCase().includes(cmdNameLower));
+                        const cmdInfo = foundKey ? COMMAND_REGISTRY[foundKey] : undefined;
+                        
+                        if (cmdInfo) {
+                            newRegistry.push({
+                                typeTag: cleanTag,
+                                methodName: cmdInfo.methodName,
+                                commandRef: cmdInfo.commandRef,
+                                paramMapping: cmdInfo.paramMapping,
+                                uiLocation: "BlockIconMenu"
+                            });
+                        } else {
+                            console.warn(`[Supertag] Command "${cmdName}" defined in ${cleanTag} not found in Layer 2 (COMMAND_REGISTRY keys: ${Object.keys(COMMAND_REGISTRY).join(", ")}).`);
+                        }
+                    }
+                }
+
+                // 解析 Current Page Menu
+                if (pageMenuRaw) {
+                    const mappedCmds = pageMenuRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+                    for (const cmdName of mappedCmds) {
+                        const cmdNameLower = cmdName.toLowerCase();
+                        const foundKey = Object.keys(COMMAND_REGISTRY).find(k => k.toLowerCase().includes(cmdNameLower));
+                        const cmdInfo = foundKey ? COMMAND_REGISTRY[foundKey] : undefined;
+
+                        if (cmdInfo) {
+                            newRegistry.push({
+                                typeTag: cleanTag,
+                                methodName: cmdInfo.methodName,
+                                commandRef: cmdInfo.commandRef,
+                                paramMapping: cmdInfo.paramMapping,
+                                uiLocation: "PageMenu"
+                            });
+                        }
+                    }
+                }
             }
         }
         SUPERTAG_REGISTRY = newRegistry;
@@ -150,7 +247,8 @@ export function addCommandTestMenuItem({ detail }: any) {
 
     for (const tag of currentBlockTags) {
         const matches = SUPERTAG_REGISTRY.filter(item =>
-            item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag)
+            (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
+            && item.uiLocation === "BlockIconMenu"
         );
 
         if (matches.length > 0) {

@@ -51,8 +51,8 @@ export async function constructCommandStorage() {
                 let lastKeyID = currentKeys.length > 0 ? currentKeys[currentKeys.length - 1].id : "";
 
                 const commandIdKey = await addCol("Command ID", "text", "iconCode", lastKeyID);
-                const commandParamKey = await addCol("Command Param", "text", "iconEdit", commandIdKey);
-                const commandTypeKey = await addCol("Command Type", "text", "iconTags", commandParamKey);
+                const paramMappingKey = await addCol("Param Mapping", "text", "iconList", commandIdKey);
+                const commandTypeKey = await addCol("Command Type", "text", "iconTags", paramMappingKey);
                 const targetScopeKey = await addCol("Target Scope", "text", "iconFocus", commandTypeKey);
                 const enableKey = await addCol("Enable", "checkbox", "iconCheck", targetScopeKey);
                 const topBarKey = await addCol("Top Bar", "checkbox", "iconLayout", enableKey);
@@ -82,7 +82,7 @@ export async function constructCommandStorage() {
                         if (label.includes(key)) {
                             populateOps.push({ keyID: commandIdKey, itemID: row.id, value: { type: "text", text: { content: config.id } } });
                             if (config.param !== undefined) {
-                                populateOps.push({ keyID: commandParamKey, itemID: row.id, value: { type: "text", text: { content: config.param } } });
+                                populateOps.push({ keyID: paramMappingKey, itemID: row.id, value: { type: "text", text: { content: config.param } } });
                             }
                             populateOps.push({ keyID: commandTypeKey, itemID: row.id, value: { type: "text", text: { content: config.type } } });
                             populateOps.push({ keyID: targetScopeKey, itemID: row.id, value: { type: "text", text: { content: config.scope } } });
@@ -109,7 +109,7 @@ export async function constructCommandStorage() {
             targetNotebookId,
             "类型绑定 (Type-DB)",
             "custom-index-type-db",
-            `# 类型绑定 (Type-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n* #Project\n* #Project | 全局关系图\n`,
+            `# 类型绑定 (Type-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n* #Project\n* #Person\n`,
             async (avId) => {
                 const addCol = async (name: string, type: string, icon: string, prevKey: string) => {
                     // @ts-ignore
@@ -125,10 +125,9 @@ export async function constructCommandStorage() {
                 const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
                 let lastKeyID = currentKeys.length > 0 ? currentKeys[currentKeys.length - 1].id : "";
 
-                const methodNameKey = await addCol("Method Name", "text", "iconPlay", lastKeyID);
-                const commandRefKey = await addCol("Command Reference", "text", "iconLink", methodNameKey);
-                const paramMappingKey = await addCol("Param Mapping", "text", "iconList", commandRefKey);
-                const enableKey = await addCol("Enable", "checkbox", "iconCheck", paramMappingKey);
+                const blockMenuKey = await addCol("Block Icon Menu", "text", "iconMenu", lastKeyID);
+                const pageMenuKey = await addCol("Current Page Menu", "text", "iconFile", blockMenuKey);
+                const enableKey = await addCol("Enable", "checkbox", "iconCheck", pageMenuKey);
 
                 await sleep(1000);
                 const renderRes = await post("/api/av/renderAttributeView", { id: avId });
@@ -142,15 +141,11 @@ export async function constructCommandStorage() {
                     if (label.includes("#Project")) {
                         projectCount++;
                         if (projectCount === 1) {
-                            // 第一个 Project：设为“右侧分屏打开”
-                            populateOps.push({ keyID: methodNameKey, itemID: row.id, value: { type: "text", text: { content: "在右侧打开" } } });
-                            populateOps.push({ keyID: commandRefKey, itemID: row.id, value: { type: "text", text: { content: "general.splitLR" } } });
+                            // 第一个 Project：给块标菜单绑定命令（使用 Layer 2 的主键名称，支持逗号分隔多个）
+                            populateOps.push({ keyID: blockMenuKey, itemID: row.id, value: { type: "text", text: { content: "在右侧分屏打开, 全局关系图" } } });
                             populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
-                            // 用户在高级设置配置后会自动填入 ID
                         } else if (projectCount === 2) {
-                            // 第二个 Project：设为“打开全局关系图”
-                            populateOps.push({ keyID: methodNameKey, itemID: row.id, value: { type: "text", text: { content: "打开全局关系图" } } });
-                            populateOps.push({ keyID: commandRefKey, itemID: row.id, value: { type: "text", text: { content: "general.graphView" } } });
+                            populateOps.push({ keyID: pageMenuKey, itemID: row.id, value: { type: "text", text: { content: "全局关系图" } } });
                             populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
                         }
                     }
