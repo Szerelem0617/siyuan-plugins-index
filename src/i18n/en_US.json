@@ -43,11 +43,11 @@
       "linkType": {
         "title": "Link Type",
         "content": "Link style for the index",
-        "options": {
-          "link": "Link",
-          "reference": "Reference",
-          "dynamic-ref": "Dynamic Reference"
-        }
+        "options": [
+          { "value": "link", "label": "Link" },
+          { "value": "reference", "label": "Reference" },
+          { "value": "dynamic-ref", "label": "Dynamic Reference" }
+        ]
       },
       "icon": {
         "title": "Show Icon",
@@ -99,12 +99,12 @@
       "outlineType": {
         "title": "Outline Type",
         "content": "Generation method for outline",
-        "options": {
-          "link": "Link",
-          "reference": "Reference",
-          "dynamic-ref": "Dynamic Reference",
-          "tree": "Heading Tree"
-        }
+        "options": [
+          { "value": "link", "label": "Link" },
+          { "value": "reference", "label": "Reference" },
+          { "value": "tree", "label": "Heading Tree" },
+          { "value": "dynamic-ref", "label": "Dynamic Reference" }
+        ]
       },
       "iconOutline": {
         "title": "Rich Text Sync",

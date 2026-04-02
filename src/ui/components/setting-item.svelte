@@ -53,9 +53,15 @@
             bind:value={settingValue}
             on:change={updateSetting}
         >
-            {#each Object.entries(content.options) as [key, text]}
-                <option value={key}>{text}</option>
-            {/each}
+            {#if Array.isArray(content.options)}
+                {#each content.options as option}
+                    <option value={option.value}>{option.label}</option>
+                {/each}
+            {:else}
+                {#each Object.entries(content.options) as [key, text]}
+                    <option value={key}>{text}</option>
+                {/each}
+            {/if}
         </select>
     {:else if type === "button"}
         <button

@@ -221,46 +221,23 @@ export async function autoUpdateIndex(notebookId: string, path: string, parentId
             return;
         }
 
-        // Migrate old local settings values before use and write-back
-        if (localSettings.linkType === "ref") localSettings.linkType = "link";
-        if (localSettings.linkType === "embed") localSettings.linkType = "reference";
-        if (localSettings.useDynamicAnchor === true && localSettings.linkType !== "dynamic-ref") localSettings.linkType = "dynamic-ref";
-        delete localSettings.useDynamicAnchor;
+        // Get merged configuration snapshot (migrated) without side effects
+        const localConfig = settings.getMergedConfig(localSettings);
 
-        // Auto-update uses local settings without prompting
-        // Build a local config to avoid mutating the global settings singleton
-        settings.loadSettings(localSettings);
-
-        if (!settings.get("autoUpdate")) return;
-
-        const localConfig = {
-            depth: localSettings.depth,
-            listType: localSettings.listType,
-            linkType: localSettings.linkType ?? settings.get("linkType"),
-            icon: localSettings.icon,
-        };
+        // Check if final effective autoUpdate is enabled
+        if (!localConfig.autoUpdate) return;
 
         let indexQueue = new IndexQueue();
         await generateIndex(notebookId, path, indexQueue, 0, localConfig);
         let data = queuePopAll(indexQueue, "");
 
         if (data != '') {
-            const indexSettings = {
-                depth: localSettings.depth,
-                listType: localSettings.listType,
-                linkType: localSettings.linkType,
-                fold: localSettings.fold,
-                col: localSettings.col,
-                icon: localSettings.icon,
-                autoUpdate: localSettings.autoUpdate
-            };
-
-            // Write back the LOCAL settings (not global) to preserve per-block config
+            // Write back the MIGRATED local settings to preserve per-block config
             await BlockService.insertOrUpdate(
                 parentId,
                 data,
                 "custom-index-create",
-                indexSettings,
+                localConfig,
                 "index",
                 undefined,
                 existingBlock // Pass existing block info to skip SQL in BlockService

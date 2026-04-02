@@ -116,36 +116,59 @@ class Settings {
         await plugin.saveData(config, plugin.data[config]);
     }
 
-    loadSettings(data: any) {
+    // Get a merged configuration object without side effects on global settings
+    getMergedConfig(localData: any) {
         const def = new SettingsProperty();
-        this.set("depth", data.depth ?? def.depth);
-        this.set("listType", data.listType ?? def.listType);
-        // Migrate old linkType values: ref→link, embed→reference; handle useDynamicAnchor
-        let linkType = data.linkType ?? def.linkType;
+        const global = plugin.data[CONFIG] || {};
+
+        let linkType = localData.linkType ?? global.linkType ?? def.linkType;
+        // Migration logic
         if (linkType === "ref") linkType = "link";
         if (linkType === "embed") linkType = "reference";
-        if (data.useDynamicAnchor === true && linkType !== "dynamic-ref") linkType = "dynamic-ref";
-        this.set("linkType", linkType);
-        this.set("fold", data.fold ?? def.fold);
-        this.set("col", data.col ?? def.col);
-        this.set("autoUpdate", data.autoUpdate ?? def.autoUpdate);
-        this.set("insertionMode", data.insertionMode ?? def.insertionMode);
-        this.set("icon", data.icon ?? def.icon);
-        this.set("builderAutoUpdate", data.builderAutoUpdate ?? def.builderAutoUpdate);
-        this.set("dbAddTemplateCols", data.dbAddTemplateCols ?? def.dbAddTemplateCols);
+        if (localData.useDynamicAnchor === true && linkType !== "dynamic-ref") linkType = "dynamic-ref";
+
+        return {
+            depth: localData.depth ?? global.depth ?? def.depth,
+            listType: localData.listType ?? global.listType ?? def.listType,
+            linkType: linkType,
+            fold: localData.fold ?? global.fold ?? def.fold,
+            col: localData.col ?? global.col ?? def.col,
+            icon: localData.icon ?? global.icon ?? def.icon,
+            autoUpdate: localData.autoUpdate ?? global.autoUpdate ?? def.autoUpdate,
+        };
+    }
+
+    getMergedConfigForOutline(localData: any) {
+        const def = new SettingsProperty();
+        const global = plugin.data[CONFIG] || {};
+
+        let outlineType = localData.outlineType ?? global.outlineType ?? def.outlineType;
+        // Migration logic
+        if (outlineType === "ref") outlineType = "link";
+        if (outlineType === "embed") outlineType = "reference";
+        if (localData.useDynamicAnchorOutline === true && outlineType !== "dynamic-ref") outlineType = "dynamic-ref";
+
+        return {
+            outlineType: outlineType,
+            outlineAutoUpdate: localData.outlineAutoUpdate ?? global.outlineAutoUpdate ?? def.outlineAutoUpdate,
+            listTypeOutline: localData.listTypeOutline ?? global.listTypeOutline ?? def.listTypeOutline,
+            iconOutline: localData.iconOutline ?? global.iconOutline ?? def.iconOutline,
+        };
+    }
+
+    // Safely load local settings into global singleton (only for purposeful UI overrides)
+    loadSettings(data: any) {
+        const merged = this.getMergedConfig(data);
+        for (const [key, val] of Object.entries(merged)) {
+            this.set(key, val);
+        }
     }
 
     loadSettingsforOutline(data: any) {
-        const def = new SettingsProperty();
-        // Migrate old outlineType values: ref→link, embed→reference; handle useDynamicAnchorOutline
-        let outlineType = data.outlineType ?? def.outlineType;
-        if (outlineType === "ref") outlineType = "link";
-        if (outlineType === "embed") outlineType = "reference";
-        if (data.useDynamicAnchorOutline === true && outlineType !== "dynamic-ref") outlineType = "dynamic-ref";
-        this.set("outlineType", outlineType);
-        this.set("outlineAutoUpdate", data.outlineAutoUpdate ?? def.outlineAutoUpdate);
-        this.set("listTypeOutline", data.listTypeOutline ?? def.listTypeOutline);
-        this.set("iconOutline", data.iconOutline ?? def.iconOutline);
+        const merged = this.getMergedConfigForOutline(data);
+        for (const [key, val] of Object.entries(merged)) {
+            this.set(key, val);
+        }
     }
 }
 

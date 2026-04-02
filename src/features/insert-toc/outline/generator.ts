@@ -23,9 +23,15 @@ function extractHeadingContent(markdown: string) {
     return content;
 }
 
-export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: number, extraData?: Record<string, { ial: string, markdown: string }>, existingAnchors?: Map<string, string>): string {
+export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: number, extraData?: Record<string, { ial: string, markdown: string }>, existingAnchors?: Map<string, string>, config?: any): string {
     let data = "";
     tab++;
+
+    const effectiveConfig = {
+        outlineType: config?.outlineType ?? settings.get("outlineType"),
+        listTypeOutline: config?.listTypeOutline ?? settings.get("listTypeOutline"),
+        iconOutline: config?.iconOutline ?? settings.get("iconOutline")
+    };
 
     for (let outline of outlineData) {
         let id = outline.id;
@@ -41,7 +47,7 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
 
         let indent = "";
         let subOutlineCount = outline.count;
-        let outlineType = settings.get("outlineType"); // "link", "reference", "dynamic-ref", "tree"
+        let outlineType = effectiveConfig.outlineType; // "link", "reference", "dynamic-ref", "tree"
 
         for (let n = 1; n <= stab; n++) {
             indent += '    ';
@@ -55,12 +61,12 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
             indent += '    ';
         }
 
-        let listType = settings.get("listTypeOutline") == "unordered" ? true : false;
+        let listType = effectiveConfig.listTypeOutline == "unordered" ? true : false;
         let listMarker = listType ? "* " : "1. ";
 
         let ialStr = ial ? `\n${indent}   {: ${ial}}` : "";
 
-        let iconEnabled = settings.get("iconOutline") ?? true;
+        let iconEnabled = effectiveConfig.iconOutline ?? true;
         let anchorText = existingAnchors?.get(id);
 
         // Strategy 2: If no icon, use plain text and bind to it
@@ -114,9 +120,9 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
 
         if (subOutlineCount > 0) {
             if (outline.depth == 0) {
-                data += generateOutlineMarkdown(outline.blocks, tab, stab, extraData, existingAnchors);
+                data += generateOutlineMarkdown(outline.blocks, tab, stab, extraData, existingAnchors, config);
             } else {
-                data += generateOutlineMarkdown(outline.children, tab, stab, extraData, existingAnchors);
+                data += generateOutlineMarkdown(outline.children, tab, stab, extraData, existingAnchors, config);
             }
         }
     }

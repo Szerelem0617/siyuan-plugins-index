@@ -147,37 +147,25 @@ export async function autoUpdateOutline(parentId: string, existingBlock?: any) {
             return;
         }
 
-        // Migrate old local settings values before use and write-back
-        if (localSettings.outlineType === "ref") localSettings.outlineType = "link";
-        if (localSettings.outlineType === "embed") localSettings.outlineType = "reference";
-        if (localSettings.useDynamicAnchorOutline === true && localSettings.outlineType !== "dynamic-ref") localSettings.outlineType = "dynamic-ref";
-        delete localSettings.useDynamicAnchorOutline;
+        // Get merged configuration snapshot (migrated) without side effects
+        const localConfig = settings.getMergedConfigForOutline(localSettings);
 
-        // Auto-update uses local settings without prompting
-        settings.loadSettingsforOutline(localSettings);
-
-        if (!settings.get("outlineAutoUpdate")) return;
+        // Check if effective autoUpdate is enabled
+        if (!localConfig.outlineAutoUpdate) return;
 
         let outlineData = await requestGetDocOutline(parentId);
         let ids = collectOutlineIds(outlineData);
         let extraData = await getBlocksData(ids);
 
-        let data = generateOutlineMarkdown(outlineData, 0, 0, extraData, existingAnchors);
+        let data = generateOutlineMarkdown(outlineData, 0, 0, extraData, existingAnchors, localConfig);
 
         if (data != '') {
-            const outlineSettings = {
-                outlineType: localSettings.outlineType,
-                listTypeOutline: localSettings.listTypeOutline,
-                iconOutline: localSettings.iconOutline,
-                outlineAutoUpdate: localSettings.outlineAutoUpdate
-            };
-
-            // Write back the LOCAL settings (not global) to preserve per-block config
+            // Write back the MIGRATED local settings to preserve per-block config
             await BlockService.insertOrUpdate(
                 parentId,
                 data,
                 "custom-outline-create",
-                outlineSettings,
+                localConfig,
                 "outline",
                 undefined,
                 existingBlock // Pass existing block info
