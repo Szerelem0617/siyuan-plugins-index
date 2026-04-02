@@ -44,9 +44,6 @@ export class SettingsProperty {
     }
 
     getAll() {
-        // Usually called to sync local instance with global settings
-        // But get() is static-like on the instance.
-        // This method seems redundant if we use settings.get() directly, but kept for compatibility.
         this.depth = settings.get("depth");
         this.listType = settings.get("listType");
         this.linkType = settings.get("linkType");
@@ -80,17 +77,13 @@ class Settings {
         let needsSave = false;
         const data = plugin.data[CONFIG];
         if (data) {
-            // Migrate linkType: ref→link, embed→reference
             if (data.linkType === "ref") { data.linkType = "link"; needsSave = true; }
             if (data.linkType === "embed") { data.linkType = "reference"; needsSave = true; }
             if (data.useDynamicAnchor === true && data.linkType !== "dynamic-ref") { data.linkType = "dynamic-ref"; needsSave = true; }
-            // Migrate outlineType
             if (data.outlineType === "ref") { data.outlineType = "link"; needsSave = true; }
             if (data.outlineType === "embed") { data.outlineType = "reference"; needsSave = true; }
             if (data.useDynamicAnchorOutline === true && data.outlineType !== "dynamic-ref") { data.outlineType = "dynamic-ref"; needsSave = true; }
-            // Migrate linkTypeNotebook
             if (data.linkTypeNotebook === "ref") { data.linkTypeNotebook = "link"; needsSave = true; }
-            // Clean up deprecated fields
             if (data.useDynamicAnchor !== undefined) { delete data.useDynamicAnchor; needsSave = true; }
             if (data.useDynamicAnchorOutline !== undefined) { delete data.useDynamicAnchorOutline; needsSave = true; }
             if (needsSave) {
@@ -116,13 +109,11 @@ class Settings {
         await plugin.saveData(config, plugin.data[config]);
     }
 
-    // Get a merged configuration object without side effects on global settings
     getMergedConfig(localData: any) {
         const def = new SettingsProperty();
         const global = plugin.data[CONFIG] || {};
 
         let linkType = localData.linkType ?? global.linkType ?? def.linkType;
-        // Migration logic
         if (linkType === "ref") linkType = "link";
         if (linkType === "embed") linkType = "reference";
         if (localData.useDynamicAnchor === true && linkType !== "dynamic-ref") linkType = "dynamic-ref";
@@ -143,7 +134,6 @@ class Settings {
         const global = plugin.data[CONFIG] || {};
 
         let outlineType = localData.outlineType ?? global.outlineType ?? def.outlineType;
-        // Migration logic
         if (outlineType === "ref") outlineType = "link";
         if (outlineType === "embed") outlineType = "reference";
         if (localData.useDynamicAnchorOutline === true && outlineType !== "dynamic-ref") outlineType = "dynamic-ref";
@@ -156,7 +146,6 @@ class Settings {
         };
     }
 
-    // Safely load local settings into global singleton (only for purposeful UI overrides)
     loadSettings(data: any) {
         const merged = this.getMergedConfig(data);
         for (const [key, val] of Object.entries(merged)) {

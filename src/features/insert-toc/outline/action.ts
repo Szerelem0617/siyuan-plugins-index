@@ -79,7 +79,8 @@ export async function insertOutlineAction(targetBlockId?: string) {
             outlineType: settings.get("outlineType"),
             listTypeOutline: settings.get("listTypeOutline"),
             iconOutline: settings.get("iconOutline"),
-            outlineAutoUpdate: settings.get("outlineAutoUpdate")
+            outlineAutoUpdate: settings.get("outlineAutoUpdate"),
+            builderAutoUpdate: settings.get("builderAutoUpdate")
         };
 
         const result = await BlockService.insertOrUpdate(

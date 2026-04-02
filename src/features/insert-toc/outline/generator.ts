@@ -55,6 +55,7 @@ export function generateOutlineMarkdown(
         let ial = "";
         let pureTextContent = "";
 
+        // Fallback pattern: Prefer SQL data if available, otherwise use basic outline data
         if (extraData && extraData[id]) {
             name = extractHeadingContent(extraData[id].markdown) || (outline.depth == 0 ? outline.name : outline.content);
             ial = filterIAL(extraData[id].ial);
@@ -78,7 +79,7 @@ export function generateOutlineMarkdown(
 
         let anchorText = existingAnchors?.get(id);
         
-        // If icon is disabled (no rich text sync), use the pure text directly from the SQL database
+        // When rich text sync (iconOutline) is off, we use the pure text content
         if (!effectiveConfig.iconOutline && !anchorText) {
             anchorText = pureTextContent;
         }

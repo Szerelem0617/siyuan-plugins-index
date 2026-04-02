@@ -32,14 +32,15 @@ export class LinkStrategy implements TOCStrategy {
         const ialStr = item.ial ? `\n${indent}   {: ${item.ial}}` : "";
 
         // If icon is enabled and NOT outline/tree, icon is a prefix, title is the link
-        if (context.iconEnabled && item.text && !context.isOutline && context.linkType !== "tree") {
+        if (context.iconEnabled && !context.isOutline && context.linkType !== "tree") {
              const icon = item.anchor || "➖"; 
              return `${indent}${marker}${icon} [${item.text}](siyuan://blocks/${item.id})${ialStr}`;
         }
 
         // Outline or Tree: Icon is the link anchor
         const anchor = item.anchor || (context.iconEnabled ? "➖" : item.text);
-        if (context.isOutline && context.iconEnabled && item.text && item.anchor === undefined) {
+        // FIX: In outline mode, if icon is enabled, ALWAYS append the main text.
+        if (context.isOutline && context.iconEnabled && item.text) {
              return `${indent}${marker}[${anchor}](siyuan://blocks/${item.id}) ${item.text}${ialStr}`;
         }
         return `${indent}${marker}[${anchor}](siyuan://blocks/${item.id})${ialStr}`;
@@ -55,7 +56,7 @@ export class RefStrategy implements TOCStrategy {
         const ialStr = item.ial ? `\n${indent}   {: ${item.ial}}` : "";
 
         // Index mode with icons: Icon as prefix, title as block ref
-        if (context.iconEnabled && item.text && !context.isOutline && context.linkType !== "tree") {
+        if (context.iconEnabled && !context.isOutline && context.linkType !== "tree") {
             const icon = item.anchor || "➖";
             const safeText = item.text.replace(/"/g, "&quot;");
             return `${indent}${marker}${icon} ((${item.id} "${safeText}"))${ialStr}`;
@@ -63,7 +64,8 @@ export class RefStrategy implements TOCStrategy {
 
         // Outline or Tree mode: Block ref as the anchor
         const display = (item.anchor || (context.iconEnabled ? "➖" : item.text)).replace(/"/g, "&quot;");
-        if (context.iconEnabled && item.text && (item.anchor || context.isOutline || display === "➖")) {
+        // FIX: In outline mode, if icon is enabled, ALWAYS append the main text.
+        if (context.isOutline && context.iconEnabled && item.text) {
             return `${indent}${marker}((${item.id} "${display}")) ${item.text}${ialStr}`;
         }
         return `${indent}${marker}((${item.id} "${display}"))${ialStr}`;
