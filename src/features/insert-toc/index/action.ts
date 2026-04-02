@@ -70,24 +70,21 @@ export async function insertAction(targetBlockId?: string) {
     if (!block.data) return;
 
     let indexQueue = new IndexQueue();
-    await generateIndex(block.data.box, block.data.path, indexQueue);
-    let data = queuePopAll(indexQueue, "");
+    const currentConfig = settings.getMergedConfig({});
+    
+    if (currentConfig.linkType === "tree") {
+        console.log("[IndexPlugin] 插入子文档树: 使用覆写配置 ->", JSON.stringify(currentConfig));
+    }
+
+    await generateIndex(block.data.box, block.data.path, indexQueue, 0, currentConfig);
+    let data = queuePopAll(indexQueue, "", currentConfig);
 
     if (data != '') {
-        const indexSettings = {
-            depth: settings.get("depth"),
-            listType: settings.get("listType"),
-            linkType: settings.get("linkType"),
-            fold: settings.get("fold"),
-            col: settings.get("col"),
-            icon: settings.get("icon"),
-            autoUpdate: settings.get("autoUpdate")
-        };
         await BlockService.insertOrUpdate(
             parentId,
             data,
             "custom-index-create",
-            indexSettings,
+            currentConfig,
             "index",
             targetBlockId
         );
@@ -144,7 +141,7 @@ export async function autoUpdateIndex(notebookId: string, path: string, parentId
 
         let indexQueue = new IndexQueue();
         await generateIndex(notebookId, path, indexQueue, 0, localConfig);
-        let data = queuePopAll(indexQueue, "");
+        let data = queuePopAll(indexQueue, "", localConfig);
 
         if (data != '') {
             // Write back the MIGRATED local settings to preserve per-block config

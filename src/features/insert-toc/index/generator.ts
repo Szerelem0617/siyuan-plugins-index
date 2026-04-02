@@ -12,6 +12,8 @@ export interface IndexConfig {
     listType?: string;
     linkType?: string;
     icon?: boolean;
+    col?: number;
+    fold?: number;
 }
 
 export async function generateIndex(notebookId: any, ppath: any, pitem: IndexQueue, tab = 0, config?: IndexConfig) {
@@ -156,7 +158,7 @@ export async function generateIndexAndOutline(notebookId: any, ppath: any, pitem
     }
 }
 
-export function queuePopAll(queue: IndexQueue, data: string) {
+export function queuePopAll(queue: IndexQueue, data: string, config?: IndexConfig) {
     if (queue.getFront()?.depth == undefined) {
         return "";
     }
@@ -167,19 +169,23 @@ export function queuePopAll(queue: IndexQueue, data: string) {
     let times = 0;
     let depth = queue.getFront().depth;
 
-    if (depth == 1 && settings.get("col") != 1) {
+    const colSetting = config?.col !== undefined ? config.col : settings.get("col");
+    const foldSetting = config?.fold !== undefined ? config.fold : settings.get("fold");
+    const listTypeSetting = config?.listType !== undefined ? config.listType : settings.get("listType");
+
+    if (depth == 1 && colSetting != 1) {
         data += "{{{col\n";
-        temp = Math.trunc(queue.getSize() / settings.get("col"));
-        times = settings.get("col") - 1;
+        temp = Math.trunc(queue.getSize() / colSetting);
+        times = colSetting - 1;
     }
 
     while (!queue.isEmpty()) {
         num++;
         item = queue.pop();
 
-        if (!item.children.isEmpty() && settings.get("fold") != 0 && settings.get("fold") <= item.depth) {
+        if (!item.children.isEmpty() && foldSetting != 0 && foldSetting <= item.depth) {
             let n = 0;
-            let listType = settings.get("listType") == "unordered" ? true : false;
+            let listType = listTypeSetting == "unordered" ? true : false;
             if (listType) {
                 n = item.text.indexOf("*");
                 if (n !== -1)
@@ -193,7 +199,7 @@ export function queuePopAll(queue: IndexQueue, data: string) {
         data += item.text;
 
         if (!item.children.isEmpty()) {
-            data = queuePopAll(item.children, data);
+            data = queuePopAll(item.children, data, config);
         }
         if (item.depth == 1 && num == temp && times > 0) {
             data += `\n{: id}\n`;
@@ -201,7 +207,7 @@ export function queuePopAll(queue: IndexQueue, data: string) {
             times--;
         }
     }
-    if (depth == 1 && settings.get("col") != 1) {
+    if (depth == 1 && colSetting != 1) {
         data += "}}}";
     }
     return data;

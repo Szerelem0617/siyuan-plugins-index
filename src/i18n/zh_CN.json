@@ -95,8 +95,8 @@
         "options": [
           { "value": "link", "label": "链接" },
           { "value": "reference", "label": "引用" },
-          { "value": "tree", "label": "标题行树（测试，目前不建议使用）" },
-          { "value": "dynamic-ref", "label": "动态引用" }
+          { "value": "dynamic-ref", "label": "动态引用" },
+          { "value": "tree", "label": "标题行树（测试，目前不建议使用）" }
         ]
       },
       "iconOutline": {

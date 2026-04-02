@@ -98,11 +98,8 @@ export class DynamicRefStrategy implements TOCStrategy {
 export class TreeStrategy implements TOCStrategy {
     render(item: RenderItem, context: RenderContext, indent: string): string {
         const marker = context.listType === "unordered" ? "* " : "1. ";
-        const isDynamic = context.linkType === "dynamic-ref";
-        const textPart = isDynamic
-            ? `<span data-type="block-ref" data-id="${item.id}" data-subtype="d">${item.text}</span>`
-            : item.text;
-        return `${indent}${marker}[➖](siyuan://blocks/${item.id}) ${textPart}`;
+        const icon = item.anchor || "📄";
+        return `${indent}${marker}[${icon}](siyuan://blocks/${item.id}) ➖ ${item.text}`;
     }
 }
 

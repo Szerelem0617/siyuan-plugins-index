@@ -118,7 +118,7 @@ class Settings {
         if (linkType === "embed") linkType = "reference";
         if (localData.useDynamicAnchor === true && linkType !== "dynamic-ref") linkType = "dynamic-ref";
 
-        return {
+        const merged = {
             depth: localData.depth ?? global.depth ?? def.depth,
             listType: localData.listType ?? global.listType ?? def.listType,
             linkType: linkType,
@@ -127,6 +127,15 @@ class Settings {
             icon: localData.icon ?? global.icon ?? def.icon,
             autoUpdate: localData.autoUpdate ?? global.autoUpdate ?? def.autoUpdate,
         };
+
+        if (linkType === "tree") {
+            merged.depth = 0;
+            merged.fold = 0;
+            merged.col = 1;
+            merged.icon = true;
+        }
+
+        return merged;
     }
 
     getMergedConfigForOutline(localData: any) {
@@ -138,12 +147,18 @@ class Settings {
         if (outlineType === "embed") outlineType = "reference";
         if (localData.useDynamicAnchorOutline === true && outlineType !== "dynamic-ref") outlineType = "dynamic-ref";
 
-        return {
+        const merged = {
             outlineType: outlineType,
             outlineAutoUpdate: localData.outlineAutoUpdate ?? global.outlineAutoUpdate ?? def.outlineAutoUpdate,
             listTypeOutline: localData.listTypeOutline ?? global.listTypeOutline ?? def.listTypeOutline,
             iconOutline: localData.iconOutline ?? global.iconOutline ?? def.iconOutline,
         };
+
+        if (outlineType === "tree") {
+            merged.iconOutline = true; // Force rich text icon formatting for tree mode
+        }
+
+        return merged;
     }
 
     loadSettings(data: any) {

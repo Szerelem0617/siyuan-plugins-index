@@ -94,8 +94,8 @@
         "options": [
           { "value": "link", "label": "Link" },
           { "value": "reference", "label": "Reference" },
-          { "value": "tree", "label": "Heading Tree (Beta, Not recommended)" },
-          { "value": "dynamic-ref", "label": "Dynamic Reference" }
+          { "value": "dynamic-ref", "label": "Dynamic Reference" },
+          { "value": "tree", "label": "Heading Tree (Beta, Not recommended)" }
         ]
       },
       "iconOutline": {
