@@ -20,8 +20,8 @@
   "errorMsg_empty": "Document ID is empty",
   "errorMsg_miss": "Operation failed",
   "confirmDialog": {
-    "title": "Configuration Conflict",
-    "content": "Local configuration mismatch detected. Update to global settings?"
+    "title": "Update Configuration",
+    "content": "Update current block configuration with settings in plugin-wide?"
   },
   "settingsTab": {
     "name": "Plugin Settings",

@@ -1,4 +1,5 @@
 import { settings } from "../../../core/settings";
+import { StrategyRegistry, RenderContext, RenderItem } from "../../../shared/render/strategy";
 import { stripMarkdownSyntax } from "../../../shared/utils/markdown-utils";
 
 function filterIAL(ialStr: string) {
@@ -33,11 +34,21 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
         iconOutline: config?.iconOutline ?? settings.get("iconOutline")
     };
 
+    const renderContext: RenderContext = {
+        linkType: effectiveConfig.outlineType,
+        iconEnabled: effectiveConfig.iconOutline,
+        listType: effectiveConfig.listTypeOutline as "unordered" | "ordered",
+        isOutline: true
+    };
+
+    const strategy = StrategyRegistry.get(effectiveConfig.outlineType);
+
     for (let outline of outlineData) {
         let id = outline.id;
         let name = "";
         let ial = "";
 
+        // Always use SQL-extracted Markdown/IAL if extraData is provided
         if (extraData && extraData[id]) {
             name = extractHeadingContent(extraData[id].markdown) || (outline.depth == 0 ? outline.name : outline.content);
             ial = filterIAL(extraData[id].ial);
@@ -46,78 +57,33 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
         }
 
         let indent = "";
-        let subOutlineCount = outline.count;
-        let outlineType = effectiveConfig.outlineType; // "link", "reference", "dynamic-ref", "tree"
-
         for (let n = 1; n <= stab; n++) {
             indent += '    ';
         }
-
-        if (outlineType !== "tree") {
+        if (effectiveConfig.outlineType !== "tree") {
             indent += "> ";
         }
-
         for (let n = 1; n < tab - stab; n++) {
             indent += '    ';
         }
 
-        let listType = effectiveConfig.listTypeOutline == "unordered" ? true : false;
-        let listMarker = listType ? "* " : "1. ";
-
-        let ialStr = ial ? `\n${indent}   {: ${ial}}` : "";
-
-        let iconEnabled = effectiveConfig.iconOutline ?? true;
         let anchorText = existingAnchors?.get(id);
-
-        // Strategy 2: If no icon, use plain text and bind to it
-        if (!iconEnabled) {
-            // If existing anchor is the default icon, discard it
-            if (anchorText === "➖") anchorText = undefined;
-
-            // If no custom anchor, use plain text
-            if (!anchorText) {
-                anchorText = stripMarkdownSyntax(name);
-            }
-        } else {
-            // Strategy 1: If icon enabled, default to icon if no anchor
-            if (!anchorText) anchorText = "➖";
+        
+        // Emulate legacy behavior: if icon is disabled (no rich text), strip markdown to get pure text anchor
+        if (!effectiveConfig.iconOutline && !anchorText) {
+            anchorText = stripMarkdownSyntax(name);
         }
 
-        let safeAnchorText = anchorText.replace(/"/g, "&quot;");
+        const renderItem: RenderItem = {
+            id: id,
+            text: name,
+            anchor: anchorText,
+            ial: ial || undefined
+        };
 
-        let isDynamicRef = outlineType === "dynamic-ref";
+        data += strategy.render(renderItem, renderContext, indent) + "\n";
 
-        if (outlineType == "tree") {
-            // Outline builder format for headings: Just a separator with the link bound to it.
-            const textPart = isDynamicRef
-                ? `<span data-type="block-ref" data-id="${id}" data-subtype="d">${name}</span>`
-                : name;
-            data += `${indent}${listMarker}[➖](siyuan://blocks/${id}) ${textPart}\n`;
-        } else if (isDynamicRef) {
-            // Dynamic Reference: Use block reference span which is native to Protyle.
-            const dynamicRef = `<span data-type="block-ref" data-id="${id}" data-subtype="d">${name}</span>`;
-            if (iconEnabled) {
-                // Combined Icon + Dynamic Reference: [icon](link) <span...>
-                data += `${indent}${listMarker}[${anchorText}](siyuan://blocks/${id}) ${dynamicRef}${ialStr}\n`;
-            } else {
-                data += `${indent}${listMarker}${dynamicRef}${ialStr}\n`;
-            }
-        } else if (iconEnabled) {
-            // Icon Enabled: Bind to Icon + Append Rich Text
-            if (outlineType == "link") {
-                data += `${indent}${listMarker}[${anchorText}](siyuan://blocks/${id}) ${name}${ialStr}\n`;
-            } else {
-                data += `${indent}${listMarker}((${id} "${safeAnchorText}")) ${name}${ialStr}\n`;
-            }
-        } else {
-            // Icon Disabled: Bind to Plain Text (No append)
-            if (outlineType == "link") {
-                data += `${indent}${listMarker}[${anchorText}](siyuan://blocks/${id})${ialStr}\n`;
-            } else {
-                data += `${indent}${listMarker}((${id} "${safeAnchorText}"))${ialStr}\n`;
-            }
-        }
-
+        const subOutlineCount = outline.count;
         if (subOutlineCount > 0) {
             if (outline.depth == 0) {
                 data += generateOutlineMarkdown(outline.blocks, tab, stab, extraData, existingAnchors, config);

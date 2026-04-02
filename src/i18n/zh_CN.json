@@ -21,8 +21,8 @@
   "errorMsg_empty": "当前文档ID为空",
   "errorMsg_miss": "操作失败",
   "confirmDialog": {
-    "title": "配置冲突",
-    "content": "检测到本地配置与全局配置不一致，是否更新为全局配置？"
+    "title": "更新配置",
+    "content": "是否用设置中的配置更新当前目录/大纲配置？"
   },
   "settingsTab": {
     "name": "插件设置",
