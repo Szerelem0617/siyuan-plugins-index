@@ -1,6 +1,5 @@
 import { settings } from "../../../core/settings";
 import { StrategyRegistry, RenderContext, RenderItem } from "../../../shared/render/strategy";
-import { stripMarkdownSyntax } from "../../../shared/utils/markdown-utils";
 
 function filterIAL(ialStr: string) {
     if (!ialStr) return "";
@@ -24,7 +23,14 @@ function extractHeadingContent(markdown: string) {
     return content;
 }
 
-export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: number, extraData?: Record<string, { ial: string, markdown: string }>, existingAnchors?: Map<string, string>, config?: any): string {
+export function generateOutlineMarkdown(
+    outlineData: any[],
+    tab: number,
+    stab: number,
+    extraData?: Record<string, { ial: string, markdown: string, content: string }>,
+    existingAnchors?: Map<string, string>,
+    config?: any
+): string {
     let data = "";
     tab++;
 
@@ -47,13 +53,16 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
         let id = outline.id;
         let name = "";
         let ial = "";
+        let pureTextContent = "";
 
-        // Always use SQL-extracted Markdown/IAL if extraData is provided
         if (extraData && extraData[id]) {
             name = extractHeadingContent(extraData[id].markdown) || (outline.depth == 0 ? outline.name : outline.content);
             ial = filterIAL(extraData[id].ial);
+            pureTextContent = extraData[id].content;
+            console.log(`[Plugin-TOC] SQL提取的纯文本 (id: ${id}):`, pureTextContent);
         } else {
             name = outline.depth == 0 ? outline.name : outline.content;
+            pureTextContent = name;
         }
 
         let indent = "";
@@ -69,9 +78,9 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
 
         let anchorText = existingAnchors?.get(id);
         
-        // Emulate legacy behavior: if icon is disabled (no rich text), strip markdown to get pure text anchor
+        // If icon is disabled (no rich text sync), use the pure text directly from the SQL database
         if (!effectiveConfig.iconOutline && !anchorText) {
-            anchorText = stripMarkdownSyntax(name);
+            anchorText = pureTextContent;
         }
 
         const renderItem: RenderItem = {
