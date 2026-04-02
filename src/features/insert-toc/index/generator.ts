@@ -11,7 +11,6 @@ export interface IndexConfig {
     listType?: string;
     linkType?: string;
     icon?: boolean;
-    useDynamicAnchor?: boolean;
 }
 
 export async function generateIndex(notebook: any, ppath: any, pitem: IndexQueue, tab = 0, config?: IndexConfig) {
@@ -55,14 +54,12 @@ export async function generateIndex(notebook: any, ppath: any, pitem: IndexQueue
                 data += "1. ";
             }
 
-            let linkType = linkTypeSetting == "ref" ? true : false;
-            let isTree = linkTypeSetting == "tree";
+            let isLink = linkTypeSetting === "link";
+            let isTree = linkTypeSetting === "tree";
+            let isDynamicRef = linkTypeSetting === "dynamic-ref";
 
             let iconStr = (iconEnabled || isTree) ? getProcessedDocIcon(icon, subFileCount != 0) : "";
             let safeName = name.replace(/"/g, "&quot;");
-
-            const useDynamic = config?.useDynamicAnchor !== undefined ? config.useDynamicAnchor : (settings.get("useDynamicAnchor") ?? false);
-            console.log(`[IndexGenerator] doc=${name} id=${id} useDynamic=${useDynamic}`);
 
             if (isTree) {
                 // Builder format for Index: [Icon](Link) ➖ Text
@@ -70,17 +67,17 @@ export async function generateIndex(notebook: any, ppath: any, pitem: IndexQueue
                 if (!displayIcon || displayIcon.startsWith(":") && displayIcon.endsWith(":")) {
                     displayIcon = subFileCount != 0 ? "📑" : "📄";
                 }
-                const textPart = useDynamic
+                const textPart = isDynamicRef
                     ? `<span data-type="block-ref" data-id="${id}" data-subtype="d">${safeName}</span>`
                     : name;
                 data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${textPart}\n`;
-            } else if (useDynamic) {
+            } else if (isDynamicRef) {
                 const dynamicRef = `<span data-type="block-ref" data-id="${id}" data-subtype="d">${safeName}</span>`;
                 data += `${iconStr ? iconStr + ' ' : ''}${dynamicRef}\n`;
-                console.log(`[IndexGenerator] Generated dynamic ref (HTML): ${dynamicRef}`);
-            } else if (linkType) {
+            } else if (isLink) {
                 data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;
             } else {
+                // reference (block ref)
                 data += `${iconStr ? iconStr + ' ' : ''}((${id} "${safeName}"))\n`;
             }
 
@@ -136,14 +133,12 @@ export async function generateIndexAndOutline(notebook: any, ppath: any, pitem: 
                     data += "1. ";
                 }
 
-                let linkType = linkTypeSetting == "ref" ? true : false;
-                let isTree = linkTypeSetting == "tree";
+                let isLink = linkTypeSetting === "link";
+                let isTree = linkTypeSetting === "tree";
+                let isDynamicRef = linkTypeSetting === "dynamic-ref";
 
                 let iconStr = (iconEnabled || isTree) ? getProcessedDocIcon(icon, subFileCount != 0) : "";
                 let safeName = name.replace(/"/g, "&quot;");
-
-                const useDynamic = config?.useDynamicAnchor !== undefined ? config.useDynamicAnchor : (settings.get("useDynamicAnchor") ?? false);
-                console.log(`[IndexAndOutlineGenerator] doc=${name} id=${id} useDynamic=${useDynamic}`);
 
                 if (isTree) {
                     // Tree index format: [Icon](Link) ➖ Text
@@ -151,17 +146,17 @@ export async function generateIndexAndOutline(notebook: any, ppath: any, pitem: 
                     if (!displayIcon || displayIcon.startsWith(":") && displayIcon.endsWith(":")) {
                         displayIcon = subFileCount != 0 ? "📑" : "📄";
                     }
-                    const textPart = useDynamic
+                    const textPart = isDynamicRef
                         ? `<span data-type="block-ref" data-id="${id}" data-subtype="d">${safeName}</span>`
                         : name;
                     data += `[${displayIcon}](siyuan://blocks/${id}) ➖ ${textPart}\n`;
-                } else if (useDynamic) {
+                } else if (isDynamicRef) {
                     const dynamicRef = `<span data-type="block-ref" data-id="${id}" data-subtype="d">${safeName}</span>`;
                     data += `${iconStr ? iconStr + ' ' : ''}${dynamicRef}\n`;
-                    console.log(`[IndexAndOutlineGenerator] Generated dynamic ref (HTML): ${dynamicRef}`);
-                } else if (linkType) {
+                } else if (isLink) {
                     data += `${iconStr ? iconStr + ' ' : ''}[${name}](siyuan://blocks/${id})\n`;
                 } else {
+                    // reference (block ref)
                     data += `${iconStr ? iconStr + ' ' : ''}((${id} "${safeName}"))\n`;
                 }
 

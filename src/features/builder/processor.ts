@@ -410,7 +410,7 @@ export class IBlockProcessor {
     }
 
     async constructListItemMarkdown(containerAttrs: any, headingId: string, syncText: string, docId?: string, docIcon?: string) {
-        const useDynamic = settings.get("useDynamicAnchor") ?? false;
+        const useDynamic = settings.get("linkType") === "dynamic-ref";
 
         const parts = [];
         if (!docId) docId = containerAttrs[ATTR_INDEX];

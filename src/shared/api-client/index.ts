@@ -84,18 +84,36 @@ export class BlockService {
                 let opId = result.data[0].doOperations[0].id;
                 let attrTargetId = opId;
 
-                // If Outline (Blockquote), find inner List to bind attribute
-                if (type == "outline" && attrName !== "custom-tree-create") {
-                    console.log(`[BlockService] Outline inserted (ID: ${opId}). Searching for inner list...`);
-                    for (let i = 0; i < 15; i++) {
-                        await sleep(500);
-                        let childRs = await client.sql({
-                            stmt: `SELECT id FROM blocks WHERE parent_id = '${opId}' AND type = 'l' LIMIT 1`
+                // If the returned block is a wrapper (Blockquote for outline, Super Block for index with col>1),
+                // find the inner List block to bind the attribute to
+                if (attrName !== "custom-tree-create") {
+                    // Check what type of block we got
+                    let needsSearch = false;
+                    if (type == "outline") {
+                        needsSearch = true;
+                    } else {
+                        // For index: check if the block is a super block (col > 1 case)
+                        let typeRs = await client.sql({
+                            stmt: `SELECT type FROM blocks WHERE id = '${opId}' LIMIT 1`
                         });
-                        if (childRs.data && childRs.data[0]) {
-                            attrTargetId = childRs.data[0].id;
-                            console.log(`[BlockService] Found inner list for binding: ${attrTargetId}`);
-                            break;
+                        if (typeRs.data?.[0]?.type === 'sb') {
+                            needsSearch = true;
+                            console.log(`[BlockService] Index wrapped in super block (col > 1). Searching for inner list...`);
+                        }
+                    }
+
+                    if (needsSearch) {
+                        console.log(`[BlockService] Block inserted (ID: ${opId}). Searching for inner list...`);
+                        for (let i = 0; i < 15; i++) {
+                            await sleep(500);
+                            let childRs = await client.sql({
+                                stmt: `SELECT id FROM blocks WHERE parent_id = '${opId}' AND type = 'l' LIMIT 1`
+                            });
+                            if (childRs.data && childRs.data[0]) {
+                                attrTargetId = childRs.data[0].id;
+                                console.log(`[BlockService] Found inner list for binding: ${attrTargetId}`);
+                                break;
+                            }
                         }
                     }
                 }
@@ -119,19 +137,14 @@ export class BlockService {
 
                 console.log(`[BlockService] Found existing ${type} at ${currentId} (Type: ${currentType})`);
 
-                // Outline Fix: If attr is on List, update parent BQ
-                if (type == "outline" && currentType === 'l') {
-                    // Check if parent is blockquote
-                    // If we have parentId, check type?
-                    // The original code queried parent.
-                    // If we passed existingBlockInfo, we have parent_id, but not parent type.
-                    // We might need one extra query here if type is 'l'.
-                    // Or we can assume?
-                    // Let's do a quick check if strictly needed.
+                // Fix: If attr is on a List inside a wrapper, update the wrapper instead
+                // Outline uses blockquote ('b'), Index with col>1 uses super block ('sb')
+                if (currentType === 'l') {
                     let parentRs = await client.sql({ stmt: `SELECT id, type FROM blocks WHERE id = '${parentId}'` });
-                    if (parentRs.data[0] && parentRs.data[0].type === 'b') {
+                    const parentType = parentRs.data?.[0]?.type;
+                    if (parentType === 'b' || parentType === 'sb') {
                         updateTargetId = parentRs.data[0].id;
-                        console.log(`[BlockService] Updating parent blockquote: ${updateTargetId}`);
+                        console.log(`[BlockService] Updating parent wrapper (${parentType}): ${updateTargetId}`);
                     }
                 }
 
@@ -141,10 +154,11 @@ export class BlockService {
                     id: updateTargetId
                 });
 
-                // Re-bind attributes to ensure they persist or update
+                // Re-bind attributes to the inner list block after updating wrapper
                 let attrTargetId = updateTargetId;
-                if (type == "outline" && attrName !== "custom-tree-create") {
-                    console.log(`[BlockService] Outline updated. Re-searching for NEW inner list in ${updateTargetId}...`);
+                if (updateTargetId !== currentId && attrName !== "custom-tree-create") {
+                    // We updated a wrapper (blockquote/super block), need to find the new inner list
+                    console.log(`[BlockService] Updated wrapper ${updateTargetId}. Re-searching for inner list...`);
                     let foundNew = false;
                     for (let i = 0; i < 15; i++) {
                         await sleep(500);

@@ -42,12 +42,6 @@
     />
     <SettingItem
         type="switch"
-        content={i18n.settingsTab.items.useDynamicAnchorOutline}
-        settingKey="useDynamicAnchorOutline"
-        settingValue={settingsStrings.useDynamicAnchorOutline}
-    />
-    <SettingItem
-        type="switch"
         content={i18n.settingsTab.items.iconOutline}
         settingKey="iconOutline"
         settingValue={settingsStrings.iconOutline}

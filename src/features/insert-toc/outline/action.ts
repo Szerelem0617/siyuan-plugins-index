@@ -1,8 +1,8 @@
 import { client, BlockService } from "../../../shared/api-client";
 import { getBlocksData, collectOutlineIds, requestGetDocOutline } from "../../../shared/api-client/query";
-import { getDocid, i18n, plugin, confirmDialog, getAttrFromIAL } from "../../../shared/utils";
+import { getDocid, i18n, confirmDialog, getAttrFromIAL } from "../../../shared/utils";
 import { extractAnchors, isValidSeparator } from "../../../shared/utils/anchor-utils";
-import { settings, CONFIG } from "../../../core/settings";
+import { settings } from "../../../core/settings";
 import { generateOutlineMarkdown } from "./generator";
 import { bindTreeAttributes } from "../../../shared/utils/transformation-utils";
 
@@ -32,6 +32,12 @@ export async function insertOutlineAction(targetBlockId?: string) {
         } catch (e) {
             console.error("[IndexPlugin] Error parsing settings", e);
         }
+
+        // Migrate old local settings values
+        if (localSettings.outlineType === "ref") localSettings.outlineType = "link";
+        if (localSettings.outlineType === "embed") localSettings.outlineType = "reference";
+        if (localSettings.useDynamicAnchorOutline === true && localSettings.outlineType !== "dynamic-ref") localSettings.outlineType = "dynamic-ref";
+        delete localSettings.useDynamicAnchorOutline;
 
         const keysToCheck = ["outlineType", "listTypeOutline", "iconOutline"];
         let mismatch = false;
@@ -69,7 +75,12 @@ export async function insertOutlineAction(targetBlockId?: string) {
     if (data != '') {
         const isTree = settings.get("outlineType") === "tree";
         const attrName = isTree ? "custom-tree-create" : "custom-outline-create";
-        const config = isTree ? { treeType: "heading-tree", builderAutoUpdate: true } : plugin.data[CONFIG];
+        const config = isTree ? { treeType: "heading-tree", builderAutoUpdate: true } : {
+            outlineType: settings.get("outlineType"),
+            listTypeOutline: settings.get("listTypeOutline"),
+            iconOutline: settings.get("iconOutline"),
+            outlineAutoUpdate: settings.get("outlineAutoUpdate")
+        };
 
         const result = await BlockService.insertOrUpdate(
             parentId,
@@ -136,7 +147,13 @@ export async function autoUpdateOutline(parentId: string, existingBlock?: any) {
             return;
         }
 
-        // Auto-update always uses local settings without prompting
+        // Migrate old local settings values before use and write-back
+        if (localSettings.outlineType === "ref") localSettings.outlineType = "link";
+        if (localSettings.outlineType === "embed") localSettings.outlineType = "reference";
+        if (localSettings.useDynamicAnchorOutline === true && localSettings.outlineType !== "dynamic-ref") localSettings.outlineType = "dynamic-ref";
+        delete localSettings.useDynamicAnchorOutline;
+
+        // Auto-update uses local settings without prompting
         settings.loadSettingsforOutline(localSettings);
 
         if (!settings.get("outlineAutoUpdate")) return;
@@ -148,11 +165,19 @@ export async function autoUpdateOutline(parentId: string, existingBlock?: any) {
         let data = generateOutlineMarkdown(outlineData, 0, 0, extraData, existingAnchors);
 
         if (data != '') {
+            const outlineSettings = {
+                outlineType: localSettings.outlineType,
+                listTypeOutline: localSettings.listTypeOutline,
+                iconOutline: localSettings.iconOutline,
+                outlineAutoUpdate: localSettings.outlineAutoUpdate
+            };
+
+            // Write back the LOCAL settings (not global) to preserve per-block config
             await BlockService.insertOrUpdate(
                 parentId,
                 data,
                 "custom-outline-create",
-                plugin.data[CONFIG],
+                outlineSettings,
                 "outline",
                 undefined,
                 existingBlock // Pass existing block info

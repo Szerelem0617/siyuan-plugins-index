@@ -121,7 +121,10 @@
     >
         <div
             class="item {activeTab === 'data' ? 'item--focus' : ''}"
+            role="tab"
+            tabindex="0"
             on:click={() => (activeTab = "data")}
+            on:keydown={(e) => e.key === 'Enter' && (activeTab = "data")}
         >
             <span class="item__text">数据组件</span>
             <span
@@ -132,7 +135,10 @@
         </div>
         <div
             class="item {activeTab === 'tool' ? 'item--focus' : ''}"
+            role="tab"
+            tabindex="0"
             on:click={() => (activeTab = "tool")}
+            on:keydown={(e) => e.key === 'Enter' && (activeTab = "tool")}
         >
             <span class="item__text">工具组件</span>
             <span
@@ -143,7 +149,10 @@
         </div>
         <div
             class="item {activeTab === 'class' ? 'item--focus' : ''}"
+            role="tab"
+            tabindex="0"
             on:click={() => (activeTab = "class")}
+            on:keydown={(e) => e.key === 'Enter' && (activeTab = "class")}
         >
             <span class="item__text">类 (Class)</span>
             <span

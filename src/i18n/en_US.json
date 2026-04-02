@@ -44,8 +44,9 @@
         "title": "Link Type",
         "content": "Link style for the index",
         "options": {
-          "ref": "Link",
-          "embed": "Reference"
+          "link": "Link",
+          "reference": "Reference",
+          "dynamic-ref": "Dynamic Reference"
         }
       },
       "icon": {
@@ -99,8 +100,9 @@
         "title": "Outline Type",
         "content": "Generation method for outline",
         "options": {
-          "ref": "Link",
-          "embed": "Reference",
+          "link": "Link",
+          "reference": "Reference",
+          "dynamic-ref": "Dynamic Reference",
           "tree": "Heading Tree"
         }
       },
@@ -120,10 +122,7 @@
         "title": "Add Template Columns",
         "content": "Automatically add title-img and template columns"
       },
-      "useDynamicAnchor": {
-        "title": "Dynamic Anchor Text",
-        "content": "Enable to use block references (dynamic links) for TOC and Outline"
-      },
+
       "builderDesc": "📄 Open sub-page · ➖ Link to heading"
     }
   },

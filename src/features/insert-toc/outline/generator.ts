@@ -41,7 +41,7 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
 
         let indent = "";
         let subOutlineCount = outline.count;
-        let outlineType = settings.get("outlineType"); // "ref", "embed", "tree"
+        let outlineType = settings.get("outlineType"); // "link", "reference", "dynamic-ref", "tree"
 
         for (let n = 1; n <= stab; n++) {
             indent += '    ';
@@ -79,16 +79,16 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
 
         let safeAnchorText = anchorText.replace(/"/g, "&quot;");
 
-        let useDynamic = settings.get("useDynamicAnchorOutline") ?? false;
+        let isDynamicRef = outlineType === "dynamic-ref";
 
         if (outlineType == "tree") {
             // Outline builder format for headings: Just a separator with the link bound to it.
-            const textPart = useDynamic
+            const textPart = isDynamicRef
                 ? `<span data-type="block-ref" data-id="${id}" data-subtype="d">${name}</span>`
                 : name;
             data += `${indent}${listMarker}[➖](siyuan://blocks/${id}) ${textPart}\n`;
-        } else if (useDynamic) {
-            // Dynamic Anchor: Use block reference span which is native to Protyle.
+        } else if (isDynamicRef) {
+            // Dynamic Reference: Use block reference span which is native to Protyle.
             const dynamicRef = `<span data-type="block-ref" data-id="${id}" data-subtype="d">${name}</span>`;
             if (iconEnabled) {
                 // Combined Icon + Dynamic Reference: [icon](link) <span...>
@@ -98,14 +98,14 @@ export function generateOutlineMarkdown(outlineData: any[], tab: number, stab: n
             }
         } else if (iconEnabled) {
             // Icon Enabled: Bind to Icon + Append Rich Text
-            if (outlineType == "ref") {
+            if (outlineType == "link") {
                 data += `${indent}${listMarker}[${anchorText}](siyuan://blocks/${id}) ${name}${ialStr}\n`;
             } else {
                 data += `${indent}${listMarker}((${id} "${safeAnchorText}")) ${name}${ialStr}\n`;
             }
         } else {
             // Icon Disabled: Bind to Plain Text (No append)
-            if (outlineType == "ref") {
+            if (outlineType == "link") {
                 data += `${indent}${listMarker}[${anchorText}](siyuan://blocks/${id})${ialStr}\n`;
             } else {
                 data += `${indent}${listMarker}((${id} "${safeAnchorText}"))${ialStr}\n`;
