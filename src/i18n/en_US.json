@@ -41,12 +41,13 @@
         }
       },
       "linkType": {
-        "title": "Link Type",
-        "content": "Link style for the index",
+        "title": "Index Type",
+        "content": "Style for the index",
         "options": [
           { "value": "link", "label": "Link" },
           { "value": "reference", "label": "Reference" },
-          { "value": "dynamic-ref", "label": "Dynamic Reference" }
+          { "value": "dynamic-ref", "label": "Dynamic Reference" },
+          { "value": "tree", "label": "Sub-doc Tree (Beta, Not recommended)" }
         ]
       },
       "icon": {
@@ -74,16 +75,7 @@
         "max": 5,
         "step": 1
       },
-      "insertionMode": {
-        "title": "Insertion Mode",
-        "content": "Default insertion behavior",
-        "options": {
-          "index": "Index Only",
-          "index_outline": "Index + Outline",
-          "notebook": "Notebook Index",
-          "tree": "Sub-doc Tree"
-        }
-      },
+
       "autoUpdate": {
         "title": "Auto Update",
         "content": "Auto update index on doc load"
@@ -102,7 +94,7 @@
         "options": [
           { "value": "link", "label": "Link" },
           { "value": "reference", "label": "Reference" },
-          { "value": "tree", "label": "Heading Tree" },
+          { "value": "tree", "label": "Heading Tree (Beta, Not recommended)" },
           { "value": "dynamic-ref", "label": "Dynamic Reference" }
         ]
       },

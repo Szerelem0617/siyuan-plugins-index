@@ -2,25 +2,11 @@ import { settings } from "../../../core/settings";
 import { getDocid, i18n, confirmDialog, getAttrFromIAL } from "../../../shared/utils";
 import { BlockService, client } from "../../../shared/api-client";
 import { IndexQueue } from "../../../shared/utils/index-queue";
-import { generateIndex, generateIndexAndOutline, queuePopAll } from "./generator";
-import { onCreatenbiButton } from "../notebook/create-notebook-index";
-import { bindTreeAttributes } from "../../../shared/utils/transformation-utils";
+import { generateIndex, queuePopAll } from "./generator";
 
 export async function insertAction(targetBlockId?: string) {
     await settings.load();
-    const mode = settings.get("insertionMode");
 
-    if (mode === "index_outline") {
-        await insertIndexAndOutlineAction(targetBlockId);
-        return;
-    } else if (mode === "notebook") {
-        // Use new notebook feature
-        await onCreatenbiButton();
-        return;
-    } else if (mode === "tree") {
-        await insertStaticTreeAction(targetBlockId);
-        return;
-    }
 
     let parentId = getDocid();
     if (!parentId) {
@@ -112,78 +98,7 @@ export async function insertAction(targetBlockId?: string) {
     }
 }
 
-export async function insertIndexAndOutlineAction(targetBlockId?: string) {
-    let parentId = getDocid();
-    if (!parentId) return;
 
-    let block = await client.getBlockInfo({ id: parentId });
-    if (!block.data) return;
-
-    let indexQueue = new IndexQueue();
-    await generateIndexAndOutline(block.data.box, block.data.path, indexQueue);
-    let data = queuePopAll(indexQueue, "");
-
-    if (data != '') {
-        // Legacy insertButton used insertDataSimple (Prepend, No Attr).
-        // If we want to support Slash replacement, we should use BlockService but maybe without Attr?
-        // Or just use prependBlock directly if we don't want to save "custom-index-create" for this mode?
-        // Legacy behavior: No auto-update for Index+Outline.
-        // So we just insert.
-
-        if (targetBlockId) {
-            await client.updateBlock({ data: data, dataType: "markdown", id: targetBlockId });
-        } else {
-            await client.prependBlock({ data: data, dataType: "markdown", parentID: parentId });
-        }
-        // client.pushMsg({ msg: i18n.msg_success });
-    } else {
-        client.pushMsg({ msg: i18n.msg_no_index, timeout: 3000 });
-    }
-}
-
-export async function insertStaticTreeAction(targetBlockId?: string) {
-    let parentId = getDocid();
-    if (!parentId) return;
-
-    let block = await client.getBlockInfo({ id: parentId });
-    if (!block.data) return;
-
-    // We force the generation logic to use "tree" mode regardless of other settings
-    let indexQueue = new IndexQueue();
-    await generateIndex(block.data.box, block.data.path, indexQueue, 0, { linkType: "tree" });
-    let data = queuePopAll(indexQueue, "");
-
-    if (data != '') {
-        const treeConfig = {
-            treeType: "doc-tree",
-            // Keep builder disabled temporarily while we bind attributes to prevent concurrent indexing triggers
-            builderAutoUpdate: false
-        };
-
-        const result = await BlockService.insertOrUpdate(
-            parentId,
-            data,
-            "custom-tree-create",
-            treeConfig,
-            "index",
-            targetBlockId
-        );
-
-        if (result && result.success && result.id) {
-            // Bind all target document IDs to the list items synchronously from Memory DOM
-            await bindTreeAttributes(result.id, "custom-index-subdoc-id");
-
-            // Now safely enable the auto-update flag on the root container
-            treeConfig.builderAutoUpdate = true;
-            await client.setBlockAttrs({
-                id: result.id,
-                attrs: { "custom-tree-create": JSON.stringify(treeConfig) }
-            });
-        }
-    } else {
-        client.pushMsg({ msg: i18n.msg_no_index, timeout: 3000 });
-    }
-}
 
 export async function autoUpdateIndex(notebookId: string, path: string, parentId: string, existingBlock?: any) {
     // await settings.load();

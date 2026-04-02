@@ -49,12 +49,7 @@
         settingKey="col"
         settingValue={settingsStrings.col}
     />
-    <SettingItem
-        type="select"
-        content={i18n.settingsTab.items.insertionMode}
-        settingKey="insertionMode"
-        settingValue={settingsStrings.insertionMode}
-    />
+
     <SettingItem
         type="switch"
         content={i18n.settingsTab.items.autoUpdate}

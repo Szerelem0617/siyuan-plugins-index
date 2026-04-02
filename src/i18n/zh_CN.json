@@ -42,12 +42,13 @@
         }
       },
       "linkType": {
-        "title": "链接类型",
-        "content": "选择生成目录的链接样式",
+        "title": "目录类型",
+        "content": "选择生成目录的样式",
         "options": [
           { "value": "link", "label": "链接" },
           { "value": "reference", "label": "引用" },
-          { "value": "dynamic-ref", "label": "动态引用" }
+          { "value": "dynamic-ref", "label": "动态引用" },
+          { "value": "tree", "label": "子文档树（测试，目前不建议使用）" }
         ]
       },
       "icon": {
@@ -75,16 +76,7 @@
         "max": 5,
         "step": 1
       },
-      "insertionMode": {
-        "title": "插入模式",
-        "content": "选择默认的插入行为",
-        "options": {
-          "index": "仅目录",
-          "index_outline": "目录+大纲",
-          "notebook": "笔记本目录",
-          "tree": "作为子文档树"
-        }
-      },
+
       "autoUpdate": {
         "title": "自动更新",
         "content": "文档加载时是否自动更新目录"
@@ -103,7 +95,7 @@
         "options": [
           { "value": "link", "label": "链接" },
           { "value": "reference", "label": "引用" },
-          { "value": "tree", "label": "标题行树" },
+          { "value": "tree", "label": "标题行树（测试，目前不建议使用）" },
           { "value": "dynamic-ref", "label": "动态引用" }
         ]
       },

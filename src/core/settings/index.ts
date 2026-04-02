@@ -13,7 +13,7 @@ export class SettingsProperty {
     outlineAutoUpdate: boolean;
     outlineType: string;
     listTypeOutline: string;
-    insertionMode: string;
+
     depthNotebook: number;
     listTypeNotebook: string;
     linkTypeNotebook: string;
@@ -33,7 +33,7 @@ export class SettingsProperty {
         this.outlineAutoUpdate = true;
         this.outlineType = "link";
         this.listTypeOutline = "unordered";
-        this.insertionMode = "index";
+
         this.depthNotebook = 3;
         this.listTypeNotebook = "unordered";
         this.linkTypeNotebook = "link";
@@ -54,7 +54,7 @@ export class SettingsProperty {
         this.outlineAutoUpdate = settings.get("outlineAutoUpdate");
         this.outlineType = settings.get("outlineType");
         this.listTypeOutline = settings.get("listTypeOutline");
-        this.insertionMode = settings.get("insertionMode");
+
         this.depthNotebook = settings.get("depthNotebook") ?? 3;
         this.listTypeNotebook = settings.get("listTypeNotebook") ?? "unordered";
         this.linkTypeNotebook = settings.get("linkTypeNotebook") ?? "link";
