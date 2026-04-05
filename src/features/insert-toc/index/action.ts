@@ -72,9 +72,7 @@ export async function insertAction(targetBlockId?: string) {
     let indexQueue = new IndexQueue();
     const currentConfig = settings.getMergedConfig({});
     
-    if (currentConfig.linkType === "tree") {
-        console.log("[IndexPlugin] 插入子文档树: 使用覆写配置 ->", JSON.stringify(currentConfig));
-    }
+
 
     await generateIndex(block.data.box, block.data.path, indexQueue, 0, currentConfig);
     let data = queuePopAll(indexQueue, "", currentConfig);

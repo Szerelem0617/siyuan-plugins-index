@@ -4,7 +4,7 @@ import { getDocid, i18n, confirmDialog, getAttrFromIAL } from "../../../shared/u
 import { extractAnchors, isValidSeparator } from "../../../shared/utils/anchor-utils";
 import { settings } from "../../../core/settings";
 import { generateOutlineMarkdown } from "./generator";
-import { bindTreeAttributes } from "../../../shared/utils/transformation-utils";
+
 
 export async function insertOutlineAction(targetBlockId?: string) {
     await settings.load();
@@ -73,9 +73,7 @@ export async function insertOutlineAction(targetBlockId?: string) {
     let data = generateOutlineMarkdown(outlineData, 0, 0, extraData, new Map<string, string>());
 
     if (data != '') {
-        const isTree = settings.get("outlineType") === "tree";
-        const attrName = isTree ? "custom-tree-create" : "custom-outline-create";
-        const config = isTree ? { treeType: "heading-tree", builderAutoUpdate: true } : {
+        const config = {
             outlineType: settings.get("outlineType"),
             listTypeOutline: settings.get("listTypeOutline"),
             iconOutline: settings.get("iconOutline"),
@@ -83,18 +81,14 @@ export async function insertOutlineAction(targetBlockId?: string) {
             builderAutoUpdate: settings.get("builderAutoUpdate")
         };
 
-        const result = await BlockService.insertOrUpdate(
+        await BlockService.insertOrUpdate(
             parentId,
             data,
-            attrName,
+            "custom-outline-create",
             config,
             "outline",
             targetBlockId
         );
-
-        if (isTree && result && result.success && result.id) {
-            await bindTreeAttributes(result.id, "custom-index-heading-id");
-        }
     } else {
         client.pushMsg({ msg: i18n.msg_no_outline, timeout: 3000 });
         // error

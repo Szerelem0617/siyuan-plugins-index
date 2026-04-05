@@ -92,24 +92,11 @@ export class DynamicRefStrategy implements TOCStrategy {
     }
 }
 
-/**
- * Tree Strategy (For Outline Builder/Notebook Tree)
- * Kept internally for backend builder/DB transformations. Hidden from UI.
- */
-export class TreeStrategy implements TOCStrategy {
-    render(item: RenderItem, context: RenderContext, indent: string): string {
-        const marker = context.listType === "unordered" ? "* " : "1. ";
-        const icon = item.anchor || "📄";
-        return `${indent}${marker}[${icon}](siyuan://blocks/${item.id}) ➖ ${item.text}`;
-    }
-}
-
 export class StrategyRegistry {
     private static strategies: Record<string, TOCStrategy> = {
         "link": new LinkStrategy(),
         "reference": new RefStrategy(),
-        "dynamic-ref": new DynamicRefStrategy(),
-        "tree": new TreeStrategy()
+        "dynamic-ref": new DynamicRefStrategy()
     };
 
     static get(type: string): TOCStrategy {

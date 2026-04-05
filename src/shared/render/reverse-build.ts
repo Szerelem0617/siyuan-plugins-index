@@ -1,6 +1,7 @@
 import { client } from "../../shared/api-client";
-import { escapeHtml } from "../../shared/utils";
 import { getProcessedDocIcon } from "../../shared/utils/icon-utils";
+import { escapeHtml } from "../../shared/utils";
+
 
 export interface ReverseBuildItem {
     id: string;
@@ -60,3 +61,50 @@ export async function buildSubdocTreeMarkdown(notebookId: string, path: string, 
 
     return md;
 }
+
+/**
+ * 递归获取大纲树，并严格按照 Builder (双链数据库) 引擎引擎要求输出格式。
+ */
+export async function buildOutlineTreeMarkdown(
+    outlineData: any[],
+    tab: number,
+    stab: number,
+    extraData?: Record<string, { ial: string, markdown: string, content: string }>,
+    isOrdered: boolean = false
+): Promise<string> {
+    let md = "";
+    tab++;
+
+    for (let outline of outlineData) {
+        let id = outline.id;
+        let name = "";
+        let pureTextContent = "";
+
+        if (extraData && extraData[id]) {
+            name = extraData[id].markdown.replace(/^#+\s+/, "").replace(/\s*\{:[^}]+\}\s*$/, "").trim();
+            pureTextContent = extraData[id].content;
+        } else {
+            name = outline.depth == 0 ? outline.name : outline.content;
+            pureTextContent = name;
+        }
+
+        let indent = "";
+        for (let n = 1; n < tab - stab; n++) {
+            indent += '    ';
+        }
+
+        // 强行使用 ➖ 图标保证 Builder 提取时的统一性
+        md += generateBuilderListItem({ id, text: name || pureTextContent, icon: "➖" }, indent, isOrdered) + "\n";
+
+        const subOutlineCount = outline.count;
+        if (subOutlineCount > 0) {
+            if (outline.depth == 0) {
+                md += await buildOutlineTreeMarkdown(outline.blocks, tab, stab, extraData, isOrdered);
+            } else {
+                md += await buildOutlineTreeMarkdown(outline.children, tab, stab, extraData, isOrdered);
+            }
+        }
+    }
+    return md;
+}
+
