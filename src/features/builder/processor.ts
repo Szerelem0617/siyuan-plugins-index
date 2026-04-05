@@ -469,14 +469,10 @@ export class IBlockProcessor {
         let tempMd = md.replace(/\{:[^}]+\}/g, "").trim();
         let hasSeparator = false;
         let currentIcon = null;
-        let extDocId = null;
-        let extHeadingId = null;
-
-        const docLinkRegex = /^\s*\[(.*?)\]\(siyuan:\/\/blocks\/([a-zA-Z0-9-]+)\)\s*/;
+        const docLinkRegex = /^\s*\[(.*?)\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)\s*/;
         const docMatch = tempMd.match(docLinkRegex);
         if (docMatch) {
             const anchor = docMatch[1];
-            extDocId = docMatch[2];
             if (anchor !== SEP_CHAR) {
                 if (anchor && anchor.length < 8) currentIcon = anchor;
                 tempMd = tempMd.replace(docLinkRegex, "");
@@ -489,11 +485,10 @@ export class IBlockProcessor {
                 tempMd = tempMd.replace(explicitIconRegex, "");
             }
         }
-        const sepLinkRegex = /^(.*?)(\[➖\]\(siyuan:\/\/blocks\/([a-zA-Z0-9-]+)\)|➖)\s*/u;
+        const sepLinkRegex = /^(.*?)(\[➖\]\(siyuan:\/\/blocks\/[a-zA-Z0-9-]+\)|➖)\s*/u;
         const sepMatch = tempMd.match(sepLinkRegex);
         if (sepMatch) {
             hasSeparator = true;
-            if (sepMatch[3]) extHeadingId = sepMatch[3];
             const prefix = sepMatch[1].trim();
             if (!currentIcon && prefix) {
                 const emojiTest = /^(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation}|:[^:]+:)$/u;
@@ -508,7 +503,7 @@ export class IBlockProcessor {
         const syncText = sepCharIdx !== -1
             ? content.substring(sepCharIdx + 1).trim()
             : content.replace(/^(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation}|:[^:]+:)\s*/u, "").trim();
-        return { containerId: listItemId, contentId: contentId, hasSeparator, syncText, syncMd, markdown: md, content: content, currentIcon, extDocId, extHeadingId };
+        return { containerId: listItemId, contentId: contentId, hasSeparator, syncText, syncMd, markdown: md, content: content, currentIcon };
     }
 
     filterSystemAttrs(attrs: any) {

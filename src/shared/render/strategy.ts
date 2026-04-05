@@ -15,8 +15,8 @@ export interface RenderItem {
     id: string;
     text: string;
     icon?: string;
-    anchor?: string; // Optional custom anchor override (Emoji/Icon)
-    ial?: string;    // Block attribute string (e.g. 'custom-index-subdoc-id="xxx"')
+    anchor?: string; // Optional custom anchor override
+    ial?: string; // Siyuan block attributes suffix
 }
 
 export interface TOCStrategy {
@@ -29,26 +29,21 @@ export interface TOCStrategy {
 export class LinkStrategy implements TOCStrategy {
     render(item: RenderItem, context: RenderContext, indent: string): string {
         const marker = context.listType === "unordered" ? "* " : "1. ";
+        const ialStr = item.ial ? `\n${indent}   {: ${item.ial}}` : "";
 
-        // Standard link format with builder-compatible separator
-        
-        if (context.isOutline) {
-            // Outline Mode: Target is a Heading.
-            if (context.iconEnabled) {
-                const icon = item.anchor || "📄";
-                return `${indent}${marker}${icon} [➖](siyuan://blocks/${item.id}) ${item.text}`;
-            } else {
-                return `${indent}${marker}[${item.text}](siyuan://blocks/${item.id})`;
-            }
-        } else {
-             // Index Mode: Target is a Document
-             if (context.iconEnabled) {
-                 const docLink = `[${item.anchor || "📄"}](siyuan://blocks/${item.id})`;
-                 return `${indent}${marker}${docLink} ➖ ${item.text}`;
-             } else {
-                 return `${indent}${marker}[${item.text}](siyuan://blocks/${item.id})`;
-             }
+        // If icon is enabled and NOT outline/tree, icon is a prefix, title is the link
+        if (context.iconEnabled && !context.isOutline && context.linkType !== "tree") {
+             const icon = item.anchor || "➖"; 
+             return `${indent}${marker}${icon} [${item.text}](siyuan://blocks/${item.id})${ialStr}`;
         }
+
+        // Outline or Tree: Icon is the link anchor
+        const anchor = item.anchor || (context.iconEnabled ? "➖" : item.text);
+        // FIX: In outline mode, if icon is enabled, ALWAYS append the main text.
+        if (context.isOutline && context.iconEnabled && item.text) {
+             return `${indent}${marker}[${anchor}](siyuan://blocks/${item.id}) ${item.text}${ialStr}`;
+        }
+        return `${indent}${marker}[${anchor}](siyuan://blocks/${item.id})${ialStr}`;
     }
 }
 
@@ -58,23 +53,22 @@ export class LinkStrategy implements TOCStrategy {
 export class RefStrategy implements TOCStrategy {
     render(item: RenderItem, context: RenderContext, indent: string): string {
         const marker = context.listType === "unordered" ? "* " : "1. ";
-        const display = (item.text).replace(/"/g, "&quot;");
+        const ialStr = item.ial ? `\n${indent}   {: ${item.ial}}` : "";
 
-        if (context.isOutline) {
-            if (context.iconEnabled) {
-                const icon = item.anchor || "📄";
-                return `${indent}${marker}${icon} [➖](siyuan://blocks/${item.id}) ((${item.id} "${display}"))`;
-            } else {
-                return `${indent}${marker}((${item.id} "${display}"))`;
-            }
-        } else {
-            if (context.iconEnabled) {
-                const icon = item.anchor || "📄";
-                return `${indent}${marker}[${icon}](siyuan://blocks/${item.id}) ➖ ((${item.id} "${display}"))`;
-            } else {
-                return `${indent}${marker}((${item.id} "${display}"))`;
-            }
+        // Index mode with icons: Icon as prefix, title as block ref
+        if (context.iconEnabled && !context.isOutline && context.linkType !== "tree") {
+            const icon = item.anchor || "➖";
+            const safeText = item.text.replace(/"/g, "&quot;");
+            return `${indent}${marker}${icon} ((${item.id} "${safeText}"))${ialStr}`;
         }
+
+        // Outline or Tree mode: Block ref as the anchor
+        const display = (item.anchor || (context.iconEnabled ? "➖" : item.text)).replace(/"/g, "&quot;");
+        // FIX: In outline mode, if icon is enabled, ALWAYS append the main text.
+        if (context.isOutline && context.iconEnabled && item.text) {
+            return `${indent}${marker}((${item.id} "${display}")) ${item.text}${ialStr}`;
+        }
+        return `${indent}${marker}((${item.id} "${display}"))${ialStr}`;
     }
 }
 
@@ -85,27 +79,22 @@ export class DynamicRefStrategy implements TOCStrategy {
     render(item: RenderItem, context: RenderContext, indent: string): string {
         const marker = context.listType === "unordered" ? "* " : "1. ";
         const span = `<span data-type="block-ref" data-id="${item.id}" data-subtype="d">${item.text}</span>`;
+        const ialStr = item.ial ? `\n${indent}   {: ${item.ial}}` : "";
 
-        if (context.isOutline) {
-            if (context.iconEnabled) {
-                const icon = item.anchor || "📄";
-                return `${indent}${marker}${icon} [➖](siyuan://blocks/${item.id}) ${span}`;
-            } else {
-                return `${indent}${marker}${span}`;
+        if (context.iconEnabled) {
+            const icon = item.anchor || "➖";
+            if (context.isOutline || context.linkType === "tree") {
+                return `${indent}${marker}[${icon}](siyuan://blocks/${item.id}) ${span}${ialStr}`;
             }
-        } else {
-            if (context.iconEnabled) {
-                const docLink = `[${item.anchor || "📄"}](siyuan://blocks/${item.id})`;
-                return `${indent}${marker}${docLink} ➖ ${span}`;
-            } else {
-                return `${indent}${marker}${span}`;
-            }
+            return `${indent}${marker}${icon} ${span}${ialStr}`;
         }
+        return `${indent}${marker}${span}${ialStr}`;
     }
 }
 
 /**
  * Tree Strategy (For Outline Builder/Notebook Tree)
+ * Kept internally for backend builder/DB transformations. Hidden from UI.
  */
 export class TreeStrategy implements TOCStrategy {
     render(item: RenderItem, context: RenderContext, indent: string): string {

@@ -145,8 +145,6 @@ export class ListProcessor {
                 const hM = sourceItem.ial.match(new RegExp(`${ATTR_OUTLINE}="([^"]+)"`));
                 if (hM) headingTargetId = hM[1];
             }
-            if (!docTargetId && core.extDocId) docTargetId = core.extDocId;
-            if (!headingTargetId && core.extHeadingId) headingTargetId = core.extHeadingId;
 
             const docTarget = docTargetId ? targetMap.get(docTargetId) : null;
             const headingTarget = headingTargetId ? targetMap.get(headingTargetId) : null;

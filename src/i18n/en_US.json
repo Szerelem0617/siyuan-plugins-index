@@ -46,7 +46,8 @@
         "options": [
           { "value": "link", "label": "Link" },
           { "value": "reference", "label": "Reference" },
-          { "value": "dynamic-ref", "label": "Dynamic Reference" }
+          { "value": "dynamic-ref", "label": "Dynamic Reference" },
+          { "value": "tree", "label": "Sub-doc Tree (Beta, Not recommended)" }
         ]
       },
       "icon": {
@@ -93,7 +94,8 @@
         "options": [
           { "value": "link", "label": "Link" },
           { "value": "reference", "label": "Reference" },
-          { "value": "dynamic-ref", "label": "Dynamic Reference" }
+          { "value": "dynamic-ref", "label": "Dynamic Reference" },
+          { "value": "tree", "label": "Heading Tree (Beta, Not recommended)" }
         ]
       },
       "iconOutline": {

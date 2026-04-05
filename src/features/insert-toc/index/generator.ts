@@ -58,12 +58,7 @@ export async function generateIndex(notebookId: any, ppath: any, pitem: IndexQue
             indent += '    ';
         }
 
-        const isTree = linkTypeSetting === "tree";
-        let iconStr = (iconEnabled || isTree) ? getProcessedDocIcon(doc.icon, subFileCount != 0) : "";
-        
-        if (isTree && (!iconStr || (iconStr.startsWith(":") && iconStr.endsWith(":")))) {
-            iconStr = subFileCount != 0 ? "📑" : "📄";
-        }
+        let iconStr = iconEnabled ? getProcessedDocIcon(doc.icon, subFileCount != 0) : "";
 
         const renderItem = {
             id: id,
@@ -125,12 +120,7 @@ export async function generateIndexAndOutline(notebookId: any, ppath: any, pitem
                 indent += '    ';
             }
 
-            const isTree = linkTypeSetting === "tree";
-            let iconStr = (iconEnabled || isTree) ? getProcessedDocIcon(doc.icon, subFileCount != 0) : "";
-            
-            if (isTree && (!iconStr || (iconStr.startsWith(":") && iconStr.endsWith(":")))) {
-                iconStr = subFileCount != 0 ? "📑" : "📄";
-            }
+            let iconStr = iconEnabled ? getProcessedDocIcon(doc.icon, subFileCount != 0) : "";
 
             const renderItem = {
                 id: id,
