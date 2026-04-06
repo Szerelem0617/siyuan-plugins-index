@@ -13,27 +13,25 @@ export interface DBItemProp {
     titleImg: string;
 }
 
-/**
- * Parses the Markdown/HTML of a list item's paragraph to extract the primary bound document/block ID.
- * Supports doc-trees, composite-trees, and implicitly bound links.
- */
 function extractBoundBlockIdFromDOM(pChild: Element | null): string | null {
     if (!pChild) return null;
 
-    // First try: The precise attribute we set for subdocs
-    const explicitSubdoc = pChild.getAttribute("custom-index-subdoc-id");
+    // The attributes are stored on the parent NodeListItem, NOT the NodeParagraph itself.
+    const parentListItem = pChild.parentElement;
+    const explicitSubdoc = parentListItem?.getAttribute("custom-index-subdoc-id");
     if (explicitSubdoc) return explicitSubdoc;
 
     // Second try: Find any siyuan://blocks/ link in the paragraph
-    const links = pChild.querySelectorAll('span[data-type="a"]');
+    const links = pChild.querySelectorAll('span[data-type="a"], span[data-type="block-ref"]');
     for (let i = 0; i < links.length; i++) {
         const href = links[i].getAttribute("data-href");
         if (href && href.startsWith("siyuan://blocks/")) {
             const id = href.replace("siyuan://blocks/", "");
-            // Prioritize document links, but we return the first block ID found
-            // In doc-tree or composite-tree, this is usually the target.
             return id;
         }
+        // For block-ref, the ID is in data-id
+        const dataId = links[i].getAttribute("data-id");
+        if (dataId) return dataId;
     }
 
     return null;
@@ -583,21 +581,8 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
             // ONLY FOR NEW DB or if data needs to be populated
             if (!existingAvID) {
                 let finalIcon = itemProps?.icon || "";
-
-                // Debug: Log if a target document has no icon
-                if (item.subDocId && !itemProps?.icon) {
-                    console.log(`[Data-Debug] Target doc ${item.subDocId} (for list item ${item.originalId}) returned empty or null icon`);
-                }
-
-                // USER REQUEST: Ignore default text emojis 📄 and 📑, and the separator ➖, leave blank instead
-                if (finalIcon === "📄" || finalIcon === "📑" || finalIcon === "➖" || finalIcon === "2796") {
-                    finalIcon = "";
-                }
-
-                // USER REQUEST: Ignore dynamic icons and custom SVG images for DB sync
-                if (finalIcon.startsWith("api/icon/") || finalIcon.includes(".")) {
-                    finalIcon = "";
-                }
+                if (finalIcon === "📄" || finalIcon === "📑" || finalIcon === "➖") finalIcon = "";
+                if (finalIcon.startsWith("api/icon/") || finalIcon.includes(".")) finalIcon = "";
 
                 if (iconKeyId) updateValues.push({ keyID: iconKeyId, itemID: itemID, value: { type: "text", text: { content: finalIcon } } });
                 if (titleImgKeyId) updateValues.push({ keyID: titleImgKeyId, itemID: itemID, value: { type: "text", text: { content: itemProps?.titleImg || "" } } });
@@ -605,43 +590,54 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
             }
         }
 
+        // --- Execute in Chunks ---
         if (newSrcs.length > 0) {
-            await post("/api/av/addAttributeViewBlocks", { avID: realAvID, srcs: newSrcs });
+            console.log(`[Data] Adding ${newSrcs.length} blocks to AV in chunks...`);
+            const chunkSizeSrc = 50;
+            for (let i = 0; i < newSrcs.length; i += chunkSizeSrc) {
+                const chunk = newSrcs.slice(i, i + chunkSizeSrc);
+                await post("/api/av/addAttributeViewBlocks", { avID: realAvID, srcs: chunk });
+            }
         }
 
         if (updateValues.length > 0) {
-            console.log(`[Data] Path-Sync: Sending batch update for ${updateValues.length} fields.`);
-            // Debug: Log the first few updates
-            updateValues.slice(0, 3).forEach(uv => {
-                console.log(`[Data] Update Sample: Item ${uv.itemID}, Key ${uv.keyID}, Value:`, uv.value);
-            });
-            await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: realAvID, values: updateValues });
+            console.log(`[Data] Sending batch update for ${updateValues.length} fields in chunks.`);
+            const chunkSizeUpdate = 50;
+            for (let i = 0; i < updateValues.length; i += chunkSizeUpdate) {
+                const chunk = updateValues.slice(i, i + chunkSizeUpdate);
+                await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: realAvID, values: chunk });
+            }
         }
 
         // --- 6. 保存映射关系 (仅在未绑定或发生变化时) ---
-        const savePromises = [];
+        const savePromisesList = [];
         for (const [blockId, itemId] of Object.entries(itemIDToBlockID)) {
-            // Check if the block already has the correct ATTR_ITEM_ID
-            // This is a bit expensive to check every block, but we must avoid redundant setBlockAttrs
-            // to stop infinite auto-update loops.
-            // For now, let's trust that if the database was just updated, we only call this if it's a NEW item.
             if (!itemIDMap[blockId]) {
-                savePromises.push(client.setBlockAttrs({ id: blockId, attrs: { [ATTR_ITEM_ID]: itemId } }));
+                savePromisesList.push({ id: blockId, attrs: { [ATTR_ITEM_ID]: itemId } });
             }
         }
-        if (savePromises.length > 0) {
-            await Promise.all(savePromises);
+
+        // CHUNK the setBlockAttrs calls to prevent overwhelming SiYuan for large lists
+        if (savePromisesList.length > 0) {
+            console.log(`[Data] Saving mapping relations for ${savePromisesList.length} items in chunks...`);
+            const chunkSizeAttr = 20;
+            for (let i = 0; i < savePromisesList.length; i += chunkSizeAttr) {
+                const chunk = savePromisesList.slice(i, i + chunkSizeAttr);
+                await Promise.all(chunk.map(op => client.setBlockAttrs(op)));
+            }
         }
 
-        // --- 7. 双向绑定 ---
-        for (const listId of sourceBlockIds) {
-            await client.setBlockAttrs({
-                id: listId,
-                attrs: {
-                    [ATTR_LINKED_AV]: realAvID,
-                    [ATTR_LINKED_AV_BLOCK]: blockID
-                }
-            });
+        // --- Chunked Linked AV binding ---
+        if (sourceBlockIds.length > 0) {
+            for (const listId of sourceBlockIds) {
+                await client.setBlockAttrs({
+                    id: listId,
+                    attrs: {
+                        [ATTR_LINKED_AV]: realAvID,
+                        [ATTR_LINKED_AV_BLOCK]: blockID || ""
+                    }
+                });
+            }
         }
 
         if (!existingAvID) {
