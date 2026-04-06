@@ -2,8 +2,8 @@ import { client } from "../../shared/api-client";
 import { getProcessedDocIcon } from "../../shared/utils/icon-utils";
 
 import { ATTR_LINKED_AV, ATTR_ITEM_ID } from "../../shared/constants";
-import { getColIDMap, isValueEmpty } from "../../shared/utils/av-utils";
-import { settings } from "../../core/settings";
+import { getColIDMap } from "../../shared/utils/av-utils";
+
 
 // Constants
 export const ATTR_INDEX = "custom-index-subdoc-id";
@@ -31,7 +31,7 @@ export class IBlockProcessor {
         this.errors = errors;
     }
 
-    async getLinkedAVData(listItemId: string, itemAttrs: any, avId?: string, ctx?: any) {
+    async getLinkedAVData(listItemId: string, itemAttrs: any, avId?: string) {
         if (!avId) {
             const parentRes = await client.sql({ stmt: `SELECT parent_id FROM blocks WHERE id = '${listItemId}'` });
             const parentId = parentRes.data?.[0]?.parent_id;
@@ -200,7 +200,7 @@ export class IBlockProcessor {
             }
         }
 
-        const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs, ctx.avId, ctx);
+        const linkedData = await this.getLinkedAVData(core.containerId, containerAttrs, ctx.avId);
         let targetIcon = linkedData?.icon ? (/[^\u0000-\u007F]/.test(linkedData.icon) ? this.emojiToHex(linkedData.icon) : linkedData.icon) : (core.currentIcon ? this.emojiToHex(core.currentIcon) : null);
 
         // USER REQUEST: Ignore default text emojis 📄 and 📑 completely, as well as the separator ➖.
@@ -409,33 +409,24 @@ export class IBlockProcessor {
         return icon;
     }
 
-    async constructListItemMarkdown(containerAttrs: any, headingId: string, syncText: string, docId?: string, docIcon?: string) {
-        const useDynamic = settings.get("linkType") === "dynamic-ref";
-
+    async constructListItemMarkdown(_containerAttrs: any, headingId: string, syncText: string, docId?: string, docIcon?: string) {
+        // Builder items ALWAYS use plain text for the body to avoid redundant links and infinite update loops.
+        // The icon already provides the navigation link to the document.
+        
         const parts = [];
-        if (!docId) docId = containerAttrs[ATTR_INDEX];
         if (docId) {
-            let icon = docIcon || DEFAULT_ICON;
-            if (!docIcon) {
-                try {
-                    const docInfoRes = await client.getBlockAttrs({ id: docId });
-                    icon = getProcessedDocIcon(docInfoRes.data.icon || DEFAULT_ICON, false);
-                } catch (e) { }
-            }
+            const icon = docIcon || DEFAULT_ICON;
             parts.push(`[${icon}](siyuan://blocks/${docId})`);
-        } else if (docIcon) parts.push(docIcon);
-
-        if (headingId) parts.push(`[${SEP_CHAR}](siyuan://blocks/${headingId})`);
-        else parts.push(SEP_CHAR);
-
-        if (useDynamic && docId) {
-            const dynamicRef = `<span data-type="block-ref" data-id="${docId}" data-subtype="d">${syncText.trim()}</span>`;
-            console.log(`[Builder] Using dynamic anchor (HTML) for doc: ${docId}`);
-            parts.push(dynamicRef);
-        } else {
-            parts.push(syncText.trim());
         }
-
+        
+        if (headingId) {
+            parts.push(`[${SEP_CHAR}](siyuan://blocks/${headingId})`);
+        } else {
+            parts.push(SEP_CHAR);
+        }
+        
+        // syncText is already scrubbed in parseItemContent
+        parts.push(syncText.trim());
         return parts.join(" ");
     }
 
@@ -497,12 +488,34 @@ export class IBlockProcessor {
             tempMd = tempMd.replace(sepLinkRegex, "");
         }
         let syncMd = tempMd.trim();
-        // Derive syncText from SQL `content` field (already plain text by SiYuan).
-        // Avoids false-stripping of literal * _ chars and handles block-refs / IAL correctly.
+        // Derive syncText from SQL `content` field.
+        // STRIP all MD markers (refs, links) to treat the body as pure text for unified builder logic.
         const sepCharIdx = content.indexOf("➖");
-        const syncText = sepCharIdx !== -1
+        let rawSyncText = sepCharIdx !== -1
             ? content.substring(sepCharIdx + 1).trim()
             : content.replace(/^(\p{Extended_Pictographic}\uFE0F?|\p{Emoji_Presentation}|:[^:]+:)\s*/u, "").trim();
+        
+        // Strip all MD link/ref markers to maintain pure-text syncText.
+        // This regex handles various anchor styles and multi-level escaping that might occur in the SQL 'content' field.
+        const syncText = rawSyncText
+            // 1. Remove block references with specific anchors ((id "anchor")) or just ((id))
+            .replace(/\(\([a-zA-Z0-9-]{16,22}(?:\s+.*?)?\)\)/g, (match) => {
+                // Extract inner anchor text if present
+                const innerMatch = match.match(/\(\([a-zA-Z0-9-]{16,22}\s+(.*)\)\)/);
+                if (innerMatch && innerMatch[1]) {
+                    // Strip potential outer quotes (including escaped ones)
+                    let anchor = innerMatch[1].trim();
+                    anchor = anchor.replace(/^(['"]|&quot;|&apos;)(.*)\1$/, "$2");
+                    return anchor;
+                }
+                return "";
+            })
+            // 2. Remove standard Markdown links [text](url) and SiYuan-style links
+            .replace(/\[(.*?)\]\((?:siyuan:\/\/blocks\/[a-zA-Z0-9-]+|#.*?|.*?)\)/g, "$1")
+            // 3. Cleanup HTML-like artifacts of Dynamic Ref Spans
+            .replace(/<span data-type="block-ref".*?>(.*?)<\/span>/g, "$1")
+            .trim();
+
         return { containerId: listItemId, contentId: contentId, hasSeparator, syncText, syncMd, markdown: md, content: content, currentIcon };
     }
 

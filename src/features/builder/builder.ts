@@ -155,7 +155,7 @@ export class ListProcessor {
             let currentItemResolved: any = {};
             if (ctx.avId) {
                 const itemAttrs = this.ibp.parseIAL(sourceItem?.ial);
-                currentItemResolved = await this.ibp.getLinkedAVData(child.id, itemAttrs, ctx.avId, ctx) || {};
+                currentItemResolved = await this.ibp.getLinkedAVData(child.id, itemAttrs, ctx.avId) || {};
             }
 
             const itemCtx = {
@@ -175,7 +175,7 @@ export class ListProcessor {
                         console.log(`[Builder] Item ${child.id} content mismatch: "${docTarget.content}" !== "${core.syncText}". Update needed.`);
                         needsUpdate = true;
                     } else {
-                        const localValues = await this.ibp.getLinkedAVData(child.id, this.ibp.parseIAL(sourceItem?.ial), ctx.avId, itemCtx);
+                        const localValues = await this.ibp.getLinkedAVData(child.id, this.ibp.parseIAL(sourceItem?.ial), ctx.avId);
 
                         let desiredIcon = localValues?.icon ? (/[^\u0000-\u007F]/.test(localValues.icon) ? this.ibp.emojiToHex(localValues.icon) : localValues.icon) : (core.currentIcon ? this.ibp.emojiToHex(core.currentIcon) : "");
 
