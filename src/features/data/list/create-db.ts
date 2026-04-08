@@ -473,20 +473,42 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
         const activeRowIds = new Set<string>();
         const currentDataStore: Record<string, any> = {}; // itemID -> { path, level, ... }
 
+        // --- NEW: Kernel-level ID Mapping (The Source of Truth) ---
+        // Using getAttributeViewItemIDsByBoundIDs ensures we find all items even if they are not on the current page.
+        const allOriginalIds = allItems.map(item => item.originalId);
+        try {
+            const mappingRes = await post("/api/av/getAttributeViewItemIDsByBoundIDs", {
+                avID: realAvID,
+                blockIDs: allOriginalIds
+            });
+            // Result is a map: { [blockID]: itemID }
+            if (mappingRes && typeof mappingRes === "object") {
+                Object.entries(mappingRes).forEach(([blockId, itemId]) => {
+                    if (itemId) {
+                        itemIDMap[blockId] = itemId as string;
+                        activeRowIds.add(itemId as string);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("[Data] Failed to fetch kernel-level ID mapping", e);
+        }
+
         if (existingAvID) {
             try {
+                // Secondary check: Fetch cells for path/level updates only for the items we KNOW exist
+                // We'll still use paginated render but it's now just for value comparison, not for existence check.
                 let currentPage = 1;
                 while (true) {
                     const renderRes = await post("/api/av/renderAttributeView", {
                         id: realAvID,
                         page: currentPage,
-                        pageSize: 100 // Smaller chunks for reliability
+                        pageSize: 100
                     });
 
                     const view = renderRes.view || renderRes;
                     const rows = view.rows || [];
                     const columns = view.columns || [];
-
                     if (rows.length === 0) break;
 
                     const pathIdx = columns.findIndex((c: any) => c.keyID === pathKeyId);
@@ -500,31 +522,27 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                             level: levelIdx !== -1 ? row.cells[levelIdx]?.value?.number?.content : undefined,
                             father: fatherIdx !== -1 ? row.cells[fatherIdx]?.value?.text?.content : undefined
                         };
-
-                        if (row.cells) {
-                            const blockCell = row.cells.find((c: any) => c.valueType === "block");
-                            if (blockCell && blockCell.value && blockCell.value.block && blockCell.value.block.id) {
-                                itemIDMap[blockCell.value.block.id] = row.id;
-                            }
-                        }
                     });
 
-                    if (rows.length < 100) break; // Reached last page
+                    if (rows.length < 100) break;
                     currentPage++;
-                    if (currentPage > 50) break; // Guard for sanity
+                    if (currentPage > 50) break; 
                 }
             } catch (e) {
-                console.error("[Data] Failed to render AV to check rows", e);
+                console.error("[Data] Failed to render AV for cell data sync", e);
             }
         }
 
         allItems.forEach(item => {
-            // If the item had a saved itemID but it's not in the block map, verify if it still exists in the DB
-            if (item.savedItemID && !itemIDMap[item.originalId]) {
-                if (existingAvID && !activeRowIds.has(item.savedItemID)) {
-                    console.warn(`[Data] Dead saved ID detected for block ${item.originalId}: ${item.savedItemID}. Will regenerate.`);
-                    item.savedItemID = null; // Blank it out to force a new creation
-                } else {
+            const actualItemID = itemIDMap[item.originalId];
+            if (item.savedItemID && item.savedItemID !== actualItemID) {
+                if (actualItemID) {
+                    if (!silent) console.log(`[Data] Re-binding block ${item.originalId} from stale ID ${item.savedItemID} to database ID ${actualItemID}`);
+                } else if (existingAvID && !activeRowIds.has(item.savedItemID)) {
+                    if (!silent) console.warn(`[Data] Dead saved ID detected for block ${item.originalId}: ${item.savedItemID}. Will regenerate.`);
+                    item.savedItemID = null;
+                } else if (existingAvID && activeRowIds.has(item.savedItemID)) {
+                    if (!silent) console.log(`[Data] ID ${item.savedItemID} exists but primary link is broken. Re-mapping.`);
                     itemIDMap[item.originalId] = item.savedItemID;
                 }
             }
