@@ -20,9 +20,10 @@ export async function getColIDMap(avID: string) {
 
         if (kv.values) {
             kv.values.forEach((v: any) => {
-                // Robust ID detection: try multiple possible property names
-                const rowId = v.itemID || v.itemId || v.id;
-                const bid = v.block?.id || v.blockID || v.block_id || v.blockId || (v.type === 'block' ? v.content : null);
+                // IMPORTANT: v.blockID in SiYuan's kernel/av/value.go is the Item/Row ID! (Not Siyuan Doc Block ID)
+                const rowId = v.blockID || v.block_id || v.blockId || v.itemID || v.itemId || v.id;
+                // The actual bound Siyuan Block ID is explicitly retrieved from block type cells
+                const bid = v.block?.id || (v.type === 'block' ? (v.content || v.text?.content || v.block?.content) : null);
 
                 if (rowId && bid) {
                     itemToBlock.set(rowId, bid);
@@ -39,8 +40,9 @@ export async function getColIDMap(avID: string) {
         colToCells[kv.key.id] = cellMap;
         if (kv.values) {
             kv.values.forEach((v: any) => {
-                const rowId = v.itemID || v.itemId || v.id;
-                const bid = v.block?.id || v.blockID || v.block_id || v.blockId || (v.type === 'block' ? v.content : null) || itemToBlock.get(rowId);
+                const rowId = v.blockID || v.block_id || v.blockId || v.itemID || v.itemId || v.id;
+                // Index purely by the definitively mapped SiYuan Block ID for this Row
+                const bid = itemToBlock.get(rowId);
                 if (bid) {
                     cellMap.set(bid, v);
                 }
