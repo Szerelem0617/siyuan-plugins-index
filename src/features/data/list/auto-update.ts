@@ -1,24 +1,46 @@
 import { createDatabaseWithBlocks } from "./create-db";
-import { ATTR_LAST_SYNC } from "../../../shared/constants";
+import { ATTR_LAST_SYNC, ATTR_LINKED_AV, ATTR_LINKED_AV_BLOCK } from "../../../shared/constants";
+import { loadDbConfig, syncInheritanceToDb } from "../av-setting/db-config";
+import { client } from "../../../shared/api-client";
 
 export async function autoUpdateListAVs(listBlock: any) {
     if (!listBlock.id) return;
     try {
-        const lastSync = listBlock.ial?.includes(ATTR_LAST_SYNC) 
-            ? listBlock.ial.split(ATTR_LAST_SYNC + '="')[1]?.split('"')[0] 
+        const ial = listBlock.ial || "";
+        const avId = ial.includes(ATTR_LINKED_AV + '="') 
+            ? ial.split(ATTR_LINKED_AV + '="')[1]?.split('"')[0] 
+            : null;
+        const avBlockId = ial.includes(ATTR_LINKED_AV_BLOCK + '="') 
+            ? ial.split(ATTR_LINKED_AV_BLOCK + '="')[1]?.split('"')[0] 
             : null;
 
-        // Skip if the block hasn't been modified since the last sync
+        // --- 1. 继承回填 (独立逻辑) ---
+        // 只要存在绑定关系，每次激活页签都尝试进行轻量级的继承同步（内部有 dirty check）
+        if (avId && avBlockId) {
+            console.log(`[Auto-Update-Debug] Tab Activated. Checking inheritance for AV ${avId}...`);
+            const config = await loadDbConfig(avBlockId);
+            if (config && config.inheritanceRules && config.inheritanceRules.length > 0) {
+                const updatedCount = await syncInheritanceToDb(avId, config, avBlockId);
+                if (updatedCount > 0) {
+                    console.log(`[Auto-Update-Debug] Inheritance auto-applied: ${updatedCount} fields updated.`);
+                }
+            }
+        }
+
+        // --- 2. 物理同步 (Builder 逻辑，仅在列表有改动时执行) ---
+        const lastSync = ial.includes(ATTR_LAST_SYNC + '="') 
+            ? ial.split(ATTR_LAST_SYNC + '="')[1]?.split('"')[0] 
+            : null;
+
         if (lastSync && listBlock.updated <= lastSync) {
-            // console.log(`[Data] Incremental Skip: List ${listBlock.id} is up to date.`);
+            // console.log(`[Auto-Update] Builder sync skipped for ${listBlock.id} (No changes).`);
             return;
         }
 
-        console.log(`[Data] Auto-syncing List to bound DB for list ${listBlock.id} (lastSync: ${lastSync}, updated: ${listBlock.updated})`);
-        
-        // Run the DB create/update process silently
+        console.log(`[Auto-Update] List content changed. Triggering Builder sync: ${listBlock.id}`);
         await createDatabaseWithBlocks([listBlock.id], true, true);
+
     } catch (e) {
-        console.error("[Data] Auto-sync list AVs failed:", e);
+        console.error("[Auto-Update] Failed:", e);
     }
 }

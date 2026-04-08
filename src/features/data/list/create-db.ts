@@ -7,7 +7,6 @@ import { formatDate } from "../../../shared/utils";
 import { confirmTransformation } from "../../../shared/utils/transformation-utils";
 import { transformToTree } from "../../builder/transformation";
 import { getBlockAttribute } from "../../../shared/utils/dom-utils";
-import { loadDbConfig, syncInheritanceToDb } from "../av-setting/db-config";
 export interface DBItemProp {
     icon: string;
     titleImg: string;
@@ -676,15 +675,6 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
 
         if (!existingAvID) {
             await client.setBlockAttrs({ id: blockID!, attrs: { [ATTR_LINKED_LIST]: sourceBlockIds.join(",") } });
-        }
-
-        // --- 8. Database-Level Inheritance Sync ---
-        // Evaluate inheritance immediately so DB cells are the source of truth
-        if (blockID) {
-            const config = await loadDbConfig(blockID);
-            if (config && config.inheritanceRules && config.inheritanceRules.length > 0) {
-                await syncInheritanceToDb(realAvID, config, blockID);
-            }
         }
 
         await post("/api/av/renderAttributeView", { id: realAvID, viewID: viewID, page: 1, pageSize: 50 });
