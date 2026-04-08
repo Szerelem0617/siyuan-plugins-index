@@ -66,7 +66,7 @@ export class ListProcessor {
                 nextCtx.dbConfig = await loadDbConfig(avBlockId);
                 const colInfo = await getColIDMap(avId);
                 nextCtx.colIDMap = colInfo;
-                nextCtx.parentMap = await buildAvHierarchy(colInfo);
+                nextCtx.parentMap = await buildAvHierarchy(colInfo.keyValues, colInfo.itemToBlock);
             }
             await this.processListBatch(blockId, actionType, nextCtx);
         }
