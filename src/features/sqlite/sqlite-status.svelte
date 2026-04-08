@@ -42,6 +42,7 @@
                 syncStatus[avId] = "Failed: " + res.message;
             }
         } catch (e) {
+            console.error(`[SQLite-UI] Sync failed for ${avId}:`, e);
             syncStatus[avId] = "Error";
         }
     }
