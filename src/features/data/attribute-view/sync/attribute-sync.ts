@@ -28,9 +28,7 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
 
         const syncValue = cleanValue(sourceRow.cells[colIndex].value);
 
-        // Use sourceRow.id directly. 
-        // Note: extracting from cells (valueType === "block") might yield a child block ID 
-        // which mismatches the AV KeyValues blockID.
+        // 绑定 ID 获取逻辑
         const sourceBlockID = sourceRow.id;
         if (!sourceBlockID) throw new Error("无法获取源行 ID");
 
@@ -38,47 +36,24 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
         let targetBlockIDs: string[] = [];
 
         if (mode === "level") {
-            // 查找 Level 字段 (不区分大小写)
             const levelKeyName = Object.keys(nameToID).find(k => k.toLowerCase() === "level");
             const levelKeyID = levelKeyName ? nameToID[levelKeyName] : undefined;
             const levelKV = keyValues.find((kv: any) => kv.key.id === levelKeyID);
+            if (!levelKV) throw new Error("未找到 Level 字段");
 
-            if (!levelKV) {
-                console.error("[Sync] Available keys:", Object.keys(nameToID));
-                throw new Error("未找到 Level 字段 (请检查列名是否为 Level)");
-            }
-
-            const sourceLevelVal = levelKV.values.find((v: any) => v.blockID === sourceBlockID);
-
-            // 兼容多种类型的 Level 值 (Number, Text, Select)
             const getVal = (v: any) => {
                 if (!v) return undefined;
-                // 注意：SiYuan 返回的结构中，content 可能是 number 或 string
                 if (v.number !== undefined) return v.number.content;
                 if (v.text !== undefined) return v.text.content;
                 if (v.mSelect !== undefined && v.mSelect.length > 0) return v.mSelect[0].content;
-
-                // 尝试直接读取 content (如果是 text 类型但结构不同)
-                if (v.content !== undefined) return v.content;
-
-                return undefined;
+                return v.content;
             };
 
-            const targetLevel = getVal(sourceLevelVal);
-            console.log(`[Sync-Level] ID: ${sourceBlockID}, Level: ${targetLevel}`);
-
-            if (targetLevel === undefined) {
-                console.warn("[Sync-Warning] Target level is undefined. Cannot sync to peers.");
-                showMessage("无法获取当前行的 Level 值", 3000, "info");
-                return;
-            }
+            const targetLevel = getVal(levelKV.values.find((v: any) => v.blockID === sourceBlockID));
+            if (targetLevel === undefined) throw new Error("无法获取当前行的 Level 值");
 
             targetBlockIDs = levelKV.values
-                .filter((v: any) => {
-                    const val = getVal(v);
-                    // 使用 loose equality 以匹配 string "1" 和 number 1
-                    return val == targetLevel && v.blockID !== sourceBlockID;
-                })
+                .filter((v: any) => getVal(v) == targetLevel && v.blockID !== sourceBlockID)
                 .map((v: any) => v.blockID);
         } else if (mode === "siblings") {
             const findKey = (name: string) => {
@@ -88,41 +63,27 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
             const fatherKV = keyValues.find((kv: any) => kv.key.id === findKey("Father"));
             if (!fatherKV) throw new Error("未找到 Father 字段");
 
-            // Robust ID lookup
             const sourceBlockCell = sourceRow.cells.find((c: any) => c.valueType === "block");
             const cellBlockID = sourceBlockCell?.value?.block?.id;
-
-            // Check which ID has a value in Father column
             let effectiveSourceID = sourceBlockID;
-            const hasVal = (id: string) => fatherKV.values.some((v: any) => v.blockID === id);
-
-            if (!hasVal(sourceBlockID) && cellBlockID && hasVal(cellBlockID)) {
+            if (!fatherKV.values.some((v: any) => v.blockID === sourceBlockID) && cellBlockID) {
                 effectiveSourceID = cellBlockID;
             }
 
             const sourceFatherVal = fatherKV.values.find((v: any) => v.blockID === effectiveSourceID);
             const targetFather = sourceFatherVal?.text?.content || "";
-
             targetBlockIDs = fatherKV.values
                 .filter((v: any) => (v.text?.content || "") === targetFather && v.blockID !== effectiveSourceID)
                 .map((v: any) => v.blockID);
-
         } else if (mode === "descendants") {
             const findKey = (name: string) => {
                 const kn = Object.keys(nameToID).find(k => k.toLowerCase() === name.toLowerCase());
                 return kn ? nameToID[kn] : undefined;
             };
             const pathKeyID = findKey("Path");
-            if (!pathKeyID) throw new Error("未找到 Path 字段 (Descendants 模式依赖 Path)");
+            if (!pathKeyID) throw new Error("未找到 Path 字段");
 
             const pathKV = keyValues.find((kv: any) => kv.key.id === pathKeyID);
-
-            // Robust ID lookup
-            const sourceBlockCell = sourceRow.cells.find((c: any) => c.valueType === "block");
-            const cellBlockID = sourceBlockCell?.value?.block?.id;
-            // Default to Row ID (which is sourceBlockID from outer scope)
-            let effectiveSourceID = sourceBlockID;
-
             const blockPathMap = new Map<string, string>();
             if (pathKV && pathKV.values) {
                 pathKV.values.forEach((v: any) => {
@@ -130,26 +91,43 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
                 });
             }
 
-            // Check which ID is in the map
-            // Use RowID if present, otherwise try CellBlockID
-            if (!blockPathMap.has(effectiveSourceID) && cellBlockID && blockPathMap.has(cellBlockID)) {
+            const sourceBlockCell = sourceRow.cells.find((c: any) => c.valueType === "block");
+            const cellBlockID = sourceBlockCell?.value?.block?.id;
+            let effectiveSourceID = sourceBlockID;
+            if (!blockPathMap.has(effectiveSourceID) && cellBlockID) {
                 effectiveSourceID = cellBlockID;
             }
 
             if (blockPathMap.has(effectiveSourceID)) {
                 const sourcePath = blockPathMap.get(effectiveSourceID)!;
-                // Strict descendant check: starts with sourcePath + "/"
-                const prefix = `${sourcePath}/`;
+                
+                // 从 sourcePath 推导后代的身份前缀
+                // 例如：/ID1/002-ID2 -> 其后代必以 /ID1/ID2/ 开头
+                const segments = sourcePath.split("/");
+                const lastSegment = segments[segments.length - 1];
+                // 稳妥剥离前缀序号 (001-ID -> ID)
+                const currentIdInPath = lastSegment.replace(/^\d{3}-/, "");
+                
+                // 构造身份前缀
+                const identityPrefix = segments.slice(0, -1).join("/") + "/" + currentIdInPath + "/";
+                
+                console.log(`[Sync-Debug] Descendants Mode:`, {
+                    effectiveSourceID,
+                    sourcePath,
+                    identityPrefix
+                });
+
                 targetBlockIDs = pathKV.values
                     .filter((v: any) => {
                         const p = v.text?.content;
-                        // Check if p starts with prefix, and is NOT the source block itself
-                        return p && p.startsWith(prefix) && v.blockID !== effectiveSourceID;
+                        // 后代必定以当前项的“身份路径/”开头
+                        return p && p.startsWith(identityPrefix) && v.blockID !== effectiveSourceID;
                     })
                     .map((v: any) => v.blockID);
+                
+                console.log(`[Sync-Debug] Target Block IDs found: ${targetBlockIDs.length}`);
             } else {
-                console.warn(`[Sync-Descendants] Source ID ${effectiveSourceID} not found in Path map.`);
-                // If checking RowID failed, maybe user needs to check column content
+                console.warn(`[Sync-Debug] sourceID ${effectiveSourceID} not found in Path map.`);
             }
         } else {
             // filtered: 同步到当前视图的所有其他行

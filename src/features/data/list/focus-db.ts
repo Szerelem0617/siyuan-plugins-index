@@ -103,13 +103,29 @@ export async function focusDatabaseView(blockId: string, protyle: any, mode: "le
             filterValue = { type: "text", text: { content: parentItemId } };
             showMsg = `✅ 已聚焦: 兄弟项`;
         } else {
-            // 后代：Path 包含当前块 ID 且带有分隔符
+            // 后代：获取当前项在数据库里的真实 Path
             const pathKey = currentKeys.find((k: any) => k.name === "Path");
             if (!pathKey) throw new Error("数据库中未找到 Path 字段，请重新同步以支持后代筛选");
 
+            // 预查当前项的 Path
+            const renderRes = await post("/api/av/renderAttributeView", { id: linkedAvId, pageSize: 1500 });
+            const rows = (renderRes.view?.rows || renderRes.rows || []);
+            const currentRow = rows.find((r: any) => r.id === blockId);
+            
+            const columns = (renderRes.view?.columns || renderRes.columns || []);
+            const pathColIndex = columns.findIndex((c: any) => c.id === pathKey.id);
+            const currentPath = currentRow?.cells[pathColIndex]?.value?.text?.content;
+
+            if (!currentPath) throw new Error("无法获取当前项的路径，请先执行数据库同步");
+
+            // 从路径推导后代判定前缀
+            const segments = currentPath.split("/");
+            const lastSeg = segments[segments.length - 1];
+            const identityId = lastSeg.replace(/^\d{3}-/, "");
+            const identityPrefix = segments.slice(0, -1).join("/") + "/" + identityId + "/";
+
             filterColumn = pathKey.id;
-            // 使用 /ID/ 匹配，由于 Path 格式为 /ID1/ID2，/ID1/ 会匹配所有后代但排除自身（自身末尾无 /）
-            filterValue = { type: "text", text: { content: `/${blockId}/` } };
+            filterValue = { type: "text", text: { content: identityPrefix } };
             showMsg = `✅ 已聚焦: 所有后代项`;
         }
 
