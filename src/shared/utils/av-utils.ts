@@ -13,16 +13,16 @@ export async function getColIDMap(avID: string) {
     const itemToBlock = new Map<string, string>();
     const blockToItem = new Map<string, string>();
 
-    // Pass 1: Build block mappings
+    // Pass 1: Build block mappings (Identify which Row ID belongs to which Siyuan Block ID)
     keyValues.forEach((kv: any) => {
         nameToID[kv.key.name] = kv.key.id;
         idToType[kv.key.id] = kv.key.type;
 
         if (kv.values) {
             kv.values.forEach((v: any) => {
-                // IMPORTANT: v.blockID in SiYuan's kernel/av/value.go is the Item/Row ID! (Not Siyuan Doc Block ID)
-                const rowId = v.blockID || v.block_id || v.blockId || v.itemID || v.itemId || v.id;
-                // The actual bound Siyuan Block ID is explicitly retrieved from block type cells
+                // 核心：rowId 必须是行标识，不能是单元格标识 (弃用 v.id)
+                const rowId = v.blockID || v.block_id || v.blockId || v.itemID || v.itemId;
+                // bid 是该行绑定的思源文档块 ID
                 const bid = v.block?.id || (v.type === 'block' ? (v.content || v.text?.content || v.block?.content) : null);
 
                 if (rowId && bid) {
@@ -40,8 +40,10 @@ export async function getColIDMap(avID: string) {
         colToCells[kv.key.id] = cellMap;
         if (kv.values) {
             kv.values.forEach((v: any) => {
-                const rowId = v.blockID || v.block_id || v.blockId || v.itemID || v.itemId || v.id;
-                // Index purely by the definitively mapped SiYuan Block ID for this Row
+                const rowId = v.blockID || v.block_id || v.blockId || v.itemID || v.itemId;
+                if (!rowId) return;
+                
+                // 通过行 ID 找到它对应的思源块 ID
                 const bid = itemToBlock.get(rowId);
                 if (bid) {
                     cellMap.set(bid, v);
@@ -51,9 +53,9 @@ export async function getColIDMap(avID: string) {
     });
 
     if (itemToBlock.size === 0 && keyValues.length > 0) {
-        console.warn("[AV Utils] Found 0 mappings. Sample cell data:", keyValues[0]?.values?.[0]);
+        console.warn("[AV Utils] Found 0 unique rows. Sample cell data:", keyValues[0]?.values?.[0]);
     } else {
-        console.log(`[AV Utils] getColIDMap for ${avID}: Found ${itemToBlock.size} mappings.`);
+        console.log(`[AV Utils] getColIDMap for ${avID}: Found ${itemToBlock.size} unique rows (from ${keyValues.length} columns).`);
     }
 
     return { nameToID, idToType, keyValues, itemToBlock, blockToItem, colToCells };
