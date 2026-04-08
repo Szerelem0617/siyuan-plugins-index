@@ -1,6 +1,6 @@
 import { client } from "../../../shared/api-client";
 import { showMessage } from "siyuan";
-import { ATTR_LINKED_AV, ATTR_LINKED_AV_BLOCK, ATTR_LINKED_LIST, ATTR_ITEM_ID } from "../../../shared/constants";
+import { ATTR_LINKED_AV, ATTR_LINKED_AV_BLOCK, ATTR_LINKED_LIST, ATTR_ITEM_ID, ATTR_LAST_SYNC } from "../../../shared/constants";
 import { settings } from "../../../core/settings";
 import { post } from "../../../shared/api-client/request";
 import { formatDate } from "../../../shared/utils";
@@ -475,15 +475,20 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
 
         if (existingAvID) {
             try {
-                const renderRes = await post("/api/av/renderAttributeView", {
-                    id: realAvID,
-                    pageSize: 1000
-                });
+                let currentPage = 1;
+                while (true) {
+                    const renderRes = await post("/api/av/renderAttributeView", {
+                        id: realAvID,
+                        page: currentPage,
+                        pageSize: 100 // Smaller chunks for reliability
+                    });
 
-                const rows = renderRes.view ? renderRes.view.rows : renderRes.rows;
-                const columns = renderRes.view ? renderRes.view.columns : renderRes.columns;
+                    const view = renderRes.view || renderRes;
+                    const rows = view.rows || [];
+                    const columns = view.columns || [];
 
-                if (rows && columns) {
+                    if (rows.length === 0) break;
+
                     const pathIdx = columns.findIndex((c: any) => c.keyID === pathKeyId);
                     const levelIdx = columns.findIndex((c: any) => c.keyID === levelKeyId);
                     const fatherIdx = columns.findIndex((c: any) => c.keyID === fatherKeyId);
@@ -503,6 +508,10 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                             }
                         }
                     });
+
+                    if (rows.length < 100) break; // Reached last page
+                    currentPage++;
+                    if (currentPage > 50) break; // Guard for sanity
                 }
             } catch (e) {
                 console.error("[Data] Failed to render AV to check rows", e);
@@ -526,10 +535,16 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
         const itemIDToBlockID: Record<string, string> = {};
 
         // Bulk fetch properties for newly transformed Index DB insertion
-        const targetIds = allItems.map(item => item.subDocId).filter(id => id);
+        // Optimization: Only fetch icons for items that are actually being added or updated
+        const targetIds = allItems.filter(item => {
+            const itemID = itemIDMap[item.originalId];
+            return !itemID || !existingAvID; // Fetch if new item, dead item (itemID=null now), or if it's a full reconstruction
+        }).map(item => item.subDocId).filter(id => id);
+        
         let itemPropsMap: Record<string, { icon: string, titleImg: string }> = {};
 
         if (targetIds.length > 0 && (!existingAvID || iconKeyId || titleImgKeyId)) {
+            console.log(`[Data] Syncing icons/props for ${targetIds.length} items needing update.`);
             itemPropsMap = await fetchDocumentIconsForDBItems(targetIds);
         }
 
@@ -654,6 +669,13 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
         }
 
         await post("/api/av/renderAttributeView", { id: realAvID, viewID: viewID, page: 1, pageSize: 50 });
+        
+        // --- 9. Update Sync Timestamp ---
+        const now = formatDate(new Date()).replace(/-/g, "").replace(/:/g, "").replace(/ /g, "");
+        for (const listId of sourceBlockIds) {
+            await client.setBlockAttrs({ id: listId, attrs: { [ATTR_LAST_SYNC]: now } });
+        }
+
         if (!silent) showMessage(`✅ 数据库已同步: ${newSrcs.length} 新增, ${updateValues.length / 5} 更新`);
 
     } catch (e: any) {
