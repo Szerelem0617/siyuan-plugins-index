@@ -16,6 +16,7 @@ import { refreshTopBarCommands, handleTopBarEvents } from "./features/command/gl
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
 import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
+import { getSqliteEngine } from "./features/sqlite/sqlite-manager";
 import { version } from "../plugin.json";
 
 export default class IndexPlugin extends Plugin {
@@ -64,6 +65,7 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.on("paste", handleBtnPaste);
 
         // SQLite Entry Point: Alt + Click on Native Search Button
+        getSqliteEngine().catch(e => console.error("[SQLite] Preload failed", e));
         this.registerSqliteEntry();
     }
     // onLayoutReady() {

@@ -1,4 +1,5 @@
 import { post } from "../../shared/api-client/request";
+import { plugin } from "../../shared/utils";
 
 let dbInstance: any = null;
 let SQL_ENGINE: any = null;
@@ -9,8 +10,8 @@ export async function getSqliteEngine() {
 
     try {
         if (!(window as any).initSqlJs) {
-            const pluginName = "siyuan-plugins-index";
-            const scriptUrl = `/plugins/${pluginName}/sql-wasm.js`;
+            const pluginId = plugin?.id || "siyuan-plugins-index";
+            const scriptUrl = `/plugins/${pluginId}/sql-wasm.js`;
 
             await new Promise((resolve, reject) => {
                 const script = document.createElement("script");
@@ -23,7 +24,7 @@ export async function getSqliteEngine() {
 
         const initSqlJs = (window as any).initSqlJs;
         SQL_ENGINE = await initSqlJs({
-            locateFile: (file: string) => `/plugins/siyuan-plugins-index/${file}`
+            locateFile: (file: string) => `/plugins/${plugin?.id || "siyuan-plugins-index"}/${file}`
         });
 
         try {
