@@ -1,78 +1,98 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { getSqliteStatus } from "./sqlite-manager";
+    import { fetchAllAVBlocks } from "./sqlite-data-fetcher";
 
-    let status: any = null;
+    let avBlocks: any[] = [];
     let loading = true;
+    let error = "";
 
-    async function checkStatus() {
+    async function refresh() {
         loading = true;
-        status = await getSqliteStatus();
-        loading = false;
+        error = "";
+        try {
+            avBlocks = await fetchAllAVBlocks();
+        } catch (e) {
+            error = e.message;
+        } finally {
+            loading = false;
+        }
     }
 
     onMount(() => {
-        checkStatus();
+        refresh();
     });
+
+    function copyToClipboard(text: string) {
+        navigator.clipboard.writeText(text);
+        // Simple visual feedback could be added here
+    }
 </script>
 
-<div class="sqlite-status-panel fn__flex-column fn__flex-1" style="padding: 24px; background: var(--b3-theme-background); color: var(--b3-theme-on-background); font-family: var(--b3-font-family); min-height: 100%; overflow-y: auto;">
-    <div class="fn__flex" style="align-items: center; margin-bottom: 24px;">
-        <h1 style="font-size: 24px; margin: 0; flex: 1; font-weight: 600;">SQLite WASM Status</h1>
-        <button class="b3-button b3-button--text" on:click={checkStatus} disabled={loading}>
-            {loading ? "Checking..." : "Refresh Status"}
+<div class="av-explorer-panel fn__flex-column fn__flex-1" style="padding: 20px; background: var(--b3-theme-background); color: var(--b3-theme-on-background); font-family: var(--b3-font-family); height: 100%; overflow: hidden;">
+    <div class="fn__flex" style="align-items: center; margin-bottom: 20px; flex-shrink: 0;">
+        <h1 style="font-size: 20px; margin: 0; flex: 1; font-weight: 600;">Attribute View (AV) Explorer</h1>
+        <button class="b3-button b3-button--outline" on:click={refresh} disabled={loading} style="padding: 4px 12px;">
+            {loading ? "Scanning..." : "Refetch Blocks"}
         </button>
     </div>
 
     {#if loading}
-        <div class="loading-state fn__flex-column" style="align-items: center; justify-content: center; min-height: 200px;">
-            <div class="fn__loading" style="width: 48px; height: 48px; border-width: 4px;"></div>
-            <p style="margin-top: 16px; opacity: 0.7;">Detecting SQLite engine...</p>
+        <div class="loading-state fn__flex-column fn__flex-1" style="align-items: center; justify-content: center;">
+            <div class="fn__loading" style="width: 40px; height: 40px; border-width: 3px;"></div>
+            <p style="margin-top: 12px; opacity: 0.6;">Scanning workspace for AV blocks...</p>
         </div>
-    {:else if status}
-        <div class="status-result b3-card" style="padding: 24px; border-radius: 12px; border: 1px solid var(--b3-border-color); background: var(--b3-theme-surface);">
-            <div class="fn__flex" style="align-items: center; margin-bottom: 16px;">
-                <div class="status-indicator" style="width: 12px; height: 12px; border-radius: 50%; background: {status.status === 'success' ? '#10b981' : '#ef4444'}; margin-right: 12px;"></div>
-                <span style="font-size: 18px; font-weight: 600;">{status.status === 'success' ? 'Engine Ready' : 'Engine Error'}</span>
-            </div>
-
-            <div class="details-list" style="display: grid; grid-template-columns: auto 1fr; gap: 12px 24px;">
-                <span style="opacity: 0.6;">Message:</span>
-                <span>{status.message}</span>
-
-                {#if status.status === 'success'}
-                    <span style="opacity: 0.6;">Init Time:</span>
-                    <span>{status.loadTime}</span>
-                    
-                    <span style="opacity: 0.6;">Version:</span>
-                    <code>{status.version}</code>
-                {/if}
-            </div>
-
-            {#if status.status !== 'success'}
-                <div style="margin-top: 24px; padding: 16px; border-radius: 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #f87171;">
-                    <strong>Tip:</strong> Make sure you have installed the dependency via <code style="padding: 2px 4px; background: rgba(0,0,0,0.1); border-radius: 4px;">pnpm install</code>. If you are using dynamic loading from a CDN, ensure you have an active internet connection.
-                </div>
-            {/if}
+    {:else if error}
+        <div class="error-state b3-card" style="padding: 20px; color: var(--b3-theme-error);">
+            <p>Error: {error}</p>
+        </div>
+    {:else}
+        <div class="table-container fn__flex-1" style="overflow-y: auto; border: 1px solid var(--b3-border-color); border-radius: 8px; background: var(--b3-theme-surface);">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead style="position: sticky; top: 0; background: var(--b3-border-color); color: var(--b3-theme-on-surface); z-index: 10;">
+                    <tr>
+                        <th style="padding: 10px; text-align: left; width: 40%;">Block ID (Physical)</th>
+                        <th style="padding: 10px; text-align: left; width: 40%;">AV ID (Logical)</th>
+                        <th style="padding: 10px; text-align: center; width: 20%;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#each avBlocks as block}
+                        <tr style="border-bottom: 1px solid var(--b3-border-color); hover: background: rgba(0,0,0,0.02);">
+                            <td style="padding: 10px; font-family: monospace;">
+                                {block.blockId}
+                            </td>
+                            <td style="padding: 10px;">
+                                <span style="font-family: monospace; color: {block.avId === 'Not Found' ? 'var(--b3-theme-error)' : 'inherit'}">
+                                    {block.avId}
+                                </span>
+                            </td>
+                            <td style="padding: 10px; text-align: center;">
+                                <button class="b3-button b3-button--text" style="font-size: 11px;" on:click={() => copyToClipboard(block.avId)}>Copy AV</button>
+                            </td>
+                        </tr>
+                    {/each}
+                    {#if avBlocks.length === 0}
+                        <tr>
+                            <td colspan="3" style="padding: 40px; text-align: center; opacity: 0.5;">No Attribute View blocks found in current notebook.</td>
+                        </tr>
+                    {/if}
+                </tbody>
+            </table>
         </div>
     {/if}
 
-    <div style="margin-top: 40px; border-top: 1px solid var(--b3-border-color); padding-top: 24px;">
-        <h2 style="font-size: 18px; margin-bottom: 12px; font-weight: 600;">Why SQLite?</h2>
-        <p style="opacity: 0.8; line-height: 1.6;">
-            We are introducing SQLite (WASM) to enable advanced querying capabilities for your command tree. 
-            This allows us to process thousands of commands with sub-millisecond search latency, 
-            directly in the browser environment without impacting SiYuan's native performance.
-        </p>
+    <div style="margin-top: 16px; font-size: 12px; opacity: 0.5; flex-shrink: 0;">
+        Tip: Physical Block ID is the node container, Logical AV ID is the actual configuration ID used for AV APIs.
     </div>
 </div>
 
 <style>
-    .b3-card {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        transition: transform 0.2s, box-shadow 0.2s;
+    tr:hover {
+        background-color: var(--b3-theme-background-hover);
     }
-    .b3-card:hover {
-        box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+    th {
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
 </style>
