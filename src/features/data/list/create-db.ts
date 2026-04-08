@@ -342,7 +342,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                                 const className = child.className || "";
                                 // 忽略子列表和操作按钮
                                 if (type !== "NodeList" && !className.includes("protyle-action")) {
-                                    textParts.push((child as HTMLElement).innerText || "");
+                                    textParts.push((child as HTMLElement).textContent || "");
                                 }
                             }
                             const extractedName = textParts.join("").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();

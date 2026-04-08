@@ -12,7 +12,8 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
         showMessage("⏳ 正在同步...", 3000);
 
         // 1. 获取全量数据以查找目标和列映射
-        const { nameToID, keyValues } = await getColIDMap(avID);
+        const colInfo = await getColIDMap(avID);
+        const { nameToID, itemToBlock, colToCells } = colInfo;
 
         // 2. 确定源行数据（从当前视图获取，包含最新状态）
         const sourceViewData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
@@ -28,9 +29,10 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
 
         const syncValue = cleanValue(sourceRow.cells[colIndex].value);
 
-        // 绑定 ID 获取逻辑
-        const sourceBlockID = sourceRow.id;
-        if (!sourceBlockID) throw new Error("无法获取源行 ID");
+        // 获取真实的 Siyuan Block ID 绑定
+        const sourceRowID = sourceRow.id;
+        const sourceBlockID = itemToBlock.get(sourceRowID);
+        if (!sourceBlockID) throw new Error("无法获取源行对应的 Siyuan Block ID");
 
         // 3. 根据模式筛选目标 Block IDs
         let targetBlockIDs: string[] = [];
@@ -38,8 +40,10 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
         if (mode === "level") {
             const levelKeyName = Object.keys(nameToID).find(k => k.toLowerCase() === "level");
             const levelKeyID = levelKeyName ? nameToID[levelKeyName] : undefined;
-            const levelKV = keyValues.find((kv: any) => kv.key.id === levelKeyID);
-            if (!levelKV) throw new Error("未找到 Level 字段");
+            if (!levelKeyID) throw new Error("未找到 Level 字段");
+
+            const levelCellMap = colToCells[levelKeyID];
+            if (!levelCellMap) throw new Error("Level 数据为空");
 
             const getVal = (v: any) => {
                 if (!v) return undefined;
@@ -49,89 +53,68 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
                 return v.content;
             };
 
-            const targetLevel = getVal(levelKV.values.find((v: any) => v.blockID === sourceBlockID));
+            const targetLevel = getVal(levelCellMap.get(sourceBlockID));
             if (targetLevel === undefined) throw new Error("无法获取当前行的 Level 值");
 
-            targetBlockIDs = levelKV.values
-                .filter((v: any) => getVal(v) == targetLevel && v.blockID !== sourceBlockID)
-                .map((v: any) => v.blockID);
+            targetBlockIDs = Array.from(levelCellMap.entries())
+                .filter(([bid, cell]) => getVal(cell) == targetLevel && bid !== sourceBlockID)
+                .map(([bid]) => bid);
         } else if (mode === "siblings") {
-            const findKey = (name: string) => {
-                const kn = Object.keys(nameToID).find(k => k.toLowerCase() === name.toLowerCase());
-                return kn ? nameToID[kn] : undefined;
-            };
-            const fatherKV = keyValues.find((kv: any) => kv.key.id === findKey("Father"));
-            if (!fatherKV) throw new Error("未找到 Father 字段");
+            const fatherKeyName = Object.keys(nameToID).find(k => k.toLowerCase() === "father");
+            const fatherKeyID = fatherKeyName ? nameToID[fatherKeyName] : undefined;
+            if (!fatherKeyID) throw new Error("未找到 Father 字段");
 
-            const sourceBlockCell = sourceRow.cells.find((c: any) => c.valueType === "block");
-            const cellBlockID = sourceBlockCell?.value?.block?.id;
-            let effectiveSourceID = sourceBlockID;
-            if (!fatherKV.values.some((v: any) => v.blockID === sourceBlockID) && cellBlockID) {
-                effectiveSourceID = cellBlockID;
-            }
+            const fatherCellMap = colToCells[fatherKeyID];
+            if (!fatherCellMap) throw new Error("Father 数据为空");
 
-            const sourceFatherVal = fatherKV.values.find((v: any) => v.blockID === effectiveSourceID);
+            const sourceFatherVal = fatherCellMap.get(sourceBlockID);
             const targetFather = sourceFatherVal?.text?.content || "";
-            targetBlockIDs = fatherKV.values
-                .filter((v: any) => (v.text?.content || "") === targetFather && v.blockID !== effectiveSourceID)
-                .map((v: any) => v.blockID);
+            
+            targetBlockIDs = Array.from(fatherCellMap.entries())
+                .filter(([bid, cell]) => (cell?.text?.content || "") === targetFather && bid !== sourceBlockID)
+                .map(([bid]) => bid);
         } else if (mode === "descendants") {
-            const findKey = (name: string) => {
-                const kn = Object.keys(nameToID).find(k => k.toLowerCase() === name.toLowerCase());
-                return kn ? nameToID[kn] : undefined;
-            };
-            const pathKeyID = findKey("Path");
+            const pathKeyName = Object.keys(nameToID).find(k => k.toLowerCase() === "path");
+            const pathKeyID = pathKeyName ? nameToID[pathKeyName] : undefined;
             if (!pathKeyID) throw new Error("未找到 Path 字段");
 
-            const pathKV = keyValues.find((kv: any) => kv.key.id === pathKeyID);
-            const blockPathMap = new Map<string, string>();
-            if (pathKV && pathKV.values) {
-                pathKV.values.forEach((v: any) => {
-                    if (v.blockID && v.text?.content) blockPathMap.set(v.blockID, v.text.content);
-                });
-            }
+            const pathCellMap = colToCells[pathKeyID];
+            if (!pathCellMap) throw new Error("Path 数据为空");
 
-            const sourceBlockCell = sourceRow.cells.find((c: any) => c.valueType === "block");
-            const cellBlockID = sourceBlockCell?.value?.block?.id;
-            let effectiveSourceID = sourceBlockID;
-            if (!blockPathMap.has(effectiveSourceID) && cellBlockID) {
-                effectiveSourceID = cellBlockID;
-            }
-
-            if (blockPathMap.has(effectiveSourceID)) {
-                const sourcePath = blockPathMap.get(effectiveSourceID)!;
-                
+            const sourcePath = pathCellMap.get(sourceBlockID)?.text?.content;
+            
+            if (sourcePath) {
                 // 从 sourcePath 推导后代的身份前缀
                 // 例如：/ID1/002-ID2 -> 其后代必以 /ID1/ID2/ 开头
                 const segments = sourcePath.split("/");
                 const lastSegment = segments[segments.length - 1];
-                // 稳妥剥离前缀序号 (001-ID -> ID)
                 const currentIdInPath = lastSegment.replace(/^\d{3}-/, "");
-                
-                // 构造身份前缀
                 const identityPrefix = segments.slice(0, -1).join("/") + "/" + currentIdInPath + "/";
                 
                 console.log(`[Sync-Debug] Descendants Mode:`, {
-                    effectiveSourceID,
+                    sourceBlockID,
                     sourcePath,
                     identityPrefix
                 });
 
-                targetBlockIDs = pathKV.values
-                    .filter((v: any) => {
-                        const p = v.text?.content;
-                        // 后代必定以当前项的“身份路径/”开头
-                        return p && p.startsWith(identityPrefix) && v.blockID !== effectiveSourceID;
+                targetBlockIDs = Array.from(pathCellMap.entries())
+                    .filter(([bid, cell]) => {
+                        const p = cell?.text?.content;
+                        return p && p.startsWith(identityPrefix) && bid !== sourceBlockID;
                     })
-                    .map((v: any) => v.blockID);
+                    .map(([bid]) => bid);
                 
                 console.log(`[Sync-Debug] Target Block IDs found: ${targetBlockIDs.length}`);
             } else {
-                console.warn(`[Sync-Debug] sourceID ${effectiveSourceID} not found in Path map.`);
+                console.error(`[Sync-Debug] sourceID ${sourceBlockID} not found in Path map. Map size: ${pathCellMap.size}`);
+                throw new Error("无法获取当前项的路径数据");
             }
         } else {
             // filtered: 同步到当前视图的所有其他行
-            targetBlockIDs = sourceRows.filter((r: any) => r.id !== sourceRow.id).map((r: any) => r.id);
+            // 此处保持使用 AV row.id
+            const currentFilteredRowIDs = sourceRows.filter((r: any) => r.id !== sourceRow.id).map((r: any) => r.id);
+            // 将 RowID 转为 Siyuan Block ID
+            targetBlockIDs = currentFilteredRowIDs.map((rid: string) => itemToBlock.get(rid)).filter(Boolean) as string[];
         }
 
         if (targetBlockIDs.length === 0) return showMessage("未找到符合条件的项", 3000, "info");
