@@ -26,7 +26,6 @@ export async function getSqliteEngine() {
             locateFile: (file: string) => `/plugins/siyuan-plugins-index/${file}`
         });
 
-        // 1. 尝试从磁盘加载
         try {
             const fileRes = await fetch("/api/file/getFile", {
                 method: "POST",
@@ -44,7 +43,6 @@ export async function getSqliteEngine() {
             dbInstance = new SQL_ENGINE.Database();
         }
 
-        // 2. 初始化元数据
         dbInstance.run("CREATE TABLE IF NOT EXISTS _meta (id TEXT PRIMARY KEY, type TEXT, updated TEXT);");
         
         return { db: dbInstance, SQL: SQL_ENGINE };
@@ -76,31 +74,53 @@ export async function instantiateAV(avID: string) {
     
     if (keyValues.length === 0) return { success: false, message: "Empty" };
 
+    // 1. 映射列头
     const columns = keyValues.map((kv: any) => ({
         id: kv.key.id,
         name: kv.key.name.replace(/[^\w]/g, '_'),
         type: kv.key.type
     }));
 
+    // 2. 清理旧数据并重新建表
     db.run(`DROP TABLE IF EXISTS "${avID}";`); 
     db.run(`CREATE TABLE "${avID}" (rowID TEXT PRIMARY KEY, ${columns.map(c => `"${c.name}" TEXT`).join(", ")});`);
 
+    // 3. 行归类数据平铺 (核心修复：使用 blockID)
     const rowMap = new Map<string, any>();
     keyValues.forEach((kv: any) => {
         const colSafeName = kv.key.name.replace(/[^\w]/g, '_');
         kv.values?.forEach((v: any) => {
-            const rowId = v.itemID || v.itemId || v.id;
+            const rowId = v.blockID || v.blockId || v.itemID || v.itemId;
+            if (!rowId) return; // 忽略无效值
+
             if (!rowMap.has(rowId)) rowMap.set(rowId, { rowID: rowId });
             const item = rowMap.get(rowId);
-            item[colSafeName] = v.text?.content || v.number?.content || v.mOption?.map((o: any) => o.content).join(", ") || v.content || "";
+
+            // 增强型值提取逻辑，对齐 kernel/av/value.go
+            let val = "";
+            if (v.block) val = v.block.content;
+            else if (v.text) val = v.text.content;
+            else if (v.number) val = String(v.number.content);
+            else if (v.mOption) val = v.mOption.map((o: any) => o.content).join(", ");
+            else if (v.url) val = v.url.content;
+            else if (v.email) val = v.email.content;
+            else if (v.phone) val = v.phone.content;
+            else if (v.checkbox) val = v.checkbox.checked ? "√" : "";
+            else if (v.date) val = v.date.formattedContent || String(v.date.content);
+            else val = v.content || "";
+
+            item[colSafeName] = val;
         });
     });
 
+    // 4. 批量执行插入
     const rows = Array.from(rowMap.values());
     for (const row of rows) {
         const fields = ["rowID", ...columns.map(c => c.name)];
+        const placeholders = fields.map(() => "?").join(", ");
         const values = fields.map(f => row[f] || "");
-        db.run(`INSERT INTO "${avID}" (${fields.map(f => `"${f}"`).join(", ")}) VALUES (${fields.map(() => "?").join(", ")});`, values);
+        
+        db.run(`INSERT INTO "${avID}" (${fields.map(f => `"${f}"`).join(", ")}) VALUES (${placeholders});`, values);
     }
 
     db.run(`INSERT OR REPLACE INTO _meta (id, type, updated) VALUES (?, 'av', ?);`, [avID, new Date().toISOString()]);
