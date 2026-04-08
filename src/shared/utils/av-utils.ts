@@ -110,13 +110,13 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
             const path = v.text?.content;
             if (bid && path) {
                 blockIDToPath.set(bid, path);
-                const purePath = path.replace(/\/\d+-/g, '/');
+                const purePath = path.replace(/\/\d{3}-/g, '/');
                 pathToBlockID.set(purePath, bid);
             }
         });
 
         for (const [bid, path] of blockIDToPath.entries()) {
-            const purePath = path.replace(/\/\d+-/g, '/');
+            const purePath = path.replace(/\/\d{3}-/g, '/');
             const lastSlash = purePath.lastIndexOf("/");
             if (lastSlash > 0) {
                 const parentPath = purePath.substring(0, lastSlash);
@@ -127,6 +127,10 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
             }
         }
     }
+    
+    console.log(`[Hierarchy-Debug] Built parentMap with ${parentMap.size} relationships.`);
+    const sampleKeys = Array.from(parentMap.keys()).slice(0, 3);
+    sampleKeys.forEach(k => console.log(`[Hierarchy-Debug] Sample: Child ${k} -> Parent ${parentMap.get(k)}`));
 
     // 2. 尝试使用 Father 列 (如果 parentMap 为空或不完整)
     const fatherKV = keyValues.find(kv => kv.key.name.toLowerCase() === "father");
@@ -173,20 +177,29 @@ export function resolveInheritance(
 
     let nearestAncestorVal = null;
     let curr = parentMap.get(blockId);
+    let jumpCount = 0;
 
-    // console.log(`[Inheritance Resolve] Resolving ${blockId} for Col ${colId}. Local exists: ${!isValueEmpty(localVal)}`);
+    console.log(`[Inheritance-Debug] Resolving for ${blockId}, Mode: ${mode}`);
 
     while (curr) {
+        jumpCount++;
         const val = getLocal(curr);
         if (!isValueEmpty(val)) {
             nearestAncestorVal = val;
+            console.log(`[Inheritance-Debug] Found Value at Level ${jumpCount} Ancestor: ${curr}`);
             break;
         }
         curr = parentMap.get(curr);
     }
 
+    if (!nearestAncestorVal) {
+        console.log(`[Inheritance-Debug] No value found in ${jumpCount} levels of ancestors.`);
+    }
+
     if (mode === "weak") {
-        return !isValueEmpty(localVal) ? localVal : nearestAncestorVal;
+        const result = !isValueEmpty(localVal) ? localVal : nearestAncestorVal;
+        console.log(`[Inheritance-Debug] Mode Weak: Local empty? ${isValueEmpty(localVal)}. Result source: ${!isValueEmpty(localVal) ? "Self" : (nearestAncestorVal ? "Ancestor" : "None")}`);
+        return result;
     } else if (mode === "strong") {
         return !isValueEmpty(nearestAncestorVal) ? nearestAncestorVal : localVal;
     }
