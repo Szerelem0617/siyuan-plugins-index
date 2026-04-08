@@ -1,19 +1,15 @@
 import { client } from "../../shared/api-client";
+import { post } from "../../shared/api-client/request";
 import { getAttrFromIAL } from "../../shared/utils";
 
 export async function fetchAllAVBlocks() {
     try {
-        // 1. 获取所有物理 AV 块
         const sql = "SELECT id, ial FROM blocks WHERE type = 'av' LIMIT 100";
         const res = await client.sql({ stmt: sql });
         const blocks = res.data || [];
 
-        const result = [];
-        for (const block of blocks) {
-            // 2. 尝试从 IAL 提取逻辑 AV ID
+        const fetchPromises = blocks.map(async (block) => {
             let avId = getAttrFromIAL(block.ial, "custom-av-id");
-            
-            // 如果 IAL 没抓到，尝试从 DOM 抓取 (因为 data-av-id 存储在 DOM 中)
             if (!avId) {
                 const domRes = await client.getBlockDOM({ id: block.id });
                 if (domRes.data && domRes.data.dom) {
@@ -22,15 +18,25 @@ export async function fetchAllAVBlocks() {
                 }
             }
 
-            result.push({
+            let realName = "Unnamed Database";
+            if (avId) {
+                try {
+                    const avConfig = await post("/api/av/getAttributeView", { id: avId });
+                    realName = avConfig?.name || (avConfig?.av ? avConfig.av.name : "Unnamed");
+                } catch { /* Error fallback to Unnamed */ }
+            }
+
+            return {
                 blockId: block.id,
                 avId: avId || "Not Found",
+                name: realName,
                 ial: block.ial
-            });
-        }
-        return result;
+            };
+        });
+
+        return await Promise.all(fetchPromises);
     } catch (e) {
-        console.error("Failed to fetch AV blocks", e);
+        console.error("[AV-Fetcher] Failed", e);
         return [];
     }
 }
