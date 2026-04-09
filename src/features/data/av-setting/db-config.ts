@@ -21,13 +21,14 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
     }
 
     try {
-        console.log(`[Materialized Sync] Starting full sync for AV: ${avId}`);
+        console.log(`[Materialized-V2] Starting full sync for AV: ${avId}`);
         const colInfo = await getColIDMap(avId);
+        const { blockToItem } = colInfo;
         const parentMap = await buildAvHierarchy(colInfo.keyValues, colInfo.itemToBlock);
 
         // Find all unique block IDs from the mappings
-        const allBlockIds = Array.from(colInfo.blockToItem.keys());
-        console.log(`[Materialized Sync] Processing ${allBlockIds.length} blocks in AV.`);
+        const allBlockIds = Array.from(blockToItem.keys());
+        console.log(`[Materialized-V2] Processing ${allBlockIds.length} blocks in AV.`);
 
         const updateOps: any[] = [];
 
@@ -66,11 +67,11 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
                     if (isDifferent) {
                         const localDisplay = getValStr(cell) || "(Empty)";
                         const resolvedDisplay = getValStr(resolvedVal) || "(Empty)";
-                        console.log(`[Materialized Sync] Update: Block ${bid}, Col ${rule.colId}. Local: ${localDisplay} -> Resolved: ${resolvedDisplay}`);
+                        console.log(`[Materialized-V2] Update detected: Block ${bid}, Col ${rule.colId}. Local: ${localDisplay} -> Resolved: ${resolvedDisplay}`);
 
                         updateOps.push({
                             keyID: rule.colId,
-                            itemID: bid, // Use Siyuan Block ID as identifier for updates
+                            itemID: bid, 
                             value: resolvedVal
                         });
                     }
@@ -79,11 +80,42 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
         }
 
         if (updateOps.length > 0) {
-            console.log(`[Materialized Sync] Committing ${updateOps.length} updates to DB.`);
-            await post("/api/av/batchSetAttributeViewBlockAttrs", {
-                avID: avId,
-                values: updateOps
-            });
+            console.log(`[Materialized-V2] Need to update ${updateOps.length} fields. Correcting IDs via Kernel API...`);
+
+            // 核心：将 Block ID 转换为准确的 AV Item ID
+            const blockIDsToMap = updateOps.map(op => op.itemID);
+            let finalUpdateValues = updateOps;
+            try {
+                const mappingRes = await post("/api/av/getAttributeViewItemIDsByBoundIDs", {
+                    avID: avId,
+                    blockIDs: blockIDsToMap
+                });
+                if (mappingRes && typeof mappingRes === "object") {
+                    finalUpdateValues = updateOps.map(op => ({
+                        ...op,
+                        itemID: mappingRes[op.itemID] || blockToItem.get(op.itemID) // 优先使用内核映射，fallback 本地
+                    })).filter(op => op.itemID);
+                }
+            } catch (e) {
+                console.warn("[Materialized-V2] Kernel mapping failed, falling back to local map", e);
+                finalUpdateValues = updateOps.map(op => ({
+                    ...op,
+                    itemID: blockToItem.get(op.itemID)
+                })).filter(op => op.itemID);
+            }
+
+            console.log(`[Materialized-V2] Committing ${finalUpdateValues.length} updates to DB in chunks.`);
+            
+            // 分割批次执行 (每批 50 条)
+            const chunkSize = 50;
+            for (let i = 0; i < finalUpdateValues.length; i += chunkSize) {
+                const chunk = finalUpdateValues.slice(i, i + chunkSize);
+                const res = await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                    avID: avId,
+                    values: chunk
+                });
+                console.log(`[Materialized-V2] Chunk ${i/chunkSize + 1} Result:`, res);
+            }
 
             // Force UI refresh by updating the AV block's timestamp
             if (avBlockId) {
@@ -99,9 +131,9 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
                     }]
                 });
             }
-            return updateOps.length;
+            return finalUpdateValues.length;
         } else {
-            console.log("[Materialized Sync] No changes detected.");
+            console.log("[Materialized-V2] No changes detected.");
         }
         return 0;
     } catch (e) {
