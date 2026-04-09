@@ -34,7 +34,17 @@ class AVEventHandler {
     private getAVCell(event: MouseEvent) {
         if (!event.altKey) return null;
         const target = event.target as HTMLElement;
-        return target.closest(".av__cell") as HTMLElement;
+        const cell = target.closest(".av__cell") as HTMLElement;
+        if (!cell) return null;
+
+        // Skip Primary Key column (the first cell in any row)
+        // This avoids conflicts with Command-DB link copying and adheres to standard AV behavior rules.
+        const row = cell.closest(".av__row");
+        if (row && row.querySelector(".av__cell") === cell) {
+            return null;
+        }
+
+        return cell;
     }
 
     private onMouseDown(event: MouseEvent) {

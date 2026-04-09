@@ -1,6 +1,4 @@
-
 import { post } from "../../../shared/api-client/request";
-import { client } from "../../../shared/api-client";
 import { SUPERTAG_REGISTRY, refreshSupertagRegistry } from "../../command/registration";
 import { getGlobalTypeConfigs } from "./db-config";
 import { type TypeConfig } from "./types";
@@ -28,7 +26,6 @@ export class SupertagMonitor {
         this.dataRegistry = await getGlobalTypeConfigs();
 
         this.lastUpdate = Date.now();
-        console.log(`[Supertag] Monitor registries refreshed. Logic: ${SUPERTAG_REGISTRY.length}, Data: ${this.dataRegistry.length}`);
     }
 
     private boundHandler = this.handleWsMessage.bind(this);
@@ -40,7 +37,6 @@ export class SupertagMonitor {
         this.pluginInstance = plugin;
         if (this.pluginInstance && this.pluginInstance.eventBus) {
             this.pluginInstance.eventBus.on("ws-main", this.boundHandler);
-            console.log("[Supertag] Monitor started processing global ws-main events.");
 
             // Load preferences
             this.pluginInstance.loadData("supertag-prefs.json").then((data: any) => {
@@ -90,7 +86,6 @@ export class SupertagMonitor {
                     const addedTags = Array.from(newTags).filter(t => !cachedTags.has(t));
 
                     if (addedTags.length > 0) {
-                        console.log(`[Supertag] Op: ${op.action} on ${blockId}. New tags added:`, addedTags);
 
                         // Update cache
                         this.tagCache.set(blockId, newTags);
@@ -194,15 +189,13 @@ export class SupertagMonitor {
 
             const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
 
-            console.log(`[Supertag] Processing tag: "${cleanTag}". Registry size: ${SUPERTAG_REGISTRY.length}`);
             if (SUPERTAG_REGISTRY.length < 10) {
-                console.log(`[Supertag] Current Registry Tags:`, SUPERTAG_REGISTRY.map(c => c.typeTag));
+                // Logic routing implementation
             }
 
             // --- Path A: Logic Routing (Layer 3) ---
             const logicMatches = SUPERTAG_REGISTRY.filter(c => c.typeTag === cleanTag);
             if (logicMatches.length > 0) {
-                console.log(`[Supertag] ✨ Logic Match! Running ${logicMatches.length} command(s) for #${cleanTag}#`);
                 // Logic routing implementation (not strictly syncing to DB, just running commands)
                 // In a future step, we might trigger the actual command bus here.
                 // For now, logic is mainly represented by its presence in the registry.
@@ -224,10 +217,8 @@ export class SupertagMonitor {
                     }
                 }
 
-                console.log(`[Supertag] ✨ Data Match! Target: ${targetConfig.avName || targetConfig.avId}. Triggering sync...`);
                 await this.applySupertag(blockId, cleanTag, targetConfig);
             } else {
-                console.log(`[Supertag] ℹ️ Tag "${cleanTag}" ignore sync. No Data Component (Layer 4) mapping found.`);
             }
         } catch (e) {
             console.error("[Supertag] Failed to process new tag:", blockId, e);
@@ -246,13 +237,11 @@ export class SupertagMonitor {
                 // 2. Add block to AV if not present
                 // @ts-ignore
                 itemId = window.Lute.NewNodeID();
-                console.log(`[Supertag] Adding block ${blockId} to AV ${avId} as item ${itemId}`);
 
-                const insertRes = await post("/api/av/addAttributeViewBlocks", {
+                await post("/api/av/addAttributeViewBlocks", {
                     avID: avId,
                     srcs: [{ itemID: itemId, id: blockId, isDetached: false }]
                 });
-                console.log(`[Supertag] Insert Block Result:`, insertRes);
 
                 // Wait a bit for backend to process
                 await new Promise(r => setTimeout(r, 100));
@@ -265,13 +254,11 @@ export class SupertagMonitor {
                         if (cell) {
                             const currentVal = (cell.mSelect?.[0]?.content || cell.text?.content || cell.number?.content || cell.content || "").toString();
                             if (currentVal === config.mappedValue.toString()) {
-                                console.log(`[Supertag] Idempotency Check: Block ${blockId} already correctly categorized in ${avId} with value "${currentVal}". Skipping update.`);
                                 return;
                             }
                         }
                     }
                 }
-                console.log(`[Supertag] Block ${blockId} already exists in AV ${avId} as item ${itemId}, but may need value update.`);
             }
 
             // 4. Set specific attribute value
@@ -279,8 +266,7 @@ export class SupertagMonitor {
                 const colType = idToType[config.typeFieldId] || "text";
                 const valuePayload = this.formatValue(String(config.mappedValue).trim(), colType);
 
-                console.log(`[Supertag] Setting attribute value (Type: ${colType}) via Batch API. Payload:`, valuePayload);
-                const setRes = await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                await post("/api/av/batchSetAttributeViewBlockAttrs", {
                     avID: avId,
                     values: [{
                         keyID: config.typeFieldId,
@@ -288,7 +274,6 @@ export class SupertagMonitor {
                         value: valuePayload
                     }]
                 });
-                console.log(`[Supertag] Batch Set Result:`, setRes);
             }
 
             // 5. Force UI refresh
@@ -298,7 +283,6 @@ export class SupertagMonitor {
                 transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: blockId, data: formatDate(new Date()) }] }]
             });
 
-            console.log(`[Supertag] Successfully applied Data Sync for "${cleanTag}" (Class: ${config.typeName}) to block ${blockId}`);
             showMessage(`✨ Supertag: 已自动同步至 "${config.avName || cleanTag}"`);
 
         } catch (e) {
@@ -308,7 +292,6 @@ export class SupertagMonitor {
 
 
     private formatValue(val: string, colType: string) {
-        console.log(`[Supertag] Formatting value "${val}" for column type "${colType}"`);
 
         if (colType === "number") {
             const numContent = Number(val);

@@ -21,17 +21,13 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
     }
 
     try {
-        console.log(`[Materialized Sync] Starting full sync for AV: ${avId}`);
         const colInfo = await getColIDMap(avId);
+        const { blockToItem } = colInfo;
         const parentMap = await buildAvHierarchy(colInfo.keyValues, colInfo.itemToBlock);
 
-        // Find all unique block IDs from the mappings
-        const allBlockIds = Array.from(colInfo.blockToItem.keys());
-        console.log(`[Materialized Sync] Processing ${allBlockIds.length} blocks in AV.`);
-
+        const allBlockIds = Array.from(blockToItem.keys());
         const updateOps: any[] = [];
 
-        // Helper for normalized display
         const getValStr = (v: any) => {
             if (!v) return "";
             if (typeof v === 'string') return v;
@@ -42,50 +38,68 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
             for (const rule of config.inheritanceRules) {
                 if (rule.mode === 'none') continue;
 
-                // 1. Get current local raw value (for Dirty Check) using O(1) index
                 const cellMap = colInfo.colToCells[rule.colId];
-                const cell = cellMap ? cellMap.get(bid) : null;
+                if (!cellMap) continue;
 
-                // 2. Resolve inheritance using O(1) indexed lookups
-                const resolvedVal = resolveInheritance(bid, rule.colId, rule.mode, cellMap, parentMap);
+                const cell = cellMap.get(bid);
+                const resolvedVal = resolveInheritance(bid, rule.mode, cellMap, parentMap);
 
                 if (!isValueEmpty(resolvedVal)) {
                     let isDifferent = false;
+                    const localStr = getValStr(cell);
+                    const resolvedStr = getValStr(resolvedVal);
+
                     if (!cell || isValueEmpty(cell)) {
                         isDifferent = true;
-                    } else {
-                        // Compare normalized content strings
-                        const localStr = getValStr(cell);
-                        const resolvedStr = getValStr(resolvedVal);
-
-                        if (String(localStr) !== String(resolvedStr)) {
-                            isDifferent = true;
-                        }
+                    } else if (String(localStr) !== String(resolvedStr)) {
+                        isDifferent = true;
                     }
 
                     if (isDifferent) {
-                        const localDisplay = getValStr(cell) || "(Empty)";
-                        const resolvedDisplay = getValStr(resolvedVal) || "(Empty)";
-                        console.log(`[Materialized Sync] Update: Block ${bid}, Col ${rule.colId}. Local: ${localDisplay} -> Resolved: ${resolvedDisplay}`);
-
                         updateOps.push({
                             keyID: rule.colId,
-                            itemID: bid, // Use Siyuan Block ID as identifier for updates
+                            itemID: bid,
                             value: resolvedVal
                         });
                     }
+                } else {
+                    // console.log(`[Materialized-V3] Skip ${bid} Col ${rule.colId}: No inherited value found.`);
                 }
             }
         }
 
         if (updateOps.length > 0) {
-            console.log(`[Materialized Sync] Committing ${updateOps.length} updates to DB.`);
-            await post("/api/av/batchSetAttributeViewBlockAttrs", {
-                avID: avId,
-                values: updateOps
+            // Use the authoritative mapping from Kernel
+            const blockIDsToMap = Array.from(new Set(updateOps.map(op => op.itemID)));
+            let idMap: Record<string, string> = {};
+            
+            try {
+                const mappingRes = await post("/api/av/getAttributeViewItemIDsByBoundIDs", {
+                    avID: avId,
+                    blockIDs: blockIDsToMap
+                });
+                if (mappingRes && typeof mappingRes === "object") {
+                    idMap = mappingRes as Record<string, string>;
+                }
+            } catch (e) {
+                console.warn("[Materialized-V3] Kernel mapping failed, using local map", e);
+            }
+
+            const finalUpdateValues = updateOps.map(op => {
+                // If kernel knows the Item ID, use it. Otherwise, fallback to local map or bid itself (for new rows)
+                const mappedId = idMap[op.itemID] || blockToItem.get(op.itemID) || op.itemID;
+                return { ...op, itemID: mappedId };
             });
 
-            // Force UI refresh by updating the AV block's timestamp
+            const chunkSize = 50;
+            for (let i = 0; i < finalUpdateValues.length; i += chunkSize) {
+                const chunk = finalUpdateValues.slice(i, i + chunkSize);
+                await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                    avID: avId,
+                    values: chunk
+                });
+            }
+
             if (avBlockId) {
                 await post("/api/transactions", {
                     app: "plugin-index",
@@ -99,13 +113,11 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
                     }]
                 });
             }
-            return updateOps.length;
-        } else {
-            console.log("[Materialized Sync] No changes detected.");
+            return finalUpdateValues.length;
         }
         return 0;
     } catch (e) {
-        console.error("[Materialized Sync] Failed", e);
+        console.error("[Materialized Sync] Fatal Error", e);
         throw e;
     }
 }
@@ -223,7 +235,6 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                         if (config.mode !== "multi" && config.singleClassName) {
                             // Single mode
                             const finalAvName = await resolveDBName();
-                            console.log(`[Supertag] Resolved DB Name for ${targetAvId} (Single Mode): "${finalAvName}"`);
                             configs.push({
                                 typeName: config.singleClassName,
                                 avId: targetAvId,
@@ -238,8 +249,6 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                                 for (const m of config.typeMappings) {
                                     if (m.name) {
                                         const finalAvName = await resolveDBName();
-                                        console.log(`[Supertag] Resolved DB Name for ${targetAvId}: "${finalAvName}"`);
-
                                         configs.push({
                                             typeName: m.name,
                                             avId: targetAvId, // Fallback to blockId if avId not set
