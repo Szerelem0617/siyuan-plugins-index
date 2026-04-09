@@ -27,6 +27,8 @@ export interface SupertagCommand {
 }
 export let COMMAND_REGISTRY: Record<string, CommandDef> = {};
 export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
+export let commandAvId: string = "";
+export let typeAvId: string = "";
 
 /**
  * 刷新 Supertag 注册表：从 Command-DB (Layer 2) 和 Type-DB (Layer 3) 联合加载数据
@@ -45,6 +47,7 @@ export async function refreshSupertagRegistry() {
                 const listAttrsRes = await client.getBlockAttrs({ id: listId });
                 const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
                 if (avId) {
+                    commandAvId = avId;
                     const renderRes = await post("/api/av/renderAttributeView", { id: avId });
                     const view = renderRes.view || renderRes;
                     const rows: any[] = view.rows || [];
@@ -97,6 +100,7 @@ export async function refreshSupertagRegistry() {
             // console.log("[Supertag] Type-DB does not have custom-index-linked-av attribute.");
             return;
         }
+        typeAvId = avId;
 
         const renderRes = await post("/api/av/renderAttributeView", { id: avId });
         const view = renderRes.view || renderRes;

@@ -15,6 +15,7 @@ import { supertagManager } from "./features/data/av-setting/supertag-manager";
 import { refreshTopBarCommands, handleTopBarEvents } from "./features/command/global-registration/top-bar";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
+import { initButtonLinkListener, destroyButtonLinkListener } from "./features/command/global-registration/button-link";
 import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
 import { version } from "../plugin.json";
 
@@ -59,6 +60,7 @@ export default class IndexPlugin extends Plugin {
         if (DEV_ENABLE_INIT_SYS) {
             initInlineButtonListener();
             initCommandPalette();
+            initButtonLinkListener();
         }
         // paste 钩子始终激活：只对 siyuan-btn:// 链接生效，与实验模式无关
         this.eventBus.on("paste", handleBtnPaste);
@@ -90,6 +92,7 @@ export default class IndexPlugin extends Plugin {
         if (DEV_ENABLE_INIT_SYS) {
             destroyInlineButtonListener();
             destroyCommandPalette();
+            destroyButtonLinkListener();
         }
         this.eventBus.off("paste", handleBtnPaste);
         console.log("IndexPlugin onunload");
