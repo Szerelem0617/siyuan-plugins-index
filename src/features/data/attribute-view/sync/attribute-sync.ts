@@ -8,12 +8,12 @@ import { getColIDMap, cleanValue } from "../../../../shared/utils/av-utils";
  */
 export async function syncAttribute(avID: string, rowID: string, colID: string, mode: "level" | "siblings" | "descendants" | "filtered", avBlockID: string) {
     try {
-        console.log(`[Sync] Mode: ${mode}, Source RowID: ${rowID}, ColID: ${colID}`);
+        console.log(`[Sync-V2] Starting sync. Mode: ${mode}, Source RowID: ${rowID}, ColID: ${colID}`);
         showMessage("⏳ 正在同步...", 3000);
 
-        // 1. 获取全量数据以查找目标和列映射
+        // 1. 获取全量基础数据以查找目标
         const colInfo = await getColIDMap(avID);
-        const { nameToID, itemToBlock, colToCells } = colInfo;
+        const { nameToID, itemToBlock, blockToItem, colToCells } = colInfo;
 
         // 2. 确定源行数据（从当前视图获取，包含最新状态）
         const sourceViewData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
@@ -28,14 +28,15 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
         if (colIndex === -1) throw new Error("当前视图未显示该列，无法同步");
 
         const syncValue = cleanValue(sourceRow.cells[colIndex].value);
+        console.log(`[Sync-V2] Source Value:`, JSON.stringify(syncValue));
 
         // 获取真实的 Siyuan Block ID 绑定
         const sourceRowID = sourceRow.id;
         const sourceBlockID = itemToBlock.get(sourceRowID);
         if (!sourceBlockID) throw new Error("无法获取源行对应的 Siyuan Block ID");
 
-        // 3. 根据模式筛选目标 Block IDs
-        let targetBlockIDs: string[] = [];
+        // 3. 根据模式筛选目标 Item IDs (AV 内部行 ID)
+        let targetItemIDs: string[] = [];
 
         if (mode === "level") {
             const levelKeyName = Object.keys(nameToID).find(k => k.toLowerCase() === "level");
@@ -56,7 +57,7 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
             const targetLevel = getVal(levelCellMap.get(sourceBlockID));
             if (targetLevel === undefined) throw new Error("无法获取当前行的 Level 值");
 
-            targetBlockIDs = Array.from(levelCellMap.entries())
+            targetItemIDs = Array.from(levelCellMap.entries())
                 .filter(([bid, cell]) => getVal(cell) == targetLevel && bid !== sourceBlockID)
                 .map(([bid]) => bid);
         } else if (mode === "siblings") {
@@ -70,7 +71,7 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
             const sourceFatherVal = fatherCellMap.get(sourceBlockID);
             const targetFather = sourceFatherVal?.text?.content || "";
             
-            targetBlockIDs = Array.from(fatherCellMap.entries())
+            targetItemIDs = Array.from(fatherCellMap.entries())
                 .filter(([bid, cell]) => (cell?.text?.content || "") === targetFather && bid !== sourceBlockID)
                 .map(([bid]) => bid);
         } else if (mode === "descendants") {
@@ -84,8 +85,6 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
             const sourcePath = pathCellMap.get(sourceBlockID)?.text?.content;
             
             if (sourcePath) {
-                // 从 sourcePath 推导后代的身份前缀
-                // 例如：/ID1/002-ID2 -> 其后代必以 /ID1/ID2/ 开头
                 const segments = sourcePath.split("/");
                 const lastSegment = segments[segments.length - 1];
                 const currentIdInPath = lastSegment.replace(/^\d{3}-/, "");
@@ -97,39 +96,67 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
                     identityPrefix
                 });
 
-                targetBlockIDs = Array.from(pathCellMap.entries())
+                targetItemIDs = Array.from(pathCellMap.entries())
                     .filter(([bid, cell]) => {
                         const p = cell?.text?.content;
                         return p && p.startsWith(identityPrefix) && bid !== sourceBlockID;
                     })
                     .map(([bid]) => bid);
                 
-                console.log(`[Sync-Debug] Target Block IDs found: ${targetBlockIDs.length}`);
+                console.log(`[Sync-Debug] Target Item IDs found: ${targetItemIDs.length}`);
             } else {
                 console.error(`[Sync-Debug] sourceID ${sourceBlockID} not found in Path map. Map size: ${pathCellMap.size}`);
                 throw new Error("无法获取当前项的路径数据");
             }
         } else {
             // filtered: 同步到当前视图的所有其他行
-            // 此处保持使用 AV row.id
-            const currentFilteredRowIDs = sourceRows.filter((r: any) => r.id !== sourceRow.id).map((r: any) => r.id);
-            // 将 RowID 转为 Siyuan Block ID
-            targetBlockIDs = currentFilteredRowIDs.map((rid: string) => itemToBlock.get(rid)).filter(Boolean) as string[];
+            // 此处 sourceRows.id 就是我们需要的 AV Item ID
+            targetItemIDs = sourceRows.filter((r: any) => r.id !== sourceRow.id).map((r: any) => r.id);
         }
 
-        if (targetBlockIDs.length === 0) return showMessage("未找到符合条件的项", 3000, "info");
+        if (targetItemIDs.length === 0) return showMessage("未找到符合条件的项", 3000, "info");
+
+        // 3.5 核心：确保获取最准确的 Item ID 映射 (从 Siyuan Block ID 映射到 AV Item ID)
+        let finalItemIDs: string[] = targetItemIDs;
+        
+        if (mode !== "filtered") {
+            try {
+                console.log(`[Sync-V2] Mapping ${targetItemIDs.length} BlockIDs via Kernel...`);
+                const mappingRes = await post("/api/av/getAttributeViewItemIDsByBoundIDs", {
+                    avID: avID,
+                    blockIDs: targetItemIDs
+                });
+                if (mappingRes && typeof mappingRes === "object") {
+                    finalItemIDs = Object.values(mappingRes).filter(id => id && typeof id === "string") as string[];
+                    console.log(`[Sync-V2] Kernel mapping conversion successful: ${finalItemIDs.length} ItemIDs found.`);
+                }
+            } catch (e) {
+                console.warn("[Sync-V2] Kernel mapping failed, falling back to local blockToItem", e);
+                finalItemIDs = targetItemIDs.map(bid => blockToItem.get(bid)).filter(Boolean) as string[];
+            }
+        }
+
+        if (finalItemIDs.length === 0) return showMessage("未能解析出目标的 AV 内部 ID", 3000, "error");
 
         // 4. 执行更新
-        const updateValues = targetBlockIDs.map(bid => ({
+        const updateValues = finalItemIDs.map(iid => ({
             keyID: colID,
-            itemID: bid,
+            itemID: iid,
             value: syncValue
         }));
 
-        await post("/api/av/batchSetAttributeViewBlockAttrs", {
-            avID: avID,
-            values: updateValues
-        });
+        console.log(`[Sync-V2] Batch updating ${updateValues.length} items. First ItemID: ${updateValues[0].itemID}`);
+
+        // 分批执行更新 (每批 50 条) 以保证稳定性，参考 create-db.ts
+        const chunkSize = 50;
+        for (let i = 0; i < updateValues.length; i += chunkSize) {
+            const chunk = updateValues.slice(i, i + chunkSize);
+            const res = await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                avID: avID,
+                values: chunk
+            });
+            console.log(`[Sync-V2] Chunk ${i/chunkSize + 1} Result:`, res);
+        }
 
         if (avBlockID) {
             await post("/api/transactions", {
@@ -138,7 +165,7 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
                 transactions: [{ doOperations: [{ action: "doUpdateUpdated", id: avBlockID, data: formatDate(new Date()) }] }]
             });
         }
-        showMessage(`✅ 同步成功: 更新 ${targetBlockIDs.length} 个项`, 3000);
+        showMessage(`✅ 同步成功: 更新 ${targetItemIDs.length} 个项`, 3000);
     } catch (e: any) {
         console.error("Sync Error", e);
         showMessage(`❌ 同步失败: ${e.message}`, 3000, "error");
