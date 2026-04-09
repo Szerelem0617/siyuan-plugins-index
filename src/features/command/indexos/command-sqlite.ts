@@ -1,4 +1,4 @@
-import { getSqliteEngine, saveDatabaseToDisk } from "../sqlite-manager";
+import { getSqliteEngine, saveDatabaseToDisk } from "../../sqlite/sqlite-manager";
 
 const TABLE_COMMANDS = "sys_command_db";
 const TABLE_TYPES = "sys_type_db";

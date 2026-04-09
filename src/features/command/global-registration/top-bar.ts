@@ -40,7 +40,7 @@ export async function refreshTopBarCommands() {
  */
 async function refreshTopBarFromSqlite(): Promise<boolean> {
     try {
-        const { getSystemTableNames, initSystemTables } = await import("../../sqlite/indexos/command-sqlite");
+        const { getSystemTableNames, initSystemTables } = await import("../indexos/command-sqlite");
         const { runQuery } = await import("../../sqlite/sqlite-manager");
 
         await initSystemTables();

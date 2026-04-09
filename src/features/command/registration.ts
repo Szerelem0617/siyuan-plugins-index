@@ -5,7 +5,7 @@ import { client } from "../../shared/api-client";
 import { showMessage, type Protyle, type Menu } from "siyuan";
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
 import { getSqliteEngine, runQuery, saveDatabaseToDisk } from "../sqlite/sqlite-manager";
-import { getSystemTableNames, initSystemTables } from "../sqlite/indexos/command-sqlite";
+import { getSystemTableNames, initSystemTables } from "./indexos/command-sqlite";
 
 export const DEV_ENABLE_INIT_SYS = true;
 

@@ -19,7 +19,7 @@ import { initButtonLinkListener, destroyButtonLinkListener } from "./features/co
 import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
 import { getSqliteEngine } from "./features/sqlite/sqlite-manager";
 import { version } from "../plugin.json";
-import { initSystemTables } from "./features/sqlite/indexos/command-sqlite";
+import { initSystemTables } from "./features/command/indexos/command-sqlite";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
