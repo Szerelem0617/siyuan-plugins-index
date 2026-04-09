@@ -20,9 +20,9 @@ export async function getColIDMap(avID: string) {
 
         if (kv.values) {
             kv.values.forEach((v: any) => {
-                // 核心：rowId 必须是行标识，不能是单元格标识 (弃用 v.id)
-                const rowId = v.blockID || v.block_id || v.blockId || v.itemID || v.itemId;
-                // bid 是该行绑定的思源文档块 ID
+                // Compatibility: rowId is the internal AV item ID
+                const rowId = v.itemID || v.itemId || v.blockID || v.block_id || v.blockId || v.id;
+                // bid is the bound Siyuan Block ID
                 const bid = v.block?.id || (v.type === 'block' ? (v.content || v.text?.content || v.block?.content) : null);
 
                 if (rowId && bid) {
@@ -40,11 +40,11 @@ export async function getColIDMap(avID: string) {
         colToCells[kv.key.id] = cellMap;
         if (kv.values) {
             kv.values.forEach((v: any) => {
-                const rowId = v.blockID || v.block_id || v.blockId || v.itemID || v.itemId;
+                const rowId = v.itemID || v.itemId || v.blockID || v.block_id || v.blockId || v.id;
                 if (!rowId) return;
                 
-                // 通过行 ID 找到它对应的思源块 ID
-                const bid = itemToBlock.get(rowId);
+                // Try finding by explicit mapping or fallback to treating rowId as bid if it's a block type cell
+                const bid = itemToBlock.get(rowId) || (v.type === 'block' ? (v.block?.id || v.content) : null);
                 if (bid) {
                     cellMap.set(bid, v);
                 }
@@ -53,9 +53,7 @@ export async function getColIDMap(avID: string) {
     });
 
     if (itemToBlock.size === 0 && keyValues.length > 0) {
-        console.warn("[AV Utils] Found 0 unique rows. Sample cell data:", keyValues[0]?.values?.[0]);
-    } else {
-        console.log(`[AV Utils] getColIDMap for ${avID}: Found ${itemToBlock.size} unique rows (from ${keyValues.length} columns).`);
+        console.warn("[AV Utils] Found 0 mappings. Data might not be bound to blocks.");
     }
 
     return { nameToID, idToType, keyValues, itemToBlock, blockToItem, colToCells };
@@ -126,8 +124,8 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
     const pathKV = keyValues.find(kv => kv.key.name.toLowerCase() === "path");
     if (pathKV && pathKV.values) {
         pathKV.values.forEach((v: any) => {
-            const rowId = v.itemID || v.itemId || v.id;
-            const bid = v.blockID || v.block_id || v.blockId || itemToBlock.get(rowId);
+            const rowId = v.itemID || v.itemId || v.blockID || v.block_id || v.blockId || v.id;
+            const bid = itemToBlock.get(rowId);
             const path = v.text?.content;
             if (bid && path) {
                 blockIDToPath.set(bid, path);
@@ -150,15 +148,13 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
     }
     
     console.log(`[Hierarchy-Debug] Built parentMap with ${parentMap.size} relationships.`);
-    const sampleKeys = Array.from(parentMap.keys()).slice(0, 3);
-    sampleKeys.forEach(k => console.log(`[Hierarchy-Debug] Sample: Child ${k} -> Parent ${parentMap.get(k)}`));
 
     // 2. 尝试使用 Father 列 (如果 parentMap 为空或不完整)
     const fatherKV = keyValues.find(kv => kv.key.name.toLowerCase() === "father");
     if (fatherKV && fatherKV.values) {
         fatherKV.values.forEach((v: any) => {
-            const rowId = v.itemID || v.itemId || v.id;
-            const bid = v.blockID || v.block_id || v.blockId || itemToBlock.get(rowId);
+            const rowId = v.itemID || v.itemId || v.blockID || v.block_id || v.blockId || v.id;
+            const bid = itemToBlock.get(rowId);
             const pid = v.text?.content || v.relation?.blockIDs?.[0] || "";
             if (bid && pid && !parentMap.has(bid)) {
                 parentMap.set(bid, pid);
@@ -174,12 +170,15 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
  */
 export function resolveInheritance(
     blockId: string,
-    colId: string,
     mode: "none" | "weak" | "strong",
     cellMap: Map<string, any> | undefined,
     parentMap: Map<string, string>
 ) {
-    if (mode === "none" || !mode || !cellMap) return null;
+    if (mode === "none" || !mode) return null;
+    if (!cellMap) {
+        console.warn(`[Inheritance-Debug] No cellMap for inheritance resolution on block ${blockId}`);
+        return null;
+    }
 
     const getLocal = (bid: string) => {
         const cell = cellMap.get(bid);
@@ -190,20 +189,27 @@ export function resolveInheritance(
 
     let nearestAncestorVal = null;
     let curr = parentMap.get(blockId);
+    let level = 1;
+
+    console.log(`[Inheritance-Debug] Resolving ${blockId} (mode: ${mode}). Initial Parent: ${curr || "None"}`);
 
     while (curr) {
         const val = getLocal(curr);
         if (!isValueEmpty(val)) {
             nearestAncestorVal = val;
+            console.log(`[Inheritance-Debug] Found value at ancestor level ${level}: ${curr}`);
             break;
         }
         curr = parentMap.get(curr);
+        level++;
     }
 
     if (mode === "weak") {
-        return !isValueEmpty(localVal) ? localVal : nearestAncestorVal;
+        const res = !isValueEmpty(localVal) ? localVal : nearestAncestorVal;
+        return res;
     } else if (mode === "strong") {
-        return !isValueEmpty(nearestAncestorVal) ? nearestAncestorVal : localVal;
+        const res = !isValueEmpty(nearestAncestorVal) ? nearestAncestorVal : localVal;
+        return res;
     }
 
     return localVal;
