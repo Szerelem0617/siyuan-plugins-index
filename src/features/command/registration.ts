@@ -5,7 +5,7 @@ import { client } from "../../shared/api-client";
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
 import type { Protyle, Menu } from "siyuan";
 
-export const DEV_ENABLE_INIT_SYS = true;
+export const DEV_ENABLE_INIT_SYS = false;
 
 // --- 内存缓存：Supertag 注册表 ---
 export interface CommandDef {
@@ -20,10 +20,10 @@ export interface SupertagCommand {
     commandRef: string;   // 执行的命令 ID
     paramMapping: string;
     uiLocation: string;   // 绑定的界面位置
-    autoSync?: boolean;    
-    targetDbId?: string;   
-    typeFieldId?: string; 
-    mappedValue?: any; 
+    autoSync?: boolean;
+    targetDbId?: string;
+    typeFieldId?: string;
+    mappedValue?: any;
 }
 export let COMMAND_REGISTRY: Record<string, CommandDef> = {};
 export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
@@ -62,7 +62,7 @@ export async function refreshSupertagRegistry() {
                         const pk = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
                         const cmdId = getCellText("Command ID");
                         const paramMapping = getCellText("Param Mapping");
-                        
+
                         if (pk && cmdId) {
                             COMMAND_REGISTRY[pk.trim()] = {
                                 methodName: pk.trim(),
@@ -143,7 +143,7 @@ export async function refreshSupertagRegistry() {
                         const cmdNameLower = cmdName.toLowerCase();
                         const foundKey = Object.keys(COMMAND_REGISTRY).find(k => k.toLowerCase().includes(cmdNameLower));
                         const cmdInfo = foundKey ? COMMAND_REGISTRY[foundKey] : undefined;
-                        
+
                         if (cmdInfo) {
                             newRegistry.push({
                                 typeTag: cleanTag,
