@@ -147,7 +147,6 @@ export async function buildAvHierarchy(keyValues: any[], itemToBlock: Map<string
         }
     }
     
-    console.log(`[Hierarchy-Debug] Built parentMap with ${parentMap.size} relationships.`);
 
     // 2. 尝试使用 Father 列 (如果 parentMap 为空或不完整)
     const fatherKV = keyValues.find(kv => kv.key.name.toLowerCase() === "father");
@@ -189,27 +188,20 @@ export function resolveInheritance(
 
     let nearestAncestorVal = null;
     let curr = parentMap.get(blockId);
-    let level = 1;
-
-    console.log(`[Inheritance-Debug] Resolving ${blockId} (mode: ${mode}). Initial Parent: ${curr || "None"}`);
 
     while (curr) {
         const val = getLocal(curr);
         if (!isValueEmpty(val)) {
             nearestAncestorVal = val;
-            console.log(`[Inheritance-Debug] Found value at ancestor level ${level}: ${curr}`);
             break;
         }
         curr = parentMap.get(curr);
-        level++;
     }
 
     if (mode === "weak") {
-        const res = !isValueEmpty(localVal) ? localVal : nearestAncestorVal;
-        return res;
+        return !isValueEmpty(localVal) ? localVal : nearestAncestorVal;
     } else if (mode === "strong") {
-        const res = !isValueEmpty(nearestAncestorVal) ? nearestAncestorVal : localVal;
-        return res;
+        return !isValueEmpty(nearestAncestorVal) ? nearestAncestorVal : localVal;
     }
 
     return localVal;

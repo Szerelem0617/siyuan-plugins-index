@@ -21,14 +21,11 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
     }
 
     try {
-        console.log(`[Materialized-V3] Starting sync for AV: ${avId}`);
         const colInfo = await getColIDMap(avId);
         const { blockToItem } = colInfo;
         const parentMap = await buildAvHierarchy(colInfo.keyValues, colInfo.itemToBlock);
 
         const allBlockIds = Array.from(blockToItem.keys());
-        console.log(`[Materialized-V3] Processing ${allBlockIds.length} blocks for ${config.inheritanceRules.length} rules.`);
-
         const updateOps: any[] = [];
 
         const getValStr = (v: any) => {
@@ -42,10 +39,7 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
                 if (rule.mode === 'none') continue;
 
                 const cellMap = colInfo.colToCells[rule.colId];
-                if (!cellMap) {
-                    console.log(`[Materialized-V3] No cellMap for Col: ${rule.colId}`);
-                    continue;
-                }
+                if (!cellMap) continue;
 
                 const cell = cellMap.get(bid);
                 const resolvedVal = resolveInheritance(bid, rule.mode, cellMap, parentMap);
@@ -57,10 +51,8 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
 
                     if (!cell || isValueEmpty(cell)) {
                         isDifferent = true;
-                        console.log(`[Materialized-V3] [Sync-Plan] Block ${bid} Col ${rule.colId} NEW -> Inherited: ${resolvedStr}`);
                     } else if (String(localStr) !== String(resolvedStr)) {
                         isDifferent = true;
-                        console.log(`[Materialized-V3] [Sync-Plan] Block ${bid} Col ${rule.colId} CHANGE: ${localStr} -> ${resolvedStr}`);
                     }
 
                     if (isDifferent) {
@@ -77,8 +69,6 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
         }
 
         if (updateOps.length > 0) {
-            console.log(`[Materialized-V3] Detected ${updateOps.length} updates. Resolving IDs...`);
-
             // Use the authoritative mapping from Kernel
             const blockIDsToMap = Array.from(new Set(updateOps.map(op => op.itemID)));
             let idMap: Record<string, string> = {};
@@ -109,8 +99,6 @@ export async function syncInheritanceToDb(avId: string, config: DbConfig, avBloc
                     values: chunk
                 });
             }
-
-            console.log(`[Materialized-V3] Sync completed: ${finalUpdateValues.length} fields updated.`);
 
             if (avBlockId) {
                 await post("/api/transactions", {
@@ -247,7 +235,6 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                         if (config.mode !== "multi" && config.singleClassName) {
                             // Single mode
                             const finalAvName = await resolveDBName();
-                            console.log(`[Supertag] Resolved DB Name for ${targetAvId} (Single Mode): "${finalAvName}"`);
                             configs.push({
                                 typeName: config.singleClassName,
                                 avId: targetAvId,
@@ -262,8 +249,6 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                                 for (const m of config.typeMappings) {
                                     if (m.name) {
                                         const finalAvName = await resolveDBName();
-                                        console.log(`[Supertag] Resolved DB Name for ${targetAvId}: "${finalAvName}"`);
-
                                         configs.push({
                                             typeName: m.name,
                                             avId: targetAvId, // Fallback to blockId if avId not set

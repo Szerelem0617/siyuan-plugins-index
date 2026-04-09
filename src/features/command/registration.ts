@@ -32,7 +32,6 @@ export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
  * 刷新 Supertag 注册表：从 Command-DB (Layer 2) 和 Type-DB (Layer 3) 联合加载数据
  */
 export async function refreshSupertagRegistry() {
-    console.log("[Supertag] Refreshing registry from Layer 2 & 3 DBs...");
     try {
         // --- 1. Load Layer 2 (Command-DB) ---
         const cmdSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
@@ -79,16 +78,15 @@ export async function refreshSupertagRegistry() {
         const sql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
         const existingDocs = await post("/api/query/sql", { stmt: sql });
         if (!existingDocs || existingDocs.length === 0) {
-            console.log("[Supertag] Type-DB (Layer 3) not found.");
+            // console.log("[Supertag] Type-DB (Layer 3) not found.");
             return;
         }
         const docId = existingDocs[0].root_id;
-        console.log(`[Supertag] Found Type-DB DocID: ${docId}`);
 
         const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' LIMIT 1`;
         const listRes = await post("/api/query/sql", { stmt: listSql });
         if (!listRes || listRes.length === 0) {
-            console.log("[Supertag] Type-DB list block not found.");
+            // console.log("[Supertag] Type-DB list block not found.");
             return;
         }
         const listId = listRes[0].id;
@@ -96,17 +94,15 @@ export async function refreshSupertagRegistry() {
         const listAttrsRes = await client.getBlockAttrs({ id: listId });
         const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
         if (!avId) {
-            console.log("[Supertag] Type-DB does not have custom-index-linked-av attribute.");
+            // console.log("[Supertag] Type-DB does not have custom-index-linked-av attribute.");
             return;
         }
-        console.log(`[Supertag] Rendering Type-DB AV: ${avId}`);
 
         const renderRes = await post("/api/av/renderAttributeView", { id: avId });
         const view = renderRes.view || renderRes;
         const rows: any[] = view.rows || [];
         const columns: any[] = view.columns || [];
 
-        console.log(`[Supertag] Type-DB Rows: ${rows.length}, Columns:`, columns.map((c: any) => c.name || c.keyName));
 
         const newRegistry: SupertagCommand[] = [];
 
@@ -122,7 +118,6 @@ export async function refreshSupertagRegistry() {
             const blockMenuRaw = getCellText("Block Icon Menu");
             const pageMenuRaw = getCellText("Current Page Menu");
 
-            console.log(`[Supertag] Row processing [${typeTagRaw}] -> BlockMenu: "${blockMenuRaw}", PageMenu: "${pageMenuRaw}"`);
 
             const enableColIdx = columns.findIndex((c: any) => c.name === "Enable" || c.keyName === "Enable");
             let enableStatus = true;
@@ -180,7 +175,6 @@ export async function refreshSupertagRegistry() {
             }
         }
         SUPERTAG_REGISTRY = newRegistry;
-        console.log(`[Supertag] Logic Registry refreshed: ${SUPERTAG_REGISTRY.length} routes.`, SUPERTAG_REGISTRY);
     } catch (e) {
         console.error("[Supertag] Failed to refresh registry:", e);
     }
