@@ -35,7 +35,7 @@
 
 - 微信赞赏: (备注微信号)
   
-  <img src="./asset/qr.png" width="200" />
+  <img src="./asset/qr.jpg" width="200" />
 
 # 致谢
 
