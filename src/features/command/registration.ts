@@ -7,7 +7,7 @@ import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./
 import { getSqliteEngine, runQuery, saveDatabaseToDisk } from "../sqlite/sqlite-manager";
 import { getSystemTableNames, initSystemTables } from "./indexos/command-sqlite";
 
-export const DEV_ENABLE_INIT_SYS = true;
+export const DEV_ENABLE_INIT_SYS = false;
 
 // --- 内存缓存：Supertag 注册表 ---
 export interface CommandDef {
@@ -268,7 +268,7 @@ export function getInitSystemSlashCommand() {
                 protyle.insert("");
                 const { db } = await getSqliteEngine();
                 const { commands, types } = getSystemTableNames();
-                
+
                 db.run(`DROP TABLE IF EXISTS ${commands}`);
                 db.run(`DROP TABLE IF EXISTS ${types}`);
                 await initSystemTables();
@@ -301,7 +301,7 @@ export function appendInitSystemMenu(menu: Menu) {
         click: async () => {
             const { db } = await getSqliteEngine();
             const { commands, types } = getSystemTableNames();
-            
+
             db.run(`DROP TABLE IF EXISTS ${commands}`);
             db.run(`DROP TABLE IF EXISTS ${types}`);
             await initSystemTables();

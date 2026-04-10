@@ -53,7 +53,7 @@ export function addSlash() {
 
     const initSysSlash = getInitSystemSlashCommand();
     if (initSysSlash) {
-        protyleSlashContent.push(initSysSlash);
+        protyleSlashContent.push(...initSysSlash);
     }
 
     const inlineBtnSlash = getInlineButtonSlashCommand();

@@ -68,14 +68,16 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.on("paste", handleBtnPaste);
 
         // SQLite Entry Point: Alt + Click on Native Search Button
-        getSqliteEngine().then(async () => {
-            console.log("[IndexOS] SQLite Engine Ready. Initializing builtin DB...");
-            await initSystemTables();
-            // Refresh registrations once DB is ready
-            await refreshSupertagRegistry();
-            await refreshTopBarCommands();
-        }).catch(e => console.error("[SQLite] Preload failed", e));
-        this.registerSqliteEntry();
+        if (DEV_ENABLE_INIT_SYS) {
+            getSqliteEngine().then(async () => {
+                console.log("[IndexOS] SQLite Engine Ready. Initializing builtin DB...");
+                await initSystemTables();
+                // Refresh registrations once DB is ready
+                await refreshSupertagRegistry();
+                await refreshTopBarCommands();
+            }).catch(e => console.error("[SQLite] Preload failed", e));
+            this.registerSqliteEntry();
+        }
     }
     // onLayoutReady() {
     //     initObserver();
