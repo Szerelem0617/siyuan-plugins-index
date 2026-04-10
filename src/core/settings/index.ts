@@ -160,20 +160,6 @@ class Settings {
 
         return merged;
     }
-
-    loadSettings(data: any) {
-        const merged = this.getMergedConfig(data);
-        for (const [key, val] of Object.entries(merged)) {
-            this.set(key, val);
-        }
-    }
-
-    loadSettingsforOutline(data: any) {
-        const merged = this.getMergedConfigForOutline(data);
-        for (const [key, val] of Object.entries(merged)) {
-            this.set(key, val);
-        }
-    }
 }
 
 export const settings = new Settings();

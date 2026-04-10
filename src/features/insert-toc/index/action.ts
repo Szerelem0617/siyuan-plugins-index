@@ -6,6 +6,7 @@ import { generateIndex, queuePopAll } from "./generator";
 
 export async function insertAction(targetBlockId?: string) {
     await settings.load();
+    let forceLocalConfig: any = null;
 
 
     let parentId = getDocid();
@@ -57,7 +58,8 @@ export async function insertAction(targetBlockId?: string) {
                     resolve();
                 }, () => {
                     console.log("[IndexPlugin] User kept Local settings");
-                    settings.loadSettings(localSettings);
+                    // Use local configuration only for THIS operation
+                    forceLocalConfig = settings.getMergedConfig(localSettings);
                     resolve();
                 }, i18n.update, i18n.keep);
             });
@@ -70,7 +72,8 @@ export async function insertAction(targetBlockId?: string) {
     if (!block.data) return;
 
     let indexQueue = new IndexQueue();
-    const currentConfig = settings.getMergedConfig({});
+    // Use the forced local config if available, otherwise use global/merged defaults
+    const currentConfig = forceLocalConfig || settings.getMergedConfig({});
     
 
 

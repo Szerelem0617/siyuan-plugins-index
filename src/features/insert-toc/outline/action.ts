@@ -8,6 +8,7 @@ import { generateOutlineMarkdown } from "./generator";
 
 export async function insertOutlineAction(targetBlockId?: string) {
     await settings.load();
+    let forceLocalConfig: any = null;
 
     let parentId = getDocid();
     if (parentId == null) {
@@ -56,7 +57,7 @@ export async function insertOutlineAction(targetBlockId?: string) {
                     resolve();
                 }, () => {
                     console.log("[IndexPlugin] User kept Local settings (Outline)");
-                    settings.loadSettingsforOutline(localSettings);
+                    forceLocalConfig = settings.getMergedConfigForOutline(localSettings);
                     resolve();
                 }, i18n.update, i18n.keep);
             });
@@ -69,23 +70,17 @@ export async function insertOutlineAction(targetBlockId?: string) {
     let ids = collectOutlineIds(outlineData);
     let extraData = await getBlocksData(ids);
 
+    const currentConfig = forceLocalConfig || settings.getMergedConfigForOutline({});
+
     // Manual insert: Pass empty map to reset anchors
-    let data = generateOutlineMarkdown(outlineData, 0, 0, extraData, new Map<string, string>());
+    let data = generateOutlineMarkdown(outlineData, 0, 0, extraData, new Map<string, string>(), currentConfig);
 
     if (data != '') {
-        const config = {
-            outlineType: settings.get("outlineType"),
-            listTypeOutline: settings.get("listTypeOutline"),
-            iconOutline: settings.get("iconOutline"),
-            outlineAutoUpdate: settings.get("outlineAutoUpdate"),
-            builderAutoUpdate: settings.get("builderAutoUpdate")
-        };
-
         await BlockService.insertOrUpdate(
             parentId,
             data,
             "custom-outline-create",
-            config,
+            currentConfig,
             "outline",
             targetBlockId
         );
