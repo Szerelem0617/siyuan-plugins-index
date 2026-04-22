@@ -10,10 +10,9 @@ Left-click to insert a directory list; right-click for more actions.
 
 `CTRL + ALT + O` Insert current document outline
 
-# 🚀 Version 1.9.2
+# 🚀 Version 1.9.15
 
-- Support running builder on TOC/Outline
-- Fixed the issue where data was not persistent after creating a database for TOC/Outline
+- Fix the issue where the directory cannot be displayed normally in version 3.6.5 of SiYuan
 
 # 🚀 Tutorial
 
