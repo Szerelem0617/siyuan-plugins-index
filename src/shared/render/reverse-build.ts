@@ -41,9 +41,12 @@ export async function buildSubdocTreeMarkdown(notebookId: string, path: string, 
         indent += '    ';
     }
 
+    const allHaveSySuffix = docs.data.files.every((f: any) => f.name.endsWith(".sy"));
+
     for (let doc of docs.data.files) {
         const id = doc.id;
-        const name = escapeHtml(doc.name.slice(0, -3));
+        const rawName = allHaveSySuffix ? doc.name.slice(0, -3) : doc.name;
+        const name = escapeHtml(rawName);
         const subFileCount = doc.subFileCount;
         const subPath = doc.path;
 

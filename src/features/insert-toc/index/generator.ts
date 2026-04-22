@@ -47,9 +47,12 @@ export async function generateIndex(notebookId: any, ppath: any, pitem: IndexQue
     const strategy = StrategyRegistry.get(linkTypeSetting);
     tab++;
 
+    const allHaveSySuffix = docs.data.files.every((f: any) => f.name.endsWith(".sy"));
+
     for (let doc of docs.data.files) {
         const id = doc.id;
-        const name = escapeHtml(doc.name.slice(0, -3));
+        const rawName = allHaveSySuffix ? doc.name.slice(0, -3) : doc.name;
+        const name = escapeHtml(rawName);
         const subFileCount = doc.subFileCount;
         const path = doc.path;
 
@@ -108,10 +111,13 @@ export async function generateIndexAndOutline(notebookId: any, ppath: any, pitem
     const strategy = StrategyRegistry.get(linkTypeSetting);
     tab++;
 
+    const allHaveSySuffix = docs.data.files.every((f: any) => f.name.endsWith(".sy"));
+
     for (let doc of docs.data.files) {
         try {
             const id = doc.id;
-            const name = escapeHtml(doc.name.slice(0, -3));
+            const rawName = allHaveSySuffix ? doc.name.slice(0, -3) : doc.name;
+            const name = escapeHtml(rawName);
             const subFileCount = doc.subFileCount;
             const path = doc.path;
 
