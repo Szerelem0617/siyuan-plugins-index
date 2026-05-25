@@ -6,7 +6,7 @@ import readline  from 'node:readline';
 
 //Please write the "workspace/data/plugins" directory here
 //请在这里填写你的 "workspace/data/plugins" 目录
-let targetDir = 'D:\\思源dev\\data\\plugins';
+let targetDir = '/Users/feng/Siyuan-space/思源dev/data/plugins';
 //Like this
 // const targetDir = `H:\\SiYuanDevSpace\\data\\plugins`;
 //********************************************************************************************

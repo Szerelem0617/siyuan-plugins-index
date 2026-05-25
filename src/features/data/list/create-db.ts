@@ -127,6 +127,17 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
             }
         }
 
+        // --- 0.6 检测是否有连接 builder 的情况 ---
+        let hasBuilderConnection = false;
+        for (const listId of sourceBlockIds) {
+            const attrsRes = await client.getBlockAttrs({ id: listId });
+            const attrs = attrsRes.data || {};
+            if (attrs["custom-tree-create"]) {
+                hasBuilderConnection = true;
+                break;
+            }
+        }
+
         // --- 0.5 检测是否有现成的绑定关系 ---
         let existingAvID = null;
         let existingAvBlockID = null;
@@ -257,6 +268,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
         let iconKeyId = null;
         let titleImgKeyId = null;
         let templateKeyId = null;
+        let subdocIdKeyId = null;
 
         const ensureKey = async (name: string, type: string, icon: string) => {
             let key = currentKeys.find((k: any) => k.name === name);
@@ -289,6 +301,10 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
             fatherKeyId = await ensureKey("Father", "text", "iconLink");
             pathKeyId = await ensureKey("Path", "text", "iconMap");
 
+            if (hasBuilderConnection) {
+                subdocIdKeyId = await ensureKey("subdoc-id", "text", "iconLink");
+            }
+
             // Always add icon column
             iconKeyId = await ensureKey("icon", "text", "iconEmoji");
 
@@ -304,12 +320,13 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
 
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            // Ensure Level, Father, Path are hidden only on creation
+            // Ensure Level, Father, Path, and subdoc-id are hidden only on creation
             if (viewID && !existingAvID) {
                 const hideOps: any[] = [];
                 if (levelKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: levelKeyId, data: true });
                 if (fatherKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: fatherKeyId, data: true });
                 if (pathKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: pathKeyId, data: true });
+                if (subdocIdKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: subdocIdKeyId, data: true });
 
                 // Explicitly ensure icon is NOT hidden
                 if (iconKeyId) hideOps.push({ action: "setAttrViewColHidden", avID: realAvID, blockID: viewID, id: iconKeyId, data: false });
@@ -514,13 +531,15 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                     const pathIdx = columns.findIndex((c: any) => c.keyID === pathKeyId);
                     const levelIdx = columns.findIndex((c: any) => c.keyID === levelKeyId);
                     const fatherIdx = columns.findIndex((c: any) => c.keyID === fatherKeyId);
+                    const subdocIdIdx = subdocIdKeyId ? columns.findIndex((c: any) => c.keyID === subdocIdKeyId) : -1;
 
                     rows.forEach((row: any) => {
                         activeRowIds.add(row.id);
                         currentDataStore[row.id] = {
                             path: pathIdx !== -1 ? row.cells[pathIdx]?.value?.text?.content : undefined,
                             level: levelIdx !== -1 ? row.cells[levelIdx]?.value?.number?.content : undefined,
-                            father: fatherIdx !== -1 ? row.cells[fatherIdx]?.value?.text?.content : undefined
+                            father: fatherIdx !== -1 ? row.cells[fatherIdx]?.value?.text?.content : undefined,
+                            "subdoc-id": subdocIdIdx !== -1 ? row.cells[subdocIdIdx]?.value?.text?.content : undefined
                         };
                     });
 
@@ -604,6 +623,16 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                         keyID: pathKeyId,
                         itemID: itemID,
                         value: { type: "text", text: { content: newPath } }
+                    });
+                }
+            }
+            if (subdocIdKeyId) {
+                const newSubDocId = item.subDocId || "";
+                if (!currentItemData || currentItemData["subdoc-id"] !== newSubDocId) {
+                    updateValues.push({
+                        keyID: subdocIdKeyId,
+                        itemID: itemID,
+                        value: { type: "text", text: { content: newSubDocId } }
                     });
                 }
             }
