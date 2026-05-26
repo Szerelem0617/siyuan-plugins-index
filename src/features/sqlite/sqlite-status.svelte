@@ -11,6 +11,7 @@
         runMutation, rollbackChanges, getChangelog, clearChangelog,
         type MutationResult, type ChangelogEntry
     } from "./sqlite-writeback";
+    import CommandsPanel from "./commands-db/CommandsPanel.svelte";
 
     let avBlocks: any[] = [];
     let loading = true;
@@ -53,7 +54,7 @@
     }, {} as Record<string, ChangelogEntry[]>);
 
     // Tabs
-    let activeTab: "databases" | "console" = "databases";
+    let activeTab: "databases" | "console" | "commands" = "commands";
 
     function detectSqlType(sql: string): string {
         return sql.trim().split(/\s+/)[0]?.toUpperCase() || "";
@@ -303,6 +304,13 @@
     <div class="fn__flex" style="gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--b3-border-color);">
         <button
             class="tab-btn"
+            class:active={activeTab === "commands"}
+            on:click={() => activeTab = "commands"}
+        >
+            Command Control (命令面板)
+        </button>
+        <button
+            class="tab-btn"
             class:active={activeTab === "databases"}
             on:click={() => activeTab = "databases"}
         >
@@ -316,6 +324,13 @@
             SQL Console
         </button>
     </div>
+
+    <!-- Tab Content: Command Control -->
+    {#if activeTab === "commands"}
+        <div class="fn__flex-1 fn__flex-column" style="min-height: 0; display: flex; flex-direction: column;">
+            <CommandsPanel />
+        </div>
+    {/if}
 
     <!-- Tab Content: Databases -->
     {#if activeTab === "databases"}

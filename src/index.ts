@@ -180,8 +180,8 @@ export default class IndexPlugin extends Plugin {
         const dialog = new Dialog({
             title: "IndexOS - Database Diagnostic",
             content: `<div id="sqlite-status-container" class="fn__flex-1" style="height: 100%;"></div>`,
-            width: "600px",
-            height: "500px",
+            width: "850px",
+            height: "650px",
         });
 
         const container = dialog.element.querySelector("#sqlite-status-container");

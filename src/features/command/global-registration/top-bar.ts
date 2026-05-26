@@ -4,6 +4,9 @@ import { client } from "../../../shared/api-client";
 import { dispatchCommand } from "../command-dispatcher";
 import { updateInlineButtonList, InlineButtonCmd } from "./inline-button";
 import { updateCommandPaletteList, PaletteCommand } from "./command-palette";
+import { getSqliteEngine, runQuery } from "../../sqlite/sqlite-manager";
+import { getTargetTablesInfo } from "../registration";
+import { initSystemTables } from "../indexos/command-sqlite";
 
 export interface TopBarCommand {
     id: string;
@@ -23,7 +26,6 @@ export async function refreshTopBarCommands() {
     if (!plugin) return;
 
     try {
-        const { getSqliteEngine } = await import("../../sqlite/sqlite-manager");
         const { db } = await getSqliteEngine();
         if (db) {
             const success = await refreshTopBarFromSqlite();
@@ -40,10 +42,6 @@ export async function refreshTopBarCommands() {
  */
 async function refreshTopBarFromSqlite(): Promise<boolean> {
     try {
-        const { getTargetTablesInfo } = await import("../registration");
-        const { initSystemTables } = await import("../indexos/command-sqlite");
-        const { runQuery } = await import("../../sqlite/sqlite-manager");
-
         await initSystemTables();
         const { commandsTable, commandLabelCol } = await getTargetTablesInfo();
 
@@ -111,29 +109,13 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
 function applyTopBarUpdates(newTopBars: TopBarCommand[], newInlineBtns: InlineButtonCmd[], newPaletteCmds: PaletteCommand[]) {
     if (!plugin) return;
 
-    // 1. Remove commands that are no longer ticked
-    const toRemove = registeredTopBars.filter(r => !newTopBars.find(n => n.id === r.id));
-    for (const rem of toRemove) {
+    // 1. Remove all dynamically registered top bar buttons
+    for (const rem of registeredTopBars) {
         if (rem.element) rem.element.remove();
     }
-    registeredTopBars = registeredTopBars.filter(r => newTopBars.find(n => n.id === r.id));
+    registeredTopBars = [];
 
-    // 2. Add new commands
-    for (const tb of newTopBars) {
-        if (!registeredTopBars.find(r => r.id === tb.id)) {
-            const el = plugin.addTopBar({
-                icon: "iconPlay",
-                title: tb.label,
-                position: "right",
-                callback: () => {
-                    console.log(`[TopBar] Executing: ${tb.label}`, tb.commandId);
-                    const mockContext = { blockEl: document.body, protyleEl: null };
-                    dispatchCommand(tb.commandId, tb.commandParam, mockContext as any);
-                }
-            });
-            registeredTopBars.push({ id: tb.id, element: el });
-        }
-    }
+    // 2. Do NOT add new commands to the Siyuan topbar anymore (removed as requested)
 
     updateInlineButtonList(newInlineBtns);
     updateCommandPaletteList(newPaletteCmds);

@@ -6,6 +6,7 @@ import { showMessage, type Protyle, type Menu } from "siyuan";
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
 import { getSqliteEngine, runQuery, saveDatabaseToDisk } from "../sqlite/sqlite-manager";
 import { getSystemTableNames, initSystemTables } from "./indexos/command-sqlite";
+import { reverseDbToList } from "./hierarchy/db-reverse-list";
 
 export const DEV_ENABLE_INIT_SYS = true;
 
@@ -31,6 +32,8 @@ export let COMMAND_REGISTRY: Record<string, CommandDef> = {};
 export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
 export let commandAvId: string = "";
 export let typeAvId: string = "";
+export function setCommandAvId(val: string) { commandAvId = val; }
+export function setTypeAvId(val: string) { typeAvId = val; }
 
 /**
  * Dynamically resolves active table names and primary key column names.
@@ -350,41 +353,23 @@ export function getInitSystemSlashCommand() {
                 await refreshSupertagRegistry();
                 showMessage("内置 SQLite 数据库已重置并加载默认数据");
             }
+        },
+        {
+            filter: ["reverse db list", "生成大纲列表", "scdg"],
+            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">生成大纲列表模式</span><span class="b3-list-item__meta">Outline</span></div>`,
+            id: "reverseDbList",
+            async callback(protyle: Protyle) {
+                protyle.insert("");
+                const success = await reverseDbToList();
+                if (success) {
+                    await refreshSupertagRegistry();
+                }
+            }
         }
     ];
 }
 
-/**
- * 将初始构建按钮注入到顶栏的右键菜单中
- */
-export function appendInitSystemMenu(menu: Menu) {
-    if (!DEV_ENABLE_INIT_SYS) return;
 
-    menu.addSeparator();
-    menu.addItem({
-        icon: "iconDatabase",
-        label: i18n.initSystemDB,
-        click: async () => {
-            await constructCommandStorage();
-            await refreshSupertagRegistry();
-        }
-    });
-    menu.addItem({
-        icon: "iconRefresh",
-        label: "重置内置 SQLite 数据库",
-        click: async () => {
-            const { db } = await getSqliteEngine();
-            const { commands, types } = getSystemTableNames();
-
-            db.run(`DROP TABLE IF EXISTS ${commands}`);
-            db.run(`DROP TABLE IF EXISTS ${types}`);
-            await initSystemTables();
-            await saveDatabaseToDisk();
-            await refreshSupertagRegistry();
-            showMessage("内置 SQLite 数据库已重置并加载默认数据");
-        }
-    });
-}
 
 /**
  * 从缓存同步挂载方法 (同步执行，确保菜单显示)

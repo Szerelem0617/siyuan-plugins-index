@@ -64,7 +64,7 @@ export default defineConfig({
     build: {
         // 输出路径
         outDir: distDir,
-        emptyOutDir: false,
+        emptyOutDir: true,
 
         // 构建后是否生成 source map 文件
         sourcemap: false,
@@ -117,6 +117,7 @@ export default defineConfig({
 
             output: {
                 entryFileNames: "[name].js",
+                inlineDynamicImports: true,
                 assetFileNames: (assetInfo) => {
                     if (assetInfo.name === "style.css") {
                         return "index.css"

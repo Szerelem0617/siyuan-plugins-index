@@ -2,19 +2,20 @@ import { post } from "../../shared/api-client/request";
 import { client } from "../../shared/api-client";
 import { showMessage } from "siyuan";
 import { sleep } from "../../shared/utils";
-import { createDatabaseWithBlocks } from "../data/list/create-db";
+import { setCommandAvId, setTypeAvId } from "./registration";
+import { getSqliteEngine, runQuery, instantiateAV, saveDatabaseToDisk } from "../sqlite/sqlite-manager";
 
 const NOTEBOOK_NAME = "类与命令管理";
 
 /**
  * Initializes the Command & Type DB notebook and internal pages.
  * 1. Creates a Notebook called "类与命令管理" if it doesn't exist.
- * 2. Creates a Page called "逻辑工厂 (Command-DB)" if it doesn't exist.
- * 3. Creates a Page called "类型绑定 (Type-DB)" if it doesn't exist.
+ * 2. Creates a Page called "逻辑工厂 (Command-DB)" with a pure Attribute View.
+ * 3. Creates a Page called "类型绑定 (Type-DB)" with a pure Attribute View.
  */
 export async function constructCommandStorage() {
     try {
-        showMessage(`[IndexOS] 正在初始化 4 层结构系统存储库...`, 2000);
+        showMessage(`[IndexOS] 正在以纯数据表模式初始化系统存储库...`, 2000);
 
         // 1. Get or Create Notebook
         const { notebooks } = await post("/api/notebook/lsNotebooks", {});
@@ -34,7 +35,8 @@ export async function constructCommandStorage() {
             targetNotebookId,
             "逻辑工厂 (Command-DB)",
             "custom-index-command-db",
-            `# 逻辑工厂 (Command-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 2，用于编排复合指令和参数流转。\n\n* 🌐 全局关系图 (无上下文测试)\n* 📥 收集箱 (无上下文测试)\n* ⬇️ 下方插入同级块\n* 📑 复制当前块\n* 🖇️ 复制块引用\n* 🔍 在右侧分屏打开\n`,
+            `# 逻辑工厂 (Command-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 2，用于编排复合指令和参数流转。\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
+            "Command ID",
             async (avId) => {
                 const addCol = async (name: string, type: string, icon: string, prevKey: string) => {
                     // @ts-ignore
@@ -60,30 +62,51 @@ export async function constructCommandStorage() {
                 const paletteKey = await addCol("Command Palette", "checkbox", "iconSearch", buttonKey);
 
                 // Fetch seed data from SQLite sys_command_db
-                const { runQuery } = await import("../sqlite/sqlite-manager");
                 const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette FROM sys_command_db`);
 
-                await sleep(1000);
-                const renderRes = await post("/api/av/renderAttributeView", { id: avId });
-                const rows = renderRes.view?.rows || renderRes.rows || [];
+                // Insert seed items as detached rows
+                const addRows: any[] = [];
+                for (const match of seedRes.values) {
+                    const [rowID] = match;
+                    addRows.push({
+                        itemID: rowID,
+                        id: "",
+                        isDetached: true
+                    });
+                }
+
+                if (addRows.length > 0) {
+                    console.log(`[IndexOS] Adding ${addRows.length} detached rows to Command-DB AV ${avId}...`);
+                    await post("/api/av/addAttributeViewBlocks", { avID: avId, srcs: addRows });
+                    await sleep(500);
+                }
+
+                // Query primary key column to populate labels
+                const checkKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
+                const checkKeys = Array.isArray(checkKeysRes) ? checkKeysRes : (checkKeysRes.keys || []);
+                const primaryKeyCol = checkKeys.find((k: any) => k.type === "block" || k.name === "主键" || k.name === "Primary Key");
+                const primaryKeyId = primaryKeyCol?.id || checkKeys[0]?.id;
+
                 const populateOps: any[] = [];
-
-                for (const row of rows) {
-                    const firstCell = row.cells[0];
-                    let label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
-
-                    const match = seedRes.values.find((r: any) => label.includes(String(r[1]).trim()));
-                    if (match) {
-                        const [rowID, labelVal, commandID, paramMapping, commandType, targetScope, enable, topBar, inlineButton, commandPalette] = match;
-                        populateOps.push({ keyID: commandIdKey, itemID: row.id, value: { type: "text", text: { content: String(commandID || "") } } });
-                        populateOps.push({ keyID: paramMappingKey, itemID: row.id, value: { type: "text", text: { content: String(paramMapping || "") } } });
-                        populateOps.push({ keyID: commandTypeKey, itemID: row.id, value: { type: "text", text: { content: String(commandType || "") } } });
-                        populateOps.push({ keyID: targetScopeKey, itemID: row.id, value: { type: "text", text: { content: String(targetScope || "") } } });
-                        populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
-                        populateOps.push({ keyID: topBarKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(topBar) === 1 } } });
-                        populateOps.push({ keyID: buttonKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(inlineButton) === 1 } } });
-                        populateOps.push({ keyID: paletteKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(commandPalette) === 1 } } });
+                for (const match of seedRes.values) {
+                    const [rowID, labelVal, commandID, paramMapping, commandType, targetScope, enable, topBar, inlineButton, commandPalette] = match;
+                    
+                    if (primaryKeyId) {
+                        populateOps.push({
+                            keyID: primaryKeyId,
+                            itemID: rowID,
+                            value: { type: "block", block: { content: String(labelVal || "") } }
+                        });
                     }
+
+                    populateOps.push({ keyID: commandIdKey, itemID: rowID, value: { type: "text", text: { content: String(commandID || "") } } });
+                    populateOps.push({ keyID: paramMappingKey, itemID: rowID, value: { type: "text", text: { content: String(paramMapping || "") } } });
+                    populateOps.push({ keyID: commandTypeKey, itemID: rowID, value: { type: "text", text: { content: String(commandType || "") } } });
+                    populateOps.push({ keyID: targetScopeKey, itemID: rowID, value: { type: "text", text: { content: String(targetScope || "") } } });
+                    populateOps.push({ keyID: enableKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
+                    populateOps.push({ keyID: topBarKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(topBar) === 1 } } });
+                    populateOps.push({ keyID: buttonKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(inlineButton) === 1 } } });
+                    populateOps.push({ keyID: paletteKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(commandPalette) === 1 } } });
                 }
 
                 if (populateOps.length > 0) {
@@ -97,7 +120,8 @@ export async function constructCommandStorage() {
             targetNotebookId,
             "类型绑定 (Type-DB)",
             "custom-index-type-db",
-            `# 类型绑定 (Type-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n* #Project\n* #Person\n`,
+            `# 类型绑定 (Type-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
+            "Block Icon Menu",
             async (avId) => {
                 const addCol = async (name: string, type: string, icon: string, prevKey: string) => {
                     // @ts-ignore
@@ -118,25 +142,46 @@ export async function constructCommandStorage() {
                 const enableKey = await addCol("Enable", "checkbox", "iconCheck", pageMenuKey);
 
                 // Fetch seed data from SQLite sys_type_db
-                const { runQuery } = await import("../sqlite/sqlite-manager");
                 const seedRes = await runQuery(`SELECT rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable FROM sys_type_db`);
 
-                await sleep(1000);
-                const renderRes = await post("/api/av/renderAttributeView", { id: avId });
-                const rows = renderRes.view?.rows || renderRes.rows || [];
+                // Insert seed items as detached rows
+                const addRows: any[] = [];
+                for (const match of seedRes.values) {
+                    const [rowID] = match;
+                    addRows.push({
+                        itemID: rowID,
+                        id: "",
+                        isDetached: true
+                    });
+                }
+
+                if (addRows.length > 0) {
+                    console.log(`[IndexOS] Adding ${addRows.length} detached rows to Type-DB AV ${avId}...`);
+                    await post("/api/av/addAttributeViewBlocks", { avID: avId, srcs: addRows });
+                    await sleep(500);
+                }
+
+                // Query primary key column to populate labels
+                const checkKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
+                const checkKeys = Array.isArray(checkKeysRes) ? checkKeysRes : (checkKeysRes.keys || []);
+                const primaryKeyCol = checkKeys.find((k: any) => k.type === "block" || k.name === "主键" || k.name === "Primary Key");
+                const primaryKeyId = primaryKeyCol?.id || checkKeys[0]?.id;
+
                 const populateOps: any[] = [];
-
-                for (const row of rows) {
-                    const firstCell = row.cells[0];
-                    let label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
-
-                    const match = seedRes.values.find((r: any) => label.includes(String(r[1]).trim()));
-                    if (match) {
-                        const [rowID, supertag, blockMenu, pageMenu, enable] = match;
-                        populateOps.push({ keyID: blockMenuKey, itemID: row.id, value: { type: "text", text: { content: String(blockMenu || "") } } });
-                        populateOps.push({ keyID: pageMenuKey, itemID: row.id, value: { type: "text", text: { content: String(pageMenu || "") } } });
-                        populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
+                for (const match of seedRes.values) {
+                    const [rowID, supertag, blockMenu, pageMenu, enable] = match;
+                    
+                    if (primaryKeyId) {
+                        populateOps.push({
+                            keyID: primaryKeyId,
+                            itemID: rowID,
+                            value: { type: "block", block: { content: String(supertag || "") } }
+                        });
                     }
+
+                    populateOps.push({ keyID: blockMenuKey, itemID: rowID, value: { type: "text", text: { content: String(blockMenu || "") } } });
+                    populateOps.push({ keyID: pageMenuKey, itemID: rowID, value: { type: "text", text: { content: String(pageMenu || "") } } });
+                    populateOps.push({ keyID: enableKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
                 }
 
                 if (populateOps.length > 0) {
@@ -149,12 +194,10 @@ export async function constructCommandStorage() {
             await establishDbRelation(commandDb.avId, typeDb.avId);
 
             // Set global registration variables
-            const reg = await import("./registration");
-            reg.commandAvId = commandDb.avId;
-            reg.typeAvId = typeDb.avId;
+            setCommandAvId(commandDb.avId);
+            setTypeAvId(typeDb.avId);
 
             // Sync the newly created AVs into SQLite av_ tables
-            const { instantiateAV, getSqliteEngine, saveDatabaseToDisk } = await import("../sqlite/sqlite-manager");
             console.log("[IndexOS] Syncing newly initialized Command-DB and Type-DB to SQLite...");
             await instantiateAV(commandDb.avId, true);
             await instantiateAV(typeDb.avId, true);
@@ -374,6 +417,7 @@ async function initDbDoc(
     docName: string,
     attrName: string,
     initMarkdown: string,
+    expectedColName: string,
     initColsCallback: (avId: string) => Promise<void>
 ): Promise<{ docId: string; avId: string }> {
     // 0. Check via attributes first
@@ -384,11 +428,13 @@ async function initDbDoc(
         console.log(`[IndexOS] Found existing system db [${docName}] via attr: doc=${docId}`);
         
         let avId = "";
-        const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' ORDER BY created ASC LIMIT 1`;
-        const listRes = await post("/api/query/sql", { stmt: listSql });
-        if (listRes && listRes.length > 0) {
-            const listAttrsRes = await client.getBlockAttrs({ id: listRes[0].id });
-            avId = listAttrsRes.data?.["custom-index-linked-av"] || "";
+        const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
+        const avRes = await post("/api/query/sql", { stmt: avSql });
+        if (avRes && avRes.length > 0) {
+            const domRes = await client.getBlockDOM({ id: avRes[0].id });
+            const html = domRes.data?.dom || "";
+            const match = html.match(/data-av-id="([^"]+)"/);
+            avId = match ? match[1] : avRes[0].id;
         }
         return { docId, avId };
     }
@@ -436,37 +482,41 @@ async function initDbDoc(
             }
         });
 
-        // 3. Ensure the list is turned into a Database
+        // 3. Locate the Attribute View block directly
         console.log(`[IndexOS] Waiting for indexing on ${docId} for ${docName}...`);
         await sleep(2000);
-        const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' ORDER BY created ASC LIMIT 1`;
-        const listRes = await post("/api/query/sql", { stmt: listSql });
+        
+        const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
+        const avRes = await post("/api/query/sql", { stmt: avSql });
 
-        if (listRes && listRes.length > 0) {
-            const listId = listRes[0].id;
-            const listAttrsRes = await client.getBlockAttrs({ id: listId });
-            const listAttrs = listAttrsRes.data || {};
-            avId = listAttrs["custom-index-linked-av"] || "";
+        if (avRes && avRes.length > 0) {
+            const avBlockId = avRes[0].id;
+            const domRes = await client.getBlockDOM({ id: avBlockId });
+            const html = domRes.data?.dom || "";
+            const match = html.match(/data-av-id="([^"]+)"/);
+            avId = match ? match[1] : avBlockId;
 
-            if (!avId) {
-                console.log(`[IndexOS] Converting list ${listId} to DB for ${docName}...`);
-                await createDatabaseWithBlocks([listId], true, true);
-                await sleep(1000);
+            if (avId) {
+                // Pre-render to force Siyuan to instantiate the default view in its database engine
+                console.log(`[IndexOS] Pre-rendering AV ${avId} to initialize view...`);
+                await post("/api/av/renderAttributeView", { id: avId });
+                await sleep(500);
 
-                const newAttrsRes = await client.getBlockAttrs({ id: listId });
-                const newAttrs = newAttrsRes.data || {};
-                avId = newAttrs["custom-index-linked-av"] || "";
+                // Check if it is already initialized by checking if the expected custom column exists
+                const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
+                const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
+                const isAlreadyInitialized = currentKeys.some((k: any) => k.name === expectedColName);
 
-                if (avId) {
-                    console.log(`[IndexOS] DB created with avID: ${avId}, injecting columns...`);
+                if (!isAlreadyInitialized) {
+                    console.log(`[IndexOS] DB created with avID: ${avId}, injecting columns and detached rows...`);
                     await initColsCallback(avId);
-                    console.log(`[IndexOS] DB columns initialized for ${docName}.`);
+                    console.log(`[IndexOS] DB columns and detached rows initialized for ${docName}.`);
+                } else {
+                    console.log(`[IndexOS] DB already initialized for ${docName}.`);
                 }
-            } else {
-                console.log(`[IndexOS] DB already exists and linked for ${docName}.`);
             }
         } else {
-            console.warn(`[IndexOS] Failed to find the list block in ${docName} for DB conversion.`);
+            console.warn(`[IndexOS] Failed to find the AV block in ${docName}.`);
         }
     }
 
