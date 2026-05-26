@@ -5,6 +5,58 @@ let dbInstance: any = null;
 let SQL_ENGINE: any = null;
 const STORAGE_DB_PATH = "/data/storage/petal/siyuan-plugins-index/index-os.sqlite";
 
+// ─── AV Type → SQLite Type Mapping ───
+const AV_TYPE_TO_SQLITE: Record<string, string> = {
+    text: "TEXT",
+    number: "REAL",
+    select: "TEXT",
+    mSelect: "TEXT",   // JSON array
+    date: "INTEGER",   // Unix ms timestamp
+    checkbox: "INTEGER",
+    url: "TEXT",
+    email: "TEXT",
+    phone: "TEXT",
+    relation: "TEXT",  // JSON array of block IDs
+    rollup: "TEXT",    // Computed, read-only
+    block: "TEXT",     // Primary key binding
+    mAsset: "TEXT",    // JSON array
+    template: "TEXT",  // Computed, read-only
+    created: "INTEGER",
+    updated: "INTEGER",
+};
+
+// Columns that are NEVER writable back to AV
+const READONLY_TYPES = new Set(["rollup", "block", "template", "created", "updated"]);
+
+// ─── Schema Types ───
+export interface AVColumnSchema {
+    avId: string;
+    colName: string;   // Safe SQLite column name
+    keyId: string;     // AV original key ID
+    keyName: string;   // AV original column name
+    keyType: string;   // AV column type
+    writable: boolean;
+    options: string | null; // JSON for select options
+}
+
+export interface SyncResult {
+    success: boolean;
+    rowCount?: number;
+    message?: string;
+    unchanged?: boolean;
+}
+
+export interface SavedQuery {
+    id: string;
+    name: string;
+    sql: string;
+    created: string;
+}
+
+// ═══════════════════════════════════════════
+//  Engine Initialization
+// ═══════════════════════════════════════════
+
 export async function getSqliteEngine() {
     if (dbInstance) return { db: dbInstance, SQL: SQL_ENGINE };
 
@@ -44,13 +96,75 @@ export async function getSqliteEngine() {
             dbInstance = new SQL_ENGINE.Database();
         }
 
-        dbInstance.run("CREATE TABLE IF NOT EXISTS _meta (id TEXT PRIMARY KEY, type TEXT, updated TEXT);");
+        // Initialize system tables
+        _initSystemTables(dbInstance);
         
         return { db: dbInstance, SQL: SQL_ENGINE };
     } catch (e) {
         throw e;
     }
 }
+
+function _initSystemTables(db: any) {
+    // Core metadata (upgraded from original)
+    db.run(`CREATE TABLE IF NOT EXISTS _meta (
+        id TEXT PRIMARY KEY,
+        type TEXT,
+        updated TEXT,
+        data_hash TEXT,
+        row_count INTEGER DEFAULT 0,
+        col_count INTEGER DEFAULT 0
+    );`);
+
+    // Migration for older _meta schema on disk
+    try {
+        db.run("ALTER TABLE _meta ADD COLUMN data_hash TEXT;");
+    } catch (e) {}
+    try {
+        db.run("ALTER TABLE _meta ADD COLUMN row_count INTEGER DEFAULT 0;");
+    } catch (e) {}
+    try {
+        db.run("ALTER TABLE _meta ADD COLUMN col_count INTEGER DEFAULT 0;");
+    } catch (e) {}
+
+    // Schema registry — stores AV column metadata
+    db.run(`CREATE TABLE IF NOT EXISTS _av_schema (
+        av_id TEXT NOT NULL,
+        col_name TEXT NOT NULL,
+        key_id TEXT NOT NULL,
+        key_name TEXT NOT NULL,
+        key_type TEXT NOT NULL,
+        writable INTEGER DEFAULT 1,
+        options TEXT,
+        col_order INTEGER DEFAULT 0,
+        PRIMARY KEY (av_id, col_name)
+    );`);
+
+    // Changelog — operation journal for Phase 2 write-back
+    db.run(`CREATE TABLE IF NOT EXISTS _changelog (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        av_id TEXT NOT NULL,
+        row_id TEXT NOT NULL,
+        col_name TEXT NOT NULL,
+        key_id TEXT,
+        old_value TEXT,
+        new_value TEXT,
+        timestamp TEXT NOT NULL,
+        synced INTEGER DEFAULT 0
+    );`);
+
+    // Saved queries
+    db.run(`CREATE TABLE IF NOT EXISTS _saved_queries (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        sql TEXT NOT NULL,
+        created TEXT NOT NULL
+    );`);
+}
+
+// ═══════════════════════════════════════════
+//  Disk Persistence
+// ═══════════════════════════════════════════
 
 export async function saveDatabaseToDisk() {
     if (!dbInstance) return;
@@ -67,9 +181,56 @@ export async function saveDatabaseToDisk() {
     }
 }
 
-export async function instantiateAV(avID: string) {
+// ═══════════════════════════════════════════
+//  AV Instantiation (Phase 1 — Enhanced)
+// ═══════════════════════════════════════════
+
+/**
+ * Compute a lightweight content hash for change detection.
+ * Uses sorted JSON of all cell values to detect modifications.
+ */
+function _computeDataHash(keyValues: any[]): string {
+    let hash = 0;
+    const str = JSON.stringify(keyValues.map(kv => ({
+        id: kv.key.id,
+        name: kv.key.name,
+        type: kv.key.type,
+        valCount: kv.values?.length || 0,
+        // Sample first and last value for change detection without full serialization
+        first: kv.values?.[0]?.blockID || "",
+        last: kv.values?.[kv.values?.length - 1]?.blockID || ""
+    })));
+    
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash |= 0; // Convert to 32bit integer
+    }
+    return hash.toString(36);
+}
+
+/**
+ * Map AV type to the best SQLite column type
+ */
+function _getSqliteType(avType: string): string {
+    return AV_TYPE_TO_SQLITE[avType] || "TEXT";
+}
+
+/**
+ * Extract options list for select/mSelect type columns
+ */
+function _extractSelectOptions(kv: any): string | null {
+    const options = kv.key.options;
+    if (!options || !Array.isArray(options)) return null;
+    return JSON.stringify(options.map((o: any) => ({
+        name: o.name || o.content,
+        color: o.color
+    })));
+}
+
+export async function instantiateAV(avID: string, force: boolean = false): Promise<SyncResult> {
     const { db } = await getSqliteEngine();
-    console.log(`[SQLiteManager] Instantiating AV: ${avID}`);
+    console.log(`[SQLiteManager] Instantiating AV: ${avID} (force=${force})`);
     const res = await post("/api/av/getAttributeView", { id: avID });
     
     // Debug: Check if the response is actually valid
@@ -84,14 +245,31 @@ export async function instantiateAV(avID: string) {
     
     if (keyValues.length === 0) return { success: false, message: "Empty/No columns" };
 
+    // ── Incremental Sync: Check if data has changed ──
+    if (!force) {
+        const newHash = _computeDataHash(keyValues);
+        try {
+            const hashRes = db.exec(`SELECT data_hash FROM _meta WHERE id = ?`, [avID]);
+            if (hashRes.length > 0 && hashRes[0].values.length > 0) {
+                const oldHash = hashRes[0].values[0][0];
+                if (oldHash === newHash) {
+                    console.log(`[SQLiteManager] AV ${avID} unchanged (hash match). Skipping rebuild.`);
+                    return { success: true, rowCount: 0, unchanged: true };
+                }
+            }
+        } catch (e) {
+            // First sync or _meta schema outdated — proceed with full sync
+        }
+    }
+
     // 1. 映射列头 (增加去重逻辑)
-    const usedNames = new Set(["rowID"]);
-    const columns = keyValues.map((kv: any) => {
+    const usedNames = new Set(["rowID", "_itemID"]);
+    const columns = keyValues.map((kv: any, idx: number) => {
         let baseName = kv.key.name.replace(/[^\w]/g, '_') || "unnamed";
         let safeName = baseName;
         
         // 如果已存在或为空（比如全是非 ASCII 字符），则追加 ID 后四位
-        if (usedNames.has(safeName) || safeName === "__") {
+        if (usedNames.has(safeName) || safeName === "__" || safeName === "_") {
             safeName = `${baseName}_${kv.key.id.slice(-4)}`;
         }
         
@@ -106,14 +284,30 @@ export async function instantiateAV(avID: string) {
         return {
             id: kv.key.id,
             name: safeName,
-            type: kv.key.type
+            originalName: kv.key.name,
+            type: kv.key.type,
+            sqliteType: _getSqliteType(kv.key.type),
+            writable: !READONLY_TYPES.has(kv.key.type),
+            options: _extractSelectOptions(kv),
+            order: idx
         };
     });
 
-    // 2. 清理旧数据并重新建表
+    // 2. 清理旧数据并重新建表（使用正确的类型映射）
     console.log(`[SQLiteManager] Creating table "${avID}"...`);
     db.run(`DROP TABLE IF EXISTS "${avID}";`); 
-    db.run(`CREATE TABLE "${avID}" (rowID TEXT PRIMARY KEY, ${columns.map(c => `"${c.name}" TEXT`).join(", ")});`);
+    
+    const colDefs = columns.map(c => `"${c.name}" ${c.sqliteType}`).join(", ");
+    db.run(`CREATE TABLE "${avID}" (rowID TEXT PRIMARY KEY, "_itemID" TEXT, ${colDefs});`);
+
+    // 2.5 写入 Schema 元数据
+    db.run(`DELETE FROM _av_schema WHERE av_id = ?;`, [avID]);
+    for (const col of columns) {
+        db.run(
+            `INSERT INTO _av_schema (av_id, col_name, key_id, key_name, key_type, writable, options, col_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+            [avID, col.name, col.id, col.originalName, col.type, col.writable ? 1 : 0, col.options, col.order]
+        );
+    }
 
     // 3. 行归类数据平铺
     const rowMap = new Map<string, any>();
@@ -129,10 +323,12 @@ export async function instantiateAV(avID: string) {
 
         kv.values?.forEach((v: any) => {
             try {
-                const rowId = v.blockID || v.blockId || v.itemID || v.itemId;
+                const blockId = v.blockID || v.blockId || "";
+                const itemId = v.itemID || v.itemId || "";
+                const rowId = blockId || itemId;
                 if (!rowId) return;
 
-                if (!rowMap.has(rowId)) rowMap.set(rowId, { rowID: rowId });
+                if (!rowMap.has(rowId)) rowMap.set(rowId, { rowID: rowId, _itemID: itemId || blockId });
                 const item = rowMap.get(rowId);
 
                 let val: any = null;
@@ -186,9 +382,10 @@ export async function instantiateAV(avID: string) {
     const rows = Array.from(rowMap.values());
     console.log(`[SQLiteManager] Inserting ${rows.length} rows into "${avID}"...`);
     
+    db.run("BEGIN TRANSACTION;");
     for (const row of rows) {
         try {
-            const fields = ["rowID", ...columns.map(c => c.name)];
+            const fields = ["rowID", "_itemID", ...columns.map(c => c.name)];
             const placeholders = fields.map(() => "?").join(", ");
             const values = fields.map(f => {
                 const v = row[f];
@@ -200,12 +397,22 @@ export async function instantiateAV(avID: string) {
             console.error(`[SQLite-Debug] Row Insert Failed. Data:`, row, rowInsertError);
         }
     }
+    db.run("COMMIT;");
 
-    db.run(`INSERT OR REPLACE INTO _meta (id, type, updated) VALUES (?, 'av', ?);`, [avID, new Date().toISOString()]);
+    // 5. 更新 _meta（含 hash 和统计信息）
+    const dataHash = _computeDataHash(keyValues);
+    db.run(
+        `INSERT OR REPLACE INTO _meta (id, type, updated, data_hash, row_count, col_count) VALUES (?, 'av', ?, ?, ?, ?);`,
+        [avID, new Date().toISOString(), dataHash, rows.length, columns.length]
+    );
     await saveDatabaseToDisk();
 
     return { success: true, rowCount: rows.length };
 }
+
+// ═══════════════════════════════════════════
+//  Query Engine
+// ═══════════════════════════════════════════
 
 export async function runQuery(sql: string) {
     const { db } = await getSqliteEngine();
@@ -213,10 +420,177 @@ export async function runQuery(sql: string) {
     return res.length > 0 ? { columns: res[0].columns, values: res[0].values } : { columns: [], values: [] };
 }
 
+// ═══════════════════════════════════════════
+//  Schema & Metadata Queries
+// ═══════════════════════════════════════════
+
 export async function getInstantiatedIds(): Promise<Set<string>> {
     const { db } = await getSqliteEngine();
     try {
         const res = db.exec("SELECT id FROM _meta WHERE type = 'av'");
         return new Set(res[0]?.values.map((v: any) => v[0]) || []);
     } catch { return new Set(); }
+}
+
+/**
+ * Get full schema info for an instantiated AV
+ */
+export async function getAVSchema(avID: string): Promise<AVColumnSchema[]> {
+    const { db } = await getSqliteEngine();
+    try {
+        const res = db.exec(
+            `SELECT av_id, col_name, key_id, key_name, key_type, writable, options FROM _av_schema WHERE av_id = ? ORDER BY col_order`,
+            [avID]
+        );
+        if (!res.length) return [];
+        return res[0].values.map((row: any) => ({
+            avId: row[0],
+            colName: row[1],
+            keyId: row[2],
+            keyName: row[3],
+            keyType: row[4],
+            writable: row[5] === 1,
+            options: row[6]
+        }));
+    } catch { return []; }
+}
+
+/**
+ * Get sync metadata for all instantiated AVs
+ */
+export async function getSyncMetadata(): Promise<Record<string, { updated: string; rowCount: number; colCount: number }>> {
+    const { db } = await getSqliteEngine();
+    try {
+        const res = db.exec("SELECT id, updated, row_count, col_count FROM _meta WHERE type = 'av'");
+        if (!res.length) return {};
+        const result: Record<string, any> = {};
+        res[0].values.forEach((row: any) => {
+            result[row[0]] = { updated: row[1], rowCount: row[2] || 0, colCount: row[3] || 0 };
+        });
+        return result;
+    } catch { return {}; }
+}
+
+// ═══════════════════════════════════════════
+//  Saved Queries
+// ═══════════════════════════════════════════
+
+export async function saveQuery(name: string, sql: string): Promise<string> {
+    const { db } = await getSqliteEngine();
+    // @ts-ignore
+    const id = window.Lute?.NewNodeID?.() || `q_${Date.now()}`;
+    db.run(
+        `INSERT OR REPLACE INTO _saved_queries (id, name, sql, created) VALUES (?, ?, ?, ?);`,
+        [id, name, sql, new Date().toISOString()]
+    );
+    await saveDatabaseToDisk();
+    return id;
+}
+
+export async function getSavedQueries(): Promise<SavedQuery[]> {
+    const { db } = await getSqliteEngine();
+    try {
+        const res = db.exec("SELECT id, name, sql, created FROM _saved_queries ORDER BY created DESC");
+        if (!res.length) return [];
+        return res[0].values.map((row: any) => ({
+            id: row[0], name: row[1], sql: row[2], created: row[3]
+        }));
+    } catch { return []; }
+}
+
+export async function deleteSavedQuery(id: string): Promise<void> {
+    const { db } = await getSqliteEngine();
+    db.run(`DELETE FROM _saved_queries WHERE id = ?;`, [id]);
+    await saveDatabaseToDisk();
+}
+
+// ═══════════════════════════════════════════
+//  Export Utilities
+// ═══════════════════════════════════════════
+
+/**
+ * Export query results as CSV string
+ */
+export function exportToCSV(queryResult: { columns: string[]; values: any[][] }): string {
+    if (!queryResult || !queryResult.columns.length) return "";
+
+    const csvRows: string[] = [];
+    // Header
+    csvRows.push(queryResult.columns.map(col => _csvEscape(col)).join(","));
+    // Rows
+    queryResult.values.forEach(row => {
+        csvRows.push(row.map(val => _csvEscape(val === null ? "" : String(val))).join(","));
+    });
+    return csvRows.join("\n");
+}
+
+/**
+ * Export query results as JSON string
+ */
+export function exportToJSON(queryResult: { columns: string[]; values: any[][] }): string {
+    if (!queryResult || !queryResult.columns.length) return "[]";
+
+    const rows = queryResult.values.map(row => {
+        const obj: Record<string, any> = {};
+        queryResult.columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
+        return obj;
+    });
+    return JSON.stringify(rows, null, 2);
+}
+
+/**
+ * Trigger a file download in the browser
+ */
+export function downloadFile(content: string, filename: string, mimeType: string = "text/csv") {
+    const blob = new Blob(["\uFEFF" + content], { type: `${mimeType};charset=utf-8` }); // BOM for Excel
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function _csvEscape(val: string): string {
+    if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+        return `"${val.replace(/"/g, '""')}"`;
+    }
+    return val;
+}
+
+// ═══════════════════════════════════════════
+//  Changelog (Phase 2 Foundation)
+// ═══════════════════════════════════════════
+
+/**
+ * Get pending (unsynced) changelog entries for an AV
+ */
+export async function getPendingChanges(avID: string): Promise<any[]> {
+    const { db } = await getSqliteEngine();
+    try {
+        const res = db.exec(
+            `SELECT id, row_id, col_name, key_id, old_value, new_value, timestamp FROM _changelog WHERE av_id = ? AND synced = 0 ORDER BY id`,
+            [avID]
+        );
+        if (!res.length) return [];
+        return res[0].values.map((row: any) => ({
+            id: row[0], rowId: row[1], colName: row[2], keyId: row[3],
+            oldValue: row[4], newValue: row[5], timestamp: row[6]
+        }));
+    } catch { return []; }
+}
+
+/**
+ * Record a change in the changelog (called by future Phase 2 UPDATE interceptor)
+ */
+export async function recordChange(avID: string, rowId: string, colName: string, keyId: string, oldValue: any, newValue: any): Promise<void> {
+    const { db } = await getSqliteEngine();
+    db.run(
+        `INSERT INTO _changelog (av_id, row_id, col_name, key_id, old_value, new_value, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?);`,
+        [avID, rowId, colName, keyId, oldValue === null ? null : String(oldValue), newValue === null ? null : String(newValue), new Date().toISOString()]
+    );
 }

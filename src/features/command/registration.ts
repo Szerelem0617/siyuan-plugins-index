@@ -7,7 +7,7 @@ import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./
 import { getSqliteEngine, runQuery, saveDatabaseToDisk } from "../sqlite/sqlite-manager";
 import { getSystemTableNames, initSystemTables } from "./indexos/command-sqlite";
 
-export const DEV_ENABLE_INIT_SYS = false;
+export const DEV_ENABLE_INIT_SYS = true;
 
 // --- 内存缓存：Supertag 注册表 ---
 export interface CommandDef {
