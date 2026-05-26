@@ -105,6 +105,29 @@ export async function getSqliteEngine() {
     }
 }
 
+/**
+ * Convert Attribute View ID to a valid SQL table name (unquoted).
+ * e.g., "20251021232406-u4zvv9w" -> "av_20251021232406_u4zvv9w"
+ */
+export function avIdToTableName(avId: string): string {
+    return `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+}
+
+/**
+ * Convert SQL table name back to the Attribute View ID.
+ * e.g., "av_20251021232406_u4zvv9w" -> "20251021232406-u4zvv9w"
+ */
+export function tableNameToAvId(tableName: string): string {
+    if (tableName.startsWith("av_")) {
+        const raw = tableName.slice(3);
+        if (raw.length > 14 && raw[14] === "_") {
+            return raw.slice(0, 14) + "-" + raw.slice(15);
+        }
+        return raw.replace("_", "-");
+    }
+    return tableName;
+}
+
 function _initSystemTables(db: any) {
     // Core metadata (upgraded from original)
     db.run(`CREATE TABLE IF NOT EXISTS _meta (
@@ -115,17 +138,6 @@ function _initSystemTables(db: any) {
         row_count INTEGER DEFAULT 0,
         col_count INTEGER DEFAULT 0
     );`);
-
-    // Migration for older _meta schema on disk
-    try {
-        db.run("ALTER TABLE _meta ADD COLUMN data_hash TEXT;");
-    } catch (e) {}
-    try {
-        db.run("ALTER TABLE _meta ADD COLUMN row_count INTEGER DEFAULT 0;");
-    } catch (e) {}
-    try {
-        db.run("ALTER TABLE _meta ADD COLUMN col_count INTEGER DEFAULT 0;");
-    } catch (e) {}
 
     // Schema registry — stores AV column metadata
     db.run(`CREATE TABLE IF NOT EXISTS _av_schema (
@@ -294,11 +306,12 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
     });
 
     // 2. 清理旧数据并重新建表（使用正确的类型映射）
-    console.log(`[SQLiteManager] Creating table "${avID}"...`);
-    db.run(`DROP TABLE IF EXISTS "${avID}";`); 
+    const tableName = avIdToTableName(avID);
+    console.log(`[SQLiteManager] Creating table ${tableName}...`);
+    db.run(`DROP TABLE IF EXISTS ${tableName};`); 
     
     const colDefs = columns.map(c => `"${c.name}" ${c.sqliteType}`).join(", ");
-    db.run(`CREATE TABLE "${avID}" (rowID TEXT PRIMARY KEY, "_itemID" TEXT, ${colDefs});`);
+    db.run(`CREATE TABLE ${tableName} (rowID TEXT PRIMARY KEY, "_itemID" TEXT, ${colDefs});`);
 
     // 2.5 写入 Schema 元数据
     db.run(`DELETE FROM _av_schema WHERE av_id = ?;`, [avID]);
@@ -380,7 +393,7 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 
     // 4. 批量执行插入
     const rows = Array.from(rowMap.values());
-    console.log(`[SQLiteManager] Inserting ${rows.length} rows into "${avID}"...`);
+    console.log(`[SQLiteManager] Inserting ${rows.length} rows into ${tableName}...`);
     
     db.run("BEGIN TRANSACTION;");
     for (const row of rows) {
@@ -392,7 +405,7 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
                 return (v === undefined || v === null) ? null : v;
             });
             
-            db.run(`INSERT INTO "${avID}" (${fields.map(f => `"${f}"`).join(", ")}) VALUES (${placeholders});`, values);
+            db.run(`INSERT INTO ${tableName} (${fields.map(f => `"${f}"`).join(", ")}) VALUES (${placeholders});`, values);
         } catch (rowInsertError) {
             console.error(`[SQLite-Debug] Row Insert Failed. Data:`, row, rowInsertError);
         }

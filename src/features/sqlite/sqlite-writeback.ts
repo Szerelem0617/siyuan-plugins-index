@@ -1,7 +1,7 @@
 import { post } from "../../shared/api-client/request";
 import {
     getSqliteEngine, saveDatabaseToDisk, getAVSchema, recordChange,
-    type AVColumnSchema
+    avIdToTableName, tableNameToAvId, type AVColumnSchema
 } from "./sqlite-manager";
 
 // ═══════════════════════════════════════════
@@ -201,11 +201,12 @@ function _detectTargetAV(sql: string, db: any): string | null {
         const match = sql.match(pattern);
         if (match && match[1]) {
             const tableName = match[1];
+            const avId = tableNameToAvId(tableName);
             // Verify this table exists in _meta as an AV
             try {
-                const res = db.exec(`SELECT id FROM _meta WHERE id = ? AND type = 'av'`, [tableName]);
+                const res = db.exec(`SELECT id FROM _meta WHERE id = ? AND type = 'av'`, [avId]);
                 if (res.length > 0 && res[0].values.length > 0) {
-                    return tableName;
+                    return avId;
                 }
             } catch (e) { /* continue trying */ }
         }
@@ -222,7 +223,8 @@ type RowMap = Map<string, Record<string, any>>;
 function _snapshotRows(db: any, avId: string): RowMap {
     const map: RowMap = new Map();
     try {
-        const res = db.exec(`SELECT * FROM "${avId}"`);
+        const tableName = avIdToTableName(avId);
+        const res = db.exec(`SELECT * FROM ${tableName}`);
         if (res.length === 0) return map;
         const cols = res[0].columns;
         res[0].values.forEach((row: any[]) => {
@@ -587,10 +589,11 @@ export async function rollbackChanges(avId: string, count?: number): Promise<Mut
     }
 
     // 1. Rollback SQLite table
+    const tableName = avIdToTableName(avId);
     for (const entry of entries) {
         try {
             db.run(
-                `UPDATE "${avId}" SET "${entry.colName}" = ? WHERE rowID = ?`,
+                `UPDATE ${tableName} SET "${entry.colName}" = ? WHERE rowID = ?`,
                 [entry.oldValue, entry.rowId]
             );
         } catch (e: any) {
@@ -607,7 +610,7 @@ export async function rollbackChanges(avId: string, count?: number): Promise<Mut
         // Look up _itemID from the table
         let itemId = entry.rowId;
         try {
-            const idRes = db.exec(`SELECT "_itemID" FROM "${avId}" WHERE rowID = ?`, [entry.rowId]);
+            const idRes = db.exec(`SELECT "_itemID" FROM ${tableName} WHERE rowID = ?`, [entry.rowId]);
             if (idRes.length > 0 && idRes[0].values.length > 0) {
                 itemId = idRes[0].values[0][0] || entry.rowId;
             }

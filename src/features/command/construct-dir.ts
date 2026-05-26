@@ -30,7 +30,7 @@ export async function constructCommandStorage() {
         }
 
         // 2. Init Command-DB (逻辑工厂)
-        await initDbDoc(
+        const commandDb = await initDbDoc(
             targetNotebookId,
             "逻辑工厂 (Command-DB)",
             "custom-index-command-db",
@@ -105,7 +105,7 @@ export async function constructCommandStorage() {
         );
 
         // 3. Init Type-DB (类型绑定)
-        await initDbDoc(
+        const typeDb = await initDbDoc(
             targetNotebookId,
             "类型绑定 (Type-DB)",
             "custom-index-type-db",
@@ -156,6 +156,10 @@ export async function constructCommandStorage() {
             }
         );
 
+        if (commandDb?.avId && typeDb?.avId) {
+            await establishDbRelation(commandDb.avId, typeDb.avId);
+        }
+
         showMessage(`[IndexOS] 系统存储库初始化完成！`, 3000);
 
     } catch (e) {
@@ -165,19 +169,221 @@ export async function constructCommandStorage() {
     }
 }
 
+async function establishDbRelation(commandAvId: string, typeAvId: string) {
+    console.log(`[IndexOS] Checking database relation between Command-DB (${commandAvId}) and Type-DB (${typeAvId})...`);
+    
+    // 1. Fetch current keys for Command-DB
+    let keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: commandAvId });
+    let currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
+    
+    // Clean up "绑定类" if it exists but has wrong type
+    const existingKeyOfAnyType = currentKeys.find((k: any) => k.name === "绑定类");
+    if (existingKeyOfAnyType && existingKeyOfAnyType.type !== "relation") {
+        console.warn(`[IndexOS] Found key '绑定类' with wrong type '${existingKeyOfAnyType.type}'. Removing it...`);
+        await post("/api/av/removeAttributeViewKey", {
+            avID: commandAvId,
+            keyID: existingKeyOfAnyType.id
+        });
+        await sleep(1000);
+        // Refresh keys
+        keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: commandAvId });
+        currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
+    }
+
+    // Clean up "绑定命令" in Type-DB if it exists but has wrong type
+    const typeKeysResBefore = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
+    const typeKeysBefore = Array.isArray(typeKeysResBefore) ? typeKeysResBefore : (typeKeysResBefore.keys || []);
+    const existingTypeKeyOfAnyType = typeKeysBefore.find((k: any) => k.name === "绑定命令");
+    if (existingTypeKeyOfAnyType && existingTypeKeyOfAnyType.type !== "relation") {
+        console.warn(`[IndexOS] Found key '绑定命令' in Type-DB with wrong type '${existingTypeKeyOfAnyType.type}'. Removing it...`);
+        await post("/api/av/removeAttributeViewKey", {
+            avID: typeAvId,
+            keyID: existingTypeKeyOfAnyType.id
+        });
+        await sleep(1000);
+    }
+
+    const relationKey = currentKeys.find((k: any) => k.name === "绑定类" && k.type === "relation");
+    let commandRelKeyId = relationKey?.id;
+    const isLinked = relationKey?.relation?.avID === typeAvId && relationKey?.relation?.isTwoWay;
+
+    if (!commandRelKeyId) {
+        console.log("[IndexOS] Relation column '绑定类' not found. Creating key first...");
+        const lastKeyID = currentKeys.length > 0 ? currentKeys[currentKeys.length - 1].id : "";
+        
+        // @ts-ignore
+        commandRelKeyId = window.Lute.NewNodeID();
+        const addKeyRes = await post("/api/av/addAttributeViewKey", {
+            avID: commandAvId,
+            keyID: commandRelKeyId,
+            keyName: "绑定类",
+            keyType: "relation",
+            keyIcon: "iconLink",
+            previousKeyID: lastKeyID
+        });
+        console.log("[IndexOS-Debug] addAttributeViewKey response:", addKeyRes);
+        await sleep(1500); // Sleep longer to ensure file write completes
+    }
+
+    if (!isLinked) {
+        console.log("[IndexOS] Relation link is missing or incomplete. Establishing bidirectional relation...");
+        
+        let isLinkedAfterTx = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            console.log(`[IndexOS] Sending relation transaction (attempt ${attempt})...`);
+            
+            // Re-fetch type keys to check if "绑定命令" already exists
+            const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
+            const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
+            const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
+            
+            // @ts-ignore
+            const typeRelKeyId = typeRelKey?.id || relationKey?.relation?.backKeyID || window.Lute.NewNodeID();
+            
+            const txPayload = {
+                reqId: Date.now(),
+                app: "plugin-index",
+                transactions: [
+                    {
+                        doOperations: [
+                            {
+                                action: "updateAttrViewColRelation",
+                                avID: commandAvId,
+                                id: typeAvId,
+                                keyID: commandRelKeyId,
+                                isTwoWay: true,
+                                backRelationKeyID: typeRelKeyId,
+                                name: "绑定命令",
+                                format: "绑定类"
+                            }
+                        ]
+                    }
+                ]
+            };
+            
+            console.log(`[IndexOS-Debug] Sending transaction payload (attempt ${attempt}):`, JSON.stringify(txPayload));
+            const txRes = await post("/api/transactions", txPayload);
+            console.log(`[IndexOS-Debug] transactions response (attempt ${attempt}):`, txRes);
+            
+            // Poll to verify relation in Command-DB
+            for (let i = 0; i < 20; i++) { // Poll for up to 4 seconds (20 * 200ms)
+                await sleep(200);
+                const checkKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: commandAvId });
+                const checkKeys = Array.isArray(checkKeysRes) ? checkKeysRes : (checkKeysRes.keys || []);
+                const checkRelKey = checkKeys.find((k: any) => k.name === "绑定类" && k.type === "relation");
+                
+                if (checkRelKey?.relation?.avID === typeAvId && checkRelKey?.relation?.isTwoWay) {
+                    console.log(`[IndexOS] Bidirectional relation successfully established and verified on attempt ${attempt} in ${i * 200}ms!`);
+                    isLinkedAfterTx = true;
+                    break;
+                }
+            }
+            
+            if (isLinkedAfterTx) {
+                break;
+            } else {
+                console.warn(`[IndexOS] Attempt ${attempt} failed to establish/verify relation. Waiting 1.5s before retry...`);
+                await sleep(1500);
+            }
+        }
+        
+        if (!isLinkedAfterTx) {
+            throw new Error("Failed to establish bidirectional relation between Command-DB and Type-DB after 3 attempts.");
+        }
+    } else {
+        console.log("[IndexOS] Bidirectional relation '绑定类' <-> '绑定命令' is already set up and linked.");
+    }
+
+    await bindDefaultRelation(commandAvId, typeAvId);
+}
+
+async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
+    console.log("[IndexOS] Binding default relation values...");
+    
+    const commandRender = await post("/api/av/renderAttributeView", { id: commandAvId });
+    const commandRows = commandRender?.view?.rows || commandRender?.rows || [];
+
+    const typeRender = await post("/api/av/renderAttributeView", { id: typeAvId });
+    const typeRows = typeRender?.view?.rows || typeRender?.rows || [];
+
+    let splitLRRowId = "";
+    let graphViewRowId = "";
+    let projectRowId = "";
+
+    for (const row of commandRows) {
+        const firstCell = row.cells[0];
+        const label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
+        if (label.includes("在右侧分屏打开")) {
+            splitLRRowId = row.id;
+        } else if (label.includes("全局关系图")) {
+            graphViewRowId = row.id;
+        }
+    }
+
+    for (const row of typeRows) {
+        const firstCell = row.cells[0];
+        const label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
+        if (label.includes("#Project")) {
+            projectRowId = row.id;
+        }
+    }
+
+    if (!projectRowId || !splitLRRowId || !graphViewRowId) {
+        console.warn("[IndexOS] Default rows not found. CommandRows:", commandRows.length, "TypeRows:", typeRows.length);
+        return;
+    }
+
+    const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
+    const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
+    const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
+
+    if (typeRelKey) {
+        const typeRelKeyId = typeRelKey.id;
+        console.log(`[IndexOS] Found type relation key: ${typeRelKeyId}. Binding row ${projectRowId} to [${splitLRRowId}, ${graphViewRowId}]...`);
+        
+        await post("/api/av/batchSetAttributeViewBlockAttrs", {
+            avID: typeAvId,
+            values: [
+                {
+                    keyID: typeRelKeyId,
+                    itemID: projectRowId,
+                    value: {
+                        type: "relation",
+                        relation: {
+                            blockIDs: [splitLRRowId, graphViewRowId]
+                        }
+                    }
+                }
+            ]
+        });
+        console.log("[IndexOS] Default relation binding completed successfully!");
+    } else {
+        console.warn("[IndexOS] Relation key '绑定命令' not found in Type-DB keys.");
+    }
+}
+
 async function initDbDoc(
     notebookId: string,
     docName: string,
     attrName: string,
     initMarkdown: string,
     initColsCallback: (avId: string) => Promise<void>
-) {
+): Promise<{ docId: string; avId: string }> {
     // 0. Check via attributes first
     const sql = `SELECT root_id FROM attributes WHERE name = '${attrName}' LIMIT 1`;
     const existingDocs = await post("/api/query/sql", { stmt: sql });
     if (existingDocs && existingDocs.length > 0) {
-        console.log(`[IndexOS] Found existing system db [${docName}] via attr: doc=${existingDocs[0].root_id}`);
-        return existingDocs[0].root_id;
+        const docId = existingDocs[0].root_id;
+        console.log(`[IndexOS] Found existing system db [${docName}] via attr: doc=${docId}`);
+        
+        let avId = "";
+        const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' ORDER BY created ASC LIMIT 1`;
+        const listRes = await post("/api/query/sql", { stmt: listSql });
+        if (listRes && listRes.length > 0) {
+            const listAttrsRes = await client.getBlockAttrs({ id: listRes[0].id });
+            avId = listAttrsRes.data?.["custom-index-linked-av"] || "";
+        }
+        return { docId, avId };
     }
 
     // 1. Get or Create Document
@@ -212,6 +418,8 @@ async function initDbDoc(
         console.log(`[IndexOS] Doc already exists (but attr was missing): ${docId}`);
     }
 
+    let avId = "";
+
     // 2. Mark the document with the special attribute
     if (docId) {
         await post("/api/attr/setBlockAttrs", {
@@ -231,15 +439,16 @@ async function initDbDoc(
             const listId = listRes[0].id;
             const listAttrsRes = await client.getBlockAttrs({ id: listId });
             const listAttrs = listAttrsRes.data || {};
+            avId = listAttrs["custom-index-linked-av"] || "";
 
-            if (!listAttrs["custom-index-linked-av"]) {
+            if (!avId) {
                 console.log(`[IndexOS] Converting list ${listId} to DB for ${docName}...`);
                 await createDatabaseWithBlocks([listId], true, true);
                 await sleep(1000);
 
                 const newAttrsRes = await client.getBlockAttrs({ id: listId });
                 const newAttrs = newAttrsRes.data || {};
-                const avId = newAttrs["custom-index-linked-av"];
+                avId = newAttrs["custom-index-linked-av"] || "";
 
                 if (avId) {
                     console.log(`[IndexOS] DB created with avID: ${avId}, injecting columns...`);
@@ -254,5 +463,5 @@ async function initDbDoc(
         }
     }
 
-    return docId;
+    return { docId: docId || "", avId };
 }

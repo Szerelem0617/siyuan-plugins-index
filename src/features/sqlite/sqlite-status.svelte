@@ -5,7 +5,7 @@
         instantiateAV, runQuery, getInstantiatedIds, getSyncMetadata,
         getAVSchema, saveQuery, getSavedQueries, deleteSavedQuery,
         exportToCSV, exportToJSON, downloadFile,
-        type AVColumnSchema, type SavedQuery
+        avIdToTableName, type AVColumnSchema, type SavedQuery
     } from "./sqlite-manager";
     import {
         runMutation, rollbackChanges, getChangelog, clearChangelog,
@@ -137,7 +137,7 @@
                                     sqlInput.match(/UPDATE\s+`([^`]+)`/i) ||
                                     sqlInput.match(/UPDATE\s+(\S+)\s+SET/i);
                     if (avMatch && avMatch[1]) {
-                        queryResult = await runQuery(`SELECT * FROM "${avMatch[1]}" LIMIT 50`);
+                        queryResult = await runQuery(`SELECT * FROM ${avMatch[1]} LIMIT 50`);
                     }
                 }
             } catch (e: any) {
@@ -271,7 +271,7 @@
     }
 
     function useSqlForAv(avId: string) {
-        sqlInput = `SELECT * FROM "${avId}" LIMIT 20`;
+        sqlInput = `SELECT * FROM ${avIdToTableName(avId)} LIMIT 20`;
         activeTab = "console";
     }
 
