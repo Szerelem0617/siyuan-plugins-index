@@ -1,8 +1,15 @@
 import { post } from "../../../shared/api-client/request";
 import { client } from "../../../shared/api-client";
 import { showMessage } from "siyuan";
-import { sleep } from "../../../shared/utils";
+import { sleep, formatDate } from "../../../shared/utils";
 import { getTargetTablesInfo } from "../registration";
+import {
+    ATTR_LINKED_AV,
+    ATTR_LINKED_AV_BLOCK,
+    ATTR_LINKED_LIST,
+    ATTR_ITEM_ID,
+    ATTR_LAST_SYNC
+} from "../../../shared/constants";
 
 /**
  * Reverses detached database rows in Siyuan AV back into physical document list items,
@@ -128,7 +135,7 @@ async function processSingleDbReverse(avId: string, docId: string, labelColName:
     console.log(`[IndexOS-Reverse] Generated Markdown for ${avId}:\n`, markdown);
 
     // 4. Query document blocks to locate preceding block for AV block insertion
-    const docBlocks = await client.sql({ stmt: `SELECT id, type FROM blocks WHERE root_id = '${docId}' ORDER BY sort ASC` });
+    const docBlocks = await client.sql({ stmt: `SELECT id, type, parent_id FROM blocks WHERE root_id = '${docId}' ORDER BY sort ASC` });
     const blocksList = docBlocks.data || [];
     
     // Find the AV block ID
@@ -139,69 +146,82 @@ async function processSingleDbReverse(avId: string, docId: string, labelColName:
     }
 
     const avBlockId = avBlock.id;
-    const avBlockIdx = blocksList.findIndex((b: any) => b.id === avBlockId);
     
-    // Determine the preceding block. We want to insert the list right before the AV block
-    let precedingBlockId = "";
-    if (avBlockIdx > 0) {
-        precedingBlockId = blocksList[avBlockIdx - 1].id;
-    } else {
-        // If AV is the first block, we insert it inside doc directly
-        precedingBlockId = docId;
-    }
-
-    // 5. Delete any existing list blocks in the document to prevent duplicate outline lists
-    const existingLists = blocksList.filter((b: any) => b.type === "l");
+    // 5. Delete any existing top-level list blocks in the document to prevent duplicate outline lists
+    const existingLists = blocksList.filter((b: any) => b.type === "l" && b.parent_id === docId);
     for (const listBlock of existingLists) {
         console.log(`[IndexOS-Reverse] Deleting old list block ${listBlock.id}`);
         await post("/api/block/deleteBlock", { id: listBlock.id });
     }
     await sleep(500);
 
-    // 6. Insert new Outline List
+    // 6. Insert new Outline List right before the AV block (using nextID)
     console.log(`[IndexOS-Reverse] Inserting new list block before ${avBlockId}`);
     const insertRes = await client.insertBlock({
         dataType: "markdown",
         data: markdown,
-        previousID: precedingBlockId
+        nextID: avBlockId
     });
 
     if (!insertRes.data || insertRes.data.length === 0) {
         throw new Error(`无法在大纲文档 ${docId} 中插入列表块`);
     }
 
-    console.log("[IndexOS-Reverse] List block inserted. Waiting for index parsing...");
-    await sleep(2000); // Wait for indexing to complete
+    const listBlockId = insertRes.data[0].doOperations[0].id;
+    console.log(`[IndexOS-Reverse] List block inserted with ID: ${listBlockId}. Waiting for backend parsing...`);
+    await sleep(200);
+    
+    const domRes = await client.getBlockDOM({ id: listBlockId });
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = domRes.data?.dom || "";
 
-    // 7. Query newly created list items in document
-    const listItemsRes = await client.sql({
-        stmt: `SELECT id, content FROM blocks WHERE root_id = '${docId}' AND type = 'li' ORDER BY sort ASC`
-    });
-    const newItems = listItemsRes.data || [];
-    console.log(`[IndexOS-Reverse] Found ${newItems.length} list items in document ${docId}. Matches target rows count: ${items.length}`);
+    const newItems: { id: string, content: string }[] = [];
+    const traverseDom = (el: Element) => {
+        for (let i = 0; i < el.children.length; i++) {
+            const child = el.children[i];
+            const type = child.getAttribute("data-type");
+            if (type === "NodeListItem") {
+                const itemId = child.getAttribute("data-node-id") || "";
+                // Get the text content of the list item paragraph block
+                const para = child.querySelector('div[data-type="NodeParagraph"]');
+                const content = para ? (para.textContent || "").trim() : "";
+                newItems.push({ id: itemId, content });
+                traverseDom(child);
+            } else {
+                traverseDom(child);
+            }
+        }
+    };
+    if (tempDiv.firstElementChild) {
+        traverseDom(tempDiv.firstElementChild);
+    }
 
-    // 8. Bind row IDs (itemID) to physical block IDs
-    const bindOps: any[] = [];
+    console.log(`[IndexOS-Reverse] Parsed ${newItems.length} list items from DOM. Matches target rows count: ${items.length}`);
+
+    // 8. Re-bind existing detached row IDs (itemID) to the brand new physical block IDs
+    const replaceOps: any[] = [];
     const savedMappingOps: any[] = [];
     
+    const normalize = (s: string) => (s || "").replace(/[\u200B-\u200D\uFEFF#\s]/g, "").toLowerCase();
+
     for (const item of items) {
-        // Match list item by label comparison
+        // Match list item by normalized label comparison (strips '#', spaces, hidden chars, and compares case-insensitively)
         const matchedBlock = newItems.find((b: any) => {
-            const cleanContent = b.content.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
-            return cleanContent.includes(item.label) || item.label.includes(cleanContent);
+            const cleanContent = normalize(b.content);
+            const cleanLabel = normalize(item.label);
+            if (!cleanLabel) return false;
+            return cleanContent.includes(cleanLabel) || cleanLabel.includes(cleanContent);
         });
 
         if (matchedBlock) {
-            console.log(`[IndexOS-Reverse] Binding: Row "${item.label}" (itemID: ${item.itemID}) <-> Block ID ${matchedBlock.id}`);
-            bindOps.push({
-                itemID: item.itemID,
-                id: matchedBlock.id,
-                isDetached: false
+            console.log(`[IndexOS-Reverse] Re-binding: Row "${item.label}" (itemID: ${item.itemID}) <-> Block ID ${matchedBlock.id}`);
+            replaceOps.push({
+                [item.itemID]: matchedBlock.id
             });
             savedMappingOps.push({
                 id: matchedBlock.id,
                 attrs: {
-                    "custom-index-item-id": item.itemID
+                    [ATTR_ITEM_ID]: item.itemID
                 }
             });
         } else {
@@ -209,35 +229,46 @@ async function processSingleDbReverse(avId: string, docId: string, labelColName:
         }
     }
 
-    // Execute AV block bindings
-    if (bindOps.length > 0) {
-        await post("/api/av/addAttributeViewBlocks", { avID: avId, srcs: bindOps });
+    // Execute AV block replacements (re-bindings) via batchReplaceAttributeViewBlocks
+    if (replaceOps.length > 0) {
+        await post("/api/av/batchReplaceAttributeViewBlocks", {
+            avID: avId,
+            isDetached: false,
+            oldNew: replaceOps
+        });
         await sleep(300);
     }
 
-    // Set custom-index-item-id attributes on list items
+    // Set custom-av-item-id attributes on the physical list items
     if (savedMappingOps.length > 0) {
         await Promise.all(savedMappingOps.map(op => client.setBlockAttrs(op)));
     }
 
-    // 9. Bind the main list block with linked AV attributes
-    if (newItems.length > 0) {
-        const firstListItemId = newItems[0].id;
-        const parentListRes = await client.sql({
-            stmt: `SELECT parent_id FROM blocks WHERE id = '${firstListItemId}' LIMIT 1`
+    // 9. Bind the main list block with linked AV attributes, and the AV block with linked list
+    if (listBlockId) {
+        console.log(`[IndexOS-Reverse] Binding parent list block ${listBlockId} and AV block ${avBlockId}...`);
+        
+        const now = formatDate(new Date()).replace(/-/g, "").replace(/:/g, "").replace(/ /g, "");
+
+        // Set attributes on list block
+        await client.setBlockAttrs({
+            id: listBlockId,
+            attrs: {
+                [ATTR_LINKED_AV]: avId,
+                [ATTR_LINKED_AV_BLOCK]: avBlockId,
+                [ATTR_LAST_SYNC]: now
+            }
         });
-        if (parentListRes.data && parentListRes.data.length > 0) {
-            const listBlockId = parentListRes.data[0].parent_id;
-            console.log(`[IndexOS-Reverse] Binding parent list block ${listBlockId} with AV attributes...`);
-            await client.setBlockAttrs({
-                id: listBlockId,
-                attrs: {
-                    "custom-index-linked-av": avId,
-                    "custom-index-linked-av-block": avBlockId
-                }
-            });
-        }
+
+        // Set attribute on AV database block
+        await client.setBlockAttrs({
+            id: avBlockId,
+            attrs: {
+                [ATTR_LINKED_LIST]: listBlockId
+            }
+        });
     }
 
     return true;
 }
+
