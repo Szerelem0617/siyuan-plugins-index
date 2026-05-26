@@ -59,15 +59,9 @@ export async function constructCommandStorage() {
                 const buttonKey = await addCol("Inline Button", "checkbox", "iconPlay", topBarKey);
                 const paletteKey = await addCol("Command Palette", "checkbox", "iconSearch", buttonKey);
 
-                // Populate default data
-                const configData: Record<string, { id: string, type: string, scope: string, param?: string }> = {
-                    "全局关系图": { id: "general.graphView", type: "Native", scope: "Global" },
-                    "收集箱": { id: "general.inbox", type: "Native", scope: "Global" },
-                    "在右侧分屏打开": { id: "general.splitLR", type: "Native", scope: "Global" },
-                    "下方插入同级块": { id: "editor.general.insertAfter", type: "Native", scope: "Sibling" },
-                    "复制当前块": { id: "editor.general.duplicate", type: "Native", scope: "Sibling" },
-                    "复制块引用": { id: "editor.general.copyBlockRef", type: "Native", scope: "Global" }
-                };
+                // Fetch seed data from SQLite sys_command_db
+                const { runQuery } = await import("../sqlite/sqlite-manager");
+                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette FROM sys_command_db`);
 
                 await sleep(1000);
                 const renderRes = await post("/api/av/renderAttributeView", { id: avId });
@@ -78,23 +72,17 @@ export async function constructCommandStorage() {
                     const firstCell = row.cells[0];
                     let label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
 
-                    for (const [key, config] of Object.entries(configData)) {
-                        if (label.includes(key)) {
-                            populateOps.push({ keyID: commandIdKey, itemID: row.id, value: { type: "text", text: { content: config.id } } });
-                            if (config.param !== undefined) {
-                                populateOps.push({ keyID: paramMappingKey, itemID: row.id, value: { type: "text", text: { content: config.param } } });
-                            }
-                            populateOps.push({ keyID: commandTypeKey, itemID: row.id, value: { type: "text", text: { content: config.type } } });
-                            populateOps.push({ keyID: targetScopeKey, itemID: row.id, value: { type: "text", text: { content: config.scope } } });
-                            populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
-                            // If it's the global graph view, tick Top Bar, Inline Button, and Command Palette by default as a demo
-                            if (key === "全局关系图") {
-                                populateOps.push({ keyID: topBarKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
-                                populateOps.push({ keyID: buttonKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
-                                populateOps.push({ keyID: paletteKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
-                            }
-                            break;
-                        }
+                    const match = seedRes.values.find((r: any) => label.includes(String(r[1]).trim()));
+                    if (match) {
+                        const [rowID, labelVal, commandID, paramMapping, commandType, targetScope, enable, topBar, inlineButton, commandPalette] = match;
+                        populateOps.push({ keyID: commandIdKey, itemID: row.id, value: { type: "text", text: { content: String(commandID || "") } } });
+                        populateOps.push({ keyID: paramMappingKey, itemID: row.id, value: { type: "text", text: { content: String(paramMapping || "") } } });
+                        populateOps.push({ keyID: commandTypeKey, itemID: row.id, value: { type: "text", text: { content: String(commandType || "") } } });
+                        populateOps.push({ keyID: targetScopeKey, itemID: row.id, value: { type: "text", text: { content: String(targetScope || "") } } });
+                        populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
+                        populateOps.push({ keyID: topBarKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(topBar) === 1 } } });
+                        populateOps.push({ keyID: buttonKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(inlineButton) === 1 } } });
+                        populateOps.push({ keyID: paletteKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(commandPalette) === 1 } } });
                     }
                 }
 
@@ -129,27 +117,28 @@ export async function constructCommandStorage() {
                 const pageMenuKey = await addCol("Current Page Menu", "text", "iconFile", blockMenuKey);
                 const enableKey = await addCol("Enable", "checkbox", "iconCheck", pageMenuKey);
 
+                // Fetch seed data from SQLite sys_type_db
+                const { runQuery } = await import("../sqlite/sqlite-manager");
+                const seedRes = await runQuery(`SELECT rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable FROM sys_type_db`);
+
                 await sleep(1000);
                 const renderRes = await post("/api/av/renderAttributeView", { id: avId });
                 const rows = renderRes.view?.rows || renderRes.rows || [];
                 const populateOps: any[] = [];
 
-                let projectCount = 0;
                 for (const row of rows) {
                     const firstCell = row.cells[0];
                     let label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
-                    if (label.includes("#Project")) {
-                        projectCount++;
-                        if (projectCount === 1) {
-                            // 第一个 Project：给块标菜单绑定命令（使用 Layer 2 的主键名称，支持逗号分隔多个）
-                            populateOps.push({ keyID: blockMenuKey, itemID: row.id, value: { type: "text", text: { content: "在右侧分屏打开, 全局关系图" } } });
-                            populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
-                        } else if (projectCount === 2) {
-                            populateOps.push({ keyID: pageMenuKey, itemID: row.id, value: { type: "text", text: { content: "全局关系图" } } });
-                            populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: true } } });
-                        }
+
+                    const match = seedRes.values.find((r: any) => label.includes(String(r[1]).trim()));
+                    if (match) {
+                        const [rowID, supertag, blockMenu, pageMenu, enable] = match;
+                        populateOps.push({ keyID: blockMenuKey, itemID: row.id, value: { type: "text", text: { content: String(blockMenu || "") } } });
+                        populateOps.push({ keyID: pageMenuKey, itemID: row.id, value: { type: "text", text: { content: String(pageMenu || "") } } });
+                        populateOps.push({ keyID: enableKey, itemID: row.id, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
                     }
                 }
+
                 if (populateOps.length > 0) {
                     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: avId, values: populateOps });
                 }
@@ -158,6 +147,24 @@ export async function constructCommandStorage() {
 
         if (commandDb?.avId && typeDb?.avId) {
             await establishDbRelation(commandDb.avId, typeDb.avId);
+
+            // Set global registration variables
+            const reg = await import("./registration");
+            reg.commandAvId = commandDb.avId;
+            reg.typeAvId = typeDb.avId;
+
+            // Sync the newly created AVs into SQLite av_ tables
+            const { instantiateAV, getSqliteEngine, saveDatabaseToDisk } = await import("../sqlite/sqlite-manager");
+            console.log("[IndexOS] Syncing newly initialized Command-DB and Type-DB to SQLite...");
+            await instantiateAV(commandDb.avId, true);
+            await instantiateAV(typeDb.avId, true);
+
+            // Clean up the seed tables in SQLite to avoid duplicate data
+            const { db } = await getSqliteEngine();
+            db.run(`DROP TABLE IF EXISTS sys_command_db;`);
+            db.run(`DROP TABLE IF EXISTS sys_type_db;`);
+            await saveDatabaseToDisk();
+            console.log("[IndexOS] Dropped sys_command_db and sys_type_db tables.");
         }
 
         showMessage(`[IndexOS] 系统存储库初始化完成！`, 3000);

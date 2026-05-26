@@ -33,6 +33,80 @@ export let commandAvId: string = "";
 export let typeAvId: string = "";
 
 /**
+ * Dynamically resolves active table names and primary key column names.
+ * Falls back to sys_command_db / sys_type_db if Siyuan AVs are not initialized.
+ */
+export async function getTargetTablesInfo() {
+    if (!commandAvId || !typeAvId) {
+        try {
+            const cmdSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
+            const cmdDocs = await post("/api/query/sql", { stmt: cmdSql });
+            if (cmdDocs && cmdDocs.length > 0) {
+                const docId = cmdDocs[0].root_id;
+                const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' ORDER BY created ASC LIMIT 1`;
+                const listRes = await post("/api/query/sql", { stmt: listSql });
+                if (listRes && listRes.length > 0) {
+                    const listAttrsRes = await client.getBlockAttrs({ id: listRes[0].id });
+                    commandAvId = listAttrsRes.data?.["custom-index-linked-av"] || "";
+                }
+            }
+
+            const typeSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
+            const typeDocs = await post("/api/query/sql", { stmt: typeSql });
+            if (typeDocs && typeDocs.length > 0) {
+                const docId = typeDocs[0].root_id;
+                const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' ORDER BY created ASC LIMIT 1`;
+                const listRes = await post("/api/query/sql", { stmt: listSql });
+                if (listRes && listRes.length > 0) {
+                    const listAttrsRes = await client.getBlockAttrs({ id: listRes[0].id });
+                    typeAvId = listAttrsRes.data?.["custom-index-linked-av"] || "";
+                }
+            }
+        } catch (e) {
+            console.warn("[IndexOS] Error fetching AV IDs on registry load:", e);
+        }
+    }
+
+    if (commandAvId && typeAvId) {
+        const cmdTable = `av_${commandAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        const typeTable = `av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+        let commandLabelCol = "label";
+        let typeSupertagCol = "supertag";
+
+        try {
+            const { db } = await getSqliteEngine();
+            const cmdColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [commandAvId]);
+            if (cmdColRes.length > 0 && cmdColRes[0].values.length > 0) {
+                commandLabelCol = cmdColRes[0].values[0][0];
+            }
+            const typeColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [typeAvId]);
+            if (typeColRes.length > 0 && typeColRes[0].values.length > 0) {
+                typeSupertagCol = typeColRes[0].values[0][0];
+            }
+        } catch (e) {
+            console.warn("[IndexOS] Error reading schema from _av_schema, using defaults:", e);
+        }
+
+        return {
+            commandsTable: cmdTable,
+            typesTable: typeTable,
+            commandLabelCol,
+            typeSupertagCol,
+            isInitialized: true
+        };
+    }
+
+    return {
+        commandsTable: "sys_command_db",
+        typesTable: "sys_type_db",
+        commandLabelCol: "label",
+        typeSupertagCol: "supertag",
+        isInitialized: false
+    };
+}
+
+/**
  * 刷新 Supertag 注册表：从 Command-DB (Layer 2) 和 Type-DB (Layer 3) 联合加载数据
  * 优先尝试从 SQLite 加载以获得更好的性能和统一性
  */
@@ -56,10 +130,10 @@ export async function refreshSupertagRegistry() {
 async function refreshRegistryFromSqlite(): Promise<boolean> {
     try {
         await initSystemTables(); // Ensure tables ready
-        const { commands, types } = getSystemTableNames();
+        const { commandsTable, typesTable, commandLabelCol, typeSupertagCol } = await getTargetTablesInfo();
 
         // 1. Load Commands (Layer 2)
-        const cmdRes = await runQuery(`SELECT label, commandID, paramMapping FROM ${commands} WHERE enabled = 1`);
+        const cmdRes = await runQuery(`SELECT "${commandLabelCol}", Command_ID, Param_Mapping FROM ${commandsTable} WHERE Enable = 1`);
         if (!cmdRes || !cmdRes.values) return false;
 
         COMMAND_REGISTRY = {};
@@ -77,7 +151,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         }
 
         // 2. Load Type Bindings (Layer 3)
-        const typeRes = await runQuery(`SELECT supertag, blockIconMenu, pageMenu FROM ${types} WHERE enabled = 1`);
+        const typeRes = await runQuery(`SELECT "${typeSupertagCol}", Block_Icon_Menu, Current_Page_Menu FROM ${typesTable} WHERE Enable = 1`);
         if (!typeRes || !typeRes.values) return false;
 
         const newRegistry: SupertagCommand[] = [];
@@ -87,7 +161,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             const pageMenuRaw = row[2];
 
             if (typeTagRaw) {
-                const cleanTag = String(typeTagRaw).toLowerCase().trim();
+                const cleanTag = String(typeTagRaw).replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
 
                 const processMenu = (raw: any, location: "BlockIconMenu" | "PageMenu") => {
                     if (!raw) return;
@@ -114,7 +188,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         }
 
         SUPERTAG_REGISTRY = newRegistry;
-        console.log(`[SQLite-IndexOS] Registry refreshed from Source of Truth. Commands: ${Object.keys(COMMAND_REGISTRY).length}, Supertags: ${SUPERTAG_REGISTRY.length}`);
+        console.log(`[SQLite-IndexOS] Registry refreshed. Table: ${commandsTable}, Commands: ${Object.keys(COMMAND_REGISTRY).length}, Supertags: ${SUPERTAG_REGISTRY.length}`);
         return true;
     } catch (e) {
         console.error("[SQLite-IndexOS] Failed to refresh registry from SQL:", e);

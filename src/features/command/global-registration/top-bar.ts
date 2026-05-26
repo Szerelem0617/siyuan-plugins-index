@@ -40,19 +40,20 @@ export async function refreshTopBarCommands() {
  */
 async function refreshTopBarFromSqlite(): Promise<boolean> {
     try {
-        const { getSystemTableNames, initSystemTables } = await import("../indexos/command-sqlite");
+        const { getTargetTablesInfo } = await import("../registration");
+        const { initSystemTables } = await import("../indexos/command-sqlite");
         const { runQuery } = await import("../../sqlite/sqlite-manager");
 
         await initSystemTables();
-        const { commands } = getSystemTableNames();
+        const { commandsTable, commandLabelCol } = await getTargetTablesInfo();
 
-        const cmdRes = await runQuery(`SELECT * FROM ${commands} WHERE enabled = 1`);
+        const cmdRes = await runQuery(`SELECT * FROM ${commandsTable} WHERE Enable = 1`);
         if (!cmdRes || !cmdRes.values) {
             console.warn("[TopBar-SQLite] No enabled commands found in DB.");
             return false;
         }
 
-        console.log(`[TopBar-SQLite] Found ${cmdRes.values.length} enabled commands. Columns:`, cmdRes.columns);
+        console.log(`[TopBar-SQLite] Found ${cmdRes.values.length} enabled commands in ${commandsTable}. Columns:`, cmdRes.columns);
 
         const newTopBars: TopBarCommand[] = [];
         const newInlineBtns: InlineButtonCmd[] = [];
@@ -64,14 +65,14 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             return idx;
         };
 
-        const idIdx = colIdx("id");
-        const labelIdx = colIdx("label");
-        const cmdIdIdx = colIdx("commandID");
-        const paramIdx = colIdx("paramMapping");
-        const typeIdx = colIdx("commandType");
-        const topBarIdx = colIdx("topBar");
-        const ibIdx = colIdx("inlineButton");
-        const paletteIdx = colIdx("commandPalette");
+        const idIdx = colIdx("rowID");
+        const labelIdx = colIdx(commandLabelCol);
+        const cmdIdIdx = colIdx("Command_ID");
+        const paramIdx = colIdx("Param_Mapping");
+        const typeIdx = colIdx("Command_Type");
+        const topBarIdx = colIdx("Top_Bar");
+        const ibIdx = colIdx("Inline_Button");
+        const paletteIdx = colIdx("Command_Palette");
 
         for (const [rowIndex, row] of cmdRes.values.entries()) {
             const id = String(row[idIdx]);
@@ -85,7 +86,7 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             const isIB = Number(row[ibIdx]) === 1;
             const isPalette = Number(row[paletteIdx]) === 1;
 
-            console.log(`[TopBar-SQLite] Row[${rowIndex}] "${label}": topBar=${isTopBar}, ib=${isIB}, palette=${isPalette}`);
+            console.log(`[TopBar-SQLite] Row[${rowIndex}] "${label}": Top_Bar=${isTopBar}, Inline_Button=${isIB}, Command_Palette=${isPalette}`);
 
             if (isTopBar && label && commandId) {
                 newTopBars.push({ id, label, commandId, commandParam, commandType });
