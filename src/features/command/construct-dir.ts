@@ -2,7 +2,7 @@ import { post } from "../../shared/api-client/request";
 import { client } from "../../shared/api-client";
 import { showMessage } from "siyuan";
 import { sleep } from "../../shared/utils";
-import { setCommandAvId, setTypeAvId } from "./registration";
+import { setCommandAvId, setTypeAvId, setCommandDocId, setTypeDocId } from "./registration";
 import { getSqliteEngine, runQuery, instantiateAV, saveDatabaseToDisk } from "../sqlite/sqlite-manager";
 
 const NOTEBOOK_NAME = "类与命令管理";
@@ -196,6 +196,8 @@ export async function constructCommandStorage() {
             // Set global registration variables
             setCommandAvId(commandDb.avId);
             setTypeAvId(typeDb.avId);
+            setCommandDocId(commandDb.docId);
+            setTypeDocId(typeDb.docId);
 
             // Sync the newly created AVs into SQLite av_ tables
             console.log("[IndexOS] Syncing newly initialized Command-DB and Type-DB to SQLite...");

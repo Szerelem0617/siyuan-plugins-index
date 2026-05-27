@@ -1,5 +1,5 @@
 import { showMessage } from "siyuan";
-import { commandAvId, COMMAND_REGISTRY } from "../registration";
+import { getCommandAvId, COMMAND_REGISTRY } from "../registration";
 import { encodeBtnHref } from "./inline-button";
 
 /**
@@ -28,7 +28,7 @@ function handleAvAltClick(event: MouseEvent) {
     if (!avContainer) return;
 
     const avId = avContainer.getAttribute("data-av-id");
-    if (avId !== commandAvId) return;
+    if (avId !== getCommandAvId()) return;
 
     // 3. 确认是否为主键 (通常是第一列)
     const rowEl = cellEl.closest(".av__row");

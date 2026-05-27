@@ -32,25 +32,44 @@ export let COMMAND_REGISTRY: Record<string, CommandDef> = {};
 export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
 export let commandAvId: string = "";
 export let typeAvId: string = "";
+export let commandDocId: string = "";
+export let typeDocId: string = "";
 export function setCommandAvId(val: string) { commandAvId = val; }
 export function setTypeAvId(val: string) { typeAvId = val; }
+export function setCommandDocId(val: string) { commandDocId = val; }
+export function setTypeDocId(val: string) { typeDocId = val; }
+export function getCommandAvId() { return commandAvId; }
+export function getTypeAvId() { return typeAvId; }
+export function getCommandDocId() { return commandDocId; }
+export function getTypeDocId() { return typeDocId; }
 
 /**
  * Dynamically resolves active table names and primary key column names.
  * Falls back to sys_command_db / sys_type_db if Siyuan AVs are not initialized.
  */
 export async function getTargetTablesInfo() {
-    if (!commandAvId || !typeAvId) {
+    if (!commandAvId || !typeAvId || !commandDocId || !typeDocId) {
         try {
             const cmdSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
             const cmdDocs = await post("/api/query/sql", { stmt: cmdSql });
             if (cmdDocs && cmdDocs.length > 0) {
                 const docId = cmdDocs[0].root_id;
+                commandDocId = docId;
                 const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' ORDER BY created ASC LIMIT 1`;
                 const listRes = await post("/api/query/sql", { stmt: listSql });
                 if (listRes && listRes.length > 0) {
                     const listAttrsRes = await client.getBlockAttrs({ id: listRes[0].id });
                     commandAvId = listAttrsRes.data?.["custom-index-linked-av"] || "";
+                } else {
+                    // Fallback for Pure Database Mode
+                    const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
+                    const avRes = await post("/api/query/sql", { stmt: avSql });
+                    if (avRes && avRes.length > 0) {
+                        const domRes = await client.getBlockDOM({ id: avRes[0].id });
+                        const html = domRes.data?.dom || "";
+                        const match = html.match(/data-av-id="([^"]+)"/);
+                        commandAvId = match ? match[1] : avRes[0].id;
+                    }
                 }
             }
 
@@ -58,11 +77,22 @@ export async function getTargetTablesInfo() {
             const typeDocs = await post("/api/query/sql", { stmt: typeSql });
             if (typeDocs && typeDocs.length > 0) {
                 const docId = typeDocs[0].root_id;
+                typeDocId = docId;
                 const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' ORDER BY created ASC LIMIT 1`;
                 const listRes = await post("/api/query/sql", { stmt: listSql });
                 if (listRes && listRes.length > 0) {
                     const listAttrsRes = await client.getBlockAttrs({ id: listRes[0].id });
                     typeAvId = listAttrsRes.data?.["custom-index-linked-av"] || "";
+                } else {
+                    // Fallback for Pure Database Mode
+                    const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
+                    const avRes = await post("/api/query/sql", { stmt: avSql });
+                    if (avRes && avRes.length > 0) {
+                        const domRes = await client.getBlockDOM({ id: avRes[0].id });
+                        const html = domRes.data?.dom || "";
+                        const match = html.match(/data-av-id="([^"]+)"/);
+                        typeAvId = match ? match[1] : avRes[0].id;
+                    }
                 }
             }
         } catch (e) {
@@ -209,6 +239,7 @@ async function refreshRegistryFromApi() {
         const cmdDocs = await post("/api/query/sql", { stmt: cmdSql });
         if (cmdDocs && cmdDocs.length > 0) {
             const docId = cmdDocs[0].root_id;
+            commandDocId = docId;
             const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' LIMIT 1`;
             const listRes = await post("/api/query/sql", { stmt: listSql });
             if (listRes && listRes.length > 0) {
@@ -216,6 +247,7 @@ async function refreshRegistryFromApi() {
                 const listAttrsRes = await client.getBlockAttrs({ id: listId });
                 const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
                 if (avId) {
+                    commandAvId = avId;
                     const renderRes = await post("/api/av/renderAttributeView", { id: avId });
                     const view = renderRes.view || renderRes;
                     const rows: any[] = view.rows || [];
@@ -250,6 +282,7 @@ async function refreshRegistryFromApi() {
         const existingDocs = await post("/api/query/sql", { stmt: sql });
         if (!existingDocs || existingDocs.length === 0) return;
         const docId = existingDocs[0].root_id;
+        typeDocId = docId;
 
         const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' LIMIT 1`;
         const listRes = await post("/api/query/sql", { stmt: listSql });
@@ -259,6 +292,7 @@ async function refreshRegistryFromApi() {
         const listAttrsRes = await client.getBlockAttrs({ id: listId });
         const avId = (listAttrsRes.data || {})["custom-index-linked-av"];
         if (!avId) return;
+        typeAvId = avId;
 
         const renderRes = await post("/api/av/renderAttributeView", { id: avId });
         const view = renderRes.view || renderRes;

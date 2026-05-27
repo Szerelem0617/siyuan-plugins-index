@@ -4,8 +4,8 @@ import { client } from "../../../shared/api-client";
 import { dispatchCommand } from "../command-dispatcher";
 import { updateInlineButtonList, InlineButtonCmd } from "./inline-button";
 import { updateCommandPaletteList, PaletteCommand } from "./command-palette";
-import { getSqliteEngine, runQuery } from "../../sqlite/sqlite-manager";
-import { getTargetTablesInfo } from "../registration";
+import { getSqliteEngine, runQuery, instantiateAV } from "../../sqlite/sqlite-manager";
+import { getTargetTablesInfo, refreshSupertagRegistry, getCommandAvId, getTypeAvId, getCommandDocId, getTypeDocId } from "../registration";
 import { initSystemTables } from "../indexos/command-sqlite";
 
 export interface TopBarCommand {
@@ -183,28 +183,83 @@ async function refreshTopBarFromApi() {
     }
 }
 
+let isCommandDbUpdatedGlobal = false;
+let isTypeDbUpdatedGlobal = false;
+
 /**
  * Handle database changes and automatically trigger a debounced Top Bar refresh
  */
 export function handleTopBarEvents({ detail }: any) {
     if (detail.cmd !== "transactions") return;
 
-    // We only care about operations that might be AV cell updates (often setting attrs on a block)
-    let hasPotentialUpdate = false;
+    let localCmdUpdate = false;
+    let localTypeUpdate = false;
+
+    const cmdAvId = getCommandAvId();
+    const cmdDocId = getCommandDocId();
+    const tAvId = getTypeAvId();
+    const tDocId = getTypeDocId();
+
+    console.log(`[IndexOS-Sync] Received transactions. commandAvId="${cmdAvId}", typeAvId="${tAvId}", commandDocId="${cmdDocId}", typeDocId="${tDocId}"`);
+
     for (const trans of detail.data) {
         for (const op of trans.doOperations) {
-            if (op.action === "update" || op.action === "setAttrs" || op.action === "updateAttrs") {
-                hasPotentialUpdate = true;
-                break;
+            const opAvId = op.avID || op.avId || "";
+            console.log(`[IndexOS-Sync] Operation: action="${op.action}", avID="${opAvId}", id="${op.id}", rootID="${op.rootID}", parentID="${op.parentID}"`);
+
+            // Check if it targets Command-DB
+            const isCmdTarget = 
+                (cmdAvId && opAvId === cmdAvId) ||
+                (cmdDocId && (op.rootID === cmdDocId || op.id === cmdDocId || op.parentID === cmdDocId));
+                 
+            // Check if it targets Type-DB
+            const isTypeTarget = 
+                (tAvId && opAvId === tAvId) ||
+                (tDocId && (op.rootID === tDocId || op.id === tDocId || op.parentID === tDocId));
+
+            if (isCmdTarget) {
+                console.log(`[IndexOS-Sync] Matched Command-DB target!`);
+                localCmdUpdate = true;
+            }
+            if (isTypeTarget) {
+                console.log(`[IndexOS-Sync] Matched Type-DB target!`);
+                localTypeUpdate = true;
             }
         }
-        if (hasPotentialUpdate) break;
     }
 
-    if (hasPotentialUpdate) {
+    if (localCmdUpdate || localTypeUpdate) {
+        if (localCmdUpdate) isCommandDbUpdatedGlobal = true;
+        if (localTypeUpdate) isTypeDbUpdatedGlobal = true;
+
+        console.log(`[IndexOS-Sync] AV updates detected. Queued sync: Command-DB=${isCommandDbUpdatedGlobal}, Type-DB=${isTypeDbUpdatedGlobal}`);
+
         if (refreshTimer) clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => {
-            refreshTopBarCommands();
+        refreshTimer = setTimeout(async () => {
+            const syncCmd = isCommandDbUpdatedGlobal;
+            const syncType = isTypeDbUpdatedGlobal;
+            
+            // Reset global flags before async actions to prevent race conditions
+            isCommandDbUpdatedGlobal = false;
+            isTypeDbUpdatedGlobal = false;
+
+            try {
+                if (syncCmd && cmdAvId) {
+                    console.log(`[IndexOS-Sync] Re-instantiating Command-DB AV: ${cmdAvId}`);
+                    await instantiateAV(cmdAvId, true);
+                }
+                if (syncType && tAvId) {
+                    console.log(`[IndexOS-Sync] Re-instantiating Type-DB AV: ${tAvId}`);
+                    await instantiateAV(tAvId, true);
+                }
+
+                // Now refresh the registry and top bars
+                console.log(`[IndexOS-Sync] Refreshing registrations and UI...`);
+                await refreshSupertagRegistry();
+                await refreshTopBarCommands();
+            } catch (e) {
+                console.error("[IndexOS-Sync] Debounced sync execution failed:", e);
+            }
         }, 1500); // 1.5s debounce to allow batch updates to settle
     }
 }

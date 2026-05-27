@@ -139,6 +139,28 @@ function _initSystemTables(db: any) {
         col_count INTEGER DEFAULT 0
     );`);
 
+    // Schema migration check for _meta table
+    try {
+        const res = db.exec("PRAGMA table_info(_meta)");
+        if (res.length > 0) {
+            const columns = res[0].values.map((v: any) => v[1]);
+            if (!columns.includes("data_hash")) {
+                db.run("ALTER TABLE _meta ADD COLUMN data_hash TEXT;");
+                console.log("[SQLiteManager] Upgraded _meta schema: added data_hash column");
+            }
+            if (!columns.includes("row_count")) {
+                db.run("ALTER TABLE _meta ADD COLUMN row_count INTEGER DEFAULT 0;");
+                console.log("[SQLiteManager] Upgraded _meta schema: added row_count column");
+            }
+            if (!columns.includes("col_count")) {
+                db.run("ALTER TABLE _meta ADD COLUMN col_count INTEGER DEFAULT 0;");
+                console.log("[SQLiteManager] Upgraded _meta schema: added col_count column");
+            }
+        }
+    } catch (e) {
+        console.warn("[SQLiteManager] Failed to check/migrate _meta columns:", e);
+    }
+
     // Schema registry — stores AV column metadata
     db.run(`CREATE TABLE IF NOT EXISTS _av_schema (
         av_id TEXT NOT NULL,
