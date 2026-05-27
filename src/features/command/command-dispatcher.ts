@@ -17,7 +17,8 @@ import { plugin } from "../../shared/utils";
 import { post } from "../../shared/api-client/request";
 import { commandRegistry } from "./registry/command-registry";
 import type { CommandDef, ParamSchema } from "./registry/command-registry";
-import { runQuery, tableNameToAvId } from "../sqlite/sqlite-manager";
+import { runQuery, tableNameToAvId, checkTableExists, instantiateAV } from "../sqlite/sqlite-manager";
+import { getGlobalTypeConfigs } from "../data/av-setting/db-config";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -306,15 +307,60 @@ async function buildParams(
  *   2. 其他包含该 blockId 的数据库表中的列值。
  */
 async function resolveLayer4Params(blockId: string, supertag?: string): Promise<Record<string, string>> {
+    console.log(`[Layer4Params-Debug] Starting resolveLayer4Params: blockId="${blockId}", supertag="${supertag}"`);
     const params: Record<string, string> = {};
-    if (!blockId) return params;
+    if (!blockId) {
+        console.warn(`[Layer4Params-Debug] Aborted: blockId is empty!`);
+        return params;
+    }
 
     try {
+        // 0. Auto-sync database views linked to this block via Siyuan's "custom-avs" attribute
+        console.log(`[Layer4Params-Debug] Fetching block attributes for blockId="${blockId}"...`);
+        const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+        const avsAttr = attrsRes.data?.["custom-avs"] || "";
+        console.log(`[Layer4Params-Debug] Block custom-avs attribute value: "${avsAttr}"`);
+
+        const avIds = avsAttr.split(",").map((id: string) => id.trim()).filter(Boolean);
+        for (const avId of avIds) {
+            const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+            const exists = await checkTableExists(tableName);
+            console.log(`[Layer4Params-Debug] Bound database table "${tableName}" exists in SQLite: ${exists}`);
+            try {
+                const syncResult = await instantiateAV(avId, !exists);
+                console.log(`[Layer4Params-Debug] Sync outcome for ${avId}:`, syncResult);
+            } catch (syncErr) {
+                console.error(`[Layer4Params-Debug] Sync failed for ${avId}:`, syncErr);
+            }
+        }
+
+        // Also fallback to checking configs for matching supertag if no bound avIds found in attributes
+        if (avIds.length === 0 && supertag) {
+            const cleanTag = supertag.replace(/^#/, "").trim().toLowerCase();
+            const configs = await getGlobalTypeConfigs();
+            const matchedConfigs = configs.filter(c => {
+                const typeName = (c.typeName || "").trim().toLowerCase();
+                return typeName === cleanTag || typeName.includes(cleanTag) || cleanTag.includes(typeName);
+            });
+            for (const config of matchedConfigs) {
+                if (config.avId) {
+                    const tableName = `av_${config.avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+                    const exists = await checkTableExists(tableName);
+                    try {
+                        await instantiateAV(config.avId, !exists);
+                    } catch (syncErr) { /* ignore */ }
+                }
+            }
+        }
+
         // 1. 查找所有以 av_ 开头的本地 SQLite 属性视图数据表
         const tablesRes = await runQuery(`
             SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'av_%'
         `);
+        console.log(`[Layer4Params-Debug] SQLite tables found matching 'av_%':`, tablesRes?.values?.map(r => r[0]));
+
         if (!tablesRes || !tablesRes.values || tablesRes.values.length === 0) {
+            console.warn(`[Layer4Params-Debug] No SQLite tables starting with av_ found.`);
             return params;
         }
 
@@ -326,8 +372,19 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
             if (!tableName) continue;
 
             try {
+                // Let's dump all rowIDs in this table to help identify ID mismatch issues!
+                const allRowsRes = await runQuery(`SELECT rowID FROM "${tableName}"`);
+                const allRowIds = allRowsRes?.values?.map(r => r[0]) || [];
+                console.log(`[Layer4Params-Debug] Table "${tableName}" rowIDs list: ${JSON.stringify(allRowIds)}`);
+
+                // Query and dump all data in the table
+                const allRowsData = await runQuery(`SELECT * FROM "${tableName}"`);
+                console.log(`[Layer4Params-Debug] Table "${tableName}" full data: columns=${JSON.stringify(allRowsData.columns)}, values=${JSON.stringify(allRowsData.values)}`);
+
                 const existsRes = await runQuery(`SELECT count(*) FROM "${tableName}" WHERE rowID = ?`, [blockId]);
                 const existsCount = existsRes?.values?.[0]?.[0] || 0;
+                console.log(`[Layer4Params-Debug] Checking blockId "${blockId}" in table "${tableName}": existsCount=${existsCount}`);
+
                 if (Number(existsCount) > 0) {
                     const avId = tableNameToAvId(tableName);
                     
@@ -345,6 +402,7 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
                         cols.forEach((colName, idx) => {
                             rowData[colName] = vals[idx] !== null && vals[idx] !== undefined ? String(vals[idx]) : "";
                         });
+                        console.log(`[Layer4Params-Debug] Found matching row rowData in table "${tableName}":`, rowData);
 
                         matchedDbs.push({
                             tableName,
@@ -355,23 +413,31 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
                     }
                 }
             } catch (err) {
-                // Table doesn't contain standard rowID or other error, skip
+                console.error(`[Layer4Params-Debug] Error querying table "${tableName}":`, err);
             }
         }
 
-        if (matchedDbs.length === 0) return params;
+        console.log(`[Layer4Params-Debug] Total matched databases containing blockId: ${matchedDbs.length}`);
+
+        if (matchedDbs.length === 0) {
+            console.warn(`[Layer4Params-Debug] Block ID "${blockId}" was not found in any av_ table. Mismatch or missing block in DB!`);
+            return params;
+        }
 
         // 3. 优先级匹配：同名 Layer 4 数据库 > 其它 Layer 4 数据库
         let targetDb = matchedDbs[0];
 
         if (supertag) {
             const cleanTag = supertag.replace(/^#/, "").trim().toLowerCase();
-            const sameNameDb = matchedDbs.find(db => db.name.trim().toLowerCase() === cleanTag);
+            const sameNameDb = matchedDbs.find(db => {
+                const dbName = db.name.trim().toLowerCase();
+                return dbName === cleanTag || dbName.includes(cleanTag) || cleanTag.includes(dbName);
+            });
             if (sameNameDb) {
                 targetDb = sameNameDb;
-                console.log(`[Dispatcher] Priority 1: Match database with same name as Supertag: "${targetDb.name}"`);
+                console.log(`[Layer4Params-Debug] Priority 1: Match database with similar name as Supertag: "${targetDb.name}"`);
             } else {
-                console.log(`[Dispatcher] Priority 2: Use other matched database: "${targetDb.name}"`);
+                console.log(`[Layer4Params-Debug] Priority 2: Use other matched database: "${targetDb.name}"`);
             }
         }
 
@@ -379,6 +445,7 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
         const schemaRes = await runQuery(`
             SELECT col_name, key_name FROM _av_schema WHERE av_id = ?
         `, [targetDb.avId]);
+        console.log(`[Layer4Params-Debug] _av_schema mappings for target avId "${targetDb.avId}":`, schemaRes?.values);
 
         if (schemaRes && schemaRes.values) {
             for (const schemaRow of schemaRes.values) {
@@ -391,9 +458,10 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
             }
         }
     } catch (e) {
-        console.error("[Dispatcher] Error resolving Layer 4 params from SQLite:", e);
+        console.error("[Layer4Params-Debug] Error resolving Layer 4 params from SQLite:", e);
     }
 
+    console.log(`[Layer4Params-Debug] Final resolved params:`, params);
     return params;
 }
 
@@ -406,6 +474,7 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
  */
 async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
     if (!text.includes("{{")) return text;
+    console.log(`[resolveTemplate-Debug] Before resolution: "${text}"`);
 
     const blockId = context.blockEl?.getAttribute("data-node-id") ?? "";
     let result = text;
@@ -455,6 +524,7 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
         } catch { /* ignore */ }
     }
 
+    console.log(`[resolveTemplate-Debug] After resolution: "${result}"`);
     return result;
 }
 

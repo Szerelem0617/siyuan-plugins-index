@@ -350,6 +350,22 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
     const idToSafeName = new Map<string, string>();
     columns.forEach(c => idToSafeName.set(c.id, c.name));
 
+    // First scan KeyTypeBlock column values to map row item IDs to actual Siyuan block IDs
+    const itemIdToBlockId = new Map<string, string>();
+    keyValues.forEach((kv: any) => {
+        if (kv.key.type === "block") {
+            console.log(`[SQLiteManager-Debug] Found block column: "${kv.key.name}" (${kv.key.id})`);
+            kv.values?.forEach((v: any) => {
+                const itemId = v.blockID || v.blockId || v.itemID || v.itemId || "";
+                const boundBlockId = v.block?.id || "";
+                console.log(`[SQLiteManager-Debug] Mapping row cell: itemId="${itemId}", boundBlockId="${boundBlockId}", blockObj=${JSON.stringify(v.block)}`);
+                if (itemId && boundBlockId) {
+                    itemIdToBlockId.set(itemId, boundBlockId);
+                }
+            });
+        }
+    });
+
     keyValues.forEach((kv: any) => {
         const colSafeName = idToSafeName.get(kv.key.id);
         const colId = kv.key.id;
@@ -358,12 +374,12 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 
         kv.values?.forEach((v: any) => {
             try {
-                const blockId = v.blockID || v.blockId || "";
-                const itemId = v.itemID || v.itemId || "";
-                const rowId = blockId || itemId;
-                if (!rowId) return;
+                const itemId = v.blockID || v.blockId || v.itemID || v.itemId || "";
+                if (!itemId) return;
 
-                if (!rowMap.has(rowId)) rowMap.set(rowId, { rowID: rowId, _itemID: itemId || blockId });
+                const rowId = itemIdToBlockId.get(itemId) || itemId;
+
+                if (!rowMap.has(rowId)) rowMap.set(rowId, { rowID: rowId, _itemID: itemId });
                 const item = rowMap.get(rowId);
 
                 let val: any = null;
@@ -399,7 +415,6 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
                         relIds = (v.relation.blockIDs || v.relation.blockIds || []).filter(Boolean);
                     }
                     val = relIds.length > 0 ? JSON.stringify(relIds) : null;
-                    console.log(`[SQLiteManager-Relation] Col: "${kv.key.name}", Row: "${v.blockID || v.itemID}", relIds:`, relIds);
                 } else if (v.rollup) {
                     const rollupContents = v.rollup.contents || [];
                     const rollupVals = rollupContents.map((rc: any) => rc?.content || "").filter(Boolean);
@@ -453,9 +468,9 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 //  Query Engine
 // ═══════════════════════════════════════════
 
-export async function runQuery(sql: string) {
+export async function runQuery(sql: string, params?: any[]) {
     const { db } = await getSqliteEngine();
-    const res = db.exec(sql);
+    const res = db.exec(sql, params);
     return res.length > 0 ? { columns: res[0].columns, values: res[0].values } : { columns: [], values: [] };
 }
 
