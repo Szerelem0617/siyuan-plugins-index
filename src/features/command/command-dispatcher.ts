@@ -17,6 +17,7 @@ import { plugin } from "../../shared/utils";
 import { post } from "../../shared/api-client/request";
 import { commandRegistry } from "./registry/command-registry";
 import type { CommandDef, ParamSchema } from "./registry/command-registry";
+import { runQuery, tableNameToAvId } from "../sqlite/sqlite-manager";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -25,6 +26,7 @@ import type { CommandDef, ParamSchema } from "./registry/command-registry";
 export interface CommandContext {
     blockEl: HTMLElement;
     protyleEl: HTMLElement | null;
+    supertag?: string;
 }
 
 export interface DispatchResult {
@@ -297,26 +299,135 @@ async function buildParams(
  *   {{root_id}}      所在文档根块 ID
  *   {{attr:KEY}}     触发块的自定义属性值
  */
+/**
+ * 从 SQLite (Layer 4 数据库) 中按优先级解析获取块的列属性键值对。
+ * 优先级：
+ *   1. 与 supertag 同名的数据库表中的列值。
+ *   2. 其他包含该 blockId 的数据库表中的列值。
+ */
+async function resolveLayer4Params(blockId: string, supertag?: string): Promise<Record<string, string>> {
+    const params: Record<string, string> = {};
+    if (!blockId) return params;
+
+    try {
+        // 1. 查找所有以 av_ 开头的本地 SQLite 属性视图数据表
+        const tablesRes = await runQuery(`
+            SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'av_%'
+        `);
+        if (!tablesRes || !tablesRes.values || tablesRes.values.length === 0) {
+            return params;
+        }
+
+        const matchedDbs: Array<{ tableName: string; avId: string; name: string; rowData: Record<string, string> }> = [];
+
+        // 2. 遍历表，检查哪些表包含当前 blockId
+        for (const row of tablesRes.values) {
+            const tableName = row[0];
+            if (!tableName) continue;
+
+            try {
+                const existsRes = await runQuery(`SELECT count(*) FROM "${tableName}" WHERE rowID = ?`, [blockId]);
+                const existsCount = existsRes?.values?.[0]?.[0] || 0;
+                if (Number(existsCount) > 0) {
+                    const avId = tableNameToAvId(tableName);
+                    
+                    let dbRealName = "";
+                    try {
+                        const avConfig = await post("/api/av/getAttributeView", { id: avId });
+                        dbRealName = avConfig?.name || (avConfig?.av ? avConfig.av.name : "");
+                    } catch { /* ignore */ }
+
+                    const rowRes = await runQuery(`SELECT * FROM "${tableName}" WHERE rowID = ?`, [blockId]);
+                    if (rowRes && rowRes.columns && rowRes.values && rowRes.values.length > 0) {
+                        const cols = rowRes.columns;
+                        const vals = rowRes.values[0];
+                        const rowData: Record<string, string> = {};
+                        cols.forEach((colName, idx) => {
+                            rowData[colName] = vals[idx] !== null && vals[idx] !== undefined ? String(vals[idx]) : "";
+                        });
+
+                        matchedDbs.push({
+                            tableName,
+                            avId,
+                            name: dbRealName,
+                            rowData
+                        });
+                    }
+                }
+            } catch (err) {
+                // Table doesn't contain standard rowID or other error, skip
+            }
+        }
+
+        if (matchedDbs.length === 0) return params;
+
+        // 3. 优先级匹配：同名 Layer 4 数据库 > 其它 Layer 4 数据库
+        let targetDb = matchedDbs[0];
+
+        if (supertag) {
+            const cleanTag = supertag.replace(/^#/, "").trim().toLowerCase();
+            const sameNameDb = matchedDbs.find(db => db.name.trim().toLowerCase() === cleanTag);
+            if (sameNameDb) {
+                targetDb = sameNameDb;
+                console.log(`[Dispatcher] Priority 1: Match database with same name as Supertag: "${targetDb.name}"`);
+            } else {
+                console.log(`[Dispatcher] Priority 2: Use other matched database: "${targetDb.name}"`);
+            }
+        }
+
+        // 4. 读取该表的 Schema 映射并注入列的实际值
+        const schemaRes = await runQuery(`
+            SELECT col_name, key_name FROM _av_schema WHERE av_id = ?
+        `, [targetDb.avId]);
+
+        if (schemaRes && schemaRes.values) {
+            for (const schemaRow of schemaRes.values) {
+                const colName = schemaRow[0];
+                const keyName = schemaRow[1];
+                const cellValue = targetDb.rowData[colName] ?? "";
+
+                if (colName) params[colName] = cellValue;
+                if (keyName) params[keyName] = cellValue;
+            }
+        }
+    } catch (e) {
+        console.error("[Dispatcher] Error resolving Layer 4 params from SQLite:", e);
+    }
+
+    return params;
+}
+
+/**
+ * 替换字符串中的 {{占位符}}。
+ * 优先级顺序：
+ *   1. 与 supertag 同名的 Layer 4 本地表列值。
+ *   2. 其他 Layer 4 本地表列值。
+ *   3. 块自身的自定义属性 / 系统同步/API变量。
+ */
 async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
     if (!text.includes("{{")) return text;
 
     const blockId = context.blockEl?.getAttribute("data-node-id") ?? "";
+    let result = text;
 
-    // 同步变量
+    // 1. 获取 Layer 4 本地表优先级参数并进行替换 (Priority 1 & 2)
+    const layer4Params = await resolveLayer4Params(blockId, context.supertag);
+    for (const [key, value] of Object.entries(layer4Params)) {
+        result = result.replaceAll(`{{${key}}}`, value);
+        result = result.replaceAll(`{{attr:${key}}}`, value);
+    }
+
+    // 2. 基础同步/内置变量
     const syncVars: Record<string, string> = {
         "date": formatDate(new Date()),
         "time": formatTime(new Date()),
         "block_id": blockId,
     };
-
-    let result = text;
-
-    // 替换同步变量
     for (const [key, value] of Object.entries(syncVars)) {
         result = result.replaceAll(`{{${key}}}`, value);
     }
 
-    // root_id / parent_id（需API）
+    // 3. root_id / parent_id (需API)
     if (result.includes("{{root_id}}") || result.includes("{{parent_id}}")) {
         try {
             const res = await post("/api/block/getBlockBreadcrumb", { id: blockId });
@@ -331,14 +442,14 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
         }
     }
 
-    // {{attr:KEY}} → 查块自定义属性
+    // 4. 优先级 3：退回到块自身的自定义属性 (查询 /api/attr/getBlockAttrs)
     const attrMatches = result.match(/\{\{attr:([^}]+)\}\}/g);
     if (attrMatches && blockId) {
         try {
             const res = await post("/api/attr/getBlockAttrs", { id: blockId });
             const attrs: Record<string, string> = res.data ?? {};
             for (const match of attrMatches) {
-                const attrKey = match.slice(7, -2); // "{{attr:xxx}}" → "xxx"
+                const attrKey = match.slice(7, -2);
                 result = result.replaceAll(match, attrs[attrKey] ?? "");
             }
         } catch { /* ignore */ }

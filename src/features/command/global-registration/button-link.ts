@@ -1,6 +1,7 @@
 import { showMessage } from "siyuan";
 import { getCommandAvId, COMMAND_REGISTRY } from "../registration";
 import { encodeBtnHref } from "./inline-button";
+import { commandRegistry } from "../registry/command-registry";
 
 /**
  * 初始化按钮链接快捷复制监听器
@@ -30,23 +31,24 @@ function handleAvAltClick(event: MouseEvent) {
     const avId = avContainer.getAttribute("data-av-id");
     if (avId !== getCommandAvId()) return;
 
-    // 3. 确认是否为主键 (通常是第一列)
+    // 3. 获取行容器与首列 (主键列)
     const rowEl = cellEl.closest(".av__row");
     if (!rowEl) return;
 
-    // 判断是否为第一个单元格 (主键列)
+    // 判断被点击的单元格是否为第一个单元格 (主键列)
     const firstCell = rowEl.querySelector(".av__cell");
-    if (firstCell !== cellEl) return;
+    if (!firstCell) return;
+
+    const isFirstCell = (firstCell === cellEl);
 
     // 4. 提取主键内容 (命令名称)
-    const rawLabel = (cellEl.textContent || "").trim();
+    const rawLabel = (firstCell.textContent || "").trim();
     if (!rawLabel) return;
 
     // 净化 Label：处理某些情况下可能存在的零宽字符或特殊空格
     const cleanLabel = rawLabel.replace(/[\u200B-\u200D\uFEFF]/g, '');
 
     // 5. 查找对应的 Command ID
-    // 我们可以打印一下当前的注册表状态和获取到的 Label，方便调试
     console.log("[ButtonLink] Clicked Label:", `"${cleanLabel}"`);
     console.log("[ButtonLink] Registry Keys:", Object.keys(COMMAND_REGISTRY));
 
@@ -65,21 +67,55 @@ function handleAvAltClick(event: MouseEvent) {
     }
 
     const targetCommand = cmdInfo?.commandRef || cleanLabel;
-    if (!cmdInfo) {
-        console.warn("[ButtonLink] Match failed, falling back to label. The link will be URL-encoded.");
+
+    if (isFirstCell) {
+        // --- 行为 1: 复制命令按钮链接 ---
+        if (!cmdInfo) {
+            console.warn("[ButtonLink] Match failed, falling back to label. The link will be URL-encoded.");
+        }
+        const href = encodeBtnHref({ command: targetCommand });
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        navigator.clipboard.writeText(href).then(() => {
+            showMessage(`已复制命令按钮链接: ${targetCommand}`, 2000);
+            console.log("[ButtonLink] Copied link:", href);
+        }).catch(err => {
+            console.error("[ButtonLink] Failed to copy:", err);
+            showMessage("复制链接失败", 2000, "error");
+        });
+    } else {
+        // --- 行为 2: 复制参数映射模板 ---
+        const cmdDef = commandRegistry.findByNameOrId(cleanLabel) || commandRegistry.getCommand(targetCommand);
+        
+        const template: Record<string, string> = {};
+        if (cmdDef && cmdDef.params && cmdDef.params.length > 0) {
+            for (const param of cmdDef.params) {
+                if (param.paramMode === "template" && param.templateVars && param.templateVars.length > 0) {
+                    template[param.key] = param.templateVars[0];
+                } else if (param.key.toLowerCase().includes("id") || param.type === "blockid") {
+                    template[param.key] = "{{block_id}}";
+                } else {
+                    template[param.key] = param.default !== undefined ? String(param.default) : "";
+                }
+            }
+        } else {
+            // 默认回退：即使无参数定义，也提供基本块ID的模板，方便映射
+            template["id"] = "{{block_id}}";
+        }
+
+        const jsonStr = JSON.stringify(template, null, 2);
+        
+        event.preventDefault();
+        event.stopPropagation();
+
+        navigator.clipboard.writeText(jsonStr).then(() => {
+            showMessage(`📋 已复制【${cmdDef?.name || targetCommand}】参数映射模板，可直接粘贴修改！`, 3000);
+            console.log("[ButtonLink] Copied param template:", jsonStr);
+        }).catch(err => {
+            console.error("[ButtonLink] Failed to copy param template:", err);
+            showMessage("复制参数映射模板失败", 2000, "error");
+        });
     }
-
-    // 6. 组装并复制链接
-    const href = encodeBtnHref({ command: targetCommand });
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    navigator.clipboard.writeText(href).then(() => {
-        showMessage(`已复制命令按钮链接: ${targetCommand}`, 2000);
-        console.log("[ButtonLink] Copied link:", href);
-    }).catch(err => {
-        console.error("[ButtonLink] Failed to copy:", err);
-        showMessage("复制链接失败", 2000, "error");
-    });
 }

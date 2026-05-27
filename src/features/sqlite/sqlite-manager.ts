@@ -391,11 +391,15 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
                 } else if (v.relation) {
                     // --- Relation Debug Segment ---
                     const relContents = v.relation.contents || [];
-                    const relIds = relContents.map((rc: any) => {
+                    let relIds = relContents.map((rc: any) => {
                         if (!rc) return null;
                         return rc.block?.id || rc.blockID || rc.content || (rc.Block ? rc.Block.ID : null);
                     }).filter(Boolean);
+                    if (relIds.length === 0 && (v.relation.blockIDs || v.relation.blockIds)) {
+                        relIds = (v.relation.blockIDs || v.relation.blockIds || []).filter(Boolean);
+                    }
                     val = relIds.length > 0 ? JSON.stringify(relIds) : null;
+                    console.log(`[SQLiteManager-Relation] Col: "${kv.key.name}", Row: "${v.blockID || v.itemID}", relIds:`, relIds);
                 } else if (v.rollup) {
                     const rollupContents = v.rollup.contents || [];
                     const rollupVals = rollupContents.map((rc: any) => rc?.content || "").filter(Boolean);

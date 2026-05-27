@@ -7,6 +7,7 @@ import { updateCommandPaletteList, PaletteCommand } from "./command-palette";
 import { getSqliteEngine, runQuery, instantiateAV, checkTableExists, tableNameToAvId } from "../../sqlite/sqlite-manager";
 import { getTargetTablesInfo, refreshSupertagRegistry, getCommandAvId, getTypeAvId, getCommandDocId, getTypeDocId } from "../registration";
 import { initSystemTables } from "../indexos/command-sqlite";
+import { isDevModeActive } from "../../dev-mode";
 
 export interface TopBarCommand {
     id: string;
@@ -57,20 +58,15 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
 
         const cmdRes = await runQuery(`SELECT * FROM ${commandsTable} WHERE Enable = 1`);
         if (!cmdRes || !cmdRes.values) {
-            console.warn("[TopBar-SQLite] No enabled commands found in DB.");
             return false;
         }
-
-        console.log(`[TopBar-SQLite] Found ${cmdRes.values.length} enabled commands in ${commandsTable}. Columns:`, cmdRes.columns);
 
         const newTopBars: TopBarCommand[] = [];
         const newInlineBtns: InlineButtonCmd[] = [];
         const newPaletteCmds: PaletteCommand[] = [];
 
         const colIdx = (name: string) => {
-            const idx = cmdRes.columns.findIndex(c => c.toLowerCase() === name.toLowerCase());
-            if (idx === -1) console.error(`[TopBar-SQLite] Column NOT FOUND: ${name}`);
-            return idx;
+            return cmdRes.columns.findIndex(c => c.toLowerCase() === name.toLowerCase());
         };
 
         const idIdx = colIdx("rowID");
@@ -82,7 +78,7 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
         const ibIdx = colIdx("Inline_Button");
         const paletteIdx = colIdx("Command_Palette");
 
-        for (const [rowIndex, row] of cmdRes.values.entries()) {
+        for (const row of cmdRes.values) {
             const id = String(row[idIdx]);
             const label = String(row[labelIdx] || "");
             const commandId = String(row[cmdIdIdx] || "");
@@ -93,8 +89,6 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             const isTopBar = Number(row[topBarIdx]) === 1;
             const isIB = Number(row[ibIdx]) === 1;
             const isPalette = Number(row[paletteIdx]) === 1;
-
-            console.log(`[TopBar-SQLite] Row[${rowIndex}] "${label}": Top_Bar=${isTopBar}, Inline_Button=${isIB}, Command_Palette=${isPalette}`);
 
             if (isTopBar && label && commandId) {
                 newTopBars.push({ id, label, commandId, commandParam, commandType });
@@ -107,11 +101,9 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             }
         }
 
-        console.log(`[TopBar-SQLite] Final results: TopBars=${newTopBars.length}, InlineBtns=${newInlineBtns.length}, Palette=${newPaletteCmds.length}`);
         applyTopBarUpdates(newTopBars, newInlineBtns, newPaletteCmds);
         return true;
     } catch (e) {
-        console.error("[TopBar-SQLite] Failed to refresh:", e);
         return false;
     }
 }
@@ -223,23 +215,33 @@ let isTypeDbUpdatedGlobal = false;
 /**
  * Handle database changes and automatically trigger a debounced Top Bar refresh
  */
-export function handleTopBarEvents({ detail }: any) {
+export async function handleTopBarEvents({ detail }: any) {
     if (detail.cmd !== "transactions") return;
 
-    let localCmdUpdate = false;
-    let localTypeUpdate = false;
+    // Resolve IDs on demand if they aren't initialized yet
+    if (!getCommandAvId() || !getTypeAvId()) {
+        try {
+            await getTargetTablesInfo();
+        } catch (e) {
+            // passive catch
+        }
+    }
 
     const cmdAvId = getCommandAvId();
     const cmdDocId = getCommandDocId();
     const tAvId = getTypeAvId();
     const tDocId = getTypeDocId();
 
-    console.log(`[IndexOS-Sync] Received transactions. commandAvId="${cmdAvId}", typeAvId="${tAvId}", commandDocId="${cmdDocId}", typeDocId="${tDocId}"`);
+    let localCmdUpdate = false;
+    let localTypeUpdate = false;
 
     for (const trans of detail.data) {
         for (const op of trans.doOperations) {
             const opAvId = op.avID || op.avId || "";
-            console.log(`[IndexOS-Sync] Operation: action="${op.action}", avID="${opAvId}", id="${op.id}", rootID="${op.rootID}", parentID="${op.parentID}"`);
+
+            if (isDevModeActive()) {
+                console.log(`[IndexOS-WS-Debug] op.action: ${op.action}, op.id: ${op.id}, op.rootID: ${op.rootID}, op.parentID: ${op.parentID}, opAvId: ${opAvId}`);
+            }
 
             // Check if it targets Command-DB
             const isCmdTarget = 
@@ -252,12 +254,12 @@ export function handleTopBarEvents({ detail }: any) {
                 (tDocId && (op.rootID === tDocId || op.id === tDocId || op.parentID === tDocId));
 
             if (isCmdTarget) {
-                console.log(`[IndexOS-Sync] Matched Command-DB target!`);
                 localCmdUpdate = true;
+                if (isDevModeActive()) console.log(`[IndexOS-WS-Debug] Match target: Command-DB`);
             }
             if (isTypeTarget) {
-                console.log(`[IndexOS-Sync] Matched Type-DB target!`);
                 localTypeUpdate = true;
+                if (isDevModeActive()) console.log(`[IndexOS-WS-Debug] Match target: Type-DB`);
             }
         }
     }
