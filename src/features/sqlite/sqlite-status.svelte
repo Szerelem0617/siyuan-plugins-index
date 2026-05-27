@@ -349,7 +349,7 @@
                                     {syncStatus[block.avId] || "Pending"}
                                 </span>
                             </div>
-                            <div class="av-card__id" title={block.avId}>{block.avId}</div>
+                            <div class="av-card__id" title={block.avId}>{avIdToTableName(block.avId)}</div>
                             {#if syncMeta[block.avId]}
                                 <div class="av-card__meta">
                                     Last: {formatTimestamp(syncMeta[block.avId].updated)}
@@ -373,7 +373,7 @@
             <div class="schema-overlay" on:click|self={() => showSchema = false}>
                 <div class="schema-modal">
                     <div class="fn__flex" style="align-items: center; margin-bottom: 12px;">
-                        <h3 style="margin: 0; font-size: 14px; flex: 1;">Schema: {selectedSchemaAvId.slice(0, 8)}...</h3>
+                        <h3 style="margin: 0; font-size: 14px; flex: 1;">Schema: {avIdToTableName(selectedSchemaAvId)}</h3>
                         <button class="b3-button b3-button--text" style="font-size: 11px;" on:click={() => showSchema = false}>✕</button>
                     </div>
                     {#if schemaColumns.length === 0}
@@ -584,7 +584,7 @@
                     {#each Object.entries(avGroups) as [avId, entries]}
                         <div class="changelog-group">
                             <div class="fn__flex" style="align-items: center; margin-bottom: 6px; gap: 6px;">
-                                <span style="font-size: 11px; font-weight: 600; font-family: monospace;">{avId.slice(0, 12)}...</span>
+                                <span style="font-size: 11px; font-weight: 600; font-family: monospace;">{avIdToTableName(avId)}</span>
                                 <span style="font-size: 10px; opacity: 0.5;">{entries.length} changes</span>
                                 <div style="flex: 1;"></div>
                                 <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 2px 8px;" on:click={() => handleRollback(avId)}>↩ Rollback</button>

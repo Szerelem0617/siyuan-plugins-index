@@ -629,3 +629,13 @@ export async function recordChange(avID: string, rowId: string, colName: string,
         [avID, rowId, colName, keyId, oldValue === null ? null : String(oldValue), newValue === null ? null : String(newValue), new Date().toISOString()]
     );
 }
+
+export async function checkTableExists(tableName: string): Promise<boolean> {
+    try {
+        const { db } = await getSqliteEngine();
+        const res = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [tableName]);
+        return res.length > 0 && res[0].values.length > 0;
+    } catch {
+        return false;
+    }
+}

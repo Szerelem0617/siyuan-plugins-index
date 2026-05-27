@@ -114,6 +114,27 @@
         }
     }
 
+    function copyButtonLink(cmdId: string, paramStr: string, label: string) {
+        if (!cmdId) return;
+        try {
+            const cmdPart = encodeURIComponent(cmdId);
+            const params = new URLSearchParams();
+            if (paramStr) params.set("p", paramStr);
+            const query = params.toString();
+            const href = `siyuan-btn://exec/${cmdPart}${query ? "?" + query : ""}`;
+
+            navigator.clipboard.writeText(href).then(() => {
+                showMessage(`📋 已复制命令按钮链接: ${label || cmdId}`);
+            }).catch(err => {
+                console.error("Failed to copy link:", err);
+                showMessage("复制链接失败", 5000, "error");
+            });
+        } catch (e: any) {
+            console.error("Failed to copy button link:", e);
+            showMessage(`复制出错: ${e.message}`, 5000, "error");
+        }
+    }
+
     const colIdx = (cols: string[], name: string) => {
         return cols.findIndex(c => c.toLowerCase() === name.toLowerCase());
     };
@@ -230,9 +251,9 @@
                                         <button
                                             class="b3-button b3-button--text run-btn"
                                             disabled={Number(row[cmdEnableIdx]) === 0}
-                                            on:click={() => runCommand(row[cmdIdIdx], row[cmdParamIdx], row[cmdLabelIdx])}
+                                            on:click={() => copyButtonLink(row[cmdIdIdx], row[cmdParamIdx], row[cmdLabelIdx])}
                                         >
-                                            ⚡ 运行
+                                            🔗 复制链接
                                         </button>
                                     </td>
                                 </tr>

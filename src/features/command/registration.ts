@@ -4,7 +4,7 @@ import { post } from "../../shared/api-client/request";
 import { client } from "../../shared/api-client";
 import { showMessage, type Protyle, type Menu } from "siyuan";
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
-import { getSqliteEngine, runQuery, saveDatabaseToDisk } from "../sqlite/sqlite-manager";
+import { getSqliteEngine, runQuery, saveDatabaseToDisk, checkTableExists, instantiateAV, tableNameToAvId } from "../sqlite/sqlite-manager";
 import { getSystemTableNames, initSystemTables } from "./indexos/command-sqlite";
 import { reverseDbToList } from "./hierarchy/db-reverse-list";
 
@@ -164,6 +164,24 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
     try {
         await initSystemTables(); // Ensure tables ready
         const { commandsTable, typesTable, commandLabelCol, typeSupertagCol } = await getTargetTablesInfo();
+
+        // Check and auto-instantiate if tables do not exist in SQLite
+        if (commandsTable.startsWith("av_")) {
+            const exists = await checkTableExists(commandsTable);
+            if (!exists) {
+                const avId = commandAvId || tableNameToAvId(commandsTable);
+                console.log(`[SQLite-IndexOS] Commands table "${commandsTable}" not found in SQLite. Auto-instantiating...`);
+                await instantiateAV(avId, true);
+            }
+        }
+        if (typesTable.startsWith("av_")) {
+            const exists = await checkTableExists(typesTable);
+            if (!exists) {
+                const avId = typeAvId || tableNameToAvId(typesTable);
+                console.log(`[SQLite-IndexOS] Types table "${typesTable}" not found in SQLite. Auto-instantiating...`);
+                await instantiateAV(avId, true);
+            }
+        }
 
         // 1. Load Commands (Layer 2)
         const cmdRes = await runQuery(`SELECT "${commandLabelCol}", Command_ID, Param_Mapping FROM ${commandsTable} WHERE Enable = 1`);

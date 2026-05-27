@@ -4,7 +4,7 @@ import { client } from "../../../shared/api-client";
 import { dispatchCommand } from "../command-dispatcher";
 import { updateInlineButtonList, InlineButtonCmd } from "./inline-button";
 import { updateCommandPaletteList, PaletteCommand } from "./command-palette";
-import { getSqliteEngine, runQuery, instantiateAV } from "../../sqlite/sqlite-manager";
+import { getSqliteEngine, runQuery, instantiateAV, checkTableExists, tableNameToAvId } from "../../sqlite/sqlite-manager";
 import { getTargetTablesInfo, refreshSupertagRegistry, getCommandAvId, getTypeAvId, getCommandDocId, getTypeDocId } from "../registration";
 import { initSystemTables } from "../indexos/command-sqlite";
 
@@ -44,6 +44,16 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
     try {
         await initSystemTables();
         const { commandsTable, commandLabelCol } = await getTargetTablesInfo();
+
+        // Check and auto-instantiate if table does not exist in SQLite
+        if (commandsTable.startsWith("av_")) {
+            const exists = await checkTableExists(commandsTable);
+            if (!exists) {
+                const avId = getCommandAvId() || tableNameToAvId(commandsTable);
+                console.log(`[TopBar-SQLite] Commands table "${commandsTable}" not found in SQLite. Auto-instantiating...`);
+                await instantiateAV(avId, true);
+            }
+        }
 
         const cmdRes = await runQuery(`SELECT * FROM ${commandsTable} WHERE Enable = 1`);
         if (!cmdRes || !cmdRes.values) {
@@ -109,16 +119,40 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
 function applyTopBarUpdates(newTopBars: TopBarCommand[], newInlineBtns: InlineButtonCmd[], newPaletteCmds: PaletteCommand[]) {
     if (!plugin) return;
 
-    // 1. Remove all dynamically registered top bar buttons
+    // 1. Remove commands that are no longer ticked
+    const toRemove = registeredTopBars.filter(r => !newTopBars.find(n => n.id === r.id));
+    for (const rem of toRemove) {
+        if (rem.element) rem.element.remove();
+    }
+    registeredTopBars = registeredTopBars.filter(r => newTopBars.find(n => n.id === r.id));
+
+    // 2. Add new commands
+    for (const tb of newTopBars) {
+        if (!registeredTopBars.find(r => r.id === tb.id)) {
+            const el = plugin.addTopBar({
+                icon: "iconPlay",
+                title: tb.label,
+                position: "right",
+                callback: () => {
+                    console.log(`[TopBar] Executing: ${tb.label}`, tb.commandId);
+                    // Mock context for global Top Bar commands
+                    const mockContext = { blockEl: document.body, protyleEl: null };
+                    dispatchCommand(tb.commandId, tb.commandParam, mockContext as any);
+                }
+            });
+            registeredTopBars.push({ id: tb.id, element: el });
+        }
+    }
+
+    updateInlineButtonList(newInlineBtns);
+    updateCommandPaletteList(newPaletteCmds);
+}
+
+export function destroyTopBarCommands() {
     for (const rem of registeredTopBars) {
         if (rem.element) rem.element.remove();
     }
     registeredTopBars = [];
-
-    // 2. Do NOT add new commands to the Siyuan topbar anymore (removed as requested)
-
-    updateInlineButtonList(newInlineBtns);
-    updateCommandPaletteList(newPaletteCmds);
 }
 
 /**

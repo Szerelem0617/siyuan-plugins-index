@@ -12,6 +12,8 @@
  */
 
 import commandsData from "./commands.json";
+import { runQuery } from "../../sqlite/sqlite-manager";
+import { getSystemTableNames } from "../indexos/command-sqlite";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & Interfaces
@@ -150,6 +152,53 @@ class CommandRegistry {
             loaded++;
         }
         console.log(`[Registry] Loaded ${loaded} builtin commands.`);
+    }
+
+    /**
+     * 从 SQLite 数据库加载命令定义并刷新内存 Map。
+     * 这让 SQLite 成为命令定义的 Source of Truth。
+     */
+    async loadFromDatabase(): Promise<void> {
+        try {
+            const { registry: registryTable } = getSystemTableNames();
+            const res = await runQuery(`SELECT id, name, description, dispatch, params, constraints, meta FROM ${registryTable}`);
+            if (!res || !res.values || res.values.length === 0) {
+                console.warn("[Registry] No registry records found in SQLite, keeping existing builtins.");
+                return;
+            }
+
+            let loaded = 0;
+            for (const row of res.values) {
+                const id = row[0];
+                const name = row[1];
+                const description = row[2];
+                const dispatchRaw = row[3];
+                const paramsRaw = row[4];
+                const constraintsRaw = row[5];
+                const metaRaw = row[6];
+
+                if (!id) continue;
+
+                try {
+                    const def: CommandDef = {
+                        id,
+                        name: name || "",
+                        description: description || "",
+                        dispatch: dispatchRaw ? JSON.parse(dispatchRaw) : { method: "custom" },
+                        params: paramsRaw ? JSON.parse(paramsRaw) : [],
+                        constraints: constraintsRaw ? JSON.parse(constraintsRaw) : { requiresFocus: false, uiOnly: false, schedulable: false },
+                        meta: metaRaw ? JSON.parse(metaRaw) : { scope: "global", category: "custom", source: "plugin" }
+                    };
+                    this.store.set(id, def);
+                    loaded++;
+                } catch (parseErr) {
+                    console.error(`[Registry] Error parsing registry record ID "${id}":`, parseErr);
+                }
+            }
+            console.log(`[Registry] Loaded ${loaded} commands from SQLite database (Layer 1).`);
+        } catch (e) {
+            console.error("[Registry] Failed to load registry from database, keeping existing builtins:", e);
+        }
     }
 
     /**

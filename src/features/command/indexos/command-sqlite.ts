@@ -1,5 +1,7 @@
 import { getSqliteEngine, saveDatabaseToDisk } from "../../sqlite/sqlite-manager";
+import commandsData from "../registry/commands.json";
 
+const TABLE_REGISTRY = "sys_registry_db";
 const TABLE_COMMANDS = "sys_command_db";
 const TABLE_TYPES = "sys_type_db";
 
@@ -11,7 +13,18 @@ export async function initSystemTables() {
     const { db } = await getSqliteEngine();
     console.log("[SQLite-IndexOS] Initializing System Tables as Source of Truth...");
 
-    // 1. Create Command Table aligned with sanitized AV Column names
+    // 0. Create Registry Table (Layer 1)
+    db.run(`CREATE TABLE IF NOT EXISTS ${TABLE_REGISTRY} (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        description TEXT,
+        dispatch TEXT,
+        params TEXT,
+        constraints TEXT,
+        meta TEXT
+    );`);
+
+    // 1. Create Command Table aligned with sanitized AV Column names (Layer 2)
     db.run(`CREATE TABLE IF NOT EXISTS ${TABLE_COMMANDS} (
         rowID TEXT PRIMARY KEY,
         label TEXT,
@@ -25,7 +38,7 @@ export async function initSystemTables() {
         Command_Palette INTEGER DEFAULT 0
     );`);
 
-    // 2. Create Type Table aligned with sanitized AV Column names
+    // 2. Create Type Table aligned with sanitized AV Column names (Layer 3)
     db.run(`CREATE TABLE IF NOT EXISTS ${TABLE_TYPES} (
         rowID TEXT PRIMARY KEY,
         supertag TEXT,
@@ -33,6 +46,25 @@ export async function initSystemTables() {
         Current_Page_Menu TEXT,
         Enable INTEGER DEFAULT 1
     );`);
+
+    // 2.5 Check if Registry is empty and seed from JSON
+    const registryCount = db.exec(`SELECT count(*) FROM ${TABLE_REGISTRY}`)[0].values[0][0];
+    if (registryCount === 0) {
+        console.log("[SQLite-IndexOS] Seeding default registry from JSON...");
+        const stmt = db.prepare(`INSERT INTO ${TABLE_REGISTRY} (id, name, description, dispatch, params, constraints, meta) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+        for (const cmd of (commandsData as any).commands) {
+            stmt.run([
+                cmd.id,
+                cmd.name,
+                cmd.description || "",
+                JSON.stringify(cmd.dispatch),
+                JSON.stringify(cmd.params),
+                JSON.stringify(cmd.constraints),
+                JSON.stringify(cmd.meta)
+            ]);
+        }
+        stmt.free();
+    }
 
     // 3. Check if empty and seed default data
     const cmdCount = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS}`)[0].values[0][0];
@@ -72,6 +104,7 @@ export async function initSystemTables() {
  */
 export function getSystemTableNames() {
     return {
+        registry: TABLE_REGISTRY,
         commands: TABLE_COMMANDS,
         types: TABLE_TYPES
     };

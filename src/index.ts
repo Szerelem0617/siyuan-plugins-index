@@ -12,7 +12,7 @@ import { addCommandTestMenuItem, refreshSupertagRegistry, DEV_ENABLE_INIT_SYS } 
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { supertagMonitor } from "./features/data/av-setting/supertag";
 import { supertagManager } from "./features/data/av-setting/supertag-manager";
-import { refreshTopBarCommands, handleTopBarEvents } from "./features/command/global-registration/top-bar";
+import { refreshTopBarCommands, handleTopBarEvents, destroyTopBarCommands } from "./features/command/global-registration/top-bar";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
 import { initButtonLinkListener, destroyButtonLinkListener } from "./features/command/global-registration/button-link";
@@ -72,6 +72,8 @@ export default class IndexPlugin extends Plugin {
             getSqliteEngine().then(async () => {
                 console.log("[IndexOS] SQLite Engine Ready. Initializing builtin DB...");
                 await initSystemTables();
+                // Reload command registry from SQLite (Layer 1)
+                await commandRegistry.loadFromDatabase();
                 // Refresh registrations once DB is ready
                 await refreshSupertagRegistry();
                 await refreshTopBarCommands();
@@ -104,6 +106,7 @@ export default class IndexPlugin extends Plugin {
             destroyInlineButtonListener();
             destroyCommandPalette();
             destroyButtonLinkListener();
+            destroyTopBarCommands();
         }
         this.eventBus.off("paste", handleBtnPaste);
         console.log("IndexPlugin onunload");
