@@ -20,6 +20,7 @@ import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
 import { getSqliteEngine } from "./features/sqlite/sqlite-manager";
 import { version } from "../plugin.json";
 import { initSystemTables } from "./features/command/indexos/command-sqlite";
+import { canUseFeature } from "./features/dev-mode/policy-guard";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -109,6 +110,13 @@ export default class IndexPlugin extends Plugin {
             destroyTopBarCommands();
         }
         this.eventBus.off("paste", handleBtnPaste);
+
+        // Remove Search bar event listener to prevent hot reload leakage
+        const btn = document.querySelector("#barSearch");
+        if (btn) {
+            btn.removeEventListener("mousedown", this.handleSearchMouseDown, true);
+        }
+
         console.log("IndexPlugin onunload");
     }
 
@@ -158,6 +166,15 @@ export default class IndexPlugin extends Plugin {
         if (e.altKey) {
             e.stopPropagation();
             e.preventDefault();
+            
+            console.log("[DevModeDebug] handleSearchMouseDown triggered, altKey:", e.altKey);
+            const hasPerm = canUseFeature("database.diagnose");
+            console.log("[DevModeDebug] handleSearchMouseDown hasPerm check:", hasPerm);
+            if (!hasPerm) {
+                console.log("[DevModeDebug] handleSearchMouseDown BLOCKED (no permission)");
+                return;
+            }
+            console.log("[DevModeDebug] handleSearchMouseDown ALLOWED (calling openSqliteStatus)");
             this.openSqliteStatus();
         }
     }

@@ -7,8 +7,12 @@
     import { constructCommandStorage } from "../../command/construct-dir";
     import { reverseDbToList } from "../../command/hierarchy/db-reverse-list";
     import { getSystemTableNames, initSystemTables } from "../../command/indexos/command-sqlite";
+    import { canUseFeature } from "../../dev-mode/policy-guard";
 
     let loading = true;
+    let showPullModal = false;
+    let pullableCommands: any[] = [];
+    let pullLoading = false;
     let commandRows: any[] = [];
     let commandCols: string[] = [];
     let typeRows: any[] = [];
@@ -94,6 +98,75 @@
         } catch (e: any) {
             console.error("Generate outline failed", e);
             showMessage(`生成失败: ${e.message}`, 5000, "error");
+        }
+    }
+
+    async function openPullModal() {
+        pullLoading = true;
+        showPullModal = true;
+        try {
+            const { registry: registryTable, commands: commandsTable } = getSystemTableNames();
+            const res = await runQuery(`
+                SELECT id, name, description, dispatch, params, constraints, meta 
+                FROM ${registryTable} 
+                WHERE id NOT IN (SELECT Command_ID FROM ${commandsTable} WHERE Command_ID IS NOT NULL)
+            `);
+            if (res && res.values) {
+                pullableCommands = res.values.map(row => ({
+                    id: row[0],
+                    name: row[1],
+                    description: row[2],
+                    dispatch: JSON.parse(row[3] || "{}"),
+                    params: JSON.parse(row[4] || "[]"),
+                    constraints: JSON.parse(row[5] || "{}"),
+                    meta: JSON.parse(row[6] || "{}")
+                }));
+            } else {
+                pullableCommands = [];
+            }
+        } catch (e) {
+            console.error("[CommandsPanel] Failed to load pullable commands:", e);
+            showMessage("无法加载内置命令列表", 5000, "error");
+        } finally {
+            pullLoading = false;
+        }
+    }
+
+    async function handlePullCommand(cmd: any) {
+        try {
+            // Generate standard rowID
+            const formatPart = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+            const randPart = Math.random().toString(36).slice(2, 9);
+            const rowID = `${formatPart}-${randPart}`;
+
+            const cmdType = cmd.dispatch?.method === "api" ? "API" : "Native";
+            const targetScope = cmd.meta?.scope ? (cmd.meta.scope.charAt(0).toUpperCase() + cmd.meta.scope.slice(1)) : "Global";
+
+            const { db } = await getSqliteEngine();
+            const { commands: commandsTable } = getSystemTableNames();
+
+            db.run(`
+                INSERT INTO ${commandsTable} (rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette)
+                VALUES (?, ?, ?, ?, ?, ?, 1, 0, 0, 0)
+            `, [
+                rowID,
+                cmd.name,
+                cmd.id,
+                "",
+                cmdType,
+                targetScope
+            ]);
+
+            await saveDatabaseToDisk();
+            await refreshSupertagRegistry();
+            
+            showMessage(`✓ 已将命令【${cmd.name}】拉取到 Layer 2`);
+            
+            await loadData();
+            await openPullModal();
+        } catch (e: any) {
+            console.error("Pull command failed", e);
+            showMessage(`拉取失败: ${e.message}`, 5000, "error");
         }
     }
 
@@ -203,6 +276,11 @@
             <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleGenerateOutline} disabled={!isInitialized}>
                 📑 生成大纲列表模式
             </button>
+            {#if canUseFeature("commands.pull")}
+                <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={openPullModal}>
+                    📥 拉取内置命令
+                </button>
+            {/if}
         </div>
 
         <!-- Section 1: Command List (逻辑工厂) -->
@@ -410,4 +488,68 @@
         color: #fbcfe8;
         border-color: rgba(236, 72, 153, 0.2);
     }
+
+    /* ─── Modal styling ─── */
+    .schema-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        backdrop-filter: blur(4px);
+    }
+    .schema-modal {
+        background: var(--b3-theme-surface);
+        border: 1px solid var(--b3-border-color);
+        border-radius: 12px;
+        padding: 16px;
+        width: 90%;
+        max-height: 80%;
+        overflow-y: auto;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    }
 </style>
+
+{#if showPullModal}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="schema-overlay" on:click|self={() => showPullModal = false}>
+        <div class="schema-modal" style="max-width: 600px;">
+            <div class="fn__flex" style="align-items: center; margin-bottom: 12px; gap: 8px;">
+                <h3 style="margin: 0; font-size: 14px; font-weight: 600; flex: 1;">📥 拉取内置命令至 Layer 2</h3>
+                <button class="b3-button b3-button--text" style="font-size: 11px;" on:click={() => showPullModal = false}>✕</button>
+            </div>
+            {#if pullLoading}
+                <div style="text-align: center; padding: 30px; opacity: 0.4; font-size: 11px;">加载可拉取命令中...</div>
+            {:else if pullableCommands.length === 0}
+                <div style="text-align: center; padding: 30px; opacity: 0.4; font-size: 11px;">所有内置命令已全部拉取到 Layer 2</div>
+            {:else}
+                <div class="pull-list" style="max-height: 350px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                    {#each pullableCommands as cmd}
+                        <div class="pull-item" style="padding: 10px; border: 1px solid var(--b3-border-color); border-radius: 6px; background: var(--b3-theme-surface-lighter); display: flex; align-items: flex-start; gap: 10px;">
+                            <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <strong style="font-size: 12px; color: #fff;">{cmd.name}</strong>
+                                    <code style="font-size: 9px; color: #4ec9b0; font-family: monospace;">{cmd.id}</code>
+                                </div>
+                                <div style="font-size: 10px; opacity: 0.6; line-height: 1.4;">{cmd.description || "无描述"}</div>
+                                <div style="display: flex; gap: 6px; margin-top: 4px;">
+                                    <span style="font-size: 9px; background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px; opacity: 0.7;">Scope: {cmd.meta?.scope || "global"}</span>
+                                    <span style="font-size: 9px; background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px; opacity: 0.7;">Method: {cmd.dispatch?.method || "custom"}</span>
+                                </div>
+                            </div>
+                            <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 4px 10px; font-weight: 500;" on:click={() => handlePullCommand(cmd)}>
+                                📥 拉取
+                            </button>
+                        </div>
+                    {/each}
+                </div>
+            {/if}
+        </div>
+    </div>
+{/if}

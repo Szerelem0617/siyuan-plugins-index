@@ -114,6 +114,10 @@
         "title": "Add Template Columns",
         "content": "Automatically add title-img and template columns"
       },
+      "devMode": {
+        "title": "Developer Mode",
+        "content": "Enable command registry management and database diagnostic tools (not recommended for general users)"
+      },
 
       "builderDesc": "📄 Open sub-page · ➖ Link to heading"
     }

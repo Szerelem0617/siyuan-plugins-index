@@ -113,6 +113,10 @@
         "title": "添加模板列",
         "content": "是否自动添加 title-img、template 列"
       },
+      "devMode": {
+        "title": "开发者模式",
+        "content": "启用命令管理和数据库诊断工具（普通用户不建议开启）"
+      },
 
       "builderDesc": "📄 跳转子文档 · ➖ 跳转标题行"
     }

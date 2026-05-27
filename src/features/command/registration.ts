@@ -7,6 +7,7 @@ import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./
 import { getSqliteEngine, runQuery, saveDatabaseToDisk, checkTableExists, instantiateAV, tableNameToAvId } from "../sqlite/sqlite-manager";
 import { getSystemTableNames, initSystemTables } from "./indexos/command-sqlite";
 import { reverseDbToList } from "./hierarchy/db-reverse-list";
+import { isDevModeActive } from "../dev-mode";
 
 export const DEV_ENABLE_INIT_SYS = true;
 
@@ -375,7 +376,7 @@ async function refreshRegistryFromApi() {
  * 生成用于 Slash (/) 召唤出的初始构建指令选项
  */
 export function getInitSystemSlashCommand() {
-    if (!DEV_ENABLE_INIT_SYS) return null;
+    if (!DEV_ENABLE_INIT_SYS || !isDevModeActive()) return null;
 
     return [
         {
