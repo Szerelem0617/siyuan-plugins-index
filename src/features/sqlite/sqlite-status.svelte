@@ -7,10 +7,6 @@
         exportToCSV, exportToJSON, downloadFile,
         avIdToTableName, type AVColumnSchema, type SavedQuery
     } from "./sqlite-manager";
-    import {
-        runMutation, rollbackChanges, getChangelog, clearChangelog,
-        type MutationResult, type ChangelogEntry
-    } from "./sqlite-writeback";
     import CommandsPanel from "./commands-db/CommandsPanel.svelte";
 
     let avBlocks: any[] = [];
@@ -26,9 +22,6 @@
     let queryError = "";
     let copyStatus = "Copy";
 
-    // Mutation Result
-    let mutationResult: MutationResult | null = null;
-
     // Saved Queries
     let savedQueries: SavedQuery[] = [];
     let showSavedQueries = false;
@@ -41,17 +34,6 @@
 
     // Export
     let showExportMenu = false;
-
-    // Changelog
-    let showChangelog = false;
-    let changelogEntries: ChangelogEntry[] = [];
-    let changelogLoading = false;
-
-    $: avGroups = changelogEntries.reduce((acc, e) => {
-        if (!acc[e.avId]) acc[e.avId] = [];
-        acc[e.avId].push(e);
-        return acc;
-    }, {} as Record<string, ChangelogEntry[]>);
 
     // Tabs
     let activeTab: "databases" | "console" | "commands" = "commands";
@@ -118,34 +100,12 @@
 
     async function executeSQL() {
         queryError = "";
-        mutationResult = null;
         showExportMenu = false;
 
         const sqlType = detectSqlType(sqlInput);
 
-        if (sqlType === "UPDATE") {
-            // Mutation path — write-back to AV
-            try {
-                const result = await runMutation(sqlInput);
-                mutationResult = result;
-                if (result.errors.length > 0) {
-                    queryError = result.errors.join("\n");
-                }
-                if (result.success && result.changedCells > 0) {
-                    // Refresh the table data for the user to see
-                    // Extract AV ID from the UPDATE SQL
-                    const avMatch = sqlInput.match(/UPDATE\s+"([^"]+)"/i) ||
-                                    sqlInput.match(/UPDATE\s+`([^`]+)`/i) ||
-                                    sqlInput.match(/UPDATE\s+(\S+)\s+SET/i);
-                    if (avMatch && avMatch[1]) {
-                        queryResult = await runQuery(`SELECT * FROM ${avMatch[1]} LIMIT 50`);
-                    }
-                }
-            } catch (e: any) {
-                queryError = e.message;
-            }
-        } else if (sqlType === "DELETE" || sqlType === "INSERT" || sqlType === "DROP" || sqlType === "ALTER" || sqlType === "CREATE") {
-            queryError = `⚠️ ${sqlType} 语句不支持写回操作。仅 SELECT (查询) 和 UPDATE (修改+写回) 可用。`;
+        if (["UPDATE", "DELETE", "INSERT", "DROP", "ALTER", "CREATE"].includes(sqlType)) {
+            queryError = `⚠️ ${sqlType} 语句在 SQL 终端中已被禁用。本地 SQLite 仅作为只读缓存使用。请在思源笔记的表格界面或通过官方 API 修改数据。`;
             queryResult = null;
         } else {
             // Read-only query (SELECT, PRAGMA, EXPLAIN, etc.)
@@ -206,39 +166,6 @@
         showSchema = true;
     }
 
-    async function loadChangelog() {
-        changelogLoading = true;
-        changelogEntries = await getChangelog(undefined, 100);
-        changelogLoading = false;
-        showChangelog = true;
-    }
-
-    async function handleRollback(avId: string) {
-        mutationResult = null;
-        queryError = "";
-        try {
-            const result = await rollbackChanges(avId);
-            mutationResult = {
-                success: result.success,
-                changedCells: result.changedCells,
-                changedRows: result.changedRows,
-                errors: result.errors
-            };
-            if (!result.success && result.errors.length > 0) {
-                queryError = result.errors.join("\n");
-            }
-            // Refresh changelog
-            changelogEntries = await getChangelog(undefined, 100);
-        } catch (e: any) {
-            queryError = `回滚失败: ${e.message}`;
-        }
-    }
-
-    async function handleClearChangelog() {
-        await clearChangelog();
-        changelogEntries = [];
-    }
-
     function getTypeIcon(type: string): string {
         const icons: Record<string, string> = {
             text: "Aa", number: "#", select: "◉", mSelect: "☰",
@@ -276,9 +203,6 @@
         activeTab = "console";
     }
 
-    $: sqlType = detectSqlType(sqlInput);
-    $: isMutation = sqlType === "UPDATE";
-
     onMount(() => {
         init();
     });
@@ -289,9 +213,6 @@
     <div class="fn__flex" style="align-items: center; margin-bottom: 12px; gap: 8px;">
         <h1 style="font-size: 16px; margin: 0; font-weight: 600; letter-spacing: -0.3px;">⚡ AV SQL Explorer</h1>
         <div style="flex: 1;"></div>
-        <button class="b3-button b3-button--text" style="font-size: 10px; padding: 3px 8px;" on:click={loadChangelog}>
-            📋 Changelog
-        </button>
         <button class="b3-button b3-button--outline" style="font-size: 11px; padding: 4px 10px;" on:click={init} disabled={loading || batchProcessing}>
             {loading ? "..." : "Scan"}
         </button>
@@ -419,7 +340,6 @@
                 <div class="fn__flex-1" style="position: relative;">
                     <textarea
                         class="b3-text-field fn__block sql-input"
-                        class:mutation-mode={isMutation}
                         bind:value={sqlInput}
                         on:keydown={(e) => {
                             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -430,18 +350,14 @@
                         placeholder="SELECT * FROM table — Ctrl/⌘+Enter to run"
                         rows="3"
                     ></textarea>
-                    {#if isMutation}
-                        <div class="mutation-badge">WRITE-BACK</div>
-                    {/if}
                 </div>
                 <div class="fn__flex-column" style="gap: 4px;">
                     <button
                         class="b3-button"
-                        class:mutation-btn={isMutation}
                         style="font-size: 11px; padding: 4px 12px;"
                         on:click={executeSQL}
                     >
-                        {isMutation ? "⚡ Push" : "▶ Run"}
+                        ▶ Run
                     </button>
                     <button class="b3-button b3-button--outline" style="font-size: 11px; padding: 4px 12px; position: relative;"
                         on:click={() => showSavedQueries = !showSavedQueries}
@@ -471,27 +387,6 @@
                         </div>
                     {:else}
                         <div style="font-size: 11px; opacity: 0.4; text-align: center; padding: 6px;">No saved queries</div>
-                    {/if}
-                </div>
-            {/if}
-
-            <!-- Mutation Result Banner -->
-            {#if mutationResult}
-                <div class="mutation-result-banner" class:success={mutationResult.success} class:error={!mutationResult.success} style="margin-bottom: 8px;">
-                    {#if mutationResult.success && mutationResult.changedCells > 0}
-                        <span>✓ 已更新 {mutationResult.changedCells} 个单元格 ({mutationResult.changedRows} 行) → 已同步到 AV</span>
-                        <button class="b3-button b3-button--text" style="font-size: 10px; color: inherit; margin-left: 8px;" on:click={() => {
-                            const avMatch = sqlInput.match(/UPDATE\s+"([^"]+)"/i) ||
-                                            sqlInput.match(/UPDATE\s+`([^`]+)`/i) ||
-                                            sqlInput.match(/UPDATE\s+(\S+)\s+SET/i);
-                            if (avMatch?.[1]) handleRollback(avMatch[1]);
-                        }}>
-                            ↩ Undo
-                        </button>
-                    {:else if mutationResult.success && mutationResult.changedCells === 0}
-                        <span>ℹ 未检测到变更 (数据未修改)</span>
-                    {:else}
-                        <span>✗ 写回失败</span>
                     {/if}
                 </div>
             {/if}
@@ -557,61 +452,10 @@
                         <div style="text-align: center;">
                             <div style="margin-bottom: 8px;">Run a query to see results</div>
                             <div style="font-size: 10px; opacity: 0.5;">
-                                SELECT → 只读查询 &nbsp;|&nbsp; UPDATE → 修改 + 写回 AV
+                                SELECT → 只读查询
                             </div>
                         </div>
                     </div>
-                {/if}
-            </div>
-        </div>
-    {/if}
-
-    <!-- Changelog Modal -->
-    {#if showChangelog}
-        <div class="schema-overlay" on:click|self={() => showChangelog = false}>
-            <div class="schema-modal" style="max-width: 640px;">
-                <div class="fn__flex" style="align-items: center; margin-bottom: 12px;">
-                    <h3 style="margin: 0; font-size: 14px; flex: 1;">📋 Change Log ({changelogEntries.length})</h3>
-                    <button class="b3-button b3-button--text" style="font-size: 10px; color: var(--b3-theme-error); margin-right: 8px;" on:click={handleClearChangelog} disabled={changelogEntries.length === 0}>Clear All</button>
-                    <button class="b3-button b3-button--text" style="font-size: 11px;" on:click={() => showChangelog = false}>✕</button>
-                </div>
-
-                {#if changelogLoading}
-                    <div style="text-align: center; padding: 20px; opacity: 0.4;">Loading...</div>
-                {:else if changelogEntries.length === 0}
-                    <div style="text-align: center; padding: 20px; opacity: 0.4;">No changes recorded</div>
-                {:else}
-                    {#each Object.entries(avGroups) as [avId, entries]}
-                        <div class="changelog-group">
-                            <div class="fn__flex" style="align-items: center; margin-bottom: 6px; gap: 6px;">
-                                <span style="font-size: 11px; font-weight: 600; font-family: monospace;">{avIdToTableName(avId)}</span>
-                                <span style="font-size: 10px; opacity: 0.5;">{entries.length} changes</span>
-                                <div style="flex: 1;"></div>
-                                <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 2px 8px;" on:click={() => handleRollback(avId)}>↩ Rollback</button>
-                            </div>
-                            <div class="changelog-entries">
-                                {#each entries.slice(0, 10) as entry}
-                                    <div class="changelog-entry">
-                                        <span class="changelog-time">{formatChangeTs(entry.timestamp)}</span>
-                                        <span class="changelog-col">{entry.colName}</span>
-                                        <span class="changelog-arrow">
-                                            <span class="old-val">{truncate(entry.oldValue, 15)}</span>
-                                            →
-                                            <span class="new-val">{truncate(entry.newValue, 15)}</span>
-                                        </span>
-                                        <span class="changelog-sync" class:synced={entry.synced === 1}>
-                                            {entry.synced ? "✓" : "○"}
-                                        </span>
-                                    </div>
-                                {/each}
-                                {#if entries.length > 10}
-                                    <div style="font-size: 10px; opacity: 0.4; text-align: center; padding: 4px;">
-                                        ... and {entries.length - 10} more
-                                    </div>
-                                {/if}
-                            </div>
-                        </div>
-                    {/each}
                 {/if}
             </div>
         </div>
@@ -707,28 +551,7 @@
         min-height: 48px;
         transition: border-color 0.15s;
     }
-    .sql-input.mutation-mode {
-        border-color: #f59e0b;
-        box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3);
-    }
-    .mutation-badge {
-        position: absolute;
-        top: 4px;
-        right: 4px;
-        background: #f59e0b;
-        color: #000;
-        font-size: 9px;
-        font-weight: 700;
-        padding: 1px 5px;
-        border-radius: 3px;
-        letter-spacing: 0.5px;
-        pointer-events: none;
-    }
-    .mutation-btn {
-        background: #f59e0b !important;
-        color: #000 !important;
-        border-color: #f59e0b !important;
-    }
+
 
     .saved-queries-panel {
         border: 1px solid var(--b3-border-color);
@@ -751,24 +574,7 @@
         border-left: 3px solid #dc2626;
     }
 
-    /* ─── Mutation Result Banner ─── */
-    .mutation-result-banner {
-        font-size: 11px;
-        padding: 6px 10px;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-    }
-    .mutation-result-banner.success {
-        background: rgba(16, 185, 129, 0.1);
-        border-left: 3px solid #10b981;
-        color: #10b981;
-    }
-    .mutation-result-banner.error {
-        background: rgba(239, 68, 68, 0.1);
-        border-left: 3px solid #ef4444;
-        color: #ef4444;
-    }
+
 
     /* ─── Result Table ─── */
     .result-viewer {
@@ -930,56 +736,7 @@
         color: #ef4444;
     }
 
-    /* ─── Changelog ─── */
-    .changelog-group {
-        border: 1px solid var(--b3-border-color);
-        border-radius: 6px;
-        padding: 8px;
-        margin-bottom: 8px;
-    }
-    .changelog-entries {
-        max-height: 200px;
-        overflow-y: auto;
-    }
-    .changelog-entry {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 3px 0;
-        font-size: 11px;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-    .changelog-entry:last-child { border-bottom: none; }
-    .changelog-time {
-        font-family: monospace;
-        font-size: 10px;
-        opacity: 0.4;
-        width: 55px;
-        flex-shrink: 0;
-    }
-    .changelog-col {
-        font-weight: 500;
-        width: 80px;
-        flex-shrink: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .changelog-arrow {
-        flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .old-val { color: #ef4444; opacity: 0.7; }
-    .new-val { color: #10b981; }
-    .changelog-sync {
-        width: 16px;
-        text-align: center;
-        flex-shrink: 0;
-        opacity: 0.4;
-    }
-    .changelog-sync.synced { opacity: 1; color: #10b981; }
+
 
     /* ─── General ─── */
     .b3-button:disabled { opacity: 0.5; cursor: not-allowed; }

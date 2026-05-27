@@ -174,19 +174,6 @@ function _initSystemTables(db: any) {
         PRIMARY KEY (av_id, col_name)
     );`);
 
-    // Changelog — operation journal for Phase 2 write-back
-    db.run(`CREATE TABLE IF NOT EXISTS _changelog (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        av_id TEXT NOT NULL,
-        row_id TEXT NOT NULL,
-        col_name TEXT NOT NULL,
-        key_id TEXT,
-        old_value TEXT,
-        new_value TEXT,
-        timestamp TEXT NOT NULL,
-        synced INTEGER DEFAULT 0
-    );`);
-
     // Saved queries
     db.run(`CREATE TABLE IF NOT EXISTS _saved_queries (
         id TEXT PRIMARY KEY,
@@ -614,39 +601,6 @@ function _csvEscape(val: string): string {
         return `"${val.replace(/"/g, '""')}"`;
     }
     return val;
-}
-
-// ═══════════════════════════════════════════
-//  Changelog (Phase 2 Foundation)
-// ═══════════════════════════════════════════
-
-/**
- * Get pending (unsynced) changelog entries for an AV
- */
-export async function getPendingChanges(avID: string): Promise<any[]> {
-    const { db } = await getSqliteEngine();
-    try {
-        const res = db.exec(
-            `SELECT id, row_id, col_name, key_id, old_value, new_value, timestamp FROM _changelog WHERE av_id = ? AND synced = 0 ORDER BY id`,
-            [avID]
-        );
-        if (!res.length) return [];
-        return res[0].values.map((row: any) => ({
-            id: row[0], rowId: row[1], colName: row[2], keyId: row[3],
-            oldValue: row[4], newValue: row[5], timestamp: row[6]
-        }));
-    } catch { return []; }
-}
-
-/**
- * Record a change in the changelog (called by future Phase 2 UPDATE interceptor)
- */
-export async function recordChange(avID: string, rowId: string, colName: string, keyId: string, oldValue: any, newValue: any): Promise<void> {
-    const { db } = await getSqliteEngine();
-    db.run(
-        `INSERT INTO _changelog (av_id, row_id, col_name, key_id, old_value, new_value, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?);`,
-        [avID, rowId, colName, keyId, oldValue === null ? null : String(oldValue), newValue === null ? null : String(newValue), new Date().toISOString()]
-    );
 }
 
 export async function checkTableExists(tableName: string): Promise<boolean> {
