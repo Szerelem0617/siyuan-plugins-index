@@ -5,9 +5,7 @@ import { eventBus } from "../../shared/eventbus";
  * Checks if Developer Mode is currently active.
  */
 export function isDevModeActive(): boolean {
-    const val = settings.get("devMode");
-    console.log("[DevModeDebug] isDevModeActive check:", val);
-    return !!val;
+    return !!settings.get("devMode");
 }
 
 /**

@@ -23,7 +23,5 @@ const DEV_MODE_FEATURES = new Set<PluginFeature>([
  */
 export function canUseFeature(feature: PluginFeature): boolean {
     const isDev = isDevModeActive();
-    const allowed = isDev ? DEV_MODE_FEATURES.has(feature) : USER_MODE_FEATURES.has(feature);
-    console.log(`[DevModeDebug] canUseFeature checking "${feature}" -> allowed: ${allowed} (isDev: ${isDev})`);
-    return allowed;
+    return isDev ? DEV_MODE_FEATURES.has(feature) : USER_MODE_FEATURES.has(feature);
 }

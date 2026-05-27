@@ -167,14 +167,7 @@ export default class IndexPlugin extends Plugin {
             e.stopPropagation();
             e.preventDefault();
             
-            console.log("[DevModeDebug] handleSearchMouseDown triggered, altKey:", e.altKey);
-            const hasPerm = canUseFeature("database.diagnose");
-            console.log("[DevModeDebug] handleSearchMouseDown hasPerm check:", hasPerm);
-            if (!hasPerm) {
-                console.log("[DevModeDebug] handleSearchMouseDown BLOCKED (no permission)");
-                return;
-            }
-            console.log("[DevModeDebug] handleSearchMouseDown ALLOWED (calling openSqliteStatus)");
+            if (!canUseFeature("database.diagnose")) return;
             this.openSqliteStatus();
         }
     }
