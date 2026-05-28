@@ -42,8 +42,12 @@ async function handleAvAltClick(event: MouseEvent) {
     const { cell: cellEl, row: rowEl, avContainer, avId, rowId, colId, isHeader, isPrimaryKeyCell } = clickCtx;
     const commandAvId = getCommandAvId();
     const typeAvId = getTypeAvId();
+    console.log("[Interaction-Debug] avId:", avId, "commandAvId:", commandAvId, "typeAvId:", typeAvId);
 
-    if (avId !== commandAvId && avId !== typeAvId) return;
+    if (avId !== commandAvId && avId !== typeAvId) {
+        console.log("[Interaction-Debug] avId mismatch, returning early");
+        return;
+    }
     if (isHeader || rowEl.classList.contains("av__row--footer")) return;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -132,7 +136,7 @@ async function handleAvAltClick(event: MouseEvent) {
                 return;
             }
 
-            const paramsSchema = (cmdDef.params || []).filter((p: any) => p.paramMode !== "injected");
+            const paramsSchema = cmdDef.params || [];
 
             if (paramsSchema.length === 0) {
                 showMessage(`命令 "${cmdDef.name || cleanLabel}" 不支持参数配置`);
@@ -256,7 +260,7 @@ async function handleAvAltClick(event: MouseEvent) {
 }
 
 async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
-    const paramsSchema = (cmdDef.params || []).filter((p: any) => p.paramMode !== "injected");
+    const paramsSchema = cmdDef.params || [];
     if (paramsSchema.length === 0) {
         showMessage(`命令 "${cleanLabel}" 不支持参数配置`);
         return;

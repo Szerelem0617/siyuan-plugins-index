@@ -51,16 +51,17 @@ export function getTypeDocId() { return typeDocId; }
 export async function getTargetTablesInfo() {
     if (!commandAvId || !typeAvId || !commandDocId || !typeDocId) {
         try {
-            const cmdSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
-            const cmdDocs = await post("/api/query/sql", { stmt: cmdSql });
+            // 1. Resolve Command-DB
+            const cmdDocSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
+            const cmdDocs = await post("/api/query/sql", { stmt: cmdDocSql });
             if (cmdDocs && cmdDocs.length > 0) {
                 const docId = cmdDocs[0].root_id;
                 commandDocId = docId;
-                const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' ORDER BY created ASC LIMIT 1`;
-                const listRes = await post("/api/query/sql", { stmt: listSql });
-                if (listRes && listRes.length > 0) {
-                    const listAttrsRes = await client.getBlockAttrs({ id: listRes[0].id });
-                    commandAvId = listAttrsRes.data?.["custom-index-linked-av"] || "";
+
+                const avLinkSql = `SELECT a.value FROM attributes a JOIN blocks b ON a.block_id = b.id WHERE b.root_id = '${docId}' AND a.name = 'custom-index-linked-av' LIMIT 1`;
+                const avLinkRes = await post("/api/query/sql", { stmt: avLinkSql });
+                if (avLinkRes && avLinkRes.length > 0) {
+                    commandAvId = avLinkRes[0].value || "";
                 } else {
                     // Fallback for Pure Database Mode
                     const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
@@ -74,16 +75,17 @@ export async function getTargetTablesInfo() {
                 }
             }
 
-            const typeSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
-            const typeDocs = await post("/api/query/sql", { stmt: typeSql });
+            // 2. Resolve Type-DB
+            const typeDocSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
+            const typeDocs = await post("/api/query/sql", { stmt: typeDocSql });
             if (typeDocs && typeDocs.length > 0) {
                 const docId = typeDocs[0].root_id;
                 typeDocId = docId;
-                const listSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'l' ORDER BY created ASC LIMIT 1`;
-                const listRes = await post("/api/query/sql", { stmt: listSql });
-                if (listRes && listRes.length > 0) {
-                    const listAttrsRes = await client.getBlockAttrs({ id: listRes[0].id });
-                    typeAvId = listAttrsRes.data?.["custom-index-linked-av"] || "";
+
+                const avLinkSql = `SELECT a.value FROM attributes a JOIN blocks b ON a.block_id = b.id WHERE b.root_id = '${docId}' AND a.name = 'custom-index-linked-av' LIMIT 1`;
+                const avLinkRes = await post("/api/query/sql", { stmt: avLinkSql });
+                if (avLinkRes && avLinkRes.length > 0) {
+                    typeAvId = avLinkRes[0].value || "";
                 } else {
                     // Fallback for Pure Database Mode
                     const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;

@@ -12,6 +12,7 @@ import {
 import { batchUpdateCellValue } from "./special/batch-update";
 import { openDbConfigDialog, setColumnWeakInheritance } from "../av-setting/db-config";
 import { getColIDMap } from "../../../shared/utils/av-utils";
+import { getCommandAvId, getTypeAvId } from "../../command/registration";
 class AVEventHandler {
     private onContextMenuBound = this.onContextMenu.bind(this);
     private onMouseDownBound = this.onMouseDown.bind(this);
@@ -34,6 +35,16 @@ class AVEventHandler {
     private getAVCell(event: MouseEvent) {
         const ctx = parseAVClickEvent(event);
         if (!ctx || ctx.isPrimaryKeyCell) return null;
+
+        // 若点击的是系统表（Command-DB / Type-DB），则不在这里拦截，交由 av-interaction 专有监听器处理
+        const commandAvId = getCommandAvId();
+        const typeAvId = getTypeAvId();
+        console.log("[AV-Debug] ctx.avId:", ctx.avId, "commandAvId:", commandAvId, "typeAvId:", typeAvId);
+        if (ctx.avId === commandAvId || ctx.avId === typeAvId) {
+            console.log("[AV-Debug] Bypassing events.ts for system table");
+            return null;
+        }
+
         return ctx.cell;
     }
 

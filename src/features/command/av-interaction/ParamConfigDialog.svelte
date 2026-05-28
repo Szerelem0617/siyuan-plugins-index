@@ -98,7 +98,7 @@
                         <input 
                             type="text" 
                             class="b3-input fn__block" 
-                            placeholder={param.paramMode === "template" ? "支持占位符，如 {{block_id}}, {{date}}" : (param.description || "")}
+                            placeholder={param.paramMode === "injected" ? `[自动注入] 留空则默认从上下文自动提取，支持填入覆盖值` : (param.paramMode === "template" ? "支持占位符，如 {{block_id}}, {{date}}" : (param.description || ""))}
                             bind:value={values[param.key]} 
                         />
                     {/if}

@@ -256,7 +256,12 @@ async function buildParams(
                 if (userVal !== undefined && userVal !== null && String(userVal).trim() !== "") {
                     result[schema.key] = await resolveTemplate(String(userVal), context);
                 } else {
-                    result[schema.key] = resolveInjected(schema, context);
+                    // 特殊逻辑：对于 api.block.insertBlock，若用户配置了 nextID，则不应自动注入 previousID（因为思源 API 收到 previousID 时会优先以其为准，导致 nextID 失效）
+                    if (def.id === "api.block.insertBlock" && schema.key === "previousID" && userParams["nextID"] && String(userParams["nextID"]).trim() !== "") {
+                        // 不进行自动注入，由 API 依据 nextID 运行
+                    } else {
+                        result[schema.key] = resolveInjected(schema, context);
+                    }
                 }
                 break;
             }
