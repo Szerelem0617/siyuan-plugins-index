@@ -179,7 +179,6 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             const exists = await checkTableExists(commandsTable);
             if (!exists) {
                 const avId = commandAvId || tableNameToAvId(commandsTable);
-                console.log(`[SQLite-IndexOS] Commands table "${commandsTable}" not found in SQLite. Auto-instantiating...`);
                 await instantiateAV(avId, true);
             }
         }
@@ -187,7 +186,6 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             const exists = await checkTableExists(typesTable);
             if (!exists) {
                 const avId = typeAvId || tableNameToAvId(typesTable);
-                console.log(`[SQLite-IndexOS] Types table "${typesTable}" not found in SQLite. Auto-instantiating...`);
                 await instantiateAV(avId, true);
             }
         }
@@ -214,7 +212,6 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                 cmdByRowId[rowID] = cmdInfo;
             }
         }
-        console.log("[IndexOS-Registry] Loaded COMMAND_REGISTRY from SQLite:", Object.keys(COMMAND_REGISTRY));
 
         // 2. Query relation column name for '绑定命令' in Type-DB
         const { db } = await getSqliteEngine();
@@ -227,7 +224,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                 hasRelationCol = true;
             }
         } catch (e) {
-            console.warn("[Registry] Failed to query relation column name, using fallback:", e);
+            // ignore
         }
 
         // 3. Load Type Bindings (Layer 3)
@@ -239,8 +236,6 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         }
         const typeRes = await runQuery(querySql);
         if (!typeRes || !typeRes.values) return false;
-
-        console.log("[IndexOS-Registry] Raw Type rows loaded from SQLite:", typeRes.values);
 
         const newRegistry: SupertagCommand[] = [];
         for (const row of typeRes.values) {
@@ -255,7 +250,6 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                         try {
                             const linkedRowIds: string[] = JSON.parse(relationRaw);
                             if (Array.isArray(linkedRowIds)) {
-                                console.log(`[IndexOS-Registry] Found relation column bindings for tag "#${cleanTag}":`, linkedRowIds);
                                 for (const cmdRowId of linkedRowIds) {
                                     const cmdInfo = cmdByRowId[cmdRowId];
                                     if (cmdInfo) {
@@ -269,15 +263,11 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                                                 paramMapping: cmdInfo.paramMapping,
                                                 uiLocation: "BlockIconMenu"
                                             });
-                                            console.log(`[IndexOS-Registry] Bound command "${cmdInfo.methodName}" (relation) to supertag "#${cleanTag}"`);
                                         }
-                                    } else {
-                                        console.warn(`[IndexOS-Registry] Warning: Linked Command Row ID "${cmdRowId}" for supertag "#${cleanTag}" not found in COMMAND_REGISTRY (possibly disabled or deleted)`);
                                     }
                                 }
                             }
                         } catch (e) {
-                            console.error(`[IndexOS-Registry] Error parsing relation JSON for tag "#${cleanTag}":`, relationRaw, e);
                         }
                     }
                 } else {
@@ -299,9 +289,6 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                                     paramMapping: cmdInfo.paramMapping,
                                     uiLocation: location
                                 });
-                                console.log(`[IndexOS-Registry] Bound command "${cmdInfo.methodName}" (text-menu) to supertag "#${cleanTag}" at ${location}`);
-                            } else {
-                                console.warn(`[IndexOS-Registry] Failed to bind command: "${cmdName}" not found in COMMAND_REGISTRY for supertag "#${cleanTag}"`);
                             }
                         }
                     };
@@ -312,10 +299,8 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             }
         }
         SUPERTAG_REGISTRY = newRegistry;
-        console.log(`[SQLite-IndexOS] Registry refreshed. Table: ${typesTable}, Commands: ${Object.keys(COMMAND_REGISTRY).length}, Supertags: ${SUPERTAG_REGISTRY.length}`);
         return true;
     } catch (e) {
-        console.error("[SQLite-IndexOS] Error refreshing registry from SQLite:", e);
         return false;
     }
 }
@@ -472,7 +457,6 @@ async function refreshRegistryFromApi() {
         }
         SUPERTAG_REGISTRY = newRegistry;
     } catch (e) {
-        console.error("[Supertag] API Refresh failed:", e);
     }
 }
 
@@ -488,7 +472,6 @@ export function getInitSystemSlashCommand() {
             html: `<div class="b3-list-item__first"><span class="b3-list-item__text">${i18n.initSystemDB}</span><span class="b3-list-item__meta">Legacy AV</span></div>`,
             id: "initSystemDB",
             async callback(protyle: Protyle) {
-                console.log("[IndexPlugin] Slash initSystemDB");
                 protyle.insert("");
                 await constructCommandStorage();
                 await refreshSupertagRegistry();
@@ -547,7 +530,6 @@ export function addCommandTestMenuItem({ detail }: any) {
     const currentBlockTags = Array.from(new Set([...domTags, ...inlineTags]));
 
     const blockId = targetEl.getAttribute("data-node-id") || "";
-    console.log(`[Supertag-Menu] Right-clicked block "${blockId}": detected tags =`, currentBlockTags, `SUPERTAG_REGISTRY size =`, SUPERTAG_REGISTRY.length);
 
     if (currentBlockTags.length === 0) return;
 
@@ -560,8 +542,6 @@ export function addCommandTestMenuItem({ detail }: any) {
             && item.uiLocation === "BlockIconMenu"
         );
         
-        console.log(`[Supertag-Menu] Tag "${tag}" matched ${matches.length} commands:`, matches);
-
         if (matches.length > 0) {
             if (!separatorAdded) {
                 menu.addSeparator();
@@ -579,7 +559,7 @@ export function addCommandTestMenuItem({ detail }: any) {
                         try { (window as any).siyuan?.menus?.menu?.remove(); }
                         catch (_) { document.querySelectorAll(".b3-menu").forEach((m: any) => m.remove()); }
 
-                        console.log(`[IndexOS] 🚀 Dispatching [${match.commandRef}] via Supertag Cache`);
+                        // Dispatch
 
                         setTimeout(async () => {
                             try {

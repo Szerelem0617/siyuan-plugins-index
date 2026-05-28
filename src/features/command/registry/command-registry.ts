@@ -151,7 +151,6 @@ class CommandRegistry {
             this.store.set(def.id, def);
             loaded++;
         }
-        console.log(`[Registry] Loaded ${loaded} builtin commands.`);
     }
 
     /**
@@ -195,7 +194,6 @@ class CommandRegistry {
                     console.error(`[Registry] Error parsing registry record ID "${id}":`, parseErr);
                 }
             }
-            console.log(`[Registry] Loaded ${loaded} commands from SQLite database (Layer 1).`);
         } catch (e) {
             console.error("[Registry] Failed to load registry from database, keeping existing builtins:", e);
         }

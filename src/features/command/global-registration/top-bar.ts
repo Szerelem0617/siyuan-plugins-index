@@ -4,7 +4,7 @@ import { client } from "../../../shared/api-client";
 import { dispatchCommand } from "../command-dispatcher";
 import { updateInlineButtonList, InlineButtonCmd } from "./inline-button";
 import { updateCommandPaletteList, PaletteCommand } from "./command-palette";
-import { getSqliteEngine, runQuery, instantiateAV, checkTableExists, tableNameToAvId } from "../../sqlite/sqlite-manager";
+import { getSqliteEngine, runQuery, instantiateAV, checkTableExists, tableNameToAvId, instantiatedAvIdsCache } from "../../sqlite/sqlite-manager";
 import { getTargetTablesInfo, refreshSupertagRegistry, getCommandAvId, getTypeAvId, getCommandDocId, getTypeDocId } from "../registration";
 import { initSystemTables } from "../indexos/command-sqlite";
 import { isDevModeActive } from "../../dev-mode";
@@ -51,7 +51,6 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             const exists = await checkTableExists(commandsTable);
             if (!exists) {
                 const avId = getCommandAvId() || tableNameToAvId(commandsTable);
-                console.log(`[TopBar-SQLite] Commands table "${commandsTable}" not found in SQLite. Auto-instantiating...`);
                 await instantiateAV(avId, true);
             }
         }
@@ -211,6 +210,7 @@ async function refreshTopBarFromApi() {
 
 let isCommandDbUpdatedGlobal = false;
 let isTypeDbUpdatedGlobal = false;
+let userAvUpdates = new Set<string>();
 
 /**
  * Handle database changes and automatically trigger a debounced Top Bar refresh
@@ -239,9 +239,7 @@ export async function handleTopBarEvents({ detail }: any) {
         for (const op of trans.doOperations) {
             const opAvId = op.avID || op.avId || "";
 
-            if (isDevModeActive()) {
-                console.log(`[IndexOS-WS-Debug] op.action: ${op.action}, op.id: ${op.id}, op.rootID: ${op.rootID}, op.parentID: ${op.parentID}, opAvId: ${opAvId}`);
-            }
+            // Process op
 
             // Check if it targets Command-DB
             const isCmdTarget = 
@@ -255,42 +253,47 @@ export async function handleTopBarEvents({ detail }: any) {
 
             if (isCmdTarget) {
                 localCmdUpdate = true;
-                if (isDevModeActive()) console.log(`[IndexOS-WS-Debug] Match target: Command-DB`);
             }
             if (isTypeTarget) {
                 localTypeUpdate = true;
-                if (isDevModeActive()) console.log(`[IndexOS-WS-Debug] Match target: Type-DB`);
+            }
+
+            // Check if it targets an instantiated user AV database
+            if (opAvId && opAvId !== cmdAvId && opAvId !== tAvId && instantiatedAvIdsCache.has(opAvId)) {
+                userAvUpdates.add(opAvId);
             }
         }
     }
 
-    if (localCmdUpdate || localTypeUpdate) {
+    if (localCmdUpdate || localTypeUpdate || userAvUpdates.size > 0) {
         if (localCmdUpdate) isCommandDbUpdatedGlobal = true;
         if (localTypeUpdate) isTypeDbUpdatedGlobal = true;
 
-        console.log(`[IndexOS-Sync] AV updates detected. Queued sync: Command-DB=${isCommandDbUpdatedGlobal}, Type-DB=${isTypeDbUpdatedGlobal}`);
+        // Updates detected
 
         if (refreshTimer) clearTimeout(refreshTimer);
         refreshTimer = setTimeout(async () => {
             const syncCmd = isCommandDbUpdatedGlobal;
             const syncType = isTypeDbUpdatedGlobal;
+            const userDbsToSync = Array.from(userAvUpdates);
             
             // Reset global flags before async actions to prevent race conditions
             isCommandDbUpdatedGlobal = false;
             isTypeDbUpdatedGlobal = false;
+            userAvUpdates.clear();
 
             try {
                 if (syncCmd && cmdAvId) {
-                    console.log(`[IndexOS-Sync] Re-instantiating Command-DB AV: ${cmdAvId}`);
                     await instantiateAV(cmdAvId, true);
                 }
                 if (syncType && tAvId) {
-                    console.log(`[IndexOS-Sync] Re-instantiating Type-DB AV: ${tAvId}`);
                     await instantiateAV(tAvId, true);
+                }
+                for (const avId of userDbsToSync) {
+                    await instantiateAV(avId, true);
                 }
 
                 // Now refresh the registry and top bars
-                console.log(`[IndexOS-Sync] Refreshing registrations and UI...`);
                 await refreshSupertagRegistry();
                 await refreshTopBarCommands();
             } catch (e) {

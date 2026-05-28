@@ -15,7 +15,7 @@ import { supertagManager } from "./features/data/av-setting/supertag-manager";
 import { refreshTopBarCommands, handleTopBarEvents, destroyTopBarCommands } from "./features/command/global-registration/top-bar";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
-import { initButtonLinkListener, destroyButtonLinkListener } from "./features/command/global-registration/button-link";
+import { initButtonLinkListener, destroyButtonLinkListener } from "./features/command/av-interaction";
 import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
 import { getSqliteEngine } from "./features/sqlite/sqlite-manager";
 import { version } from "../plugin.json";

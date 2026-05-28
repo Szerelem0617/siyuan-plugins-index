@@ -101,3 +101,50 @@ export function formatDate(d: Date) {
     const p = (n: number) => (n < 10 ? "0" + n : n);
     return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
 }
+
+export interface AVClickContext {
+    cell: HTMLElement;
+    row: HTMLElement;
+    avContainer: HTMLElement;
+    avId: string;
+    rowId: string;
+    colId: string;
+    isHeader: boolean;
+    isPrimaryKeyCell: boolean;
+}
+
+/**
+ * 解析属性视图（AV）点击/Alt-点击事件，并返回关联的所有 DOM 与数据上下文。
+ * 能够完美兼容思源表格“锁定列”与“滚动列”两部分 DOM 行（.av__row）独立分离的渲染机制。
+ */
+export function parseAVClickEvent(event: MouseEvent): AVClickContext | null {
+    if (!event.altKey) return null;
+    const target = event.target as HTMLElement;
+    const cell = target.closest(".av__cell") as HTMLElement;
+    if (!cell) return null;
+
+    const row = (cell.closest(".av__row") || cell.closest(".av__gallery-item") || cell.closest(".av__kanban-item")) as HTMLElement;
+    const avContainer = cell.closest(".av") as HTMLElement;
+    if (!avContainer || !row) return null;
+
+    const avId = avContainer.getAttribute("data-av-id") || "";
+    const rowId = row.getAttribute("data-id") || "";
+    const colId = cell.getAttribute("data-col-id") || cell.getAttribute("data-field-id") || "";
+    const isHeader = !!cell.closest(".av__row--header") || cell.classList.contains("av__cell--header");
+
+    // 从表头中精确识别主键列（ Primary Key，在思源中固定为类型为 "block" 的列）
+    const pkHeader = avContainer.querySelector('.av__row--header .av__cell[data-dtype="block"]');
+    const pkColId = pkHeader?.getAttribute("data-col-id");
+    const isPrimaryKeyCell = pkColId ? (colId === pkColId) : false;
+
+    return {
+        cell,
+        row,
+        avContainer,
+        avId,
+        rowId,
+        colId,
+        isHeader,
+        isPrimaryKeyCell
+    };
+}

@@ -4,6 +4,7 @@ import { plugin } from "../../shared/utils";
 let dbInstance: any = null;
 let SQL_ENGINE: any = null;
 const STORAGE_DB_PATH = "/data/storage/petal/siyuan-plugins-index/index-os.sqlite";
+export let instantiatedAvIdsCache: Set<string> = new Set();
 
 // ─── AV Type → SQLite Type Mapping ───
 const AV_TYPE_TO_SQLITE: Record<string, string> = {
@@ -98,6 +99,16 @@ export async function getSqliteEngine() {
 
         // Initialize system tables
         _initSystemTables(dbInstance);
+
+        // Cache instantiated AV IDs
+        try {
+            const res = dbInstance.exec("SELECT id FROM _meta WHERE type = 'av'");
+            if (res.length > 0 && res[0].values) {
+                instantiatedAvIdsCache = new Set(res[0].values.map((v: any) => String(v[0])));
+            }
+        } catch (e) {
+            console.warn("[SQLiteManager] Failed to populate instantiatedAvIdsCache:", e);
+        }
         
         return { db: dbInstance, SQL: SQL_ENGINE };
     } catch (e) {
@@ -208,19 +219,27 @@ export async function saveDatabaseToDisk() {
 
 /**
  * Compute a lightweight content hash for change detection.
- * Uses sorted JSON of all cell values to detect modifications.
+ * Uses serialized cell value contents of all rows to detect modifications.
  */
 function _computeDataHash(keyValues: any[]): string {
     let hash = 0;
-    const str = JSON.stringify(keyValues.map(kv => ({
+    const dataToHash = keyValues.map(kv => ({
         id: kv.key.id,
         name: kv.key.name,
         type: kv.key.type,
-        valCount: kv.values?.length || 0,
-        // Sample first and last value for change detection without full serialization
-        first: kv.values?.[0]?.blockID || "",
-        last: kv.values?.[kv.values?.length - 1]?.blockID || ""
-    })));
+        values: kv.values?.map((v: any) => {
+            const cellVal = v.text?.content || 
+                            v.number?.content || 
+                            v.checkbox?.checked || 
+                            v.date?.content || 
+                            JSON.stringify(v.mSelect || v.mOption || v.mAsset || v.relation || []);
+            return {
+                blockID: v.blockID || "",
+                content: cellVal
+            };
+        })
+    }));
+    const str = JSON.stringify(dataToHash);
     
     for (let i = 0; i < str.length; i++) {
         const char = str.charCodeAt(i);
@@ -251,7 +270,6 @@ function _extractSelectOptions(kv: any): string | null {
 
 export async function instantiateAV(avID: string, force: boolean = false): Promise<SyncResult> {
     const { db } = await getSqliteEngine();
-    console.log(`[SQLiteManager] Instantiating AV: ${avID} (force=${force})`);
     const res = await post("/api/av/getAttributeView", { id: avID });
     
     // Debug: Check if the response is actually valid
@@ -262,7 +280,6 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 
     const av = res.av || res;
     const keyValues = av.keyValues || [];
-    console.log(`[SQLiteManager] Fetched AV structure for ${avID}. Columns: ${keyValues.length}`);
     
     if (keyValues.length === 0) return { success: false, message: "Empty/No columns" };
 
@@ -274,7 +291,6 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
             if (hashRes.length > 0 && hashRes[0].values.length > 0) {
                 const oldHash = hashRes[0].values[0][0];
                 if (oldHash === newHash) {
-                    console.log(`[SQLiteManager] AV ${avID} unchanged (hash match). Skipping rebuild.`);
                     return { success: true, rowCount: 0, unchanged: true };
                 }
             }
@@ -316,7 +332,6 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 
     // 2. 清理旧数据并重新建表（使用正确的类型映射）
     const tableName = avIdToTableName(avID);
-    console.log(`[SQLiteManager] Creating table ${tableName}...`);
     db.run(`DROP TABLE IF EXISTS ${tableName};`); 
     
     const colDefs = columns.map(c => `"${c.name}" ${c.sqliteType}`).join(", ");
@@ -341,11 +356,9 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
     const itemIdToBlockId = new Map<string, string>();
     keyValues.forEach((kv: any) => {
         if (kv.key.type === "block") {
-            console.log(`[SQLiteManager-Debug] Found block column: "${kv.key.name}" (${kv.key.id})`);
             kv.values?.forEach((v: any) => {
                 const itemId = v.blockID || v.blockId || v.itemID || v.itemId || "";
                 const boundBlockId = v.block?.id || "";
-                console.log(`[SQLiteManager-Debug] Mapping row cell: itemId="${itemId}", boundBlockId="${boundBlockId}", blockObj=${JSON.stringify(v.block)}`);
                 if (itemId && boundBlockId) {
                     itemIdToBlockId.set(itemId, boundBlockId);
                 }
@@ -421,7 +434,6 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 
     // 4. 批量执行插入
     const rows = Array.from(rowMap.values());
-    console.log(`[SQLiteManager] Inserting ${rows.length} rows into ${tableName}...`);
     
     db.run("BEGIN TRANSACTION;");
     for (const row of rows) {
@@ -446,6 +458,7 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
         `INSERT OR REPLACE INTO _meta (id, type, updated, data_hash, row_count, col_count) VALUES (?, 'av', ?, ?, ?, ?);`,
         [avID, new Date().toISOString(), dataHash, rows.length, columns.length]
     );
+    instantiatedAvIdsCache.add(avID);
     await saveDatabaseToDisk();
 
     return { success: true, rowCount: rows.length };

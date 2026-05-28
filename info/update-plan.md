@@ -80,10 +80,18 @@ graph TD
 1. **极速读取**：由于数据已被方案 A 静默同步，多数情况下直接执行 `SELECT *` 即可查到块 ID。耗时小于 5ms，API 请求数为 0。
 2. **防爆兜底**：如果在 SQLite 中未检索到此物理块（如刚刚移动或新建的块），则去拉取属性中的 `custom-avs`，强制拉取，并完成补齐。
 
+### 方案 D：智能覆盖注入参数（Smart Inject Override）
+在命令分发器的参数构建阶段，允许用户在 `Param_Mapping` JSON 中配置原本由系统自动注入（`injected` 模式）的参数（如 `parentId`、`previousID` 等），从而实现命令在不同上下文下的归档和重定向：
+
+1. **值检测**：当解析 `injected` 类型的参数时，首先检查用户在自定义参数表中是否显式声明了该参数键值。
+2. **模板替换**：如果用户配置了该值（且不为空），则运行 `resolveTemplate` 解析其占位符，以支持类似 `{"parentId": "{{关联文档ID}}"}` 的动态配置。
+3. **安全注入兜底**：若用户未指定任何自定义参数，则 fallback 回退到原本的自动注入机制，注入当前触发上下文的块 ID 或父块 ID。
+
 ---
 
 ## 3. 后续开发排期 (Roadmap)
 
-*   **第 1 阶段**：修复 `_computeDataHash` Bug，确保哈希对任何单元格修改敏感。
-*   **第 2 阶段**：扩展 `top-bar.ts` 中的 WebSocket 同步检测，加入 `instantiatedAvIds` 的全局感知，完成被动后台更新。
-*   **第 3 阶段**：重写 `resolveLayer4Params` 查询算法，全面切换为“SQL 优先”读取，移除高频的 HTTP API 前置轮询。
+*   **第 1 阶段 [基座修正]**：修复 `_computeDataHash` Bug，确保哈希对任何单元格修改敏感。
+*   **第 2 阶段 [被动同步]**：扩展 `top-bar.ts` 中的 WebSocket 同步检测，加入 `instantiatedAvIds` 的全局感知，完成被动后台更新。
+*   **第 3 阶段 [极速读取]**：重写 `resolveLayer4Params` 查询算法，全面切换为“SQL 优先”读取，移除高频的 HTTP API 前置轮询。
+*   **第 4 阶段 [参数重定向]**：实现“智能覆盖注入参数（Smart Inject Override）”机制，解锁跨文档块移动与远程智能归档的高级应用场景。

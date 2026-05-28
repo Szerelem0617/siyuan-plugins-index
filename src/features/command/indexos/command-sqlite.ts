@@ -11,7 +11,6 @@ const TABLE_TYPES = "sys_type_db";
  */
 export async function initSystemTables() {
     const { db } = await getSqliteEngine();
-    console.log("[SQLite-IndexOS] Initializing System Tables as Source of Truth...");
 
     // 0. Create Registry Table (Layer 1)
     db.run(`CREATE TABLE IF NOT EXISTS ${TABLE_REGISTRY} (
@@ -50,7 +49,6 @@ export async function initSystemTables() {
     // 2.5 Check if Registry is empty and seed from JSON
     const registryCount = db.exec(`SELECT count(*) FROM ${TABLE_REGISTRY}`)[0].values[0][0];
     if (registryCount === 0) {
-        console.log("[SQLite-IndexOS] Seeding default registry from JSON...");
         const stmt = db.prepare(`INSERT INTO ${TABLE_REGISTRY} (id, name, description, dispatch, params, constraints, meta) VALUES (?, ?, ?, ?, ?, ?, ?)`);
         for (const cmd of (commandsData as any).commands) {
             stmt.run([
@@ -69,7 +67,6 @@ export async function initSystemTables() {
     // 3. Check if empty and seed default data
     const cmdCount = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS}`)[0].values[0][0];
     if (cmdCount === 0) {
-        console.log("[SQLite-IndexOS] Seeding default commands...");
         const defaultCmds = [
             // rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette
             ["20260526204558-bp28zp8", "🌐 全局关系图 (无上下文测试)", "general.graphView", "", "Native", "Global", 1, 1, 1, 1],
@@ -89,7 +86,6 @@ export async function initSystemTables() {
 
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
     if (typeCount === 0) {
-        console.log("[SQLite-IndexOS] Seeding default type bindings...");
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable) VALUES (?, ?, ?, ?, ?)`, 
             ["20260526204605-7hun58a", "#Project", "在右侧分屏打开, 全局关系图", "", 1]);
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable) VALUES (?, ?, ?, ?, ?)`, 
@@ -97,7 +93,6 @@ export async function initSystemTables() {
     }
 
     await saveDatabaseToDisk();
-    console.log("[SQLite-IndexOS] System tables ready.");
 }
 
 /**
