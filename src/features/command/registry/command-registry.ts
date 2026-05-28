@@ -22,7 +22,6 @@ import { getSystemTableNames } from "../indexos/command-sqlite";
 /** 参数的获取/注入方式 */
 export type ParamMode =
     | "static"      // 写死在 AV Command Param 列里，执行时原样传入
-    | "injected"    // Dispatcher 从运行上下文（blockEl / protyleEl）中自动提取
     | "template"    // 字符串含 {{占位符}}，Dispatcher 在执行前实时解析替换
     | "interactive"; // 执行前弹出 UI 让用户手动填写
 
@@ -55,8 +54,8 @@ export interface ParamSchema {
     values?: string[];
     /** 默认值（static 类型参数的缺省） */
     default?: unknown;
-    /** paramMode=injected 时指明从哪个上下文字段取值，如 "context.blockEl" */
-    injectedFrom?: string;
+    /** 是否在配置界面默认折叠/隐藏 */
+    hidden?: boolean;
     /** paramMode=template 时列出可用的占位符，如 ["{{date}}", "{{block_id}}"] */
     templateVars?: string[];
     /** 参数的描述文字，显示在 command-db UI 的 tooltip 里 */

@@ -175,6 +175,7 @@ async function handleAvAltClick(event: MouseEvent) {
                 currentParams = {};
             }
 
+            console.log("[ParamConfig] Dialog opened. paramsSchema:", paramsSchema);
             const dialog = new Dialog({
                 title: "配置命令参数",
                 content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
@@ -331,6 +332,7 @@ async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
         }
 
         // 5. 唤起配置弹窗
+        console.log("[ParamConfig] Dialog opened via openConfigForCommand. paramsSchema:", paramsSchema);
         const dialog = new Dialog({
             title: "配置命令参数",
             content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,

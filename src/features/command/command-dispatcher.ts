@@ -251,21 +251,6 @@ async function buildParams(
     for (const schema of def.params) {
         switch (schema.paramMode) {
 
-            case "injected": {
-                const userVal = userParams[schema.key];
-                if (userVal !== undefined && userVal !== null && String(userVal).trim() !== "") {
-                    result[schema.key] = await resolveTemplate(String(userVal), context);
-                } else {
-                    // 特殊逻辑：对于 api.block.insertBlock，若用户配置了 nextID，则不应自动注入 previousID（因为思源 API 收到 previousID 时会优先以其为准，导致 nextID 失效）
-                    if (def.id === "api.block.insertBlock" && schema.key === "previousID" && userParams["nextID"] && String(userParams["nextID"]).trim() !== "") {
-                        // 不进行自动注入，由 API 依据 nextID 运行
-                    } else {
-                        result[schema.key] = resolveInjected(schema, context);
-                    }
-                }
-                break;
-            }
-
             case "template": {
                 const raw = String(userParams[schema.key] ?? schema.default ?? "");
                 result[schema.key] = await resolveTemplate(raw, context);
@@ -286,6 +271,13 @@ async function buildParams(
     // 把用户填写的但 schema 中没有定义的额外字段也合并进来（灵活扩展）
     for (const [k, v] of Object.entries(userParams)) {
         if (!(k in result)) result[k] = v;
+    }
+
+    // 剔除所有空字符串属性，防止传给思源 API 时因为空值字段校验失败
+    for (const key of Object.keys(result)) {
+        if (result[key] === "") {
+            delete result[key];
+        }
     }
 
     return result;
@@ -507,20 +499,7 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
     return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
-function resolveInjected(schema: ParamSchema, context: CommandContext): unknown {
-    const source = schema.injectedFrom ?? "";
-    if (source.startsWith("context.blockEl")) {
-        const attr = source.split(".")[2]; // "context.blockEl.data-node-id"
-        if (attr) return context.blockEl?.getAttribute(attr) ?? "";
-        return context.blockEl?.getAttribute("data-node-id") ?? "";
-    }
-    if (source === "context.protyleEl") return null;
-    return "";
-}
 
 /** 解析 AV Command Param 列里的 JSON 字符串 */
 export function parseParam(raw: string | null | undefined): Record<string, unknown> {

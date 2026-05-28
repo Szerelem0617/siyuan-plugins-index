@@ -10,6 +10,10 @@
     export let onSave: (updated: Record<string, any>) => Promise<void>;
 
     let values: Record<string, any> = {};
+    let showHidden = false;
+
+    $: hasHiddenParams = paramsSchema.some(p => p.hidden);
+    $: visibleParams = showHidden ? paramsSchema : paramsSchema.filter(p => !p.hidden);
 
     onMount(() => {
         // Initialize values based on schema and current configurations
@@ -72,7 +76,7 @@
                 此命令没有需要配置的参数。
             </div>
         {:else}
-            {#each paramsSchema as param}
+            {#each visibleParams as param}
                 <div style="display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;">
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                         <span style="font-weight: bold; font-size: 13px; color: var(--b3-theme-on-surface);">
@@ -91,14 +95,14 @@
                             <select class="b3-select fn__block" bind:value={values[param.key]}>
                                 {#each param.values || [] as option}
                                     <option value={option}>{option}</option>
-                                {/each}
+                                  {/each}
                             </select>
                         </div>
                     {:else}
                         <input 
                             type="text" 
                             class="b3-input fn__block" 
-                            placeholder={param.paramMode === "injected" ? `[自动注入] 留空则默认从上下文自动提取，支持填入覆盖值` : (param.paramMode === "template" ? "支持占位符，如 {{block_id}}, {{date}}" : (param.description || ""))}
+                            placeholder={param.paramMode === "template" ? "支持占位符，如 {{block_id}}, {{date}}" : (param.description || "")}
                             bind:value={values[param.key]} 
                         />
                     {/if}
@@ -129,6 +133,19 @@
                     {/if}
                 </div>
             {/each}
+
+            {#if hasHiddenParams}
+                <div style="display: flex; justify-content: center; margin-top: 4px; margin-bottom: 4px;">
+                    <button 
+                        class="b3-button b3-button--text" 
+                        on:click={() => showHidden = !showHidden}
+                        style="font-size: 12px; display: flex; align-items: center; gap: 4px; padding: 4px 8px;"
+                    >
+                        <svg class="b3-list-item__graphic" style="height: 12px; width: 12px; margin: 0; color: var(--b3-theme-primary);"><use xlink:href={showHidden ? "#iconUp" : "#iconDown"}></use></svg>
+                        <span>{showHidden ? "隐藏高级参数" : "显示高级参数"}</span>
+                    </button>
+                </div>
+            {/if}
         {/if}
     </div>
 

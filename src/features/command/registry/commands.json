@@ -180,16 +180,17 @@
                     "label": "前驱块 ID",
                     "type": "blockid",
                     "required": false,
-                    "paramMode": "injected",
-                    "injectedFrom": "context.blockEl",
-                    "description": "留空时由 Dispatcher 自动从触发上下文中注入当前块 ID"
+                    "paramMode": "template",
+                    "default": "{{block_id}}",
+                    "description": "留空时自动从触发上下文中注入当前块 ID"
                 },
                 {
                     "key": "nextID",
                     "label": "后继块 ID",
                     "type": "blockid",
                     "required": false,
-                    "paramMode": "static",
+                    "paramMode": "template",
+                    "hidden": true,
                     "description": "指定插入到某块之前"
                 }
             ],
@@ -218,9 +219,9 @@
                     "label": "目标块 ID",
                     "type": "blockid",
                     "required": true,
-                    "paramMode": "injected",
-                    "injectedFrom": "context.blockEl",
-                    "description": "目标块 ID，留空时由 Dispatcher 自动注入"
+                    "paramMode": "template",
+                    "default": "{{block_id}}",
+                    "description": "目标块 ID，默认自动注入当前块 ID"
                 },
                 {
                     "key": "dataType",
@@ -272,8 +273,8 @@
                     "label": "目标块 ID",
                     "type": "blockid",
                     "required": true,
-                    "paramMode": "injected",
-                    "injectedFrom": "context.blockEl"
+                    "paramMode": "template",
+                    "default": "{{block_id}}"
                 },
                 {
                     "key": "attrs",
@@ -299,7 +300,6 @@
     "paramModes": {
         "_doc": "参数获取方式的标准说明文档",
         "static": "静态参：在 Command Param 列中写死，执行时直接使用",
-        "injected": "注入参：Dispatcher 在执行时自动从上下文（blockEl/protyleEl/event）中提取",
         "template": "模板参：字符串中含有 {{占位符}}，Dispatcher 在执行前实时计算并替换",
         "interactive": "交互参：执行前弹出 UI 让用户输入，由 UI Generator 动态生成表单"
     },

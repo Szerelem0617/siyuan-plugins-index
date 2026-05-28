@@ -46,23 +46,24 @@ export async function initSystemTables() {
         Enable INTEGER DEFAULT 1
     );`);
 
-    // 2.5 Check if Registry is empty and seed from JSON
-    const registryCount = db.exec(`SELECT count(*) FROM ${TABLE_REGISTRY}`)[0].values[0][0];
-    if (registryCount === 0) {
-        const stmt = db.prepare(`INSERT INTO ${TABLE_REGISTRY} (id, name, description, dispatch, params, constraints, meta) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-        for (const cmd of (commandsData as any).commands) {
-            stmt.run([
-                cmd.id,
-                cmd.name,
-                cmd.description || "",
-                JSON.stringify(cmd.dispatch),
-                JSON.stringify(cmd.params),
-                JSON.stringify(cmd.constraints),
-                JSON.stringify(cmd.meta)
-            ]);
-        }
-        stmt.free();
+    // 2.5 清理旧的内置命令数据并重新从 commands.json 载入以保证热更新生效
+    try {
+        db.run(`DELETE FROM ${TABLE_REGISTRY} WHERE meta LIKE '%builtin%' OR meta IS NULL`);
+    } catch (_) { /* ignore */ }
+
+    const stmt = db.prepare(`INSERT OR REPLACE INTO ${TABLE_REGISTRY} (id, name, description, dispatch, params, constraints, meta) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+    for (const cmd of (commandsData as any).commands) {
+        stmt.run([
+            cmd.id,
+            cmd.name,
+            cmd.description || "",
+            JSON.stringify(cmd.dispatch),
+            JSON.stringify(cmd.params),
+            JSON.stringify(cmd.constraints),
+            JSON.stringify(cmd.meta)
+        ]);
     }
+    stmt.free();
 
     // 3. Check if empty and seed default data
     const cmdCount = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS}`)[0].values[0][0];
