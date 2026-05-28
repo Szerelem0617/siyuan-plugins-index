@@ -1,41 +1,89 @@
-# 插件总架构设计与演进路线 (Architecture & ECS Mappings)
+# SQLite 数据库同步与四层（Layer 4）读取标准化更新计划
 
-本插件的核心目标是结合 **“ECS (Entity-Component-System)”** 和 **“无代码 (No-Code)”** 思想，为思源笔记的各种离散 Block 提供灵活的数据绑定（Supertag）和完整的结构化页面映射（Builder）。
+为了保证思源笔记内置数据库（Attribute View）数据读写的**实时性、准确性**，并最大化减少 HTTP API 请求以太提升性能，我们制定以下重构与演进计划。
 
-## 1. 核心分层与存储架构 (Storage Design)
+---
 
-*   **Type DB (类型大盘)**: 负责注册所有的标签 (如 `#任务#`, `#项目#`) 及其映射到的 AV 库。这是**组件 (Component)**的声明处。
-*   **Command DB (命令大盘)**: 负责定义所有的动作模板和执行逻辑 (System)。通过 Payload 占位符如 `{{av.Assignee}}` 解耦参数。这也是纯函数库的载体。
-*   **物理 Block (实体 Entity)**: 用户文档中的段落或列表项。
+## 1. 痛点分析与改进方向
 
-## 2. 关键引擎与应用场景 (Core Engines)
+### 痛点 1：本地 SQLite 缓存数据失效（数据不同步）
+* **现状**：`sqlite-manager.ts` 中的 `_computeDataHash` 只对列定义和行数计算哈希，**完全忽略了单元格的具体数值**。这意味着在思源中直接修改某个单元格（如把任务状态从“待办”改为“进行中”）后，哈希检测依然判定“没有变化”，导致 SQLite 跳过更新，产生过期脏数据。
+* **改进**：重构哈希计算函数，将所有单元格的值（如文本、数字、选项、关联等内容）都纳入哈希范围。
 
-1.  **Supertag 引擎 (微型组件/Thin Type 模式)**
-    *   **机制**：捕获用户打标行为 (依赖 Mutation/WebSocket)。通过查询 Type DB，将普通的 Block 隐式拉入 Attribute View，赋予其自定义的列数据。
-    *   **场景**：赋予散落的笔记段落状态（如 `#需复核#`，挂载变色操作）或特定责任人（ `#Assignee#`，挂载发邮件操作）。
-2.  **Builder 引擎 (巨型实体/Fat Type 模式)**
-    *   **机制**：当遇到知识库/日历等重量级概念时，不仅仅落入 AV，还会基于配置好的继承规则 (`inheritanceRules`)，向上拉取父级的结构数据，并自动建立一个庞大宽敞的子文档 (Document/Page) 来承载长篇正文。
-    *   **场景**：如 `#月度计划#`，打标签后不仅在总表中有数据追踪，还能点击跳转到一个包含万字的专属双链大页面中。
-3.  **Command 拦截器 (动作执行中枢)**
-    *   **机制**：负责在 Block 右键弹出相应的操作面板。根据 Block 身上的 Tags 取并集，利用鸭子类型 (**Duck Typing**) 的灵活性，只要当前 Block 所在 AV 满足 Command 的入参要求，即可调用对应的功能。
+### 痛点 2：高频读取时的 API 开销与卡顿
+* **现状**：每次触发 Layer 4 占位符解析（`resolveLayer4Params`）时，都会经历 Siyuan `getBlockAttrs` 和 `getAttributeView` API 的 HTTP 轮询，这造成了大量的延迟（数秒级），并且完全背离了“SQLite 作为高速缓存”的初衷。
+* **改进**：构建**单向被动同步**。只有在缓存未命中时才进行按需同步，日常查询 100% 走本地 SQLite。
 
-## 3. 痛点解决与架构对比 (Vs. OOP)
+---
 
-相比于传统的面向对象编程（OOP）：
-*   **摒弃类继承树**：彻底解决钻石继承和强耦合的“多态”冲突。
-*   **打标混入(Mixin)**：采用扁平的组合模式，让 Block 组合 `#A` 和 `#B` 标签瞬间拥有两者的所需数据表头和动作菜单。
-*   **消除重构噩梦**：支持修改一处基础类或动作配置包，全世界所有应用了该标签的实例瞬间更新能力。
+## 2. 具体重构方案
 
-## 4. 阶段性重构计划 (Implementation Steps)
+### 方案 A：WebSocket 驱动的活性数据库增量同步
+我们在插件生命周期的 WebSocket 监听器中，除了监听系统表外，还应当监听用户数据库的变化：
 
-在未来的开发中，要全面走向上述理想状态，我们需要分四个核心阶段推进：
+1. **缓存活性视图 Set**：在内存中维护一个已实例化在 SQLite 的 `instantiatedAvIds` 集合。
+2. **WebSocket 监听**：当收到 `transaction`、`database` 相关的 WS 更新广播，且携带的 `avID` 存在于集合中时，加入防抖队列。
+3. **静默同步**：在后台自动执行 `instantiateAV(avId, true)`。当用户在思源界面对数据进行任何修改时，本地 SQLite 都会在 1.5 秒内自动对齐最新状态，无需人工刷新。
 
-*   **阶段 1 [Breaking Change]: 基座重构**
-    *   废弃基于 `custom-index-db-config` IAL 的散装 TypeMapping，彻底移除旧的找表逻辑。
-    *   在插件专属配置笔记本下建立并读取中心化的 **Type DB** 表与 **Command DB** 表。
-*   **阶段 2: 引擎换源**
-    *   改造 `SupertagMonitor`，让它的匹配源和归类动作直接指向中心化的 Type DB。
-*   **阶段 3: 调度层构建**
-    *   研发基于鸭子类型的右键 Command 调度执行菜单，完成 Payload `{{ }}` 的多维表值替换与解析。
-*   **阶段 4: 生态大融合**
-    *   整合 Builder 与 Command，打通“胖类”的深度数据视图和动态页面生成，并且让由 Builder 生成的页面也能享用 Command 库的方法体系。
+### 方案 B：重构 `_computeDataHash`（精确变更检测）
+更新数据校验指纹计算方式，确保任何单元格内容的编辑都能被哈希捕获：
+
+```typescript
+function _computeDataHash(keyValues: any[]): string {
+    let hash = 0;
+    const dataToHash = keyValues.map(kv => {
+        return {
+            id: kv.key.id,
+            name: kv.key.name,
+            type: kv.key.type,
+            // 抓取并串联所有行的数据值
+            values: kv.values?.map((v: any) => {
+                const cellVal = v.text?.content || 
+                                v.number?.content || 
+                                v.checkbox?.checked || 
+                                v.date?.content || 
+                                JSON.stringify(v.mSelect || v.mAsset || v.relation || []);
+                return {
+                    blockID: v.blockID || "",
+                    content: cellVal
+                };
+            })
+        };
+    });
+    const str = JSON.stringify(dataToHash);
+    
+    // 生成哈希值...
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash |= 0;
+    }
+    return hash.toString(36);
+}
+```
+
+### 方案 C：标准化 Layer 4 命令参数 SQL 读取流
+重构 `resolveLayer4Params`。让它采用 **“本地 SQLite 优先 -> 缓存未命中 fallback”** 的流程，达到零延迟读取：
+
+```mermaid
+graph TD
+    A[启动 resolveLayer4Params] --> B{在本地所有 av_% 表中<br/>查询 rowID = blockId}
+    B -->|找到匹配行| C[读取对应 _av_schema 字段映射]
+    C --> D[注入并返回键值对]
+    
+    B -->|未找到匹配（缓存未命中）| E[Fallback: 调用 API getBlockAttrs]
+    E --> F[获取 custom-avs 绑定的数据库 ID]
+    F --> G[调用 instantiateAV 强制拉取并同步到 SQLite]
+    G --> H[重新查询 SQLite 返回结果]
+```
+
+1. **极速读取**：由于数据已被方案 A 静默同步，多数情况下直接执行 `SELECT *` 即可查到块 ID。耗时小于 5ms，API 请求数为 0。
+2. **防爆兜底**：如果在 SQLite 中未检索到此物理块（如刚刚移动或新建的块），则去拉取属性中的 `custom-avs`，强制拉取，并完成补齐。
+
+---
+
+## 3. 后续开发排期 (Roadmap)
+
+*   **第 1 阶段**：修复 `_computeDataHash` Bug，确保哈希对任何单元格修改敏感。
+*   **第 2 阶段**：扩展 `top-bar.ts` 中的 WebSocket 同步检测，加入 `instantiatedAvIds` 的全局感知，完成被动后台更新。
+*   **第 3 阶段**：重写 `resolveLayer4Params` 查询算法，全面切换为“SQL 优先”读取，移除高频的 HTTP API 前置轮询。
