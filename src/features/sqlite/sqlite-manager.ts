@@ -2,7 +2,7 @@ import { post } from "../../shared/api-client/request";
 import { client } from "../../shared/api-client";
 import { plugin } from "../../shared/utils";
 import { executeDML } from "./run-query/dml";
-import { executeDDL } from "./run-query/ddl";
+import { executeDDL, type DDLOptions } from "./run-query/ddl";
 
 let dbInstance: any = null;
 let SQL_ENGINE: any = null;
@@ -466,32 +466,17 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 // ═══════════════════════════════════════════
 
 export function preprocessSql(sql: string): string {
-    let processed = sql;
-    
-    // 1. Match Siyuan IDs (e.g. 20260527224659-golv5xy, with or without quotes)
-    const rawIdRegex = /["'`]?(\d{14}-[a-zA-Z0-9]{7})["'`]?/g;
-    processed = processed.replace(rawIdRegex, (match, id) => {
-        return `"${avIdToTableName(id)}"`;
-    });
-    
-    // 2. Match friendly names (e.g. Command-DB, "Command-DB")
-    for (const [friendlyName, avId] of friendlyTableNameMap.entries()) {
-        const escapedFriendly = friendlyName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        const friendlyRegex = new RegExp(`["\`']?${escapedFriendly}["\`']?`, 'gi');
-        processed = processed.replace(friendlyRegex, `"${avIdToTableName(avId)}"`);
-    }
-    
-    return processed;
+    return sql;
 }
 
-export async function runQuery(sql: string, params?: any[]): Promise<{ columns: string[], values: any[][] }> {
+export async function runQuery(sql: string, params?: any[], options?: DDLOptions): Promise<{ columns: string[], values: any[][] }> {
     const processedSql = preprocessSql(sql);
 
     // 0. Auto-redirect write SQLs
     const isWrite = /^\s*(update|insert|delete|create|alter|drop|replace)\b/i.test(processedSql);
     if (isWrite) {
         console.log(`[SQLiteManager] Redirecting write SQL to executeWritableSql: "${processedSql.slice(0, 50)}..."`);
-        const writeRes = await executeWritableSql(processedSql);
+        const writeRes = await executeWritableSql(processedSql, options);
         return {
             columns: ["success", "affectedRows", "message"],
             values: [[
@@ -526,7 +511,7 @@ export async function runQuery(sql: string, params?: any[]): Promise<{ columns: 
     return res.length > 0 ? { columns: res[0].columns, values: res[0].values } : { columns: [], values: [] };
 }
 
-export async function executeWritableSql(sql: string): Promise<any> {
+export async function executeWritableSql(sql: string, options?: DDLOptions): Promise<any> {
     const processedSql = preprocessSql(sql);
     const { db } = await getSqliteEngine();
     
@@ -545,7 +530,7 @@ export async function executeWritableSql(sql: string): Promise<any> {
     const isDrop = /^\s*DROP\b/i.test(processedSql);
     
     if (isCreate || isAlter || isDrop) {
-        return executeDDL(processedSql, db);
+        return executeDDL(processedSql, db, options);
     }
     
     throw new Error(`Unsupported Writable SQL Statement. Only DML (UPDATE, INSERT, DELETE) and DDL (CREATE, ALTER, DROP) statements targeting Siyuan AVs are supported.`);

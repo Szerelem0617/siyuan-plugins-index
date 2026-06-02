@@ -58,7 +58,14 @@ export async function triggerAvBlockRender(avID: string) {
     }
 }
 
-export async function executeDDL(processedSql: string, db: any): Promise<any> {
+export interface DDLOptions {
+    /** Target document ID to create the AV in. If omitted, uses the current active editor document. */
+    targetDocId?: string;
+    /** Insert the AV block after this specific block ID (uses insertBlock instead of appendBlock). */
+    insertAfterBlockId?: string;
+}
+
+export async function executeDDL(processedSql: string, db: any, options?: DDLOptions): Promise<any> {
     // ─── 1. CREATE TABLE Statement ───
     const createMatch = processedSql.match(/^\s*CREATE\s+TABLE\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*\((.+?)\)\s*;?\s*$/is);
     if (createMatch) {
@@ -69,49 +76,64 @@ export async function executeDDL(processedSql: string, db: any): Promise<any> {
         const existingAvID = resolveTableAvId(tableName);
         if (existingAvID) throw new Error(`Table '${tableName}' already exists.`);
         
-        // 2. Resolve notebook and active document ID (docId)
-        let docId = "";
-        let protyle = (window as any).siyuan.editor?.currentEditor?.protyle;
-        if (!protyle) {
-            const findProtyle = (layout: any): any => {
-                if (!layout) return null;
-                if (layout.model?.editor?.protyle) return layout.model.editor.protyle;
-                if (layout.children) {
-                    for (const child of layout.children) {
-                        const res = findProtyle(child);
-                        if (res) return res;
+        // 2. Determine insertion target
+        let appendRes: any;
+        const avMarkdown = `<div data-type="NodeAttributeView" data-av-type="table"></div>`;
+        
+        if (options?.insertAfterBlockId) {
+            // Insert after a specific block
+            console.log(`[SQLiteManager] Inserting AV block after block: ${options.insertAfterBlockId}`);
+            appendRes = await post("/api/block/insertBlock", {
+                previousID: options.insertAfterBlockId,
+                dataType: "markdown",
+                data: avMarkdown
+            });
+        } else {
+            // Append at the bottom of a document
+            let docId = options?.targetDocId || "";
+            
+            if (!docId) {
+                // Auto-detect from active editor
+                let protyle = (window as any).siyuan.editor?.currentEditor?.protyle;
+                if (!protyle) {
+                    const findProtyle = (layout: any): any => {
+                        if (!layout) return null;
+                        if (layout.model?.editor?.protyle) return layout.model.editor.protyle;
+                        if (layout.children) {
+                            for (const child of layout.children) {
+                                const res = findProtyle(child);
+                                if (res) return res;
+                            }
+                        }
+                        return null;
+                    };
+                    protyle = findProtyle((window as any).siyuan.layout.centerLayout);
+                }
+                
+                if (protyle && protyle.block && protyle.block.rootID) {
+                    docId = protyle.block.rootID;
+                } else {
+                    const fallbackRes = await post("/api/query/sql", { stmt: "SELECT root_id FROM blocks LIMIT 1" });
+                    if (fallbackRes && fallbackRes.length > 0) {
+                        docId = fallbackRes[0].root_id;
                     }
                 }
-                return null;
-            };
-            protyle = findProtyle((window as any).siyuan.layout.centerLayout);
-        }
-        
-        if (protyle && protyle.block && protyle.block.rootID) {
-            docId = protyle.block.rootID;
-            console.log(`[SQLiteManager] Found current active document ID: ${docId}`);
-        } else {
-            console.log(`[SQLiteManager] Active editor not found. Fallback to querying first document from Siyuan blocks database...`);
-            const fallbackRes = await post("/api/query/sql", { stmt: "SELECT root_id FROM blocks LIMIT 1" });
-            if (fallbackRes && fallbackRes.length > 0) {
-                docId = fallbackRes[0].root_id;
             }
+            
+            if (!docId) {
+                throw new Error("No target document specified and no active document found. Pass options.targetDocId or options.insertAfterBlockId.");
+            }
+            
+            console.log(`[SQLiteManager] Appending AV block at the bottom of document: ${docId}`);
+            appendRes = await post("/api/block/appendBlock", {
+                parentID: docId,
+                dataType: "markdown",
+                data: avMarkdown
+            });
         }
-        
-        if (!docId) {
-            throw new Error("No active document or document ID found to create the table.");
-        }
-        
-        // 3. Append AV Block at the bottom of the current document
-        console.log(`[SQLiteManager] Appending AV block at the bottom of document: ${docId}`);
-        const appendRes = await post("/api/block/appendBlock", {
-            parentID: docId,
-            dataType: "markdown",
-            data: `<div data-type="NodeAttributeView" data-av-type="table"></div>`
-        });
         
         if (!appendRes || !appendRes[0]?.doOperations) {
-            throw new Error(`Failed to append block to Siyuan document ${docId}.`);
+            throw new Error(`Failed to create AV block in Siyuan.`);
         }
         
         const ops = appendRes[0].doOperations;
@@ -238,16 +260,16 @@ export async function executeDDL(processedSql: string, db: any): Promise<any> {
         const parsedCols: { name: string; type: string; options: string[]; refTable: string | null }[] = [];
         for (const colDef of colDefs) {
             const trimmed = colDef.trim();
-            const matchDef = trimmed.match(/^["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s+([a-zA-Z]+)(?:\((.+?)\))?(?:\s+REFERENCES\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?)?/i);
+            const matchDef = trimmed.match(/^(?:["`']([^"`']+?)["`']|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+([a-zA-Z]+)(?:\((.+?)\))?(?:\s+REFERENCES\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5\s]+)["`']?)?/i);
             if (!matchDef) {
                 console.warn(`[SQLiteManager] Failed to match column definition: "${trimmed}"`);
                 continue;
             }
             
-            const colName = matchDef[1];
-            const rawType = matchDef[2].toLowerCase();
-            const paramsStr = matchDef[3];
-            const refTable = matchDef[4] || null;
+            const colName = matchDef[1] || matchDef[2];
+            const rawType = matchDef[3].toLowerCase();
+            const paramsStr = matchDef[4];
+            const refTable = matchDef[5] || null;
             
             let colType = "text";
             const validTypes = ["block", "text", "number", "select", "mselect", "date", "checkbox", "relation", "masset", "rollup", "template", "created", "updated"];
@@ -542,7 +564,11 @@ export async function executeDDL(processedSql: string, db: any): Promise<any> {
         // 2. Delete the AV block from Siyuan
         const blockToDelete = avBlockId || avID;
         console.log(`[SQLiteManager] Deleting AV block ${blockToDelete} from Siyuan`);
-        await post("/api/block/deleteBlock", { id: blockToDelete });
+        try {
+            await post("/api/block/deleteBlock", { id: blockToDelete });
+        } catch (e) {
+            console.warn(`[SQLiteManager] Failed to delete AV block ${blockToDelete} in Siyuan:`, e);
+        }
         
         // 3. Clear friendlyName registry and cache
         friendlyTableNameMap.delete(tableName);

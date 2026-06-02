@@ -188,7 +188,7 @@
     }
 
     function useSqlForAv(avId: string) {
-        sqlInput = `SELECT * FROM ${avId} LIMIT 20`;
+        sqlInput = `SELECT * FROM ${avIdToTableName(avId)} LIMIT 20`;
         activeTab = "console";
     }
 
@@ -256,7 +256,12 @@
                                     {syncStatus[block.avId] || "Pending"}
                                 </span>
                             </div>
-                            <div class="av-card__id" title={block.avId}>{block.avId}</div>
+                            <div class="av-card__table" title="SQLite Table Name: {avIdToTableName(block.avId)}">
+                                Table: {avIdToTableName(block.avId)}
+                            </div>
+                            <div class="av-card__id" title="AV ID: {block.avId}">
+                                AV ID: {block.avId}
+                            </div>
                             {#if syncMeta[block.avId]}
                                 <div class="av-card__meta">
                                     Last: {formatTimestamp(syncMeta[block.avId].updated)}
@@ -277,7 +282,10 @@
             <div class="schema-overlay" on:click|self={() => showSchema = false}>
                 <div class="schema-modal">
                     <div class="fn__flex" style="align-items: center; margin-bottom: 12px;">
-                        <h3 style="margin: 0; font-size: 14px; flex: 1;">Schema: {selectedSchemaAvId}</h3>
+                        <h3 style="margin: 0; font-size: 14px; flex: 1; display: flex; align-items: center; gap: 6px;">
+                            <span>Schema: {avIdToTableName(selectedSchemaAvId)}</span>
+                            <span style="opacity: 0.4; font-size: 10px; font-weight: normal; font-family: monospace;">({selectedSchemaAvId})</span>
+                        </h3>
                         <button class="b3-button b3-button--text" style="font-size: 11px;" on:click={() => showSchema = false}>✕</button>
                     </div>
                     {#if schemaColumns.length === 0}
@@ -506,6 +514,15 @@
         white-space: nowrap;
     }
     .av-card__status.ready { color: #10b981; opacity: 1; }
+    .av-card__table {
+        font-family: monospace;
+        font-size: 10px;
+        opacity: 0.75;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-bottom: 2px;
+    }
     .av-card__id {
         font-family: monospace;
         font-size: 9px;

@@ -17,7 +17,7 @@ import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste }
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
 import { initButtonLinkListener, destroyButtonLinkListener } from "./features/command/av-interaction";
 import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
-import { getSqliteEngine, runQuery, executeWritableSql, instantiateAV } from "./features/sqlite/sqlite-manager";
+import { getSqliteEngine, runQuery, executeWritableSql, instantiateAV, registerFriendlyTableName } from "./features/sqlite/sqlite-manager";
 import { version } from "../plugin.json";
 import { initSystemTables } from "./features/command/indexos/command-sqlite";
 import { canUseFeature } from "./features/dev-mode/policy-guard";
@@ -36,6 +36,7 @@ export default class IndexPlugin extends Plugin {
                 runQuery,
                 executeWritableSql,
                 instantiateAV,
+                registerFriendlyTableName,
             }
         };
         // 内置命令表先行加载，其他所有模块（Dispatcher、第三方插件）均可安全地调用 getCommand()

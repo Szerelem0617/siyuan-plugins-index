@@ -271,7 +271,11 @@ function parseSetClause(setStr: string): Record<string, any> {
             if (char === quoteChar) {
                 inQuote = false;
             } else {
-                currentValue += char;
+                if (isValueMode) {
+                    currentValue += char;
+                } else {
+                    currentKey += char;
+                }
             }
         } else {
             if (char === "'" || char === '"' || char === "`") {
@@ -299,6 +303,7 @@ function parseSetClause(setStr: string): Record<string, any> {
     }
     return result;
 }
+
 
 function parseValuesClause(valStr: string): any[] {
     const result: any[] = [];
