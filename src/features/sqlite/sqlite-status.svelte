@@ -38,9 +38,7 @@
     // Tabs
     let activeTab: "databases" | "console" | "commands" = "commands";
 
-    function detectSqlType(sql: string): string {
-        return sql.trim().split(/\s+/)[0]?.toUpperCase() || "";
-    }
+
 
     async function init() {
         loading = true;
@@ -64,58 +62,29 @@
         }
     }
 
-    async function handleSync(avId: string, force = false) {
-        syncStatus[avId] = "⟳ Syncing...";
-        syncStatus = syncStatus;
-        try {
-            const res = await instantiateAV(avId, force);
-            if (res.success) {
-                if (res.unchanged) {
-                    syncStatus[avId] = syncMeta[avId]
-                        ? `✓ ${syncMeta[avId].rowCount}r (unchanged)`
-                        : "✓ Up to date";
-                } else {
-                    syncStatus[avId] = `✓ ${res.rowCount} rows`;
-                }
-                instantiatedIds.add(avId);
-                syncMeta = await getSyncMetadata();
-            } else {
-                syncStatus[avId] = "✗ " + res.message;
-            }
-        } catch (e) {
-            console.error(`[SQLite-UI] Sync failed for ${avId}:`, e);
-            syncStatus[avId] = "✗ Error";
-        }
-        syncStatus = syncStatus;
-    }
-
-    async function instantiateAll() {
-        if (avBlocks.length === 0) return;
-        batchProcessing = true;
-        for (const block of avBlocks) {
-            await handleSync(block.avId);
-        }
-        batchProcessing = false;
-    }
-
     async function executeSQL() {
         queryError = "";
         showExportMenu = false;
 
-        const sqlType = detectSqlType(sqlInput);
-
-        if (["UPDATE", "DELETE", "INSERT", "DROP", "ALTER", "CREATE"].includes(sqlType)) {
-            queryError = `⚠️ ${sqlType} 语句在 SQL 终端中已被禁用。本地 SQLite 仅作为只读缓存使用。请在思源笔记的表格界面或通过官方 API 修改数据。`;
+        try {
+            queryResult = await runQuery(sqlInput);
+            copyStatus = "Copy";
+            
+            // Refresh instantiated IDs list in UI after execution
+            instantiatedIds = await getInstantiatedIds();
+            syncMeta = await getSyncMetadata();
+            avBlocks.forEach(b => {
+                if (instantiatedIds.has(b.avId)) {
+                    const meta = syncMeta[b.avId];
+                    syncStatus[b.avId] = meta
+                        ? `✓ ${meta.rowCount}r × ${meta.colCount}c`
+                        : "Ready";
+                }
+            });
+            syncStatus = syncStatus;
+        } catch (e: any) {
+            queryError = e.message;
             queryResult = null;
-        } else {
-            // Read-only query (SELECT, PRAGMA, EXPLAIN, etc.)
-            try {
-                queryResult = await runQuery(sqlInput);
-                copyStatus = "Copy";
-            } catch (e: any) {
-                queryError = e.message;
-                queryResult = null;
-            }
         }
     }
 
@@ -162,7 +131,27 @@
 
     async function viewSchema(avId: string) {
         selectedSchemaAvId = avId;
-        schemaColumns = await getAVSchema(avId);
+        let cols = await getAVSchema(avId);
+        if (cols.length === 0) {
+            syncStatus[avId] = "⟳ Loading...";
+            syncStatus = syncStatus;
+            try {
+                const res = await instantiateAV(avId, true);
+                if (res.success) {
+                    cols = await getAVSchema(avId);
+                    instantiatedIds.add(avId);
+                    instantiatedIds = instantiatedIds;
+                    syncMeta = await getSyncMetadata();
+                    syncStatus[avId] = `✓ ${res.rowCount} rows`;
+                } else {
+                    syncStatus[avId] = "✗ " + res.message;
+                }
+            } catch (e) {
+                syncStatus[avId] = "✗ Error";
+            }
+            syncStatus = syncStatus;
+        }
+        schemaColumns = cols;
         showSchema = true;
     }
 
@@ -199,7 +188,7 @@
     }
 
     function useSqlForAv(avId: string) {
-        sqlInput = `SELECT * FROM ${avIdToTableName(avId)} LIMIT 20`;
+        sqlInput = `SELECT * FROM ${avId} LIMIT 20`;
         activeTab = "console";
     }
 
@@ -215,9 +204,6 @@
         <div style="flex: 1;"></div>
         <button class="b3-button b3-button--outline" style="font-size: 11px; padding: 4px 10px;" on:click={init} disabled={loading || batchProcessing}>
             {loading ? "..." : "Scan"}
-        </button>
-        <button class="b3-button b3-button--outline" style="font-size: 11px; padding: 4px 10px;" on:click={instantiateAll} disabled={loading || batchProcessing || avBlocks.length === 0}>
-            {batchProcessing ? "⟳..." : "Sync All"}
         </button>
     </div>
 
@@ -270,18 +256,15 @@
                                     {syncStatus[block.avId] || "Pending"}
                                 </span>
                             </div>
-                            <div class="av-card__id" title={block.avId}>{avIdToTableName(block.avId)}</div>
+                            <div class="av-card__id" title={block.avId}>{block.avId}</div>
                             {#if syncMeta[block.avId]}
                                 <div class="av-card__meta">
                                     Last: {formatTimestamp(syncMeta[block.avId].updated)}
                                 </div>
                             {/if}
                             <div class="av-card__actions">
-                                <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => handleSync(block.avId, true)}>Sync</button>
-                                {#if instantiatedIds.has(block.avId)}
-                                    <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => useSqlForAv(block.avId)}>Query</button>
-                                    <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => viewSchema(block.avId)}>Schema</button>
-                                {/if}
+                                <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => useSqlForAv(block.avId)}>Query</button>
+                                <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => viewSchema(block.avId)}>Schema</button>
                             </div>
                         </div>
                     {/each}
@@ -294,7 +277,7 @@
             <div class="schema-overlay" on:click|self={() => showSchema = false}>
                 <div class="schema-modal">
                     <div class="fn__flex" style="align-items: center; margin-bottom: 12px;">
-                        <h3 style="margin: 0; font-size: 14px; flex: 1;">Schema: {avIdToTableName(selectedSchemaAvId)}</h3>
+                        <h3 style="margin: 0; font-size: 14px; flex: 1;">Schema: {selectedSchemaAvId}</h3>
                         <button class="b3-button b3-button--text" style="font-size: 11px;" on:click={() => showSchema = false}>✕</button>
                     </div>
                     {#if schemaColumns.length === 0}

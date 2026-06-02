@@ -4,7 +4,7 @@ import { post } from "../../shared/api-client/request";
 import { client } from "../../shared/api-client";
 import { showMessage, type Protyle, type Menu } from "siyuan";
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
-import { getSqliteEngine, runQuery, saveDatabaseToDisk, checkTableExists, instantiateAV, tableNameToAvId } from "../sqlite/sqlite-manager";
+import { getSqliteEngine, runQuery, saveDatabaseToDisk, checkTableExists, instantiateAV, tableNameToAvId, registerFriendlyTableName } from "../sqlite/sqlite-manager";
 import { getSystemTableNames, initSystemTables } from "./indexos/command-sqlite";
 import { reverseDbToList } from "./hierarchy/db-reverse-list";
 import { isDevModeActive } from "../dev-mode";
@@ -35,8 +35,14 @@ export let commandAvId: string = "";
 export let typeAvId: string = "";
 export let commandDocId: string = "";
 export let typeDocId: string = "";
-export function setCommandAvId(val: string) { commandAvId = val; }
-export function setTypeAvId(val: string) { typeAvId = val; }
+export function setCommandAvId(val: string) {
+    commandAvId = val;
+    if (val) registerFriendlyTableName("Command-DB", val);
+}
+export function setTypeAvId(val: string) {
+    typeAvId = val;
+    if (val) registerFriendlyTableName("Type-DB", val);
+}
 export function setCommandDocId(val: string) { commandDocId = val; }
 export function setTypeDocId(val: string) { typeDocId = val; }
 export function getCommandAvId() { return commandAvId; }
@@ -104,6 +110,8 @@ export async function getTargetTablesInfo() {
     }
 
     if (commandAvId && typeAvId) {
+        registerFriendlyTableName("Command-DB", commandAvId);
+        registerFriendlyTableName("Type-DB", typeAvId);
         const cmdTable = `av_${commandAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
         const typeTable = `av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
 

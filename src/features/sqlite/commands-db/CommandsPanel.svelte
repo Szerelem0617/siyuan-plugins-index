@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { getTargetTablesInfo, refreshSupertagRegistry } from "../../command/registration";
-    import { runQuery, getSqliteEngine, saveDatabaseToDisk } from "../sqlite-manager";
+    import { runQuery, getSqliteEngine, saveDatabaseToDisk, tableNameToAvId } from "../sqlite-manager";
     import { dispatchCommand } from "../../command/command-dispatcher";
     import { showMessage } from "siyuan";
     import { constructCommandStorage } from "../../command/construct-dir";
@@ -257,9 +257,9 @@
         <div class="fn__flex" style="align-items: center; gap: 8px; font-size: 11px; padding: 6px 12px; background: var(--b3-theme-surface); border-radius: 4px; border: 1px solid var(--b3-border-color);">
             <span>📊 数据源: <strong>{isInitialized ? "思源活数据表 (Live AV)" : "本地系统种子表 (SQLite Seeds)"}</strong></span>
             <span style="opacity: 0.3;">|</span>
-            <span>指令表: <code style="font-family: monospace;">{commandsTable}</code></span>
+            <span>指令表: <code style="font-family: monospace;">{tableNameToAvId(commandsTable)}</code></span>
             <span style="opacity: 0.3;">|</span>
-            <span>类型表: <code style="font-family: monospace;">{typesTable}</code></span>
+            <span>类型表: <code style="font-family: monospace;">{tableNameToAvId(typesTable)}</code></span>
             <div style="flex: 1;"></div>
             <button class="b3-button b3-button--text" style="font-size: 10px; padding: 2px 6px;" on:click={loadData}>⟳ 刷新数据</button>
         </div>

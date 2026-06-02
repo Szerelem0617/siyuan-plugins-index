@@ -6,6 +6,32 @@ let SQL_ENGINE: any = null;
 const STORAGE_DB_PATH = "/data/storage/petal/siyuan-plugins-index/index-os.sqlite";
 export let instantiatedAvIdsCache: Set<string> = new Set();
 
+// ─── On-Demand Table TTL Cache ───
+export const tableSyncTimes = new Map<string, number>();
+const TTL_MS = 3000; // 3 seconds TTL
+
+// ─── Friendly Table Name Map ───
+const friendlyTableNameMap = new Map<string, string>();
+
+export function registerFriendlyTableName(friendlyName: string, avId: string) {
+    const cleanName = friendlyName.replace(/["'\`]/g, "").trim();
+    friendlyTableNameMap.set(cleanName, avId);
+    friendlyTableNameMap.set(cleanName.replace(/\s+/g, "_"), avId);
+    friendlyTableNameMap.set(cleanName.replace(/[^a-zA-Z0-9]/g, "_"), avId);
+    console.log(`[SQLiteManager] Registered friendly table name mapping: "${cleanName}" -> "${avId}"`);
+}
+
+export function resolveTableAvId(tableName: string): string | null {
+    const cleanName = tableName.replace(/["'\`]/g, "").trim();
+    if (friendlyTableNameMap.has(cleanName)) {
+        return friendlyTableNameMap.get(cleanName)!;
+    }
+    if (cleanName.startsWith("av_")) {
+        return tableNameToAvId(cleanName);
+    }
+    return null;
+}
+
 // ─── AV Type → SQLite Type Mapping ───
 const AV_TYPE_TO_SQLITE: Record<string, string> = {
     text: "TEXT",
@@ -80,35 +106,14 @@ export async function getSqliteEngine() {
             locateFile: (file: string) => `/plugins/${plugin?.id || "siyuan-plugins-index"}/${file}`
         });
 
-        try {
-            const fileRes = await fetch("/api/file/getFile", {
-                method: "POST",
-                body: JSON.stringify({ path: STORAGE_DB_PATH })
-            });
-            
-            if (fileRes.status === 200) {
-                const buffer = await fileRes.arrayBuffer();
-                dbInstance = new SQL_ENGINE.Database(new Uint8Array(buffer));
-                console.log("[SQLiteManager] Disk DB Loaded.");
-            } else {
-                dbInstance = new SQL_ENGINE.Database();
-            }
-        } catch (e) {
-            dbInstance = new SQL_ENGINE.Database();
-        }
+        dbInstance = new SQL_ENGINE.Database();
+        console.log("[SQLiteManager] In-memory DB Initialized.");
 
         // Initialize system tables
         _initSystemTables(dbInstance);
 
-        // Cache instantiated AV IDs
-        try {
-            const res = dbInstance.exec("SELECT id FROM _meta WHERE type = 'av'");
-            if (res.length > 0 && res[0].values) {
-                instantiatedAvIdsCache = new Set(res[0].values.map((v: any) => String(v[0])));
-            }
-        } catch (e) {
-            console.warn("[SQLiteManager] Failed to populate instantiatedAvIdsCache:", e);
-        }
+        // Clear cache since we started clean in memory
+        instantiatedAvIdsCache = new Set();
         
         return { db: dbInstance, SQL: SQL_ENGINE };
     } catch (e) {
@@ -199,18 +204,7 @@ function _initSystemTables(db: any) {
 // ═══════════════════════════════════════════
 
 export async function saveDatabaseToDisk() {
-    if (!dbInstance) return;
-    try {
-        const data = dbInstance.export();
-        const formData = new FormData();
-        formData.append("path", STORAGE_DB_PATH);
-        formData.append("file", new Blob([data]));
-        formData.append("isDir", "false");
-
-        await fetch("/api/file/putFile", { method: "POST", body: formData });
-    } catch (e) {
-        console.error("Save failed", e);
-    }
+    // No-op under on-demand in-memory architecture
 }
 
 // ═══════════════════════════════════════════
@@ -302,11 +296,11 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
     // 1. 映射列头 (增加去重逻辑)
     const usedNames = new Set(["rowID", "_itemID"]);
     const columns = keyValues.map((kv: any, idx: number) => {
-        let baseName = kv.key.name.replace(/[^\w]/g, '_') || "unnamed";
+        let baseName = kv.key.name.replace(/[\s\-\+\*\/\\\{\}\[\]\(\)\,\.\;\:\'\"\`\?\!\@\#\$\%\^\&\*\=\|]/g, '_') || "unnamed";
         let safeName = baseName;
         
-        // 如果已存在或为空（比如全是非 ASCII 字符），则追加 ID 后四位
-        if (usedNames.has(safeName) || safeName === "__" || safeName === "_") {
+        // If the name resolves to only underscores (e.g. "__") or is empty, or is duplicate, append key ID suffix
+        if (usedNames.has(safeName) || safeName.replace(/_/g, '') === "") {
             safeName = `${baseName}_${kv.key.id.slice(-4)}`;
         }
         
@@ -468,10 +462,381 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 //  Query Engine
 // ═══════════════════════════════════════════
 
-export async function runQuery(sql: string, params?: any[]) {
+export function preprocessSql(sql: string): string {
+    let processed = sql;
+    
+    // 1. Match Siyuan IDs (e.g. 20260527224659-golv5xy, with or without quotes)
+    const rawIdRegex = /["'`]?(\d{14}-[a-zA-Z0-9]{7})["'`]?/g;
+    processed = processed.replace(rawIdRegex, (match, id) => {
+        return `"${avIdToTableName(id)}"`;
+    });
+    
+    // 2. Match friendly names (e.g. Command-DB, "Command-DB")
+    for (const [friendlyName, avId] of friendlyTableNameMap.entries()) {
+        const escapedFriendly = friendlyName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const friendlyRegex = new RegExp(`["\`']?${escapedFriendly}["\`']?`, 'gi');
+        processed = processed.replace(friendlyRegex, `"${avIdToTableName(avId)}"`);
+    }
+    
+    return processed;
+}
+
+export async function runQuery(sql: string, params?: any[]): Promise<{ columns: string[], values: any[][] }> {
+    const processedSql = preprocessSql(sql);
+
+    // 0. Auto-redirect write SQLs
+    const isWrite = /^\s*(update|insert|delete|create|alter|drop|replace)\b/i.test(processedSql);
+    if (isWrite) {
+        console.log(`[SQLiteManager] Redirecting write SQL to executeWritableSql: "${processedSql.slice(0, 50)}..."`);
+        const writeRes = await executeWritableSql(processedSql);
+        return {
+            columns: ["success", "affectedRows", "message"],
+            values: [[
+                writeRes.success ? 1 : 0,
+                writeRes.updatedRows || writeRes.deletedRowsCount || (writeRes.insertedId ? 1 : 0),
+                writeRes.message || ""
+            ]]
+        };
+    }
+
+    // 1. Intercept read table queries to trigger on-demand instantiation
+    const tableNameMatches = processedSql.match(/["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?/g) || [];
+    for (const rawName of tableNameMatches) {
+        const cleanName = rawName.replace(/["'\`]/g, "").trim();
+        const avID = resolveTableAvId(cleanName);
+        if (avID && avID.length >= 15) {
+            const lastSync = tableSyncTimes.get(avID) || 0;
+            if (Date.now() - lastSync > TTL_MS) {
+                try {
+                    console.log(`[SQLiteManager] On-demand instantiating AV: ${cleanName} (${avID})`);
+                    await instantiateAV(avID, true);
+                    tableSyncTimes.set(avID, Date.now());
+                } catch (e) {
+                    console.error(`[SQLiteManager] Failed to auto-instantiate table ${cleanName}:`, e);
+                }
+            }
+        }
+    }
+
     const { db } = await getSqliteEngine();
-    const res = db.exec(sql, params);
+    const res = db.exec(processedSql, params);
     return res.length > 0 ? { columns: res[0].columns, values: res[0].values } : { columns: [], values: [] };
+}
+
+export async function executeWritableSql(sql: string): Promise<any> {
+    const processedSql = preprocessSql(sql);
+    const { db } = await getSqliteEngine();
+    
+    // ─── 1. UPDATE Statement ───
+    const updateMatch = sql.match(/^\s*UPDATE\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s+SET\s+(.+?)\s+WHERE\s+(.+)$/i);
+    if (updateMatch) {
+        const tableName = updateMatch[1];
+        const setClause = updateMatch[2];
+        const whereClause = updateMatch[3];
+        
+        const avID = resolveTableAvId(tableName);
+        if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+        
+        // Parse WHERE condition to get target row IDs
+        const rowIDs: string[] = [];
+        const singleIdMatch = whereClause.match(/^\s*(?:rowID|id|_itemID)\s*=\s*['"`]([a-zA-Z0-9_\-]+)['"`]\s*$/i);
+        const inIdMatch = whereClause.match(/^\s*(?:rowID|id|_itemID)\s+IN\s*\((.+?)\)\s*$/i);
+        
+        if (singleIdMatch) {
+            rowIDs.push(singleIdMatch[1]);
+        } else if (inIdMatch) {
+            const rawIds = inIdMatch[1].split(",");
+            for (const rawId of rawIds) {
+                rowIDs.push(rawId.trim().replace(/^['"`]|['"`]$/g, ""));
+            }
+        } else {
+            throw new Error(`Unsupported WHERE clause: "${whereClause}". Write operations only support targeting specific row IDs.`);
+        }
+        
+        const assignments = parseSetClause(setClause);
+        let schema = await getAVSchema(avID);
+        if (schema.length === 0) {
+            await instantiateAV(avID, true);
+            schema = await getAVSchema(avID);
+        }
+        
+        // Clear TTL cache for this AV
+        tableSyncTimes.delete(avID);
+        
+        const values: any[] = [];
+        const dbTable = avIdToTableName(avID);
+        for (const [colName, val] of Object.entries(assignments)) {
+            const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
+            if (!colSchema) throw new Error(`Column '${colName}' not found in table schema.`);
+            
+            for (const rowID of rowIDs) {
+                let itemID = rowID;
+                try {
+                    const itemIDRes = db.exec(`SELECT "_itemID" FROM ${dbTable} WHERE rowID = ?`, [rowID]);
+                    if (itemIDRes.length > 0 && itemIDRes[0].values.length > 0) {
+                        itemID = String(itemIDRes[0].values[0][0]);
+                    }
+                } catch (e) {
+                    // fallback to rowID
+                }
+                
+                let cellValue: any = null;
+                const kt = colSchema.keyType;
+                if (kt === "checkbox") {
+                    cellValue = { type: "checkbox", checkbox: { checked: Boolean(val) } };
+                } else if (kt === "number") {
+                    cellValue = { type: "number", number: { content: val === null ? "" : String(val), isNotEmpty: val !== null } };
+                } else if (kt === "relation") {
+                    let blockIDs: string[] = [];
+                    if (typeof val === "string" && val.startsWith("[")) {
+                        try { blockIDs = JSON.parse(val); } catch { blockIDs = [val]; }
+                    } else if (Array.isArray(val)) {
+                        blockIDs = val;
+                    } else if (val) {
+                        blockIDs = [val];
+                    }
+                    cellValue = { type: "relation", relation: { blockIDs } };
+                } else if (kt === "select") {
+                    cellValue = { type: "select", select: { content: val === null ? "" : String(val) } };
+                } else if (kt === "mSelect") {
+                    let contents: string[] = [];
+                    if (typeof val === "string" && val.startsWith("[")) {
+                        try { contents = JSON.parse(val); } catch { contents = [val]; }
+                    } else if (Array.isArray(val)) {
+                        contents = val;
+                    } else if (val) {
+                        contents = [val];
+                    }
+                    cellValue = { type: "mSelect", mSelect: contents.map(c => ({ content: c, color: "" })) };
+                } else {
+                    cellValue = { type: kt, [kt]: { content: val === null ? "" : String(val) } };
+                }
+                
+                values.push({
+                    keyID: colSchema.keyId,
+                    itemID: itemID,
+                    value: cellValue
+                });
+            }
+        }
+        
+        if (values.length > 0) {
+            console.log(`[SQLiteManager] Executing Siyuan batch UPDATE on AV ${avID} with ${values.length} cell updates.`);
+            const res = await post("/api/av/batchSetAttributeViewBlockAttrs", { avID, values });
+            return { success: true, updatedRows: rowIDs.length, message: `Successfully updated ${rowIDs.length} rows` };
+        }
+        return { success: true, updatedRows: 0, message: "No rows updated" };
+    }
+    
+    // ─── 2. INSERT Statement ───
+    const insertMatch = sql.match(/^\s*INSERT\s+INTO\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*\((.+?)\)\s*VALUES\s*\((.+?)\)/i);
+    if (insertMatch) {
+        const tableName = insertMatch[1];
+        const colsClause = insertMatch[2];
+        const valsClause = insertMatch[3];
+        
+        const avID = resolveTableAvId(tableName);
+        if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+        
+        const colNames = colsClause.split(",").map(c => c.trim().replace(/["'\`]/g, ""));
+        const rawVals = parseValuesClause(valsClause);
+        if (colNames.length !== rawVals.length) {
+            throw new Error(`Column count (${colNames.length}) does not match value count (${rawVals.length}).`);
+        }
+        
+        let schema = await getAVSchema(avID);
+        if (schema.length === 0) {
+            await instantiateAV(avID, true);
+            schema = await getAVSchema(avID);
+        }
+        
+        // Generate new Siyuan block ID
+        // @ts-ignore
+        const newRowID = window.Lute?.NewNodeID?.() || `row_${Date.now()}`;
+        
+        console.log(`[SQLiteManager] Inserting new detached row ${newRowID} to AV ${avID}`);
+        await post("/api/av/addAttributeViewBlocks", {
+            avID: avID,
+            srcs: [{ itemID: newRowID, id: "", isDetached: true }]
+        });
+        
+        // Clear TTL cache
+        tableSyncTimes.delete(avID);
+        
+        const values: any[] = [];
+        for (let idx = 0; idx < colNames.length; idx++) {
+            const colName = colNames[idx];
+            const val = rawVals[idx];
+            const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
+            if (!colSchema) continue;
+            
+            let cellValue: any = null;
+            const kt = colSchema.keyType;
+            if (kt === "checkbox") {
+                cellValue = { type: "checkbox", checkbox: { checked: Boolean(val) } };
+            } else if (kt === "number") {
+                cellValue = { type: "number", number: { content: val === null ? "" : String(val), isNotEmpty: val !== null } };
+            } else if (kt === "relation") {
+                let blockIDs: string[] = [];
+                if (typeof val === "string" && val.startsWith("[")) {
+                    try { blockIDs = JSON.parse(val); } catch { blockIDs = [val]; }
+                } else if (Array.isArray(val)) {
+                    blockIDs = val;
+                } else if (val) {
+                    blockIDs = [val];
+                }
+                cellValue = { type: "relation", relation: { blockIDs } };
+            } else if (kt === "select") {
+                cellValue = { type: "select", select: { content: val === null ? "" : String(val) } };
+            } else if (kt === "mSelect") {
+                let contents: string[] = [];
+                if (typeof val === "string" && val.startsWith("[")) {
+                    try { contents = JSON.parse(val); } catch { contents = [val]; }
+                } else if (Array.isArray(val)) {
+                    contents = val;
+                } else if (val) {
+                    contents = [val];
+                }
+                cellValue = { type: "mSelect", mSelect: contents.map(c => ({ content: c, color: "" })) };
+            } else {
+                cellValue = { type: kt, [kt]: { content: val === null ? "" : String(val) } };
+            }
+            
+            values.push({
+                keyID: colSchema.keyId,
+                itemID: newRowID,
+                value: cellValue
+            });
+        }
+        
+        if (values.length > 0) {
+            await post("/api/av/batchSetAttributeViewBlockAttrs", { avID, values });
+        }
+        return { success: true, insertedId: newRowID, message: newRowID };
+    }
+    
+    // ─── 3. DELETE Statement ───
+    const deleteMatch = sql.match(/^\s*DELETE\s+FROM\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s+WHERE\s+(.+)$/i);
+    if (deleteMatch) {
+        const tableName = deleteMatch[1];
+        const whereClause = deleteMatch[2];
+        
+        const avID = resolveTableAvId(tableName);
+        if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+        
+        const rowIDs: string[] = [];
+        const singleIdMatch = whereClause.match(/^\s*(?:rowID|id|_itemID)\s*=\s*['"`]([a-zA-Z0-9_\-]+)['"`]\s*$/i);
+        const inIdMatch = whereClause.match(/^\s*(?:rowID|id|_itemID)\s+IN\s*\((.+?)\)\s*$/i);
+        
+        if (singleIdMatch) {
+            rowIDs.push(singleIdMatch[1]);
+        } else if (inIdMatch) {
+            const rawIds = inIdMatch[1].split(",");
+            for (const rawId of rawIds) {
+                rowIDs.push(rawId.trim().replace(/^['"`]|['"`]$/g, ""));
+            }
+        } else {
+            throw new Error(`Unsupported WHERE clause: "${whereClause}". Write operations only support targeting specific row IDs.`);
+        }
+        
+        // Clear TTL cache
+        tableSyncTimes.delete(avID);
+        
+        if (rowIDs.length > 0) {
+            console.log(`[SQLiteManager] Deleting rows ${rowIDs} from AV ${avID}`);
+            const res = await post("/api/av/removeAttributeViewBlocks", { avID, srcIDs: rowIDs });
+            return { success: true, deletedRowsCount: rowIDs.length, message: `Successfully deleted ${rowIDs.length} rows` };
+        }
+        return { success: true, deletedRowsCount: 0, message: "No rows deleted" };
+    }
+
+    throw new Error(`Unsupported Writable SQL Statement. Only UPDATE, INSERT, and DELETE statements targeting specific row IDs are supported.`);
+}
+
+function parseSetClause(setStr: string): Record<string, any> {
+    const result: Record<string, any> = {};
+    let i = 0;
+    let currentKey = "";
+    let currentValue = "";
+    let inQuote = false;
+    let quoteChar = "";
+    let isValueMode = false;
+
+    while (i < setStr.length) {
+        const char = setStr[i];
+        if (inQuote) {
+            if (char === quoteChar) {
+                inQuote = false;
+            } else {
+                currentValue += char;
+            }
+        } else {
+            if (char === "'" || char === '"' || char === "`") {
+                inQuote = true;
+                quoteChar = char;
+            } else if (char === "=" && !isValueMode) {
+                isValueMode = true;
+            } else if (char === "," && isValueMode) {
+                result[currentKey.trim()] = parsePrimitiveValue(currentValue.trim());
+                currentKey = "";
+                currentValue = "";
+                isValueMode = false;
+            } else {
+                if (isValueMode) {
+                    currentValue += char;
+                } else {
+                    currentKey += char;
+                }
+            }
+        }
+        i++;
+    }
+    if (currentKey.trim()) {
+        result[currentKey.trim()] = parsePrimitiveValue(currentValue.trim());
+    }
+    return result;
+}
+
+function parseValuesClause(valStr: string): any[] {
+    const result: any[] = [];
+    let i = 0;
+    let currentValue = "";
+    let inQuote = false;
+    let quoteChar = "";
+    
+    while (i < valStr.length) {
+        const char = valStr[i];
+        if (inQuote) {
+            if (char === quoteChar) {
+                inQuote = false;
+            } else {
+                currentValue += char;
+            }
+        } else {
+            if (char === "'" || char === '"' || char === "`") {
+                inQuote = true;
+                quoteChar = char;
+            } else if (char === ",") {
+                result.push(parsePrimitiveValue(currentValue.trim()));
+                currentValue = "";
+            } else {
+                currentValue += char;
+            }
+        }
+        i++;
+    }
+    if (currentValue.trim()) {
+        result.push(parsePrimitiveValue(currentValue.trim()));
+    }
+    return result;
+}
+
+function parsePrimitiveValue(valStr: string): any {
+    if (valStr.toLowerCase() === "true") return true;
+    if (valStr.toLowerCase() === "false") return false;
+    if (valStr.toLowerCase() === "null") return null;
+    if (!isNaN(Number(valStr)) && valStr !== "") return Number(valStr);
+    return valStr.replace(/^['"`]|['"`]$/g, "");
 }
 
 // ═══════════════════════════════════════════

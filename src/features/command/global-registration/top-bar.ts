@@ -4,7 +4,7 @@ import { client } from "../../../shared/api-client";
 import { dispatchCommand } from "../command-dispatcher";
 import { updateInlineButtonList, InlineButtonCmd } from "./inline-button";
 import { updateCommandPaletteList, PaletteCommand } from "./command-palette";
-import { getSqliteEngine, runQuery, instantiateAV, checkTableExists, tableNameToAvId, instantiatedAvIdsCache } from "../../sqlite/sqlite-manager";
+import { getSqliteEngine, runQuery, instantiateAV, checkTableExists, tableNameToAvId, instantiatedAvIdsCache, tableSyncTimes } from "../../sqlite/sqlite-manager";
 import { getTargetTablesInfo, refreshSupertagRegistry, getCommandAvId, getTypeAvId, getCommandDocId, getTypeDocId } from "../registration";
 import { initSystemTables } from "../indexos/command-sqlite";
 import { isDevModeActive } from "../../dev-mode";
@@ -258,8 +258,8 @@ export async function handleTopBarEvents({ detail }: any) {
                 localTypeUpdate = true;
             }
 
-            // Check if it targets an instantiated user AV database
-            if (opAvId && opAvId !== cmdAvId && opAvId !== tAvId && instantiatedAvIdsCache.has(opAvId)) {
+            // Check if it targets an instantiated user AV database or active cached table
+            if (opAvId && opAvId !== cmdAvId && opAvId !== tAvId && (instantiatedAvIdsCache.has(opAvId) || tableSyncTimes.has(opAvId))) {
                 userAvUpdates.add(opAvId);
             }
         }
@@ -284,12 +284,15 @@ export async function handleTopBarEvents({ detail }: any) {
 
             try {
                 if (syncCmd && cmdAvId) {
+                    tableSyncTimes.delete(cmdAvId);
                     await instantiateAV(cmdAvId, true);
                 }
                 if (syncType && tAvId) {
+                    tableSyncTimes.delete(tAvId);
                     await instantiateAV(tAvId, true);
                 }
                 for (const avId of userDbsToSync) {
+                    tableSyncTimes.delete(avId);
                     await instantiateAV(avId, true);
                 }
 
