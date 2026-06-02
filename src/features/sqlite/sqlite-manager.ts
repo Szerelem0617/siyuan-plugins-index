@@ -528,7 +528,7 @@ export async function executeWritableSql(sql: string): Promise<any> {
     const { db } = await getSqliteEngine();
     
     // ─── 1. UPDATE Statement ───
-    const updateMatch = sql.match(/^\s*UPDATE\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s+SET\s+(.+?)\s+WHERE\s+(.+)$/i);
+    const updateMatch = processedSql.match(/^\s*UPDATE\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s+SET\s+(.+?)\s+WHERE\s+(.+?)\s*$/is);
     if (updateMatch) {
         const tableName = updateMatch[1];
         const setClause = updateMatch[2];
@@ -550,7 +550,26 @@ export async function executeWritableSql(sql: string): Promise<any> {
                 rowIDs.push(rawId.trim().replace(/^['"`]|['"`]$/g, ""));
             }
         } else {
-            throw new Error(`Unsupported WHERE clause: "${whereClause}". Write operations only support targeting specific row IDs.`);
+            // Complex/arbitrary WHERE condition: query in-memory table
+            console.log(`[SQLiteManager] Complex WHERE clause detected: "${whereClause}". Running in-memory filter query...`);
+            
+            // 1. Ensure the memory table is instantiated and fully up-to-date with Siyuan.
+            await instantiateAV(avID, true);
+            
+            // 2. Query matching rowIDs from memory DB
+            const dbTable = avIdToTableName(avID);
+            const cleanWhere = whereClause.trim().replace(/;+$/, "");
+            const querySql = `SELECT rowID FROM "${dbTable}" WHERE ${cleanWhere};`;
+            try {
+                const res = db.exec(querySql);
+                if (res.length > 0 && res[0].values.length > 0) {
+                    for (const row of res[0].values) {
+                        rowIDs.push(String(row[0]));
+                    }
+                }
+            } catch (err: any) {
+                throw new Error(`Failed to evaluate WHERE clause on in-memory table: ${err.message || err}`);
+            }
         }
         
         const assignments = parseSetClause(setClause);
@@ -629,7 +648,7 @@ export async function executeWritableSql(sql: string): Promise<any> {
     }
     
     // ─── 2. INSERT Statement ───
-    const insertMatch = sql.match(/^\s*INSERT\s+INTO\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*\((.+?)\)\s*VALUES\s*\((.+?)\)/i);
+    const insertMatch = processedSql.match(/^\s*INSERT\s+INTO\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*\((.+?)\)\s*VALUES\s*\((.+?)\)/is);
     if (insertMatch) {
         const tableName = insertMatch[1];
         const colsClause = insertMatch[2];
@@ -716,7 +735,7 @@ export async function executeWritableSql(sql: string): Promise<any> {
     }
     
     // ─── 3. DELETE Statement ───
-    const deleteMatch = sql.match(/^\s*DELETE\s+FROM\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s+WHERE\s+(.+)$/i);
+    const deleteMatch = processedSql.match(/^\s*DELETE\s+FROM\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s+WHERE\s+(.+?)\s*$/is);
     if (deleteMatch) {
         const tableName = deleteMatch[1];
         const whereClause = deleteMatch[2];
@@ -736,7 +755,26 @@ export async function executeWritableSql(sql: string): Promise<any> {
                 rowIDs.push(rawId.trim().replace(/^['"`]|['"`]$/g, ""));
             }
         } else {
-            throw new Error(`Unsupported WHERE clause: "${whereClause}". Write operations only support targeting specific row IDs.`);
+            // Complex/arbitrary WHERE condition: query in-memory table
+            console.log(`[SQLiteManager] Complex WHERE clause detected for DELETE: "${whereClause}". Running in-memory filter query...`);
+            
+            // 1. Ensure the memory table is instantiated and fully up-to-date with Siyuan.
+            await instantiateAV(avID, true);
+            
+            // 2. Query matching rowIDs from memory DB
+            const dbTable = avIdToTableName(avID);
+            const cleanWhere = whereClause.trim().replace(/;+$/, "");
+            const querySql = `SELECT rowID FROM "${dbTable}" WHERE ${cleanWhere};`;
+            try {
+                const res = db.exec(querySql);
+                if (res.length > 0 && res[0].values.length > 0) {
+                    for (const row of res[0].values) {
+                        rowIDs.push(String(row[0]));
+                    }
+                }
+            } catch (err: any) {
+                throw new Error(`Failed to evaluate WHERE clause on in-memory table: ${err.message || err}`);
+            }
         }
         
         // Clear TTL cache
