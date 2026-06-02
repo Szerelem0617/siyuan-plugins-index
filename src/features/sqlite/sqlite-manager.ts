@@ -1,4 +1,5 @@
 import { post } from "../../shared/api-client/request";
+import { client } from "../../shared/api-client";
 import { plugin } from "../../shared/utils";
 
 let dbInstance: any = null;
@@ -779,15 +780,344 @@ export async function executeWritableSql(sql: string): Promise<any> {
         // Clear TTL cache
         tableSyncTimes.delete(avID);
         
-        if (rowIDs.length > 0) {
-            console.log(`[SQLiteManager] Deleting rows ${rowIDs} from AV ${avID}`);
-            const res = await post("/api/av/removeAttributeViewBlocks", { avID, srcIDs: rowIDs });
-            return { success: true, deletedRowsCount: rowIDs.length, message: `Successfully deleted ${rowIDs.length} rows` };
+    }
+    
+    // ─── 4. CREATE TABLE Statement ───
+    const createMatch = processedSql.match(/^\s*CREATE\s+TABLE\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*\((.+?)\)\s*;?\s*$/is);
+    if (createMatch) {
+        const tableName = createMatch[1];
+        const columnsDef = createMatch[2];
+        
+        // 1. Resolve Notebook
+        const lsRes = await post("/api/notebook/lsNotebooks", {});
+        const notebooks = lsRes.notebooks || [];
+        const activeNotebook = notebooks.find((n: any) => !n.closed);
+        if (!activeNotebook) throw new Error("No active (open) notebook found to create the table document.");
+        const notebookId = activeNotebook.id;
+        
+        // 2. Check if table already exists
+        const existingAvID = resolveTableAvId(tableName);
+        if (existingAvID) throw new Error(`Table '${tableName}' already exists.`);
+        
+        // 3. Create Doc with AV Block
+        const hPath = `/${tableName}`;
+        const docPath = `${hPath}.sy`;
+        
+        console.log(`[SQLiteManager] Creating Siyuan document for table: ${tableName}`);
+        const createRes = await post("/api/filetree/createDocWithMd", {
+            notebook: notebookId,
+            path: docPath,
+            markdown: `# ${tableName}\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`
+        });
+        
+        const docId = createRes;
+        if (!docId) throw new Error(`Failed to create Siyuan document for table ${tableName}.`);
+        
+        // 4. Mark doc with custom attribute for tracking
+        await post("/api/attr/setBlockAttrs", {
+            id: docId,
+            attrs: {
+                [`custom-${tableName}`]: "true"
+            }
+        });
+        
+        // 5. Wait for indexer to instantiate AV
+        console.log(`[SQLiteManager] Waiting for Siyuan to index AV block...`);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Find AV Block ID
+        const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
+        const avRes = await post("/api/query/sql", { stmt: avSql });
+        if (!avRes || avRes.length === 0) {
+            throw new Error(`Failed to find generated Attribute View block in document ${docId}.`);
         }
-        return { success: true, deletedRowsCount: 0, message: "No rows deleted" };
+        
+        const avBlockId = avRes[0].id;
+        const domRes = await client.getBlockDOM({ id: avBlockId });
+        const html = domRes.data?.dom || "";
+        const match = html.match(/data-av-id="([^"]+)"/);
+        const avId = match ? match[1] : avBlockId;
+        if (!avId) throw new Error(`Failed to extract avID from block DOM.`);
+        
+        // Pre-render to register AV in engine
+        await post("/api/av/renderAttributeView", { id: avId });
+        
+        // 6. Parse and create columns
+        const colDefs = columnsDef.split(",");
+        const parsedCols: { name: string; type: string; options: string[]; refTable: string | null }[] = [];
+        
+        for (const colDef of colDefs) {
+            const trimmed = colDef.trim();
+            const matchDef = trimmed.match(/^["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s+([a-zA-Z]+)(?:\((.+?)\))?(?:\s+REFERENCES\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?)?/i);
+            if (!matchDef) continue;
+            
+            const colName = matchDef[1];
+            const rawType = matchDef[2].toLowerCase();
+            const paramsStr = matchDef[3];
+            const refTable = matchDef[4] || null;
+            
+            let colType = "text";
+            const validTypes = ["block", "text", "number", "select", "mselect", "date", "checkbox", "relation", "masset", "rollup", "template", "created", "updated"];
+            if (validTypes.includes(rawType)) {
+                if (rawType === "mselect") colType = "mSelect";
+                else if (rawType === "masset") colType = "mAsset";
+                else colType = rawType;
+            }
+            
+            let options: string[] = [];
+            if (paramsStr && (colType === "select" || colType === "mSelect")) {
+                options = paramsStr.split(",").map(o => o.trim().replace(/^['"`]|['"`]$/g, ""));
+            }
+            
+            parsedCols.push({ name: colName, type: colType, options, refTable });
+        }
+        
+        // 7. Apply columns to Siyuan
+        const checkKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
+        const checkKeys = Array.isArray(checkKeysRes) ? checkKeysRes : (checkKeysRes.keys || []);
+        const primaryKeyCol = checkKeys.find((k: any) => k.type === "block" || k.name === "主键");
+        let lastKeyID = checkKeys.length > 0 ? checkKeys[checkKeys.length - 1].id : "";
+        
+        let startIndex = 0;
+        if (parsedCols.length > 0 && parsedCols[0].type === "block" && primaryKeyCol) {
+            const selfName = parsedCols[0].name;
+            const selfKeyId = primaryKeyCol.id;
+            console.log(`[SQLiteManager] Renaming Siyuan primary key column to: ${selfName}`);
+            await post("/api/transactions", {
+                reqId: Date.now(),
+                app: "plugin-index",
+                transactions: [{
+                    doOperations: [{
+                        action: "updateAttrViewColName",
+                        avID: avId,
+                        keyID: selfKeyId,
+                        name: selfName
+                    }]
+                }]
+            });
+            startIndex = 1;
+        }
+        
+        for (let i = startIndex; i < parsedCols.length; i++) {
+            const col = parsedCols[i];
+            const newKeyID = (window as any).Lute?.NewNodeID?.() || `key_${Date.now()}_${i}`;
+            console.log(`[SQLiteManager] Adding column: ${col.name} (${col.type})`);
+            
+            await post("/api/av/addAttributeViewKey", {
+                avID: avId,
+                keyID: newKeyID,
+                keyName: col.name,
+                keyType: col.type === "block" ? "text" : col.type,
+                previousKeyID: lastKeyID
+            });
+            lastKeyID = newKeyID;
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            if (col.options.length > 0) {
+                const optionsVal = col.options.map((o, idx) => ({
+                    id: `opt_${Date.now()}_${idx}`,
+                    name: o,
+                    color: ""
+                }));
+                await post("/api/transactions", {
+                    reqId: Date.now(),
+                    app: "plugin-index",
+                    transactions: [{
+                        doOperations: [{
+                            action: "updateAttrViewColOptions",
+                            avID: avId,
+                            keyID: newKeyID,
+                            options: optionsVal
+                        }]
+                    }]
+                });
+            }
+            
+            if (col.type === "relation" && col.refTable) {
+                const targetAvId = resolveTableAvId(col.refTable);
+                if (targetAvId) {
+                    const backKeyId = (window as any).Lute?.NewNodeID?.() || `key_${Date.now()}_back`;
+                    console.log(`[SQLiteManager] Establishing bidirectional relationship with ${col.refTable} (${targetAvId})`);
+                    await post("/api/transactions", {
+                        reqId: Date.now(),
+                        app: "plugin-index",
+                        transactions: [{
+                            doOperations: [{
+                                action: "updateAttrViewColRelation",
+                                avID: avId,
+                                id: targetAvId,
+                                keyID: newKeyID,
+                                isTwoWay: true,
+                                backRelationKeyID: backKeyId,
+                                name: `关联-${tableName}`,
+                                format: col.name
+                            }]
+                        }]
+                    });
+                }
+            }
+        }
+        
+        registerFriendlyTableName(tableName, avId);
+        await instantiateAV(avId, true);
+        return { success: true, message: `Table '${tableName}' created successfully with avID '${avId}'.` };
     }
 
-    throw new Error(`Unsupported Writable SQL Statement. Only UPDATE, INSERT, and DELETE statements targeting specific row IDs are supported.`);
+    // ─── 5. ALTER TABLE Statement ───
+    const alterMatch = processedSql.match(/^\s*ALTER\s+TABLE\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s+(ADD\s+COLUMN|DROP\s+COLUMN)\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?(?:\s+([a-zA-Z0-9_\-\(\)'",\s]+))?/is);
+    if (alterMatch) {
+        const tableName = alterMatch[1];
+        const action = alterMatch[2].toUpperCase().replace(/\s+/g, " ");
+        const colName = alterMatch[3];
+        const colDef = alterMatch[4] || "";
+        
+        const avID = resolveTableAvId(tableName);
+        if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+        
+        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID });
+        const checkKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
+        
+        if (action === "ADD COLUMN") {
+            const typeMatch = colDef.trim().match(/^([a-zA-Z]+)(?:\((.+?)\))?(?:\s+REFERENCES\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?)?/i);
+            const rawType = typeMatch ? typeMatch[1].toLowerCase() : "text";
+            const paramsStr = typeMatch ? typeMatch[2] : null;
+            const refTable = typeMatch ? typeMatch[3] : null;
+            
+            let colType = "text";
+            const validTypes = ["block", "text", "number", "select", "mselect", "date", "checkbox", "relation", "masset", "rollup", "template", "created", "updated"];
+            if (validTypes.includes(rawType)) {
+                if (rawType === "mselect") colType = "mSelect";
+                else if (rawType === "masset") colType = "mAsset";
+                else colType = rawType;
+            }
+            
+            const lastKeyID = checkKeys.length > 0 ? checkKeys[checkKeys.length - 1].id : "";
+            const newKeyID = (window as any).Lute?.NewNodeID?.() || `key_${Date.now()}`;
+            
+            console.log(`[SQLiteManager] Adding column ${colName} (${colType}) to AV ${avID}`);
+            await post("/api/av/addAttributeViewKey", {
+                avID,
+                keyID: newKeyID,
+                keyName: colName,
+                keyType: colType,
+                previousKeyID: lastKeyID
+            });
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            let options: string[] = [];
+            if (paramsStr && (colType === "select" || colType === "mSelect")) {
+                options = paramsStr.split(",").map(o => o.trim().replace(/^['"`]|['"`]$/g, ""));
+            }
+            if (options.length > 0) {
+                const optionsVal = options.map((o, idx) => ({
+                    id: `opt_${Date.now()}_${idx}`,
+                    name: o,
+                    color: ""
+                }));
+                await post("/api/transactions", {
+                    reqId: Date.now(),
+                    app: "plugin-index",
+                    transactions: [{
+                        doOperations: [{
+                            action: "updateAttrViewColOptions",
+                            avID: avID,
+                            keyID: newKeyID,
+                            options: optionsVal
+                        }]
+                    }]
+                });
+            }
+            
+            if (colType === "relation" && refTable) {
+                const targetAvId = resolveTableAvId(refTable);
+                if (targetAvId) {
+                    const backKeyId = (window as any).Lute?.NewNodeID?.() || `key_${Date.now()}_back`;
+                    console.log(`[SQLiteManager] Establishing bidirectional relationship with ${refTable} (${targetAvId})`);
+                    await post("/api/transactions", {
+                        reqId: Date.now(),
+                        app: "plugin-index",
+                        transactions: [{
+                            doOperations: [{
+                                action: "updateAttrViewColRelation",
+                                avID: avID,
+                                id: targetAvId,
+                                keyID: newKeyID,
+                                isTwoWay: true,
+                                backRelationKeyID: backKeyId,
+                                name: `关联-${tableName}`,
+                                format: colName
+                            }]
+                        }]
+                    });
+                }
+            }
+            
+            tableSyncTimes.delete(avID);
+            await instantiateAV(avID, true);
+            return { success: true, message: `Column '${colName}' added successfully to table '${tableName}'.` };
+            
+        } else if (action === "DROP COLUMN") {
+            const targetCol = checkKeys.find((k: any) => k.name === colName);
+            if (!targetCol) throw new Error(`Column '${colName}' not found in table '${tableName}'.`);
+            
+            console.log(`[SQLiteManager] Dropping column ${colName} (${targetCol.id}) from AV ${avID}`);
+            await post("/api/av/removeAttributeViewKey", {
+                avID,
+                keyID: targetCol.id
+            });
+            
+            tableSyncTimes.delete(avID);
+            await instantiateAV(avID, true);
+            return { success: true, message: `Column '${colName}' dropped successfully from table '${tableName}'.` };
+        }
+    }
+
+    // ─── 6. DROP TABLE Statement ───
+    const dropMatch = processedSql.match(/^\s*DROP\s+TABLE\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*;?\s*$/is);
+    if (dropMatch) {
+        const tableName = dropMatch[1];
+        const avID = resolveTableAvId(tableName);
+        if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+        
+        console.log(`[SQLiteManager] Dropping table ${tableName} (avID: ${avID})`);
+        
+        // 1. Locate Siyuan Document Block ID and Notebook ID
+        const sqlFindDoc = `SELECT root_id, box FROM blocks WHERE id = '${avID}' LIMIT 1`;
+        const resFind = await post("/api/query/sql", { stmt: sqlFindDoc });
+        let docId = "";
+        let notebookId = "";
+        if (resFind && resFind.length > 0) {
+            docId = resFind[0].root_id;
+            notebookId = resFind[0].box;
+        }
+        
+        // 2. Remove document from Siyuan
+        if (docId) {
+            console.log(`[SQLiteManager] Deleting document ${docId} from Siyuan`);
+            await post("/api/filetree/removeDoc", {
+                notebook: notebookId,
+                id: docId
+            });
+        }
+        
+        // 3. Clear friendlyName registry and cache
+        friendlyTableNameMap.delete(tableName);
+        friendlyTableNameMap.delete(tableName.replace(/\s+/g, "_"));
+        friendlyTableNameMap.delete(tableName.replace(/[^a-zA-Z0-9]/g, "_"));
+        
+        tableSyncTimes.delete(avID);
+        instantiatedAvIdsCache.delete(avID);
+        
+        // 4. Drop from Wasm SQLite memory DB
+        const dbTable = avIdToTableName(avID);
+        db.run(`DROP TABLE IF EXISTS "${dbTable}";`);
+        db.run(`DELETE FROM _meta WHERE id = ?;`, [avID]);
+        db.run(`DELETE FROM _av_schema WHERE av_id = ?;`, [avID]);
+        
+        return { success: true, message: `Table '${tableName}' dropped successfully.` };
+    }
+
+    throw new Error(`Unsupported Writable SQL Statement. Only DML (UPDATE, INSERT, DELETE) and DDL (CREATE, ALTER, DROP) statements targeting Siyuan AVs are supported.`);
 }
 
 function parseSetClause(setStr: string): Record<string, any> {
