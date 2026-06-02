@@ -44,27 +44,78 @@ await window.indexOS.db.runQuery("INSERT INTO \"Command-DB\" (Command_ID, Enable
 
 ---
 
-## 2. 当前插件 AV 关联操作的 SQL 重写可行性评估
+## 2. DDL (数据定义语言) 扩展脑洞与 Siyuan 原生列类型支持
 
-本插件目前有大量和属性视图（AV）直接交互的业务功能。以下是关于“是否要用新暴露的 SQL 方法重写这些功能”的深度评估：
+针对建表与改字段（DDL）的 SQL 转译支持，我们进行了更深入的方案探究。
 
-### 🛠️ 插件现有 AV 相关功能一览
-1. **属性视图数据源与大纲双向同步** (`db-reverse-list.ts`, `attribute-sync.ts`)
-2. **主标签（Supertag）文档监控与默认属性写入** (`supertag.ts`, `supertag-manager.ts`)
-3. **属性视图配置面板与列定义映射** (`db-config.ts`, `create-db.ts`)
-4. **单元格逻辑变更与批量更新** (`batch-update.ts`, `special-handlers.ts`)
+### 💡 绝妙思路：直接使用思源原生类型作为 SQL 类型声明
+
+您提到的 **`CREATE TABLE "表名" (列名1 number, 列名2 relation)`** 方案是一个**非常巧妙且完美的破局思路**！
+
+* **为什么可行？**
+  * 在 SQLite 中，列的类型声明（Column Type）是**动态且自由度极高**的。SQLite Wasm 引擎在执行 `CREATE TABLE` 时，**允许接受任何自定义字符串作为类型声明**。因此，传入 `relation`、`mSelect` 或 `checkbox` 等类型并不会导致 SQL 引擎报错。
+  * 我们的 DDL SQL 转译层可以直接通过正则表达式拦截并解析出这些“思源专属”的类型声明，并直接 1:1 映射并调用思源的接口。
+
+### 🛠️ 方案实现路径设计
+
+如果我们要让这套原生 DDL 转译运行起来，逻辑如下：
+
+#### 1. 新建表 (`CREATE TABLE`)
+* **SQL 语法**：
+  ```sql
+  CREATE TABLE "新数据表" (
+      "标题" block,
+      "状态" select,
+      "负责人" relation,
+      "启用" checkbox
+  );
+  ```
+* **转译执行流**：
+  1. 拦截 `CREATE TABLE` 语句。
+  2. 调用思源的 `/api/filetree/createDocWithMd`，在系统配置的默认笔记本或索引沙盒目录下创建一个包含属性视图 block 标记的空文档：
+     `<div data-type="NodeAttributeView" data-av-type="table"></div>`
+  3. 等待思源建立完该 AV 的物理实例化，并通过 DOM / 块属性读取获得新生成的 `avID`。
+  4. 解析列定义括号内的字段。第一列声明为 `block` 类型（主键）。
+  5. 依次为其他列调用 `/api/av/addAttributeViewKey`，并将 SQL 里的类型直接映射为思源的原生类型：
+     * `select` ➔ `select`
+     * `relation` ➔ `relation`
+     * `checkbox` ➔ `checkbox`
+  6. 在 friendlyTableNameMap 中将 `"新数据表"` 注册并重定向为这个新生成的 `avID`。
+
+#### 2. 添加列 (`ALTER TABLE ADD COLUMN`)
+* **SQL 语法**：
+  ```sql
+  ALTER TABLE "我的表" ADD COLUMN "进度" number;
+  ```
+* **转译执行流**：
+  1. 解析出目标表名 `"我的表"` 并解析 `avID`。
+  2. 调用 `/api/av/addAttributeViewKey`，其中 `keyType` 直接设为 `"number"`，`keyName` 设为 `"进度"`。
+
+#### 3. 删除列 (`ALTER TABLE DROP COLUMN`)
+* **SQL 语法**：
+  ```sql
+  ALTER TABLE "我的表" DROP COLUMN "进度";
+  ```
+* **转译执行流**：
+  1. 解析表名和要删除的列名 `"进度"`。
+  2. 通过 schema 缓存解析出 `"进度"` 列 the `keyID`。
+  3. 调用 `/api/av/removeAttributeViewKey`，传入该 `keyID` 执行物理删除。
 
 ---
 
-### 📝 重写可行性与性价比对比表
+### ⚖️ 该方案的优缺点评估
 
-| 功能模块 | 读操作是否重写 | 写操作是否重写 | 架构师决策与核心理由 |
-| :--- | :---: | :---: | :--- |
-| **1. 双向同步与大纲转换** | **推荐重写** | **部分重写** | **读极大提升，写保持现状**：<br>・ 读：原逻辑需要用大量的 JS 遍历代码查找大纲与 AV 的映射关系。使用 SQL 查询（如：`SELECT rowID FROM table WHERE label = 'xx'`）可以省去大量过滤手写代码。<br>・ 写：大纲生成需要连续、高密度的批量级联写，直接调用 API Payload 可最大化减免解析开销。 |
-| **2. 主标签（Supertag）默认写入** | **不推荐** | **极力推荐重写** | **写体验降维打击**：<br>・ 往常向新打了主标签的文档写入默认属性值（如 `Status = 'Todo'`, `Priority = 'Medium'`），需要通过 HTTP 拿到该 AV 的列信息，找到每个列的字段 ID，然后再手动封装成极其嵌套复杂的 Cell JSON Transaction。<br>・ 如果使用 `runQuery("UPDATE \"Type-DB\" SET Status = 'Todo' WHERE id = 'doc-xxx'")`，可以将代码从 **30 行缩减为 1 行**，且完全不用管底层的 KeyID 是什么，维护性价比极高。 |
-| **3. 配置面板与列头管理 (DDL)** | **不推荐** | **禁止重写** | **不适合 SQL 表达模式**：<br>・ 配置面板涉及大量的思源底层专属操作：如添加特定类型关联列（`relation` 需定义双向关联 BlockID）、编辑单选/多选的背景颜色等。<br>・ 这些属于配置管理（Schema 管理），用 SQL DDL 极其难以传递颜色、关联 ID 等元属性。应当继续用原生 REST API 维持精细控制。 |
-| **4. 局部单元格变更** | **不推荐** | **极力推荐重写** | **简化点对点写**：<br>・ 在属性面板、双击切换启用状态等交互处，直接执行 `UPDATE` SQL 是最符合直觉的。它免去了实例化并读取结构体的开销，写起来干净利落。 |
+* **优点**：
+  * **一致性极强**：开发者可以直接用思源的 16 种原生类型建表，完全消除了标准 SQL 类型不足的缺陷。
+  * **极大简化初始化操作**：通过一段简单的 SQL DDL 脚本即可快速给其他插件搭建出完整的表格系统，极其适合模块化部署。
+* **缺点/局限性**：
+  * 对 `relation`（关联列）和 `select`（多选列）这种需要传递附属配置的字段（例如关联哪张表、选项背景色是什么），SQL DDL 语法层面依然无法自然地传递这些细节参数。
+  * 需要做很多关于“如何确定新创建 AV 块的文档挂载位置”的策略兜底（如默认挂载在插件专属数据页上）。
 
-### 💡 总结结论：按需混合使用
-* **大批量、低延迟、底层专属（如管理字段属性、颜色、大批量初始化写入）** 的操作：**继续使用原生思源 HTTP API**。
-* **业务层面的增删改查、局部状态更新、以及需要根据列名多条件检索数据** 的操作：**全面使用新暴露的 SQL API 进行重写**。这能让本插件的业务代码行数缩减 35% 以上，并大幅增加可读性！
+---
+
+### 💡 结论：是否需要加入此 DDL 支持？
+
+目前本插件的系统底层表格（Command-DB 和 Type-DB）均已在初次加载时完成了初始化（通过 JS 逐步构建），当前的业务中暂时不需要频繁调用 `CREATE TABLE` / `ALTER TABLE`。
+
+因此，这一套“直接按思源列类型建表”的 DDL 引擎非常适合作为**高阶开发者特供功能**。如果在后续迭代中，我们需要支持更复杂的第三方插件快速部署其独占表格，我们可以基于此设计图快速将这套 DDL 解析分支接入并暴露！
