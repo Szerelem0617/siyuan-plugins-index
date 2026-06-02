@@ -107,7 +107,7 @@ export async function executeDDL(processedSql: string, db: any): Promise<any> {
         const appendRes = await post("/api/block/appendBlock", {
             parentID: docId,
             dataType: "markdown",
-            data: `### ${tableName}\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>`
+            data: `<div data-type="NodeAttributeView" data-av-type="table"></div>`
         });
         
         if (!appendRes || !appendRes[0]?.doOperations) {
@@ -528,48 +528,18 @@ export async function executeDDL(processedSql: string, db: any): Promise<any> {
         
         console.log(`[SQLiteManager] Dropping table ${tableName} (avID: ${avID})`);
         
-        // 1. Locate Siyuan Block ID and Doc ID
+        // 1. Locate Siyuan AV Block ID
         let avBlockId = avIdToBlockIdMap.get(avID) || "";
-        let docId = "";
-        let parentId = "";
-        let sort = 0;
         
-        const sqlFindBlock = `SELECT id, root_id, parent_id, sort FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%') LIMIT 1`;
-        const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
-        if (resFind && resFind.length > 0) {
-            avBlockId = resFind[0].id;
-            docId = resFind[0].root_id;
-            parentId = resFind[0].parent_id;
-            sort = resFind[0].sort;
-        } else if (avBlockId) {
-            const sqlFindFallback = `SELECT root_id, parent_id, sort FROM blocks WHERE id = '${avBlockId}' LIMIT 1`;
-            const resFallback = await post("/api/query/sql", { stmt: sqlFindFallback });
-            if (resFallback && resFallback.length > 0) {
-                docId = resFallback[0].root_id;
-                parentId = resFallback[0].parent_id;
-                sort = resFallback[0].sort;
+        if (!avBlockId) {
+            const sqlFindBlock = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%') LIMIT 1`;
+            const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
+            if (resFind && resFind.length > 0) {
+                avBlockId = resFind[0].id;
             }
         }
         
-        // 2. Try to find if there is a heading block right before it to delete together
-        let headingBlockId = "";
-        if (docId && parentId) {
-            const sqlFindHeading = `SELECT id, type, content FROM blocks WHERE root_id = '${docId}' AND parent_id = '${parentId}' AND sort < ${sort} ORDER BY sort DESC LIMIT 1`;
-            const resHeading = await post("/api/query/sql", { stmt: sqlFindHeading });
-            if (resHeading && resHeading.length > 0) {
-                const headBlock = resHeading[0];
-                if (headBlock.type === "h" && headBlock.content.includes(tableName)) {
-                    headingBlockId = headBlock.id;
-                }
-            }
-        }
-        
-        // 3. Delete the blocks from Siyuan
-        if (headingBlockId) {
-            console.log(`[SQLiteManager] Deleting heading block ${headingBlockId} from Siyuan`);
-            await post("/api/block/deleteBlock", { id: headingBlockId });
-        }
-        
+        // 2. Delete the AV block from Siyuan
         const blockToDelete = avBlockId || avID;
         console.log(`[SQLiteManager] Deleting AV block ${blockToDelete} from Siyuan`);
         await post("/api/block/deleteBlock", { id: blockToDelete });

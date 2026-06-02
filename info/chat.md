@@ -1,6 +1,6 @@
 # 思源属性视图（AV）极简 SQL API 暴露与重写评估总结
 
-此文档记录了本插件如何向外暴露 SQL 读写接口以供其他插件或用户调用，并针对本插件已有的各种属性视图（AV）操作，进行了“要不要使用极简 SQL API 进行重写”的架构设计与评估分析。
+此文档记录了本插件如何向外暴露 SQL 读写接口以供其他插件或用户调用，并针对本插件已有的各种属性视图（AV）操作，进行了"要不要使用极简 SQL API 进行重写"的架构设计与评估分析。
 
 ---
 
@@ -44,78 +44,143 @@ await window.indexOS.db.runQuery("INSERT INTO \"Command-DB\" (Command_ID, Enable
 
 ---
 
-## 2. DDL (数据定义语言) 扩展脑洞与 Siyuan 原生列类型支持
+## 2. DDL (数据定义语言) 实现现状与能力评估
 
-针对建表与改字段（DDL）的 SQL 转译支持，我们进行了更深入的方案探究。
+### 📋 CREATE TABLE 当前能力分析
 
-### 💡 绝妙思路：直接使用思源原生类型作为 SQL 类型声明
+当前 `executeDDL` 中的 `CREATE TABLE` 实现（位于 [ddl.ts](file:///Users/feng/Desktop/项目/思源项目/siyuan-plugins-index/src/features/sqlite/run-query/ddl.ts)）的具体行为：
 
-您提到的 **`CREATE TABLE "表名" (列名1 number, 列名2 relation)`** 方案是一个**非常巧妙且完美的破局思路**！
+#### ❓ Q1: 是否支持传参？
 
-* **为什么可行？**
-  * 在 SQLite 中，列的类型声明（Column Type）是**动态且自由度极高**的。SQLite Wasm 引擎在执行 `CREATE TABLE` 时，**允许接受任何自定义字符串作为类型声明**。因此，传入 `relation`、`mSelect` 或 `checkbox` 等类型并不会导致 SQL 引擎报错。
-  * 我们的 DDL SQL 转译层可以直接通过正则表达式拦截并解析出这些“思源专属”的类型声明，并直接 1:1 映射并调用思源的接口。
+**不支持。** 当前 `CREATE TABLE` 仅通过 SQL 文本解析，签名为 `executeDDL(processedSql: string, db: any)`，整个调用链如下：
 
-### 🛠️ 方案实现路径设计
+```
+用户输入 SQL → runQuery() → 检测到 write → executeWritableSql() → executeDDL(processedSql, db)
+```
 
-如果我们要让这套原生 DDL 转译运行起来，逻辑如下：
+所有参数全部从 SQL 字符串正则解析而来。没有额外的可选参数接口可以控制行为（比如指定目标文档、是否生成标题、notebook 选择等）。
 
-#### 1. 新建表 (`CREATE TABLE`)
-* **SQL 语法**：
-  ```sql
-  CREATE TABLE "新数据表" (
-      "标题" block,
-      "状态" select,
-      "负责人" relation,
-      "启用" checkbox
-  );
-  ```
-* **转译执行流**：
-  1. 拦截 `CREATE TABLE` 语句。
-  2. 调用思源的 `/api/filetree/createDocWithMd`，在系统配置的默认笔记本或索引沙盒目录下创建一个包含属性视图 block 标记的空文档：
-     `<div data-type="NodeAttributeView" data-av-type="table"></div>`
-  3. 等待思源建立完该 AV 的物理实例化，并通过 DOM / 块属性读取获得新生成的 `avID`。
-  4. 解析列定义括号内的字段。第一列声明为 `block` 类型（主键）。
-  5. 依次为其他列调用 `/api/av/addAttributeViewKey`，并将 SQL 里的类型直接映射为思源的原生类型：
-     * `select` ➔ `select`
-     * `relation` ➔ `relation`
-     * `checkbox` ➔ `checkbox`
-  6. 在 friendlyTableNameMap 中将 `"新数据表"` 注册并重定向为这个新生成的 `avID`。
+**SQL 语法示例（这就是目前唯一的"参数"）：**
+```sql
+CREATE TABLE "TestTable" (
+    "书名" block,
+    "价格" number,
+    "状态" select('已读', '在读', '未读')
+);
+```
 
-#### 2. 添加列 (`ALTER TABLE ADD COLUMN`)
-* **SQL 语法**：
-  ```sql
-  ALTER TABLE "我的表" ADD COLUMN "进度" number;
-  ```
-* **转译执行流**：
-  1. 解析出目标表名 `"我的表"` 并解析 `avID`。
-  2. 调用 `/api/av/addAttributeViewKey`，其中 `keyType` 直接设为 `"number"`，`keyName` 设为 `"进度"`。
+如果要支持传参（例如指定目标文档ID），有两种思路：
+1. **扩展 SQL 语法**：`CREATE TABLE "X" (...) IN DOCUMENT '20260602-xxxxx'` — 不标准但可行
+2. **给 `executeDDL` 增加可选的 options 对象**：`executeDDL(sql, db, { targetDocId?, withHeading? })` — 更干净，但需要修改调用链
 
-#### 3. 删除列 (`ALTER TABLE DROP COLUMN`)
-* **SQL 语法**：
-  ```sql
-  ALTER TABLE "我的表" DROP COLUMN "进度";
-  ```
-* **转译执行流**：
-  1. 解析表名和要删除的列名 `"进度"`。
-  2. 通过 schema 缓存解析出 `"进度"` 列 the `keyID`。
-  3. 调用 `/api/av/removeAttributeViewKey`，传入该 `keyID` 执行物理删除。
+#### ❓ Q2: 是否支持选择在哪里创建？
 
----
+**不支持选择。** 当前逻辑硬编码为：
 
-### ⚖️ 该方案的优缺点评估
+1. 尝试获取**当前活跃编辑器的文档 ID**（`protyle.block.rootID`）
+2. 如果编辑器不存在，fallback 到 Siyuan 数据库里**随机取一个文档**
+3. 在该文档**末尾** `appendBlock` 插入
 
-* **优点**：
-  * **一致性极强**：开发者可以直接用思源的 16 种原生类型建表，完全消除了标准 SQL 类型不足的缺陷。
-  * **极大简化初始化操作**：通过一段简单的 SQL DDL 脚本即可快速给其他插件搭建出完整的表格系统，极其适合模块化部署。
-* **缺点/局限性**：
-  * 对 `relation`（关联列）和 `select`（多选列）这种需要传递附属配置的字段（例如关联哪张表、选项背景色是什么），SQL DDL 语法层面依然无法自然地传递这些细节参数。
-  * 需要做很多关于“如何确定新创建 AV 块的文档挂载位置”的策略兜底（如默认挂载在插件专属数据页上）。
+也就是说，用户无法指定笔记本、文档路径或者插入位置（如某个块的后面）。
+
+#### ❓ Q3: 创建的 H3 标题能否删除？
+
+**可以也应该删除。** 当前代码（[ddl.ts:110](file:///Users/feng/Desktop/项目/思源项目/siyuan-plugins-index/src/features/sqlite/run-query/ddl.ts#L110)）在 appendBlock 时发送的 markdown 是：
+
+```javascript
+data: `### ${tableName}\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>`
+```
+
+这会生成一个 `### 表名` H3 标题 + AV 数据库块。这个标题完全是装饰性的，不影响 AV 功能。思源的 AV 块本身自带数据库名称（通过 `setAttrViewName` 事务设置），所以 **H3 标题是多余的**。
+
+> [!TIP]
+> 建议直接去掉 H3，改为只插入 AV div：
+> ```javascript
+> data: `<div data-type="NodeAttributeView" data-av-type="table"></div>`
+> ```
+> 注意：对应的 `DROP TABLE` 逻辑（[ddl.ts:552-563](file:///Users/feng/Desktop/项目/思源项目/siyuan-plugins-index/src/features/sqlite/run-query/ddl.ts#L552-L563)）中有一段"查找并删除前面的标题块"的代码，如果去掉 H3 标题，这段代码也可以一并简化。
 
 ---
 
-### 💡 结论：是否需要加入此 DDL 支持？
+## 3. `batch-update.ts` 和 `create-db.ts` 是否应该改用统一 SQL API？
 
-目前本插件的系统底层表格（Command-DB 和 Type-DB）均已在初次加载时完成了初始化（通过 JS 逐步构建），当前的业务中暂时不需要频繁调用 `CREATE TABLE` / `ALTER TABLE`。
+### 📁 文件概览
 
-因此，这一套“直接按思源列类型建表”的 DDL 引擎非常适合作为**高阶开发者特供功能**。如果在后续迭代中，我们需要支持更复杂的第三方插件快速部署其独占表格，我们可以基于此设计图快速将这套 DDL 解析分支接入并暴露！
+| 文件 | 用途 | 核心逻辑 | 代码行数 |
+|---|---|---|---|
+| [batch-update.ts](file:///Users/feng/Desktop/项目/思源项目/siyuan-plugins-index/src/features/data/attribute-view/special/batch-update.ts) | 批量更新当前视图中所有可见行的某一列值 | `renderAttributeView` → 构建 cell values → `batchSetAttributeViewBlockAttrs` | ~54 行 |
+| [create-db.ts](file:///Users/feng/Desktop/项目/思源项目/siyuan-plugins-index/src/features/data/list/create-db.ts) | 从列表大纲创建/同步数据库 | 递归解析 DOM → 建列 → 绑定块 → 写入层级/路径/图标数据 | ~724 行 |
+
+### ⚖️ 详细对比分析
+
+#### `batch-update.ts` — **建议不改**
+
+**当前做法**：
+直接调用 Siyuan 原生 API — `renderAttributeView` 获取可见行 → 构建 `batchSetAttributeViewBlockAttrs` payload → 发送
+
+**如果改用 SQL API**：
+```sql
+UPDATE "我的数据库" SET "列名" = '新值';
+```
+
+**不建议改的理由**：
+
+1. **SQL UPDATE 需要精确的 WHERE 条件，而 batch-update 的语义是"当前视图的所有可见行"**。可见行受视图的筛选、排序、分页影响。SQL 引擎无法感知当前前端视图的 filter 状态，只能操作物理全量数据。要实现等效功能，SQL 引擎需要额外感知视图层信息，这严重违背了 SQL 层的职责边界。
+
+2. **性能方面并无改善**。当前 batch-update 只发了 **1 次** `renderAttributeView`（获取行）+ **1 次** `batchSetAttributeViewBlockAttrs`（写入），共 2 次 API 调用。如果走 SQL API，链路变成：SQL 解析 → preprocessSql 名称替换 → instantiateAV 拉取全表 → 内存 WHERE 过滤 → schema 查询 → 构建 batch payload → batchSetAttributeViewBlockAttrs。**步骤更多、更慢**。
+
+3. **batch-update 只有 54 行，逻辑清晰明了**。引入 SQL 抽象层反而增加了调试复杂度。
+
+#### `create-db.ts` — **建议不改**
+
+**当前做法**：
+从思源列表块 DOM 递归提取层级结构 → 用 `insertBlock` 创建 AV 块 → `addAttributeViewKey` 逐列建列 → `addAttributeViewBlocks` 绑定块行 → `batchSetAttributeViewBlockAttrs` 分块写入层级/路径/图标等元数据 → 设置视图列可见性、排序等
+
+**如果改用 SQL API**：
+```sql
+CREATE TABLE "新表" ("Level" number, "Father" text, "Path" text, "icon" text);
+INSERT INTO "新表" (Level, Father, Path, icon) VALUES (1, '', '/001-xxx', '📁');
+INSERT INTO "新表" (Level, Father, Path, icon) VALUES (2, 'xxx', '/001-xxx/001-yyy', '');
+-- ... 重复 N 次
+```
+
+**不建议改的理由**：
+
+1. **`create-db.ts` 不只是"建表+插数据"，它是一套完整的列表↔数据库双向绑定系统**。它的核心能力包括：
+   - **DOM 解析**：递归遍历 NodeListItem，提取 block ref、subdoc link、icon 等
+   - **增量同步**：检测已有绑定 (`ATTR_LINKED_AV`)，跳过已存在的行，只 diff 更新变化的字段
+   - **Siyuan Block 绑定**：用 `isDetached: false` 绑定真实块（非游离行），这是 SQL INSERT 默认创建的 detached row 做不到的
+   - **ID 映射持久化**：用 `setBlockAttrs` 在列表项上存储 `ATTR_ITEM_ID`，建立反向查找
+   - **视图配置**：隐藏特定列、关闭入口图标、设置数据库名称
+   
+   这些功能 SQL API 根本覆盖不了。SQL 只是数据操作的语法糖，不是 UI 控制工具。
+
+2. **SQL INSERT 创建的是 detached row（游离行），`create-db.ts` 需要的是 bound block（绑定块）**。这是根本性的语义差异。SQL 引擎中 `INSERT INTO` 的实现是 `isDetached: true`，而 create-db 明确使用 `isDetached: false` + 真实 Siyuan Block ID。改用 SQL 意味着要么修改 SQL INSERT 语义（破坏通用性），要么加特殊 SQL 扩展语法（过度设计）。
+
+3. **性能方面 SQL 路径更差**：
+   - SQL INSERT 是逐行执行的（每条 INSERT 一次 API 调用），而 create-db 用 chunk 批量 `addAttributeViewBlocks`（每 50 行一次）
+   - SQL 引擎每次写操作都要走 `preprocessSql → schema 查询 → 类型映射` 的解析链路，724 行直接 API 调用的代码省去了所有这些中间层开销
+
+4. **create-db 是 724 行高度定制化的领域逻辑**，不是简单的 CRUD。试图用 SQL 重写等于把一个 DSL（Domain Specific Language）塞进另一个 DSL（SQL），得不偿失。
+
+### 📊 结论总结表
+
+| 维度 | `batch-update.ts` | `create-db.ts` |
+|---|---|---|
+| **改用 SQL 是否可行？** | 部分可行（但 WHERE 语义不同） | 技术上不可行（bound block vs detached row） |
+| **改用 SQL 是否更高效？** | ❌ 更慢（多了 instantiateAV + schema 查询） | ❌ 更慢（逐行 INSERT vs chunk 批量绑定） |
+| **改用 SQL 是否更简洁？** | ❌ 54→50 行顶多省 4 行，但失去视图感知 | ❌ 无法覆盖 DOM 解析、增量同步、块绑定 |
+| **建议** | **不改** | **不改** |
+
+> [!IMPORTANT]
+> **核心判断原则**：SQL API 的定位是**外部调用的通用接口**（控制台调试、第三方插件集成、快速原型），不是用来替代插件内部已经高度优化的原生 API 调用链的。内部模块直接调用 Siyuan API 更高效、更精确、更易调试。SQL 层存在的意义是对外暴露一个统一入口降低使用门槛，而不是成为内部唯一的数据访问层。
+
+---
+
+## 4. 后续优化建议（不涉及代码改动）
+
+1. **`executeDDL` 的 CREATE TABLE 应该去掉 H3 标题**，只插入纯 AV div
+2. **可考虑给 `executeDDL` 增加可选 options 参数**（`targetDocId`、`insertAfterBlockId`），让外部调用者可以精确控制创建位置
+3. **`DROP TABLE` 的标题清理逻辑应随 H3 去除一并简化**
+4. **SQL API 暴露层可考虑增加 `executeDDL` 的直接暴露**，让外部插件也能用 SQL 建表
+
