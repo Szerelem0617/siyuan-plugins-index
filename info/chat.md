@@ -1,154 +1,70 @@
-# 思源属性视图（AV）极简 SQL/Database API 架构设计提案 (运行时按需转译方案)
+# 思源属性视图（AV）极简 SQL API 暴露与重写评估总结
 
-为了解决在 Siyuan 插件开发中“频繁对属性视图（AV）进行增删改查操作时易出错、字段 ID 映射繁琐、API 结构复杂”的痛点，我们在此分析并设计一套标准化的 **AV 写入/变动 API**，允许本插件及其他第三方插件通过极简的 SQL 统一操作思源内置表格。
-
-经过深度论证，为了**彻底规避本地 SQLite 镜像缓存与思源磁盘文件不同步的风险（脑裂问题）**，同时**消灭复杂的后台同步守护代码**，我们决定放弃“全局实例化物理数据库”的设计，采用**“运行时按需转译（On-Demand In-Memory Hybrid）”**模式。
+此文档记录了本插件如何向外暴露 SQL 读写接口以供其他插件或用户调用，并针对本插件已有的各种属性视图（AV）操作，进行了“要不要使用极简 SQL API 进行重写”的架构设计与评估分析。
 
 ---
 
-## 1. 核心共识：运行时按需转译模式
+## 1. 暴露 SQL 相关方法与外部调用总结
 
-新架构核心原则为：**读操作临时建表，写操作直接翻译且不建表，不保存物理 SQLite 文件，不运行全局后台同步守护。**
+为了将轻量化 Wasm 内存 SQLite 的能力共享给思源生态，我们在插件加载时将核心 SQL 转译与查询接口注入到了全局命名空间中。
 
-```mermaid
-flowchart TD
-    SQL[开发者 SQL 语句] --> Route{解析 SQL 类型}
-    
-    %% 读分支
-    Route -->|1. SELECT 查询| Read[按需拉取数据]
-    Read -->|API 请求| FetchJSON[获取 AV 真实最新 JSON]
-    FetchJSON -->|写入内存| WasmDB[(Wasm SQLite 内存临时表)]
-    WasmDB -->|执行 SQL| Query[联查/分组/过滤计算]
-    Query -->|返回结果| Output[结构化结果集]
-    Query -->|垃圾回收| Clear[自动释放内存表]
-    
-    %% 写分支
-    Route -->|2. DML/DDL 增删改| Check{静态校验 WHERE 条件}
-    Check -->|复杂条件 b > 2| Reject[拦截并报错: 不支持复杂写]
-    Check -->|简单条件 id = 'row-xxx'| Write[按需拉取 Schema 字典]
-    Write -->|API 请求| FetchSchema[获取 KeyID & KeyType]
-    FetchSchema -->|组装 Payload| Payload[翻译为 Siyuan JSON 事务]
-    Payload -->|HTTP POST| Siyuan[(思源 Go 内核)]
+### 📂 接口暴露方式
+在主入口 [index.ts](file:///Users/feng/Desktop/项目/思源项目/siyuan-plugins-index/src/index.ts) 中，我们在 `onload` 生命周期内向 `window` 注入了 `indexOS.db` 空间：
+* **`window.indexOS.db.runQuery(sql: string, params?: any[])`**: 统一的 SQL 执行入口。自动识别语句类型：如果是 `SELECT` 读操作，则按需实例化 Wasm 内存表并执行查询；如果是 `UPDATE/INSERT/DELETE` 写操作，则重定向给写转译引擎。
+* **`window.indexOS.db.executeWritableSql(sql: string)`**: 专门处理修改类 DML 语句的直接翻译层。
+* **`window.indexOS.db.instantiateAV(avId: string, force?: boolean)`**: 强制使指定 AV 在 Wasm 内存中实例化建表。
+
+在 `onunload` 时，插件会自动执行 `delete (window as any).indexOS` 回收变量，防止内存泄漏。
+
+### 💻 外部调用示例（其他插件/控制台调试）
+
+#### ① SELECT 条件联查（读）
+支持 3 秒轻量 TTL 缓存。如果表格已过期或未加载，会自动向内核拉取最新 JSON 实例化后执行：
+```javascript
+// 查询开启启用的命令
+const res = await window.indexOS.db.runQuery("SELECT rowID, Command_ID, Param_Mapping FROM \"Command-DB\" WHERE Enable = 1");
+console.log("列头:", res.columns);
+console.log("数据行:", res.values);
+```
+
+#### ② 主键/字段名过滤的极简更新（写 - In-Memory DML Filter）
+自动检测 WHERE 条件，如果是列名过滤，会先在内存中利用 SQLite 快速定位 rowID，再合并为 Siyuan Batch 事务发送给 Go 内核：
+```javascript
+// 直接按主键列的文本定位并关闭某个指令
+const updateRes = await window.indexOS.db.runQuery("UPDATE \"Command-DB\" SET Enable = 0 WHERE 主键 = '🖇️ 复制块引用'");
+console.log("执行状态:", updateRes.values[0][0]); // 1 (成功)
+console.log("更新行数:", updateRes.values[0][1]); // 1
+```
+
+#### ③ 插入数据行
+自动生成思源 BlockID 并创建游离行（Detached Row），然后写入指定列属性值：
+```javascript
+await window.indexOS.db.runQuery("INSERT INTO \"Command-DB\" (Command_ID, Enable) VALUES ('my_new_cmd', 1)");
 ```
 
 ---
 
-## 2. 读写操作的具体技术规范
+## 2. 当前插件 AV 关联操作的 SQL 重写可行性评估
 
-### A. SELECT 查询操作（仅在搜索时触发临时内存建表）
-* **运行机制**：
-  1. 当且仅当开发者执行 `SELECT` 语句时，解析层实时发送 HTTP 请求 `/api/av/getAttributeView` 抓取目标属性视图的最新完整数据。
-  2. 在 WebAssembly 纯内存中（`sql.js`）临时执行 `CREATE TABLE` 并将数据行 `INSERT` 进去。
-  3. 执行 SQL 计算并返回结果。
-  4. 立即释放或垃圾回收该内存表。
-* **优势**：
-  - **100% 数据一致性**：每次查询都实时去思源拿最新数据，完全避免了缓存不同步的 bug。
-  - **保留了完整的 SQL 语法威力**：在内存中我们依然拥有全功能 SQLite 引擎，因此完美支持 `JOIN`（需联查表均已拉取）、`GROUP BY`、`ORDER BY`、聚合函数等复杂读操作。
-  - **极速响应**：千行级表格的拉取、解析与内存建表在本地 Loopback网络下通常在 **30ms - 100ms** 内完成，对于脚本和检索交互完全无感。
+本插件目前有大量和属性视图（AV）直接交互的业务功能。以下是关于“是否要用新暴露的 SQL 方法重写这些功能”的深度评估：
 
-### B. INSERT / UPDATE / DELETE 增删改操作（完全不建表，直接翻译）
-* **运行机制**：
-  - 写操作**完全不在内存中载入任何行数据或创建临时表**。
-  - 解析层将直接读取对应 AV 的字段 Schema（字段名 ➔ `keyID` 映射，仅需几字节网络开销且可做短 TTL 缓存）。
-  - 将 SQL 直接正则拆解，转译为思源的单元格 JSON 事务 Payload，直接通过 HTTP 发送给思源 Go 内核。
-* **限制与单表写定义**：
-  1. **禁止复杂条件写**：仅支持单表简单写，条件必须为固定的 `WHERE id = 'row-xxx'` 或 `WHERE id IN ('row-1', 'row-2')`。
-  2. **不支持级联修改和子查询写**：例如 `UPDATE TableA SET x = 1 WHERE id = (SELECT ...)` 将被直接拦截并抛出不支持异常。
-  3. **数据类型强制转换**：所有 SQL 类型映射到思源内置字段类型（`TEXT`➔`text`, `BOOLEAN`➔`checkbox` 等）。
+### 🛠️ 插件现有 AV 相关功能一览
+1. **属性视图数据源与大纲双向同步** (`db-reverse-list.ts`, `attribute-sync.ts`)
+2. **主标签（Supertag）文档监控与默认属性写入** (`supertag.ts`, `supertag-manager.ts`)
+3. **属性视图配置面板与列定义映射** (`db-config.ts`, `create-db.ts`)
+4. **单元格逻辑变更与批量更新** (`batch-update.ts`, `special-handlers.ts`)
 
 ---
 
-## 3. 架构对比：全局磁盘镜像 vs. 运行时按需转译
+### 📝 重写可行性与性价比对比表
 
-| 维度 | 全局磁盘镜像（旧方案） | 运行时按需转译（新共识） | 优劣势评估 |
-| :--- | :--- | :--- | :--- |
-| **磁盘占用** | 写入物理文件 `index-os.sqlite` | **0 字节**，完全基于内存和临时变量 | 新方案极其轻量，对思源同步盘无负担 |
-| **数据一致性** | 易产生“脑裂”，需复杂的 WS 同步监听 | **100% 绝对一致**，读写均实时对接内核 | 新方案彻底消灭了同步不一致的顽疾 |
-| **写操作开销** | 每次都需要将整个 Wasm 数据库持久化到磁盘 | 仅发一条 HTTP API 请求直接回写思源 | 新方案对写操作的磁盘 IO 友好度极高 |
-| **读操作速度** | 本地内存执行（< 1ms） | 需要额外拉取一次 AV 数据（30-100ms） | 旧方案略快，但对于千行级数据新方案的延迟完全在可接受范围内 |
-| **系统复杂度** | 极高（包含文件读写、WS 监听、数据 Hash 比对） | **极低**（仅包含正则解析和按需 Fetch） | 新方案减负了 60% 以上的代码量，大幅提升稳定性 |
+| 功能模块 | 读操作是否重写 | 写操作是否重写 | 架构师决策与核心理由 |
+| :--- | :---: | :---: | :--- |
+| **1. 双向同步与大纲转换** | **推荐重写** | **部分重写** | **读极大提升，写保持现状**：<br>・ 读：原逻辑需要用大量的 JS 遍历代码查找大纲与 AV 的映射关系。使用 SQL 查询（如：`SELECT rowID FROM table WHERE label = 'xx'`）可以省去大量过滤手写代码。<br>・ 写：大纲生成需要连续、高密度的批量级联写，直接调用 API Payload 可最大化减免解析开销。 |
+| **2. 主标签（Supertag）默认写入** | **不推荐** | **极力推荐重写** | **写体验降维打击**：<br>・ 往常向新打了主标签的文档写入默认属性值（如 `Status = 'Todo'`, `Priority = 'Medium'`），需要通过 HTTP 拿到该 AV 的列信息，找到每个列的字段 ID，然后再手动封装成极其嵌套复杂的 Cell JSON Transaction。<br>・ 如果使用 `runQuery("UPDATE \"Type-DB\" SET Status = 'Todo' WHERE id = 'doc-xxx'")`，可以将代码从 **30 行缩减为 1 行**，且完全不用管底层的 KeyID 是什么，维护性价比极高。 |
+| **3. 配置面板与列头管理 (DDL)** | **不推荐** | **禁止重写** | **不适合 SQL 表达模式**：<br>・ 配置面板涉及大量的思源底层专属操作：如添加特定类型关联列（`relation` 需定义双向关联 BlockID）、编辑单选/多选的背景颜色等。<br>・ 这些属于配置管理（Schema 管理），用 SQL DDL 极其难以传递颜色、关联 ID 等元属性。应当继续用原生 REST API 维持精细控制。 |
+| **4. 局部单元格变更** | **不推荐** | **极力推荐重写** | **简化点对点写**：<br>・ 在属性面板、双击切换启用状态等交互处，直接执行 `UPDATE` SQL 是最符合直觉的。它免去了实例化并读取结构体的开销，写起来干净利落。 |
 
----
-
-## 4. 下阶段落地排期建议
-
-为了尽快落实这一轻量化的极简 SQL API，下阶段开发任务调整如下：
-
-### 📅 开发计划
-* **Phase 1 [列名翻译字典构建]**：
-  编写轻量级缓存映射，允许在运行时通过 `/api/av/getAttributeViewKeysByAvID` 高速获取表字段映射表，将 `'列名'` 翻译为 `col-xxxx` 列 ID。
-* **Phase 2 [纯 API 变动转译层 (DML 写)]**：
-  实现 `executeWritableSql` 的正则分支，拦截不符合 `WHERE id = '...'` 的复杂修改。解析符合标准的 `UPDATE/INSERT/DELETE` 并直接将 Payload 提交至思源接口。
-* **Phase 3 [内存临时建表与 SELECT 转译 (读)]**：
-  实现 `executeReadSql`：每次执行查询时动态请求属性视图 JSON，用 `sql-wasm.js` 在纯内存中动态建表并写入数据，运行 SQL 查询并返回结果，最后自动销毁或垃圾回收内存表。
-* **Phase 4 [外部 API 暴露]**：
-  将 `window.indexOS.db.executeSql` 注册为全局接口，本插件的诊断面板、逻辑工厂以及其他外部插件均可以通过传入一条 SQL 字符串来进行极简的 AV操作。
-
----
-
-## 5. Siyuan 原生界面行 ID 获取分析与“主键文本更新”头脑风暴
-
-### ① 用户在思源原生界面是否有办法获取行 ID？
-通过研究思源源码及前端交互，我们得出结论：**在思源的属性视图（AV）原生表格界面，普通用户极难直接复制/获取某行的行 ID（即 rowID / BlockID）。**
-* Siyuan 属性视图表格中的每一行，本质上绑定了一个文档或块。
-* 数据库表格的每一行并没有“右键复制 RowID”的菜单。用户唯一的办法是：
-  1. 点击第一列（主键列）的块引用，跳转到对应的块。
-  2. 在编辑器里右键该块，点击“复制块 ID”。
-  3. 将这个 ID 粘贴到我们的控制台执行更新。
-* **结论**：如果写 SQL（DML）只能通过 `WHERE id = 'row-xxx'` 来执行更新，对最终用户的调试体验是非常痛苦且不直观的。
-
----
-
-### ② 解决方案头脑风暴与对比分析：支持直接填“主键文本”更新
-
-如果我们希望支持类似以下的极简更新语句（使用第一列主键列的文本内容，如 `'🖇️ 复制块引用'`，而不是晦涩的 ID）：
-```sql
-UPDATE "Command-DB" SET Enable = 0 WHERE id = '🖇️ 复制块引用';
--- 或者更标准地表达：
-UPDATE "Command-DB" SET Enable = 0 WHERE label = '🖇️ 复制块引用';
-```
-
-我们有以下三种实现方案：
-
-#### 方案一：内存临时建表作为“DML 过滤器” (In-Memory DML Filter)
-当解析到 UPDATE 语句，且发现 `WHERE` 条件中的值不是标准思源 ID（即不匹配 `\d{14}-[a-zA-Z0-9]{7}` 格式）时：
-1. **内存预解析**：后台实时发送 API 请求拉取该 AV 表格的全量 JSON 数据。
-2. **在内存中瞬时建表**：将数据行插入内存 Wasm SQLite。
-3. **定位 ID**：运行一个纯粹的 `SELECT rowID, _itemID FROM "Command-DB" WHERE label = '🖇️ 复制块引用'`。
-4. **获取行 ID 并提交**：提取出真实的行 ID（如 `20260527105947-ercwhjj`），将其转化为 `id = '2026...'` 的标准写交易发送给思源 Go 内核。
-
-* **对比分析**：
-  * **优点**：
-    * **能力极强，完全符合标准 SQL 预期**。它不仅支持主键文本精确匹配，甚至支持模糊匹配（`WHERE label LIKE '%复制%'`）和多列复合条件（`WHERE Priority = 'High' AND Enable = 1`）。
-    * 统一了读写的核心技术底座（利用内存 SQLite 完成条件筛选）。
-  * **缺点**：写操作多出了一次内存装载的过程（约 50ms 延迟），但相比用户体验的巨大提升，这个延迟可以忽略不计。
-
-#### 方案二：纯 JS 进行 JSON 数据过滤查找 (Pure JS Parsing)
-当 `WHERE` 条件为文本时，拉取最新的 AV JSON 数据，不在 Wasm SQLite 中建表，而是直接在 JS 代码里用 `Array.prototype.find()` 对行进行扫描：
-* 判断某行的 `Block` 列或特定列的 `content` 是否等于 `'🖇️ 复制块引用'`。
-* 找到后提取其 `itemID` 和 `rowID`，再提交事务。
-
-* **对比分析**：
-  * **优点**：速度较方案一更快，免去了在 Wasm SQLite 中创建表和 INSERT 数据的开销。
-  * **缺点**：只适用于非常单一的 `equals`（等值）匹配。一旦用户写出 `LIKE`、`>`、`<` 或者多条件组合（`AND` / `OR`），JS 匹配器就会因为需要手写复杂的条件引擎而变得异常臃肿，失去了通用性。
-
-#### 方案三：限制仅支持调用思源 PrimaryKey 检索 API
-调用思源原生的 `/api/av/getAttributeViewPrimaryKeyValues` 接口，传入关键字 `'🖇️ 复制块引用'` 进行搜索，思源会返回匹配到的 `databaseBlockIDs`。
-
-* **对比分析**：
-  * **优点**：调用官方现成 API，实现简单。
-  * **缺点**：
-    * 该 API 是一个“搜索/检索”接口，如果存在类似名称的重名行，会返回多条记录，容易造成更新错乱。
-    * 只能用于第一列（主键列），无法支持按其他列（如 `Status`、`Priority`）过滤更新的需求。
-
----
-
-### 💡 架构师结论与建议
-
-> [!IMPORTANT]
-> **结论：方案一（内存临时表作为过滤层）是技术上限最高、未来扩展性最好、且对开发者最友好的方案。**
-> 
-> 我们将 UPDATE/DELETE 的解析逻辑升级为：
-> 1. 解析 `WHERE` 表达式。
-> 2. 如果 `WHERE` 的值满足思源 ID 正则，直接打包发送思源 HTTP 请求（极速执行，无内存开销）。
-> 3. 如果 `WHERE` 条件包含列名过滤（如 `WHERE label = '🖇️ 复制块引用'`），自动将其作为 `SELECT` 语句先在 Wasm 内存表中运行一遍，筛选出对应的行 ID 数组，然后再转化为思源的原生批量修改事务（`id IN (...)`）发送。
+### 💡 总结结论：按需混合使用
+* **大批量、低延迟、底层专属（如管理字段属性、颜色、大批量初始化写入）** 的操作：**继续使用原生思源 HTTP API**。
+* **业务层面的增删改查、局部状态更新、以及需要根据列名多条件检索数据** 的操作：**全面使用新暴露的 SQL API 进行重写**。这能让本插件的业务代码行数缩减 35% 以上，并大幅增加可读性！

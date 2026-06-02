@@ -3,7 +3,6 @@ import { plugin } from "../../shared/utils";
 
 let dbInstance: any = null;
 let SQL_ENGINE: any = null;
-const STORAGE_DB_PATH = "/data/storage/petal/siyuan-plugins-index/index-os.sqlite";
 export let instantiatedAvIdsCache: Set<string> = new Set();
 
 // ─── On-Demand Table TTL Cache ───
