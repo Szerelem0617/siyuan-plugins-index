@@ -114,7 +114,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         }
 
         SUPERTAG_REGISTRY = newRegistry;
-        console.log(`[SQLite-IndexOS] Registry refreshed from Source of Truth. Commands: ${Object.keys(COMMAND_REGISTRY).length}, Supertags: ${SUPERTAG_REGISTRY.length}`);
+        // console.log(`[SQLite-IndexOS] Registry refreshed from Source of Truth. Commands: ${Object.keys(COMMAND_REGISTRY).length}, Supertags: ${SUPERTAG_REGISTRY.length}`);
         return true;
     } catch (e) {
         console.error("[SQLite-IndexOS] Failed to refresh registry from SQL:", e);
@@ -254,7 +254,7 @@ export function getInitSystemSlashCommand() {
             html: `<div class="b3-list-item__first"><span class="b3-list-item__text">${i18n.initSystemDB}</span><span class="b3-list-item__meta">Legacy AV</span></div>`,
             id: "initSystemDB",
             async callback(protyle: Protyle) {
-                console.log("[IndexPlugin] Slash initSystemDB");
+                // console.log("[IndexPlugin] Slash initSystemDB");
                 protyle.insert("");
                 await constructCommandStorage();
                 await refreshSupertagRegistry();
@@ -358,7 +358,7 @@ export function addCommandTestMenuItem({ detail }: any) {
                         try { (window as any).siyuan?.menus?.menu?.remove(); }
                         catch (_) { document.querySelectorAll(".b3-menu").forEach((m: any) => m.remove()); }
 
-                        console.log(`[IndexOS] 🚀 Dispatching [${match.commandRef}] via Supertag Cache`);
+                        // console.log(`[IndexOS] 🚀 Dispatching [${match.commandRef}] via Supertag Cache`);
 
                         setTimeout(async () => {
                             try {

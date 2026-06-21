@@ -36,7 +36,7 @@ export async function initSystemTables() {
     // 3. Check if empty and seed default data
     const cmdCount = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS}`)[0].values[0][0];
     if (cmdCount === 0) {
-        console.log("[SQLite-IndexOS] Seeding default commands...");
+        // console.log("[SQLite-IndexOS] Seeding default commands...");
         const defaultCmds = [
             ["general.graphView", "全局关系图", "general.graphView", "", "Native", "Global", 1, 1, 1],
             ["general.inbox", "收集箱", "general.inbox", "", "Native", "Global", 0, 0, 1],
@@ -54,8 +54,8 @@ export async function initSystemTables() {
 
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
     if (typeCount === 0) {
-        console.log("[SQLite-IndexOS] Seeding default type bindings...");
-        db.run(`INSERT INTO ${TABLE_TYPES} (supertag, blockIconMenu, pageMenu) VALUES (?, ?, ?)`, 
+        // console.log("[SQLite-IndexOS] Seeding default type bindings...");
+        db.run(`INSERT INTO ${TABLE_TYPES} (supertag, blockIconMenu, pageMenu) VALUES (?, ?, ?)`,
             ["project", "在右侧分屏打开, 全局关系图", "全局关系图"]);
     }
 

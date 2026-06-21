@@ -80,8 +80,8 @@ export async function instantiateAV(avID: string) {
 
     const av = res.av || res;
     const keyValues = av.keyValues || [];
-    console.log(`[SQLiteManager] Fetched AV structure for ${avID}. Columns: ${keyValues.length}`);
-    
+    // console.log(`[SQLiteManager] Fetched AV structure for ${avID}. Columns: ${keyValues.length}`);
+
     if (keyValues.length === 0) return { success: false, message: "Empty/No columns" };
 
     // 1. 映射列头 (增加去重逻辑)
@@ -111,8 +111,8 @@ export async function instantiateAV(avID: string) {
     });
 
     // 2. 清理旧数据并重新建表
-    console.log(`[SQLiteManager] Creating table "${avID}"...`);
-    db.run(`DROP TABLE IF EXISTS "${avID}";`); 
+    // console.log(`[SQLiteManager] Creating table "${avID}"...`);
+    db.run(`DROP TABLE IF EXISTS "${avID}";`);
     db.run(`CREATE TABLE "${avID}" (rowID TEXT PRIMARY KEY, ${columns.map(c => `"${c.name}" TEXT`).join(", ")});`);
 
     // 3. 行归类数据平铺

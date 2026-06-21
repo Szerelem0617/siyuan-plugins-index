@@ -23,14 +23,14 @@ export async function insertAction(targetBlockId?: string) {
     });
 
     if (rs.data[0]?.id != undefined) {
-        console.log("[IndexPlugin] Found existing index:", rs.data[0].id);
+        // console.log("[IndexPlugin] Found existing index:", rs.data[0].id);
         let ial = await client.getBlockAttrs({ id: rs.data[0].id });
         let str = ial.data["custom-index-create"];
 
         let localSettings: any = {};
         try {
             localSettings = JSON.parse(str);
-            console.log("[IndexPlugin] Local settings:", localSettings);
+            // console.log("[IndexPlugin] Local settings:", localSettings);
         } catch (e) {
             console.error("[IndexPlugin] Error parsing settings", e);
         }
@@ -54,10 +54,10 @@ export async function insertAction(targetBlockId?: string) {
         if (mismatch) {
             await new Promise<void>((resolve) => {
                 confirmDialog(i18n.confirmDialog.title, i18n.confirmDialog.content, () => {
-                    console.log("[IndexPlugin] User confirmed update to Global");
+                    // console.log("[IndexPlugin] User confirmed update to Global");
                     resolve();
                 }, () => {
-                    console.log("[IndexPlugin] User kept Local settings");
+                    // console.log("[IndexPlugin] User kept Local settings");
                     // Use local configuration only for THIS operation
                     forceLocalConfig = settings.getMergedConfig(localSettings);
                     resolve();

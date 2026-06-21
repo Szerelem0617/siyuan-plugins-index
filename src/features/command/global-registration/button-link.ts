@@ -47,8 +47,8 @@ function handleAvAltClick(event: MouseEvent) {
 
     // 5. 查找对应的 Command ID
     // 我们可以打印一下当前的注册表状态和获取到的 Label，方便调试
-    console.log("[ButtonLink] Clicked Label:", `"${cleanLabel}"`);
-    console.log("[ButtonLink] Registry Keys:", Object.keys(COMMAND_REGISTRY));
+    // console.log("[ButtonLink] Clicked Label:", `"${cleanLabel}"`);
+    // console.log("[ButtonLink] Registry Keys:", Object.keys(COMMAND_REGISTRY));
 
     // 尝试直接匹配
     let cmdInfo = COMMAND_REGISTRY[cleanLabel];
@@ -60,7 +60,7 @@ function handleAvAltClick(event: MouseEvent) {
         );
         if (foundKey) {
             cmdInfo = COMMAND_REGISTRY[foundKey];
-            console.log("[ButtonLink] Fuzzy match found via key:", foundKey);
+            // console.log("[ButtonLink] Fuzzy match found via key:", foundKey);
         }
     }
 

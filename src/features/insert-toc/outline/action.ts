@@ -23,13 +23,13 @@ export async function insertOutlineAction(targetBlockId?: string) {
     });
 
     if (rs.data[0]?.id != undefined) {
-        console.log("[IndexPlugin] Found existing outline:", rs.data[0].id);
+        // console.log("[IndexPlugin] Found existing outline:", rs.data[0].id);
         let ial = await client.getBlockAttrs({ id: rs.data[0].id });
         let str = ial.data["custom-outline-create"];
         let localSettings: any = {};
         try {
             localSettings = JSON.parse(str);
-            console.log("[IndexPlugin] Local Outline settings:", localSettings);
+            // console.log("[IndexPlugin] Local Outline settings:", localSettings);
         } catch (e) {
             console.error("[IndexPlugin] Error parsing settings", e);
         }
@@ -53,10 +53,10 @@ export async function insertOutlineAction(targetBlockId?: string) {
         if (mismatch) {
             await new Promise<void>((resolve) => {
                 confirmDialog(i18n.confirmDialog.title, i18n.confirmDialog.content, () => {
-                    console.log("[IndexPlugin] User confirmed update to Global (Outline)");
+                    // console.log("[IndexPlugin] User confirmed update to Global (Outline)");
                     resolve();
                 }, () => {
-                    console.log("[IndexPlugin] User kept Local settings (Outline)");
+                    // console.log("[IndexPlugin] User kept Local settings (Outline)");
                     forceLocalConfig = settings.getMergedConfigForOutline(localSettings);
                     resolve();
                 }, i18n.update, i18n.keep);

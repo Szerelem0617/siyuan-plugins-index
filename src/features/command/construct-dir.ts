@@ -26,7 +26,7 @@ export async function constructCommandStorage() {
             targetNotebookId = res.notebook.id;
             await sleep(500);
         } else {
-            console.log(`[IndexOS] Existing notebook found: ${targetNotebookId}`);
+            // console.log(`[IndexOS] Existing notebook found: ${targetNotebookId}`);
         }
 
         // 2. Init Command-DB (逻辑工厂)
@@ -204,7 +204,7 @@ async function initDbDoc(
                 markdown: initMarkdown
             });
             docId = createRes;
-            console.log(`[IndexOS] Created doc ${docId} for ${docName}.`);
+            // console.log(`[IndexOS] Created doc ${docId} for ${docName}.`);
         } catch (e) {
             console.error(`[IndexOS] createDocWithMd failed for ${docName}`, e);
         }
@@ -242,12 +242,12 @@ async function initDbDoc(
                 const avId = newAttrs["custom-index-linked-av"];
 
                 if (avId) {
-                    console.log(`[IndexOS] DB created with avID: ${avId}, injecting columns...`);
+                    // console.log(`[IndexOS] DB created with avID: ${avId}, injecting columns...`);
                     await initColsCallback(avId);
                     console.log(`[IndexOS] DB columns initialized for ${docName}.`);
                 }
             } else {
-                console.log(`[IndexOS] DB already exists and linked for ${docName}.`);
+                // console.log(`[IndexOS] DB already exists and linked for ${docName}.`);
             }
         } else {
             console.warn(`[IndexOS] Failed to find the list block in ${docName} for DB conversion.`);

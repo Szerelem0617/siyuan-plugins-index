@@ -89,12 +89,12 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
                 const lastSegment = segments[segments.length - 1];
                 const currentIdInPath = lastSegment.replace(/^\d{3}-/, "");
                 const identityPrefix = segments.slice(0, -1).join("/") + "/" + currentIdInPath + "/";
-                
-                console.log(`[Sync-Debug] Descendants Mode:`, {
-                    sourceBlockID,
-                    sourcePath,
-                    identityPrefix
-                });
+
+                // console.log(`[Sync-Debug] Descendants Mode:`, {
+                //     sourceBlockID,
+                //     sourcePath,
+                //     identityPrefix
+                // });
 
                 targetItemIDs = Array.from(pathCellMap.entries())
                     .filter(([bid, cell]) => {
@@ -102,8 +102,8 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
                         return p && p.startsWith(identityPrefix) && bid !== sourceBlockID;
                     })
                     .map(([bid]) => bid);
-                
-                console.log(`[Sync-Debug] Target Item IDs found: ${targetItemIDs.length}`);
+
+                // console.log(`[Sync-Debug] Target Item IDs found: ${targetItemIDs.length}`);
             } else {
                 console.error(`[Sync-Debug] sourceID ${sourceBlockID} not found in Path map. Map size: ${pathCellMap.size}`);
                 throw new Error("无法获取当前项的路径数据");
@@ -121,7 +121,7 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
         
         if (mode !== "filtered") {
             try {
-                console.log(`[Sync-V2] Mapping ${targetItemIDs.length} BlockIDs via Kernel...`);
+                // console.log(`[Sync-V2] Mapping ${targetItemIDs.length} BlockIDs via Kernel...`);
                 const mappingRes = await post("/api/av/getAttributeViewItemIDsByBoundIDs", {
                     avID: avID,
                     blockIDs: targetItemIDs
@@ -145,7 +145,7 @@ export async function syncAttribute(avID: string, rowID: string, colID: string, 
             value: syncValue
         }));
 
-        console.log(`[Sync-V2] Batch updating ${updateValues.length} items. First ItemID: ${updateValues[0].itemID}`);
+        // console.log(`[Sync-V2] Batch updating ${updateValues.length} items. First ItemID: ${updateValues[0].itemID}`);
 
         // 分批执行更新 (每批 50 条) 以保证稳定性，参考 create-db.ts
         const chunkSize = 50;

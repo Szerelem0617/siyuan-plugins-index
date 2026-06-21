@@ -71,7 +71,7 @@ export async function dispatchCommand(
 
     // 3. 构建参数
     const resolvedParams = await buildParams(def, rawParam, context);
-    console.log(`[Dispatcher] "${commandId}" params resolved:`, resolvedParams);
+    // console.log(`[Dispatcher] "${commandId}" params resolved:`, resolvedParams);
 
     // 4. 按 dispatch.method 执行
     try {
@@ -179,7 +179,7 @@ function dispatchKeyboard(def: CommandDef, context: CommandContext): DispatchRes
         return { success: false, method: "keyboard", detail: `Failed to synthesize event for hotkey: ${hotkey}` };
     }
 
-    console.log(`[Dispatcher] keyboard → ${def.id} | key="${keyEvent.key}" ctrl=${keyEvent.ctrlKey} meta=${keyEvent.metaKey}`);
+    // console.log(`[Dispatcher] keyboard → ${def.id} | key="${keyEvent.key}" ctrl=${keyEvent.ctrlKey} meta=${keyEvent.metaKey}`);
     synthTarget.dispatchEvent(keyEvent);
     return { success: true, method: "keyboard", detail: hotkey };
 }
@@ -189,7 +189,7 @@ function dispatchGlobal(def: CommandDef): DispatchResult {
     if (!target) {
         return { success: false, method: "global", detail: "No target defined for global command." };
     }
-    console.log(`[Dispatcher] global  → globalCommand("${target}")`);
+    // console.log(`[Dispatcher] global  → globalCommand("${target}")`);
     globalCommand(target, plugin.app);
     return { success: true, method: "global", detail: target };
 }
@@ -210,7 +210,7 @@ async function dispatchApi(
         body.id = context.blockEl.getAttribute("data-node-id") ?? undefined;
     }
 
-    console.log(`[Dispatcher] api     → POST ${endpoint}`, body);
+    // console.log(`[Dispatcher] api     → POST ${endpoint}`, body);
     const result = await post(endpoint, body);
     return { success: true, method: "api", detail: `${endpoint} OK` };
 }
@@ -224,7 +224,7 @@ async function dispatchCustom(
     if (typeof executor !== "function") {
         return { success: false, method: "custom", detail: `No executor registered for: ${def.id}` };
     }
-    console.log(`[Dispatcher] custom  → ${def.id}`);
+    // console.log(`[Dispatcher] custom  → ${def.id}`);
     await executor(params, context);
     return { success: true, method: "custom", detail: def.id };
 }

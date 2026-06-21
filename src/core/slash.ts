@@ -33,7 +33,7 @@ export function addSlash() {
         id: "insertIndex",
         async callback(_protyle: Protyle) {
             const blockId = getCurrentBlockId();
-            console.log("[IndexPlugin] Slash insertIndex - blockId found:", blockId);
+            // console.log("[IndexPlugin] Slash insertIndex - blockId found:", blockId);
             // NOTE: SiYuan clears the slash "/" text from the block BEFORE calling this callback.
             // Do NOT call protyle.insert("") here — it sends a redundant write that races with
             // our updateBlock call and can cause the index content to be lost on quick exit/file move.
@@ -45,7 +45,7 @@ export function addSlash() {
         id: "insertOutline",
         async callback(_protyle: Protyle) {
             const blockId = getCurrentBlockId();
-            console.log("[IndexPlugin] Slash insertOutline - blockId found:", blockId);
+            // console.log("[IndexPlugin] Slash insertOutline - blockId found:", blockId);
             await insertOutlineAction(blockId);
         }
     }];

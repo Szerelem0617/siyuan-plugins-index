@@ -133,7 +133,7 @@ export class ListProcessor {
             const core = this.ibp.parseItemContent(child.id, pBlocks);
 
             if (!core) {
-                console.log(`[Builder] Item ${child.id} could not be parsed. Skipping.`);
+                // console.log(`[Builder] Item ${child.id} could not be parsed. Skipping.`);
                 continue;
             }
 

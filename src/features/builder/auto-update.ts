@@ -52,7 +52,7 @@ export async function autoUpdateBuilder(parentId: string, existingBlock?: any) {
                 }
             }
         } else {
-            console.log(`[Builder] custom-tree-create attribute not found in IAL: ${block.ial}`);
+            // console.log(`[Builder] custom-tree-create attribute not found in IAL: ${block.ial}`);
         }
     } catch (e) {
         console.error("[Builder] Failed to parse tree attribute", e);
@@ -61,7 +61,7 @@ export async function autoUpdateBuilder(parentId: string, existingBlock?: any) {
     // Check Auto Update Settings
     // Respect only local setting. If missing, assume true if the attribute exists.
     if (localAutoUpdate === false) {
-        console.log("[Builder] Auto-update disabled locally.");
+        // console.log("[Builder] Auto-update disabled locally.");
         return;
     }
 

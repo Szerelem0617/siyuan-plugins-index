@@ -326,7 +326,7 @@ export class IBlockProcessor {
             let notebook, path, hpath;
             try {
                 const pathRes = await post("/api/filetree/getPathByID", { id: docId });
-                console.log(`[Builder-Debug] getPathByID for docId ${docId} returned:`, pathRes);
+                // console.log(`[Builder-Debug] getPathByID for docId ${docId} returned:`, pathRes);
                 if (pathRes) {
                     notebook = pathRes.notebook;
                     path = pathRes.path;

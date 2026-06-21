@@ -47,7 +47,7 @@ async function fetchDocumentIconsForDBItems(targetIds: string[]): Promise<Record
     const formattedIds = targetIds.filter(id => id).map(id => `'${id}'`);
     if (formattedIds.length === 0) return itemPropsMap;
 
-    console.log(`[Data-Debug] fetchDocumentIconsForDBItems requested for ${formattedIds.length} items`);
+    // console.log(`[Data-Debug] fetchDocumentIconsForDBItems requested for ${formattedIds.length} items`);
 
     const chunkSize = 50;
     try {
@@ -79,7 +79,7 @@ async function fetchDocumentIconsForDBItems(targetIds: string[]): Promise<Record
                 });
             }
         }
-        console.log(`[Data-Debug] fetchDocumentIconsForDBItems successfully retrieved icons for ${Object.keys(itemPropsMap).length} items`);
+        // console.log(`[Data-Debug] fetchDocumentIconsForDBItems successfully retrieved icons for ${Object.keys(itemPropsMap).length} items`);
     } catch (e) {
         console.error("[db-icon-sync] Error fetching document icons for DB bulk insert", e);
     }
@@ -101,7 +101,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
         const sql = `SELECT root_id FROM attributes WHERE name IN ('custom-index-command-db', 'custom-index-type-db') AND root_id = (SELECT root_id FROM blocks WHERE id = '${lastBlockId}' LIMIT 1) LIMIT 1`;
         const res = await post("/api/query/sql", { stmt: sql });
         if (res && res.length > 0) {
-            console.log(`[createDatabaseWithBlocks] Detected system DB, forcing skipTemplateCols to true`);
+            // console.log(`[createDatabaseWithBlocks] Detected system DB, forcing skipTemplateCols to true`);
             skipTemplateCols = true;
         }
     } catch (e) {
@@ -298,8 +298,8 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
                 console.log(`[createDatabaseWithBlocks] Adding template cols...`);
                 titleImgKeyId = await ensureKey("title-img", "text", "iconImage");
                 templateKeyId = await ensureKey("template", "text", "iconLayout");
-            } else {
-                console.log(`[createDatabaseWithBlocks] Skipping template cols.`);
+            // } else {
+                // console.log(`[createDatabaseWithBlocks] Skipping template cols.`);
             }
 
             await new Promise(resolve => setTimeout(resolve, 300));

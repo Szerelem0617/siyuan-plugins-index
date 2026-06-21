@@ -17,12 +17,12 @@ export async function autoUpdateListAVs(listBlock: any) {
         // --- 1. 继承回填 (独立逻辑) ---
         // 只要存在绑定关系，每次激活页签都尝试进行轻量级的继承同步（内部有 dirty check）
         if (avId && avBlockId) {
-            console.log(`[Auto-Update-Debug] Tab Activated. Checking inheritance for AV ${avId}...`);
+            // console.log(`[Auto-Update-Debug] Tab Activated. Checking inheritance for AV ${avId}...`);
             const config = await loadDbConfig(avBlockId);
             if (config && config.inheritanceRules && config.inheritanceRules.length > 0) {
                 const updatedCount = await syncInheritanceToDb(avId, config, avBlockId);
                 if (updatedCount > 0) {
-                    console.log(`[Auto-Update-Debug] Inheritance auto-applied: ${updatedCount} fields updated.`);
+                    // console.log(`[Auto-Update-Debug] Inheritance auto-applied: ${updatedCount} fields updated.`);
                 }
             }
         }
