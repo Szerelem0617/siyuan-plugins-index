@@ -118,11 +118,20 @@
                             <span>可用占位符:</span>
                             {#each param.templateVars as tVar}
                                 <span 
+                                    role="button"
+                                    tabindex="0"
                                     class="b3-chip b3-chip--secondary" 
                                     style="font-family: monospace; cursor: pointer; padding: 2px 4px; font-size: 10px;"
                                     on:click={() => {
                                         const cur = values[param.key] || "";
                                         values[param.key] = cur + tVar;
+                                    }}
+                                    on:keydown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            const cur = values[param.key] || "";
+                                            values[param.key] = cur + tVar;
+                                        }
                                     }}
                                     title="点击插入到输入框末尾"
                                 >

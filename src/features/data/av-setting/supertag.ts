@@ -14,7 +14,6 @@ export class SupertagMonitor {
     private refreshBoundHandler = this.refreshRegistry.bind(this);
 
     constructor() {
-        this.refreshRegistry();
         window.addEventListener("index-plugin-refresh-supertags", this.refreshBoundHandler);
     }
 
@@ -42,6 +41,11 @@ export class SupertagMonitor {
             this.pluginInstance.loadData("supertag-prefs.json").then((data: any) => {
                 if (data) this.prefs = data;
             }).catch(() => { });
+
+            // Refresh registry once on initialization
+            this.refreshRegistry().catch(e => {
+                console.error("[Supertag] Failed to refresh registry during init:", e);
+            });
         } else {
             console.error("[Supertag] Failed to start monitor: Plugin eventbus not provided.");
         }

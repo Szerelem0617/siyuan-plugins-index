@@ -279,7 +279,13 @@
 
         <!-- Schema Modal -->
         {#if showSchema}
-            <div class="schema-overlay" on:click|self={() => showSchema = false}>
+            <div 
+                class="schema-overlay" 
+                role="button" 
+                tabindex="-1" 
+                on:click|self={() => showSchema = false}
+                on:keydown|self={(e) => { if (e.key === 'Escape') showSchema = false; }}
+            >
                 <div class="schema-modal">
                     <div class="fn__flex" style="align-items: center; margin-bottom: 12px;">
                         <h3 style="margin: 0; font-size: 14px; flex: 1; display: flex; align-items: center; gap: 6px;">

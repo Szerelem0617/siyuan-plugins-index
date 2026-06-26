@@ -91,7 +91,7 @@ export async function getSqliteEngine() {
 
     try {
         if (!(window as any).initSqlJs) {
-            const pluginId = plugin?.id || "siyuan-plugins-index";
+            const pluginId = plugin?.name || "siyuan-plugins-index";
             const scriptUrl = `/plugins/${pluginId}/sql-wasm.js`;
 
             await new Promise((resolve, reject) => {
@@ -105,7 +105,7 @@ export async function getSqliteEngine() {
 
         const initSqlJs = (window as any).initSqlJs;
         SQL_ENGINE = await initSqlJs({
-            locateFile: (file: string) => `/plugins/${plugin?.id || "siyuan-plugins-index"}/${file}`
+            locateFile: (file: string) => `/plugins/${plugin?.name || "siyuan-plugins-index"}/${file}`
         });
 
         dbInstance = new SQL_ENGINE.Database();

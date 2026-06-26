@@ -155,22 +155,24 @@ export async function getTargetTablesInfo() {
  * 优先尝试从 SQLite 加载以获得更好的性能和统一性
  */
 export async function refreshSupertagRegistry() {
-    try {
-        const { db } = await getSqliteEngine();
-        if (db) {
-            // Force re-instantiation of our system AV tables so SQLite is guaranteed to be fully in sync with Siyuan AV updates
-            await getTargetTablesInfo();
-            if (commandAvId) {
-                await instantiateAV(commandAvId, true);
+    if (DEV_ENABLE_INIT_SYS) {
+        try {
+            const { db } = await getSqliteEngine();
+            if (db) {
+                // Force re-instantiation of our system AV tables so SQLite is guaranteed to be fully in sync with Siyuan AV updates
+                await getTargetTablesInfo();
+                if (commandAvId) {
+                    await instantiateAV(commandAvId, true);
+                }
+                if (typeAvId) {
+                    await instantiateAV(typeAvId, true);
+                }
+                const success = await refreshRegistryFromSqlite();
+                if (success) return;
             }
-            if (typeAvId) {
-                await instantiateAV(typeAvId, true);
-            }
-            const success = await refreshRegistryFromSqlite();
-            if (success) return;
+        } catch (e) {
+            console.warn("[Supertag] SQLite sync/refresh failed, falling back to API refresh", e);
         }
-    } catch (e) {
-        console.warn("[Supertag] SQLite sync/refresh failed, falling back to API refresh", e);
     }
     await refreshRegistryFromApi();
 }
