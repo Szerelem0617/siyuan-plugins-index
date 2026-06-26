@@ -23,7 +23,7 @@ export class BlockService {
         existingBlockInfo?: { id: string, type: string, parent_id: string }
     ) {
         const attrs = { [attrName]: JSON.stringify(attrValue) };
-        console.log(`[BlockService] insertOrUpdate type=${type} data_length=${data.length} preview: ${data.slice(0, 200)}...`);
+
 
         try {
             // 1. Check for existing block
@@ -48,7 +48,7 @@ export class BlockService {
 
             if (currentId == undefined) {
                 // === Case: Insert New ===
-                console.log(`[BlockService] No existing ${type} found. Inserting new.`);
+
 
                 // Check for empty document (single empty P block)
                 let emptyBlockId: string | undefined;
@@ -97,7 +97,7 @@ export class BlockService {
                         });
                         if (typeRs.data?.[0]?.type === 'sb') {
                             needsSearch = true;
-                            console.log(`[BlockService] Index wrapped in super block (col > 1). Searching for inner list...`);
+
                         }
                     }
                     if (needsSearch) {
@@ -108,7 +108,7 @@ export class BlockService {
                             });
                             if (childRs.data && childRs.data[0]) {
                                 attrTargetId = childRs.data[0].id;
-                                console.log(`[BlockService] Found inner list for binding: ${attrTargetId}`);
+
                                 break;
                             }
                         }
@@ -125,14 +125,14 @@ export class BlockService {
                     await client.deleteBlock({ id: emptyBlockId });
                 }
 
-                console.log(`[BlockService] Attributes bound to ${attrTargetId}`);
+
                 return { success: true, id: attrTargetId, msg: "insert_success" };
 
             } else {
                 // === Case: Update Existing ===
                 let updateTargetId = currentId;
 
-                console.log(`[BlockService] Found existing ${type} at ${currentId} (Type: ${currentType})`);
+
 
                 // Fix: If attr is on a List inside a wrapper, update the wrapper instead
                 // Outline uses blockquote ('b'), Index with col>1 uses super block ('sb')
@@ -141,7 +141,7 @@ export class BlockService {
                     const parentType = parentRs.data?.[0]?.type;
                     if (parentType === 'b' || parentType === 'sb') {
                         updateTargetId = parentRs.data[0].id;
-                        console.log(`[BlockService] Updating parent wrapper (${parentType}): ${updateTargetId}`);
+
                     }
                 }
 
@@ -155,7 +155,7 @@ export class BlockService {
                 let attrTargetId = updateTargetId;
                 if (updateTargetId !== currentId && attrName !== "custom-tree-create") {
                     // We updated a wrapper (blockquote/super block), need to find the new inner list
-                    console.log(`[BlockService] Updated wrapper ${updateTargetId}. Re-searching for inner list...`);
+
                     let foundNew = false;
                     for (let i = 0; i < 15; i++) {
                         await sleep(500);
@@ -173,7 +173,7 @@ export class BlockService {
                         });
                         if (childRs.data && childRs.data[0]) {
                             attrTargetId = childRs.data[0].id;
-                            console.log(`[BlockService] Fallback: using list ID ${attrTargetId}`);
+
                         }
                     }
                 }
@@ -187,7 +187,7 @@ export class BlockService {
                     await client.deleteBlock({ id: targetBlockId });
                 }
 
-                console.log(`[BlockService] Attributes re-bound to ${attrTargetId}`);
+
                 return { success: true, id: attrTargetId, msg: "update_success" };
             }
         } catch (error) {

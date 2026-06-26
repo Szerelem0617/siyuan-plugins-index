@@ -16,8 +16,7 @@ export async function insertAction(targetBlockId?: string) {
         return;
     }
 
-    // Check for existing index to compare settings (Manual Insert/Update)
-    console.log("[IndexPlugin] Checking for existing index...");
+
     let rs = await client.sql({
         stmt: `SELECT * FROM blocks WHERE root_id = '${parentId}' AND ial like '%custom-index-create%' order by updated desc limit 1`
     });
@@ -43,7 +42,6 @@ export async function insertAction(targetBlockId?: string) {
         let mismatch = false;
         for (const key of keysToCheck) {
             if (localSettings[key] !== settings.get(key)) {
-                console.log(`[IndexPlugin] Mismatch on ${key}: Local=${localSettings[key]}, Global=${settings.get(key)}`);
                 mismatch = true;
                 break;
             }
@@ -60,8 +58,7 @@ export async function insertAction(targetBlockId?: string) {
                 }, i18n.update, i18n.keep);
             });
         }
-    } else {
-        console.log("[IndexPlugin] No existing index found, creating new.");
+
     }
 
     let block = await client.getBlockInfo({ id: parentId });
@@ -95,8 +92,7 @@ export async function insertAction(targetBlockId?: string) {
 
 
 export async function autoUpdateIndex(notebookId: string, path: string, parentId: string, existingBlock?: any) {
-    // await settings.load();
-    console.log("[IndexPlugin] Auto-updating index for doc:", parentId);
+
 
     let id, ialStr;
 
@@ -126,7 +122,6 @@ export async function autoUpdateIndex(notebookId: string, path: string, parentId
 
         // Check if local autoUpdate is enabled
         if (localSettings.autoUpdate === false) {
-            console.log("[IndexPlugin] Local autoUpdate is disabled. Skipping.");
             return;
         }
 

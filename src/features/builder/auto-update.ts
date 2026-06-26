@@ -41,7 +41,6 @@ export async function autoUpdateBuilder(parentId: string, existingBlock?: any) {
                 const data = JSON.parse(jsonToParse);
                 treeType = data.treeType;
                 localAutoUpdate = data.builderAutoUpdate;
-                console.log(`[Builder] Triggered: type=${treeType}, autoUpdate=${localAutoUpdate}`);
             } catch (je) {
                 // Second attempt: old raw string format
                 if (val === "doc-tree" || val === "heading-tree" || val === "composite-tree") {

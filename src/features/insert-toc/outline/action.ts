@@ -16,8 +16,7 @@ export async function insertOutlineAction(targetBlockId?: string) {
         return;
     }
 
-    // Check for existing outline (Manual Insert/Update)
-    console.log("[IndexPlugin] Checking for existing outline...");
+
     let rs = await client.sql({
         stmt: `SELECT * FROM blocks WHERE root_id = '${parentId}' AND ial like '%custom-outline-create%' order by updated desc limit 1`
     });
@@ -42,7 +41,6 @@ export async function insertOutlineAction(targetBlockId?: string) {
         let mismatch = false;
         for (const key of keysToCheck) {
             if (localSettings[key] !== settings.get(key)) {
-                console.log(`[IndexPlugin] Mismatch on ${key}: Local=${localSettings[key]}, Global=${settings.get(key)}`);
                 mismatch = true;
                 break;
             }
@@ -58,8 +56,7 @@ export async function insertOutlineAction(targetBlockId?: string) {
                 }, i18n.update, i18n.keep);
             });
         }
-    } else {
-        console.log("[IndexPlugin] No existing outline found.");
+
     }
 
     let outlineData = await requestGetDocOutline(parentId);
@@ -87,8 +84,7 @@ export async function insertOutlineAction(targetBlockId?: string) {
 }
 
 export async function autoUpdateOutline(parentId: string, existingBlock?: any) {
-    // await settings.load();
-    console.log("[IndexPlugin] Auto-updating outline for doc:", parentId);
+
 
     let id, ialStr, markdown;
 
@@ -127,9 +123,7 @@ export async function autoUpdateOutline(parentId: string, existingBlock?: any) {
             console.error("Failed to parse settings", e);
         }
 
-        // Check if local outlineAutoUpdate is enabled
         if (localSettings.outlineAutoUpdate === false) {
-            console.log("[IndexPlugin] Local outlineAutoUpdate is disabled. Skipping.");
             return;
         }
 
