@@ -61,7 +61,6 @@ export class BlockService {
                         // content can be empty string for empty P block
                         if (b.type === 'p' && (!b.content || b.content.trim() === '')) {
                             emptyBlockId = b.id;
-                            console.log(`[BlockService] Found empty initial block: ${emptyBlockId}. Will remove after insertion.`);
                         }
                     }
                 }
@@ -101,9 +100,7 @@ export class BlockService {
                             console.log(`[BlockService] Index wrapped in super block (col > 1). Searching for inner list...`);
                         }
                     }
-
                     if (needsSearch) {
-                        console.log(`[BlockService] Block inserted (ID: ${opId}). Searching for inner list...`);
                         for (let i = 0; i < 15; i++) {
                             await sleep(500);
                             let childRs = await client.sql({
@@ -166,7 +163,6 @@ export class BlockService {
                         let childRs = await client.sql({ stmt });
                         if (childRs.data && childRs.data[0]) {
                             attrTargetId = childRs.data[0].id;
-                            console.log(`[BlockService] Found new inner list for re-binding: ${attrTargetId}`);
                             foundNew = true;
                             break;
                         }

@@ -131,12 +131,9 @@ export class ListProcessor {
             const sourceItem = sourceMap.get(child.id);
             const pBlocks = contentMap.get(child.id) || [];
             const core = this.ibp.parseItemContent(child.id, pBlocks);
-
             if (!core) {
-                console.log(`[Builder] Item ${child.id} could not be parsed. Skipping.`);
                 continue;
             }
-
             let docTargetId = null;
             let headingTargetId = null;
             if (sourceItem?.ial) {

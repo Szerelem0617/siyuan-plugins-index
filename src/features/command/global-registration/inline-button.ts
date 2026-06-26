@@ -180,7 +180,6 @@ export function handleInlineButtonClick(event: MouseEvent) {
         return;
     }
 
-    console.log("[InlineButton] Click:", payload);
 
     // ── 配置模式 ──────────────────────────────────────────────────────────
     if (payload.command === "sys.configure") {
@@ -216,19 +215,14 @@ export function handleInlineButtonClick(event: MouseEvent) {
  */
 export function handleBtnPaste(event: CustomEvent) {
     const { textPlain, resolve } = event.detail;
-    console.log("[BtnPaste] hook called, textPlain=", textPlain?.slice(0, 80));
 
     if (!textPlain?.startsWith(PROTOCOL)) {
         // 与本功能无关，不调用 resolve，让思源循原生流程继续
         return;
     }
 
-    // 告诉 EventBus 我们接管了此事件（dispatchEvent 返回 false，阻止 paste.ts 抢先 resolve(undefined)）
     event.preventDefault();
-
-    console.log("[BtnPaste] detected siyuan-btn link, decoding...");
     const payload = decodeBtnHref(textPlain.trim());
-    console.log("[BtnPaste] decoded payload=", payload);
 
     if (!payload) {
         console.warn("[BtnPaste] decode failed, fallback");
@@ -240,7 +234,6 @@ export function handleBtnPaste(event: CustomEvent) {
     let displayName = payload.command;
     if (payload.command !== "sys.configure") {
         const def = commandRegistry.findByNameOrId(payload.command);
-        console.log("[BtnPaste] findByNameOrId result=", def?.id, def?.name);
         if (def) displayName = def.name;
     }
 

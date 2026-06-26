@@ -60,7 +60,6 @@ export function generateOutlineMarkdown(
             name = extractHeadingContent(extraData[id].markdown) || (outline.depth == 0 ? outline.name : outline.content);
             ial = filterIAL(extraData[id].ial);
             pureTextContent = extraData[id].content;
-            console.log(`[Plugin-TOC] SQL提取的纯文本 (id: ${id}):`, pureTextContent);
         } else {
             name = outline.depth == 0 ? outline.name : outline.content;
             pureTextContent = name;

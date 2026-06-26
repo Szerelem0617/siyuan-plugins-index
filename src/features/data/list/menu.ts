@@ -54,8 +54,6 @@ export function addDataMenuItems({ detail }: any) {
     const attrNames = outermostList.getAttributeNames();
     const attrMap: any = {};
     attrNames.forEach(name => attrMap[name] = outermostList.getAttribute(name));
-    console.log(`[Data] Sync Menu Check - Outermost [${outermostId}] attrs:`, attrMap);
-    console.log(`[Data] Sync Menu Check - linkedAv:`, linkedAv);
 
     if (linkedAv) {
         menu.addItem({

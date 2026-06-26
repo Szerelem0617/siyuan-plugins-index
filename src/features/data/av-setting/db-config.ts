@@ -16,7 +16,6 @@ import { type DbConfig, type TypeConfig } from "./types";
 
 export async function syncInheritanceToDb(avId: string, config: DbConfig, avBlockId?: string) {
     if (!config.inheritanceRules || config.inheritanceRules.length === 0) {
-        console.log("[Materialized Sync] No inheritance rules defined. Skipping.");
         return;
     }
 

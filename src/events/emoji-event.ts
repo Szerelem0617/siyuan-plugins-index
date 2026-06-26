@@ -25,7 +25,6 @@ async function handleAltClick(event: MouseEvent) {
     // Ignore the fixed separator character
     if (textContent === "➖") return;
 
-    console.log("handleAltClick - textContent:", textContent); // Debug log
 
     // Matches:
     // 1. Flags: \p{RI}\p{RI}

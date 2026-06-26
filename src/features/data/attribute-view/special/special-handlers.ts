@@ -102,7 +102,6 @@ function renderPreviewAsset(path: string, previewEl: HTMLElement) {
  */
 export async function updateCellValue(protyleInstance: any, avID: string, rowID: string, colID: string, newValue: string) {
     try {
-        console.log(`[Data] Updating cell: Row [${rowID}], Col [${colID}]`, { newValue });
         const avData = await post("/api/av/renderAttributeView", { id: avID, pageSize: 1000 });
         const view = avData.view || avData;
         const rows = view.rows || [];
@@ -339,9 +338,7 @@ export function openTemplateDialog(protyleInstance: any, avID: string, rowID: st
 
     const renderList = (keyword = "") => {
         listEl.innerHTML = '<div class="fn__loading" style="padding: 20px;"><img width="32px" src="/stage/loading-pure.svg"></div>';
-        console.log(`[SpecialHandlers] Searching template with keyword: "${keyword}"`);
         post("/api/search/searchTemplate", { k: keyword }).then((res: any) => {
-            console.log(`[SpecialHandlers] Search results:`, res);
             let html = "";
             const templates = res.templates || [];
             if (templates.length > 0) {
@@ -358,7 +355,6 @@ export function openTemplateDialog(protyleInstance: any, avID: string, rowID: st
                 html = `<div class="b3-list--empty" style="padding: 16px; text-align: center; color: var(--b3-theme-on-surface-light);">无匹配模板</div>`;
             }
             listEl.innerHTML = html;
-            console.log(`[SpecialHandlers] Total templates found: ${templates.length}`);
 
             const firstItem = listEl.querySelector(".b3-list-item") as HTMLElement;
             if (firstItem) {

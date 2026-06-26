@@ -26,8 +26,6 @@ export async function constructCommandStorage() {
             const res = await post("/api/notebook/createNotebook", { name: NOTEBOOK_NAME });
             targetNotebookId = res.notebook.id;
             await sleep(500);
-        } else {
-            console.log(`[IndexOS] Existing notebook found: ${targetNotebookId}`);
         }
 
         // 2. Init Command-DB (逻辑工厂)
@@ -465,7 +463,6 @@ async function initDbDoc(
                 markdown: initMarkdown
             });
             docId = createRes;
-            console.log(`[IndexOS] Created doc ${docId} for ${docName}.`);
         } catch (e) {
             console.error(`[IndexOS] createDocWithMd failed for ${docName}`, e);
         }
@@ -510,11 +507,8 @@ async function initDbDoc(
                 const isAlreadyInitialized = currentKeys.some((k: any) => k.name === expectedColName);
 
                 if (!isAlreadyInitialized) {
-                    console.log(`[IndexOS] DB created with avID: ${avId}, injecting columns and detached rows...`);
                     await initColsCallback(avId);
                     console.log(`[IndexOS] DB columns and detached rows initialized for ${docName}.`);
-                } else {
-                    console.log(`[IndexOS] DB already initialized for ${docName}.`);
                 }
             }
         } else {

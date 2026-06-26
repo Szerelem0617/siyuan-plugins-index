@@ -219,7 +219,6 @@ class CommandRegistry {
             console.warn(`[Registry] Command "${def.id}" is being overwritten.`);
         }
         this.store.set(def.id, def);
-        console.log(`[Registry] Registered: ${def.id} (${def.meta.source})`);
     }
 
     /**
