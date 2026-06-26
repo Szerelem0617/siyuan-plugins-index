@@ -21,7 +21,6 @@ export function registerFriendlyTableName(friendlyName: string, avId: string) {
     friendlyTableNameMap.set(cleanName, avId);
     friendlyTableNameMap.set(cleanName.replace(/\s+/g, "_"), avId);
     friendlyTableNameMap.set(cleanName.replace(/[^a-zA-Z0-9]/g, "_"), avId);
-    console.log(`[SQLiteManager] Registered friendly table name mapping: "${cleanName}" -> "${avId}"`);
 }
 
 export function resolveTableAvId(tableName: string): string | null {
@@ -110,7 +109,6 @@ export async function getSqliteEngine() {
         });
 
         dbInstance = new SQL_ENGINE.Database();
-        console.log("[SQLiteManager] In-memory DB Initialized.");
 
         // Initialize system tables
         _initSystemTables(dbInstance);
@@ -496,7 +494,6 @@ export async function runQuery(sql: string, params?: any[], options?: DDLOptions
             const lastSync = tableSyncTimes.get(avID) || 0;
             if (Date.now() - lastSync > TTL_MS) {
                 try {
-                    console.log(`[SQLiteManager] On-demand instantiating AV: ${cleanName} (${avID})`);
                     await instantiateAV(avID, true);
                     tableSyncTimes.set(avID, Date.now());
                 } catch (e) {

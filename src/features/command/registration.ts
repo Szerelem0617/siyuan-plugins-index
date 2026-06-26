@@ -9,7 +9,7 @@ import { getSystemTableNames, initSystemTables } from "./indexos/command-sqlite"
 import { reverseDbToList } from "./hierarchy/db-reverse-list";
 import { isDevModeActive } from "../dev-mode";
 
-export const DEV_ENABLE_INIT_SYS = true;
+export const DEV_ENABLE_INIT_SYS = false;
 
 // --- 内存缓存：Supertag 注册表 ---
 export interface CommandDef {
@@ -551,7 +551,7 @@ export function addCommandTestMenuItem({ detail }: any) {
             (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
             && item.uiLocation === "BlockIconMenu"
         );
-        
+
         if (matches.length > 0) {
             if (!separatorAdded) {
                 menu.addSeparator();

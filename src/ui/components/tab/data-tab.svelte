@@ -1,6 +1,7 @@
 <script lang="ts">
     import SettingItem from "../setting-item.svelte";
     import { i18n } from "../../../shared/utils";
+    import { DEV_ENABLE_INIT_SYS } from "../../../features/command/registration";
 
     export let tabbarfocus: string;
     export let settingsStrings: any;
@@ -30,10 +31,12 @@
         bind:settingValue={settingsStrings.dbAddTemplateCols}
     />
 
-    <SettingItem
-        content={devModeContent}
-        type="switch"
-        settingKey="devMode"
-        bind:settingValue={settingsStrings.devMode}
-    />
+    {#if DEV_ENABLE_INIT_SYS}
+        <SettingItem
+            content={devModeContent}
+            type="switch"
+            settingKey="devMode"
+            bind:settingValue={settingsStrings.devMode}
+        />
+    {/if}
 </div>

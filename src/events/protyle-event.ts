@@ -12,7 +12,6 @@ export async function execAutoUpdate(parentId: string, notebookId: string, path:
         stmt: `SELECT * FROM blocks WHERE root_id = '${parentId}' AND (ial like '%custom-index-create%' OR ial like '%custom-outline-create%' OR ial like '%custom-tree-create%' OR ial like '%custom-index-linked-av%') order by updated desc limit 50`
     });
 
-    console.log(`[IndexPlugin] AutoUpdate Check for ${parentId}. Found ${rs.data?.length || 0} candidate blocks.`);
 
     let indexBlock = null;
     let outlineBlock = null;
@@ -30,7 +29,6 @@ export async function execAutoUpdate(parentId: string, notebookId: string, path:
             }
             if (block.ial.includes("custom-tree-create") && !builderBlock) {
                 builderBlock = block;
-                console.log(`[IndexPlugin] Found Builder Block: ${block.id}`);
             }
             if (block.ial.includes("custom-index-linked-av")) {
                 listBlocks.push(block);
@@ -38,9 +36,7 @@ export async function execAutoUpdate(parentId: string, notebookId: string, path:
         }
     }
 
-    // 1. Auto sync lists mapped to AV (Important to do this FIRST so builder has item IDs)
     if (listBlocks.length > 0) {
-        console.log(`[IndexPlugin] Found ${listBlocks.length} list(s) bound to AV for auto-sync.`);
         for (const listBlock of listBlocks) {
             await autoUpdateListAVs(listBlock);
         }
@@ -54,7 +50,6 @@ export async function execAutoUpdate(parentId: string, notebookId: string, path:
         await autoUpdateOutline(parentId, outlineBlock);
     }
     if (builderBlock) {
-        console.log(`[IndexPlugin] Triggering Builder Auto-Update...`);
         await autoUpdateBuilder(parentId, builderBlock);
     }
 }
