@@ -82,7 +82,7 @@ export class SupertagMonitor {
                     if (!blockId || !op.data) continue;
 
                     // Extract all tags currently embedded in the operation payload
-                    const newTags = this.extractTagsFromPayload(op.data, op.action);
+                    const newTags = this.extractTagsFromPayload(op.data, op.action, blockId);
                     if (newTags === null) continue; // Skip if this operation doesn't carry definitive tag information
 
                     // Compare with virtual cache
@@ -107,7 +107,7 @@ export class SupertagMonitor {
         }
     }
 
-    private extractTagsFromPayload(payload: any, action?: string): Set<string> | null {
+    private extractTagsFromPayload(payload: any, action?: string, opId?: string): Set<string> | null {
         const tags = new Set<string>();
         if (!payload) return tags;
 
@@ -153,29 +153,37 @@ export class SupertagMonitor {
         // Condition 2: payload is DOM HTML (action === "update" | "insert")
         // We only proceed here if it's NOT a recognized JSON but looks like HTML
         if (payload.includes("<") && payload.includes(">")) {
-            // Match 1: <span data-type="tag">YourTag</span> (This is the actual structure based on SiYuan debug logs)
-            const regex1 = /<span[^>]*data-type="tag"[^>]*>([^<]+)<\/span>/ig;
-            let tagMatch;
-            while ((tagMatch = regex1.exec(payload)) !== null) {
-                if (tagMatch[1]) {
-                    const tagText = tagMatch[1].replace(/#/g, ''); // Strip any # if present
-                    tags.add(tagText);
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = payload;
+
+            // Find all tag elements
+            const tagEls = tempDiv.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
+            tagEls.forEach((el: any) => {
+                // Check if this tag is inside a nested block (descendant element with data-node-id different from opId)
+                let isNested = false;
+                let parent = el.parentElement;
+                while (parent && parent !== tempDiv) {
+                    const nodeId = parent.getAttribute("data-node-id");
+                    if (nodeId && nodeId !== opId) {
+                        isNested = true;
+                        break;
+                    }
+                    parent = parent.parentElement;
                 }
-            }
 
-            // Match 2: <span data-type="tag" data-content="YourTag"> (Fallback)
-            const regex2 = /data-type="[^"]*tag[^"]*"[^>]*data-content="([^"]+)"/ig;
-            let contentMatch;
-            while ((contentMatch = regex2.exec(payload)) !== null) {
-                if (contentMatch[1]) tags.add(contentMatch[1]);
-            }
-
-            // Match 3: <span data-type="NodeTag">#YourTag#</span> (Fallback)
-            const regex3 = /data-type="NodeTag"[^>]*>#([^<#]+)#<\/span>/ig;
-            let matchHash;
-            while ((matchHash = regex3.exec(payload)) !== null) {
-                if (matchHash[1]) tags.add(matchHash[1]);
-            }
+                if (!isNested) {
+                    let tagText = "";
+                    if (el.getAttribute("data-type") === "NodeTag") {
+                        tagText = el.textContent || "";
+                    } else {
+                        tagText = el.textContent || el.getAttribute("data-content") || "";
+                    }
+                    const clean = tagText.replace(/#/g, '').trim();
+                    if (clean) {
+                        tags.add(clean);
+                    }
+                }
+            });
 
             return tags;
         }
