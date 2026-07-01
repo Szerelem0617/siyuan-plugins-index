@@ -18,7 +18,7 @@ Left-click to insert a directory list; right-click for more actions.
 
 **Experimental Feature**: After adding to the database, use `alt + click` on cells to batch configure attributes.
 
-<img src="https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/asset/guide-create-db.jpg" width="500" />
+<img src="https://raw.githubusercontent.com/Szerelem0617/siyuan-plugins-index/main/asset/guide-create-db.jpg" width="500" />
 
 # Changelog
 

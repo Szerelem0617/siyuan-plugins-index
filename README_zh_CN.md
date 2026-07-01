@@ -15,7 +15,7 @@
 为目录以及其它列表创建数据库。
 加入数据库后，可通过 `alt + click` 单元格来批量配置属性。
 
-<img src="https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/asset/guide-create-db.jpg" width="500" />
+<img src="https://raw.githubusercontent.com/Szerelem0617/siyuan-plugins-index/main/asset/guide-create-db.jpg" width="500" />
 
 # 1.9.15 版本更新
 
@@ -34,7 +34,7 @@
 
 - 微信赞赏: (备注微信号)
   
-  <img src="https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/asset/qr.jpg" width="200" />
+  <img src="https://raw.githubusercontent.com/Szerelem0617/siyuan-plugins-index/main/asset/qr.jpg" width="200" />
 
 # 致谢
 
