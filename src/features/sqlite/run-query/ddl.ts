@@ -1,5 +1,6 @@
 import { post } from "../../../shared/api-client/request";
 import { client } from "../../../shared/api-client";
+import { executeCreateView } from "./view";
 import { 
     resolveTableAvId, 
     avIdToTableName, 
@@ -66,6 +67,12 @@ export interface DDLOptions {
 }
 
 export async function executeDDL(processedSql: string, db: any, options?: DDLOptions): Promise<any> {
+    // ─── 0. CREATE VIEW Statement ───
+    const viewRes = await executeCreateView(processedSql, db, options);
+    if (viewRes !== null) {
+        return viewRes;
+    }
+
     // ─── 1. CREATE TABLE Statement ───
     const createMatch = processedSql.match(/^\s*CREATE\s+TABLE\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*\((.+?)\)\s*;?\s*$/is);
     if (createMatch) {
