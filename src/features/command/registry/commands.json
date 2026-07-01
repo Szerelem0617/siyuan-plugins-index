@@ -295,6 +295,26 @@
                 "category": "attribute",
                 "source": "builtin"
             }
+        },
+        {
+            "id": "plugin.index.effect.fireworks",
+            "name": "烟花",
+            "description": "在命令按钮或当前光标块位置播放炫丽的放烟花动画特效。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [],
+            "constraints": {
+                "requiresFocus": false,
+                "uiOnly": true,
+                "schedulable": false
+            },
+            "meta": {
+                "scope": "self",
+                "category": "custom",
+                "source": "plugin",
+                "plugin": "index"
+            }
         }
     ],
     "paramModes": {

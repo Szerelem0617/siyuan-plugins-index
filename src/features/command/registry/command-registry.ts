@@ -77,7 +77,7 @@ export interface DispatchConfig {
      */
     executor?: (
         params: Record<string, unknown>,
-        context: { blockEl: HTMLElement; protyleEl: HTMLElement | null }
+        context: { blockEl: HTMLElement; protyleEl: HTMLElement | null; supertag?: string; triggerEl?: HTMLElement }
     ) => Promise<unknown>;
 }
 
@@ -178,6 +178,7 @@ class CommandRegistry {
                 if (!id) continue;
 
                 try {
+                    const existing = this.store.get(id);
                     const def: CommandDef = {
                         id,
                         name: name || "",
@@ -187,6 +188,9 @@ class CommandRegistry {
                         constraints: constraintsRaw ? JSON.parse(constraintsRaw) : { requiresFocus: false, uiOnly: false, schedulable: false },
                         meta: metaRaw ? JSON.parse(metaRaw) : { scope: "global", category: "custom", source: "plugin" }
                     };
+                    if (existing && existing.dispatch.executor) {
+                        def.dispatch.executor = existing.dispatch.executor;
+                    }
                     this.store.set(id, def);
                     loaded++;
                 } catch (parseErr) {
@@ -215,6 +219,17 @@ class CommandRegistry {
      */
     registerCommand(def: CommandDef): void {
         if (!def.id) throw new Error("[Registry] registerCommand: 'id' is required.");
+        
+        const pluginName = def.meta?.plugin;
+        if (!pluginName || typeof pluginName !== "string") {
+            throw new Error(`[Registry] registerCommand: 'meta.plugin' is required and must be a string identifying the plugin.`);
+        }
+
+        const expectedPrefix = `plugin.${pluginName}.`;
+        if (!def.id.startsWith(expectedPrefix)) {
+            throw new Error(`[Registry] registerCommand: Command ID "${def.id}" must start with "${expectedPrefix}" to follow the naming convention: plugin.[pluginName].[category].[action]`);
+        }
+
         if (this.store.has(def.id)) {
             console.warn(`[Registry] Command "${def.id}" is being overwritten.`);
         }

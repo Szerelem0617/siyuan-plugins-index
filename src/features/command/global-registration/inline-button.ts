@@ -200,7 +200,8 @@ export function handleInlineButtonClick(event: MouseEvent) {
 
     const mockContext = {
         blockEl: linkEl.closest("[data-node-id]") || document.body,
-        protyleEl: null
+        protyleEl: null,
+        triggerEl: linkEl
     };
     dispatchCommand(def.id, payload.param ?? null, mockContext as any);
 }

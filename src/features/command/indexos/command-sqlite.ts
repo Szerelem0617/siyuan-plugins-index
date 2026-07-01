@@ -76,13 +76,27 @@ export async function initSystemTables() {
             ["20260526204558-6nbjc0b", "⬇️ 下方插入同级块", "editor.general.insertAfter", "", "Native", "Sibling", 1, 0, 0, 1],
             ["20260526204558-zxrigm8", "📑 复制当前块", "editor.general.duplicate", "", "Native", "Sibling", 1, 0, 0, 1],
             ["20260526204558-6y7laha", "🖇️ 复制块引用", "editor.general.copyBlockRef", "", "Native", "Global", 1, 0, 0, 1],
-            ["20260527120000-insert", "⚡ API 插入块测试", "api.block.insertBlock", "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}", "API", "Global", 1, 0, 0, 1]
+            ["20260527120000-insert", "⚡ API 插入块测试", "api.block.insertBlock", "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}", "API", "Global", 1, 0, 0, 1],
+            ["20260701100000-fireworks", "烟花", "plugin.index.effect.fireworks", "", "Custom", "Self", 1, 0, 1, 1]
         ];
         const stmt = db.prepare(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const cmd of defaultCmds) {
             stmt.run(cmd);
         }
         stmt.free();
+    } else {
+        // Ensure plugin.index.effect.fireworks exists in TABLE_COMMANDS even if the database was already seeded
+        try {
+            const checkExists = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS} WHERE Command_ID = 'plugin.index.effect.fireworks'`);
+            const existsCount = checkExists?.[0]?.values?.[0]?.[0] || 0;
+            if (Number(existsCount) === 0) {
+                db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+                        ["20260701100000-fireworks", "烟花", "plugin.index.effect.fireworks", "", "Custom", "Self", 1, 0, 1, 1]);
+            }
+        } catch (e) {
+            console.error("[SQLite-Init] Failed to ensure plugin.index.effect.fireworks seeded:", e);
+        }
     }
 
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];

@@ -12,7 +12,7 @@
  * 不负责：读写 AV 数据库、DOM 事件监听、UI 渲染。
  */
 
-import { globalCommand } from "siyuan";
+import { globalCommand, showMessage } from "siyuan";
 import { plugin } from "../../shared/utils";
 import { post } from "../../shared/api-client/request";
 import { commandRegistry } from "./registry/command-registry";
@@ -28,6 +28,7 @@ export interface CommandContext {
     blockEl: HTMLElement;
     protyleEl: HTMLElement | null;
     supertag?: string;
+    triggerEl?: HTMLElement;
 }
 
 export interface DispatchResult {
@@ -75,27 +76,43 @@ export async function dispatchCommand(
     // 3. 构建参数
     const resolvedParams = await buildParams(def, rawParam, context);
 
+    console.log(`[Dispatcher] Executing command "${commandId}" via method "${def.dispatch.method}". Params:`, resolvedParams);
+
     // 4. 按 dispatch.method 执行
     try {
+        let result: DispatchResult;
         switch (def.dispatch.method) {
 
             case "keyboard":
-                return dispatchKeyboard(def, context);
+                result = dispatchKeyboard(def, context);
+                break;
 
             case "global":
-                return dispatchGlobal(def);
+                result = dispatchGlobal(def);
+                break;
 
             case "api":
-                return await dispatchApi(def, resolvedParams, context);
+                result = await dispatchApi(def, resolvedParams, context);
+                break;
 
             case "custom":
-                return await dispatchCustom(def, resolvedParams, context);
+                result = await dispatchCustom(def, resolvedParams, context);
+                break;
 
             default:
-                return { success: false, method: "unknown", detail: `Unknown method: ${(def.dispatch as any).method}` };
+                result = { success: false, method: "unknown", detail: `Unknown method: ${(def.dispatch as any).method}` };
         }
+
+        if (!result.success) {
+            console.error(`[Dispatcher] Command "${commandId}" execution failed:`, result.detail);
+            showMessage(`❌ 命令执行失败: ${result.detail}`, 5000, "error");
+        } else {
+            console.log(`[Dispatcher] Command "${commandId}" executed successfully:`, result);
+        }
+        return result;
     } catch (err) {
         console.error(`[Dispatcher] Error executing "${commandId}":`, err);
+        showMessage(`❌ 命令运行出错: ${err}`, 5000, "error");
         return { success: false, method: def.dispatch.method as any, detail: String(err) };
     }
 }
@@ -220,10 +237,13 @@ async function dispatchCustom(
     context: CommandContext
 ): Promise<DispatchResult> {
     const executor = def.dispatch.executor;
+    console.log(`[Dispatcher] dispatchCustom called for: ${def.id}. Executor is:`, typeof executor);
     if (typeof executor !== "function") {
         return { success: false, method: "custom", detail: `No executor registered for: ${def.id}` };
     }
+    console.log(`[Dispatcher] Invoking executor for custom command: ${def.id}`);
     await executor(params, context);
+    console.log(`[Dispatcher] Custom command executor finished successfully for: ${def.id}`);
     return { success: true, method: "custom", detail: def.id };
 }
 
