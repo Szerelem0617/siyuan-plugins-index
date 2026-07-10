@@ -1,6 +1,7 @@
 import { client } from "../../shared/api-client";
 import { post } from "../../shared/api-client/request";
 import { getAttrFromIAL } from "../../shared/utils";
+import { registerFriendlyTableName } from "./sqlite-manager";
 
 export async function fetchAllAVBlocks() {
     try {
@@ -23,6 +24,10 @@ export async function fetchAllAVBlocks() {
                 try {
                     const avConfig = await post("/api/av/getAttributeView", { id: avId });
                     realName = avConfig?.name || (avConfig?.av ? avConfig.av.name : "Unnamed");
+                    
+                    if (realName && realName !== "Unnamed Database" && realName !== "Unnamed") {
+                        registerFriendlyTableName(realName, avId);
+                    }
                 } catch { /* Error fallback to Unnamed */ }
             }
 

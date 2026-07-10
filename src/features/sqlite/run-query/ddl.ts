@@ -595,9 +595,22 @@ export async function executeDDL(processedSql: string, db: any, options?: DDLOpt
         }
         
         // 3. Clear friendlyName registry and cache
-        friendlyTableNameMap.delete(tableName);
-        friendlyTableNameMap.delete(tableName.replace(/\s+/g, "_"));
-        friendlyTableNameMap.delete(tableName.replace(/[^a-zA-Z0-9]/g, "_"));
+        const cleanNames = [
+            tableName,
+            tableName.replace(/\s+/g, "_"),
+            tableName.replace(/[^a-zA-Z0-9]/g, "_")
+        ];
+        for (const name of cleanNames) {
+            const avIds = friendlyTableNameMap.get(name);
+            if (avIds) {
+                const updated = avIds.filter(id => id !== avID);
+                if (updated.length > 0) {
+                    friendlyTableNameMap.set(name, updated);
+                } else {
+                    friendlyTableNameMap.delete(name);
+                }
+            }
+        }
         avIdToBlockIdMap.delete(avID);
         
         tableSyncTimes.delete(avID);

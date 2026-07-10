@@ -36,6 +36,9 @@
 
     // Export
     let showExportMenu = false;
+    
+    // Cyclic locating index tracker
+    let locateIndices: Record<string, number> = {};
 
     // Tabs
     let activeTab: "databases" | "console" | "commands" = "commands";
@@ -59,14 +62,28 @@
                         name: b.name,
                         avId: b.avId,
                         mirrorCount: 0,
-                        blockIds: []
+                        blockIds: [],
+                        isDuplicateName: false
                     };
                 }
                 groups[b.avId].blockIds.push(b.blockId);
                 groups[b.avId].mirrorCount = groups[b.avId].blockIds.length;
             });
             
-            avBlocks = Object.values(groups);
+            const tempBlocks = Object.values(groups);
+            
+            // Check for duplicate AV names
+            const nameCounts: Record<string, number> = {};
+            tempBlocks.forEach((b: any) => {
+                nameCounts[b.name] = (nameCounts[b.name] || 0) + 1;
+            });
+            tempBlocks.forEach((b: any) => {
+                if (nameCounts[b.name] > 1) {
+                    b.isDuplicateName = true;
+                }
+            });
+            
+            avBlocks = tempBlocks;
             
             avBlocks.forEach(b => {
                 if (instantiatedIds.has(b.avId)) {
@@ -215,8 +232,13 @@
 
     function locateAv(block: any) {
         if (block.blockIds && block.blockIds.length > 0) {
-            const targetBlockId = block.blockIds[0];
-            console.log(`[SQLiteManager] Locating AV block ${targetBlockId} for avID ${block.avId}`);
+            const list = block.blockIds;
+            const currentIdx = locateIndices[block.avId] !== undefined ? locateIndices[block.avId] : 0;
+            const nextIdx = (currentIdx + 1) % list.length;
+            locateIndices[block.avId] = nextIdx;
+            
+            const targetBlockId = list[currentIdx];
+            console.log(`[SQLiteManager] Locating AV block ${targetBlockId} (index ${currentIdx}/${list.length}) for avID ${block.avId}`);
             openTab({
                 app: plugin.app,
                 doc: {
@@ -286,11 +308,16 @@
                     {#each avBlocks as block}
                         <div class="av-card" class:synced={instantiatedIds.has(block.avId)}>
                             <div class="av-card__header">
-                                <span class="av-card__name" title={block.name}>
+                                <span class="av-card__name" class:duplicate-name-warning={block.isDuplicateName} title={block.name}>
                                     {block.name}
                                     {#if block.mirrorCount > 1}
                                         <span class="av-card__mirrors-badge" style="font-size: 10px; color: var(--b3-theme-primary); font-weight: normal; margin-left: 4px; background: rgba(92, 184, 92, 0.15); padding: 1px 4px; border-radius: 3px;" title="This database is referenced by {block.mirrorCount} blocks (mirrors).">
                                             {block.mirrorCount} 镜像
+                                        </span>
+                                    {/if}
+                                    {#if block.isDuplicateName}
+                                        <span class="av-card__duplicate-badge" style="font-size: 10px; color: #ef4444; font-weight: normal; margin-left: 4px; background: rgba(239, 68, 68, 0.15); padding: 1px 4px; border-radius: 3px;" title="Multiple databases share this name. SQL queries using this name will throw an error.">
+                                            ⚠️ 同名冲突
                                         </span>
                                     {/if}
                                 </span>
@@ -503,6 +530,10 @@
 </div>
 
 <style>
+    .duplicate-name-warning {
+        color: #ef4444 !important;
+        font-weight: 600;
+    }
     /* ─── Tab Bar ─── */
     .tab-btn {
         background: none;

@@ -13,20 +13,35 @@ export const tableSyncTimes = new Map<string, number>();
 const TTL_MS = 3000; // 3 seconds TTL
 
 // ─── Friendly Table Name Map ───
-export const friendlyTableNameMap = new Map<string, string>();
+export const friendlyTableNameMap = new Map<string, string[]>();
 export const avIdToBlockIdMap = new Map<string, string>();
 
 export function registerFriendlyTableName(friendlyName: string, avId: string) {
     const cleanName = friendlyName.replace(/["'\`]/g, "").trim();
-    friendlyTableNameMap.set(cleanName, avId);
-    friendlyTableNameMap.set(cleanName.replace(/\s+/g, "_"), avId);
-    friendlyTableNameMap.set(cleanName.replace(/[^a-zA-Z0-9]/g, "_"), avId);
+    const namesToRegister = [
+        cleanName,
+        cleanName.replace(/\s+/g, "_"),
+        cleanName.replace(/[^a-zA-Z0-9]/g, "_")
+    ];
+    
+    for (const name of namesToRegister) {
+        let list = friendlyTableNameMap.get(name) || [];
+        if (!list.includes(avId)) {
+            list.push(avId);
+            friendlyTableNameMap.set(name, list);
+        }
+    }
+    console.log(`[SQLiteManager] Registered friendly table name mapping: "${cleanName}" -> "${avId}" (total mappings: ${friendlyTableNameMap.get(cleanName)?.length})`);
 }
 
 export function resolveTableAvId(tableName: string): string | null {
     const cleanName = tableName.replace(/["'\`]/g, "").trim();
     if (friendlyTableNameMap.has(cleanName)) {
-        return friendlyTableNameMap.get(cleanName)!;
+        const list = friendlyTableNameMap.get(cleanName)!;
+        if (list.length > 1) {
+            throw new Error(`Table name '${cleanName}' is ambiguous because multiple databases share this name: ${list.join(", ")}. Please use the exact SQLite table name (e.g. av_xxxx_xxxx) instead.`);
+        }
+        return list[0];
     }
     if (cleanName.startsWith("av_")) {
         return tableNameToAvId(cleanName);
@@ -274,6 +289,9 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
     }
 
     const av = res.av || res;
+    if (av.name && av.name !== "Unnamed" && av.name !== "Unnamed Database") {
+        registerFriendlyTableName(av.name, avID);
+    }
     const keyValues = av.keyValues || [];
     
     if (keyValues.length === 0) return { success: false, message: "Empty/No columns" };
@@ -464,7 +482,32 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 // ═══════════════════════════════════════════
 
 export function preprocessSql(sql: string): string {
-    return sql;
+    let processed = sql;
+    
+    // Sort friendly names by length descending
+    const friendlyNames = Array.from(friendlyTableNameMap.keys()).sort((a, b) => b.length - a.length);
+    
+    for (const friendlyName of friendlyNames) {
+        const avIds = friendlyTableNameMap.get(friendlyName);
+        if (!avIds || avIds.length === 0) continue;
+        
+        // Escape special regex characters in friendlyName
+        const escapedName = friendlyName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const regex = new RegExp(`(["'\`]?)${escapedName}\\1`, 'g');
+        
+        // Check if the query actually contains this friendlyName
+        if (regex.test(processed)) {
+            if (avIds.length > 1) {
+                throw new Error(`Table name '${friendlyName}' is ambiguous because multiple databases share this name: ${avIds.join(", ")}. Please use the exact SQLite table name (e.g. av_xxxx_xxxx) instead.`);
+            }
+            const targetTableName = avIdToTableName(avIds[0]);
+            // Reset regex search index since we did regex.test
+            regex.lastIndex = 0;
+            processed = processed.replace(regex, `"${targetTableName}"`);
+        }
+    }
+    
+    return processed;
 }
 
 export async function runQuery(sql: string, params?: any[], options?: DDLOptions): Promise<{ columns: string[], values: any[][] }> {
