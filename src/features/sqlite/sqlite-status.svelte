@@ -1,5 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { openTab } from "siyuan";
+    import { plugin } from "../../shared/utils";
     import { fetchAllAVBlocks } from "./sqlite-data-fetcher";
     import {
         instantiateAV, runQuery, getInstantiatedIds, getSyncMetadata,
@@ -43,10 +45,29 @@
     async function init() {
         loading = true;
         try {
-            avBlocks = await fetchAllAVBlocks();
+            const rawBlocks = await fetchAllAVBlocks();
             instantiatedIds = await getInstantiatedIds();
             syncMeta = await getSyncMetadata();
             savedQueries = await getSavedQueries();
+            
+            // Group by avId to deduplicate and count mirrors
+            const groups: Record<string, any> = {};
+            rawBlocks.forEach(b => {
+                if (!b.avId || b.avId === "Not Found") return;
+                if (!groups[b.avId]) {
+                    groups[b.avId] = {
+                        name: b.name,
+                        avId: b.avId,
+                        mirrorCount: 0,
+                        blockIds: []
+                    };
+                }
+                groups[b.avId].blockIds.push(b.blockId);
+                groups[b.avId].mirrorCount = groups[b.avId].blockIds.length;
+            });
+            
+            avBlocks = Object.values(groups);
+            
             avBlocks.forEach(b => {
                 if (instantiatedIds.has(b.avId)) {
                     const meta = syncMeta[b.avId];
@@ -192,6 +213,20 @@
         activeTab = "console";
     }
 
+    function locateAv(block: any) {
+        if (block.blockIds && block.blockIds.length > 0) {
+            const targetBlockId = block.blockIds[0];
+            console.log(`[SQLiteManager] Locating AV block ${targetBlockId} for avID ${block.avId}`);
+            openTab({
+                app: plugin.app,
+                doc: {
+                    id: targetBlockId,
+                    action: ["cb-get-hl", "cb-get-focus"]
+                }
+            });
+        }
+    }
+
     onMount(() => {
         init();
     });
@@ -251,7 +286,14 @@
                     {#each avBlocks as block}
                         <div class="av-card" class:synced={instantiatedIds.has(block.avId)}>
                             <div class="av-card__header">
-                                <span class="av-card__name" title={block.name}>{block.name}</span>
+                                <span class="av-card__name" title={block.name}>
+                                    {block.name}
+                                    {#if block.mirrorCount > 1}
+                                        <span class="av-card__mirrors-badge" style="font-size: 10px; color: var(--b3-theme-primary); font-weight: normal; margin-left: 4px; background: rgba(92, 184, 92, 0.15); padding: 1px 4px; border-radius: 3px;" title="This database is referenced by {block.mirrorCount} blocks (mirrors).">
+                                            {block.mirrorCount} 镜像
+                                        </span>
+                                    {/if}
+                                </span>
                                 <span class="av-card__status" class:ready={instantiatedIds.has(block.avId)}>
                                     {syncStatus[block.avId] || "Pending"}
                                 </span>
@@ -270,6 +312,7 @@
                             <div class="av-card__actions">
                                 <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => useSqlForAv(block.avId)}>Query</button>
                                 <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => viewSchema(block.avId)}>Schema</button>
+                                <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => locateAv(block)}>Locate</button>
                             </div>
                         </div>
                     {/each}

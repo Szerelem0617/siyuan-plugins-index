@@ -40,14 +40,14 @@ export async function executeCreateView(processedSql: string, db: any, options?:
         throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
     }
 
-    // 2. Locate unique Siyuan AV Block ID
+    // 2. Locate Siyuan AV Block ID
     const sqlFindBlock = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%')`;
     const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
     if (!resFind || resFind.length === 0) {
         throw new Error(`No Attribute View block found in Siyuan documents for table '${tableName}'.`);
     }
     if (resFind.length > 1) {
-        throw new Error(`Multiple AV blocks found for table '${tableName}' (${resFind.length} blocks). Creating a view is only allowed when exactly one unique AV block exists for the table.`);
+        console.log(`[SQLiteManager] Multiple AV blocks (${resFind.length}) found for table '${tableName}', using the first block ID '${resFind[0].id}' to create the view.`);
     }
 
     const avBlockID = resFind[0].id;

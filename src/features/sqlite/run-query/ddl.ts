@@ -13,49 +13,66 @@ import {
 } from "../sqlite-manager";
 
 export async function triggerAvBlockRender(avID: string) {
-    let avBlockId = avIdToBlockIdMap.get(avID) || "";
-    if (!avBlockId) {
-        const sqlFind = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%') LIMIT 1`;
-        const res = await post("/api/query/sql", { stmt: sqlFind });
-        if (res && res.length > 0) avBlockId = res[0].id;
+    const blockIds = new Set<string>();
+    
+    // Find all blocks referencing this avID
+    const sqlFind = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%')`;
+    const res = await post("/api/query/sql", { stmt: sqlFind });
+    if (res && res.length > 0) {
+        for (const row of res) {
+            blockIds.add(row.id);
+        }
     }
     
-    if (avBlockId) {
-        // Toggle the block type to a paragraph first to force Siyuan editor to unmount the AV widget
-        console.log(`[SQLiteManager] Force reloading columns by toggling block ${avBlockId}`);
-        await post("/api/block/updateBlock", {
-            id: avBlockId,
-            dataType: "markdown",
-            data: `<p>Refreshing Database UI...</p>`
-        });
-        
-        await new Promise(resolve => setTimeout(resolve, 150));
-        
-        // Then set it back to the Attribute View block. This forces Siyuan editor to completely recreate and remount the widget.
-        await post("/api/block/updateBlock", {
-            id: avBlockId,
-            dataType: "markdown",
-            data: `<div data-type="NodeAttributeView" data-av-type="table" data-av-id="${avID}"></div>`
-        });
+    // Include cached block ID if present
+    const cachedBlockId = avIdToBlockIdMap.get(avID);
+    if (cachedBlockId) {
+        blockIds.add(cachedBlockId);
+    }
+    
+    if (blockIds.size > 0) {
+        console.log(`[SQLiteManager] Found ${blockIds.size} AV blocks to trigger re-render for avID ${avID}:`, Array.from(blockIds));
         
         const formatDateStr = (date: Date) => {
             const pad = (n: number) => n.toString().padStart(2, '0');
             return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
         };
-        await post("/api/transactions", {
-            app: "plugin-index",
-            reqId: Date.now(),
-            transactions: [{
-                doOperations: [{
-                    action: "doUpdateUpdated",
-                    id: avBlockId,
-                    data: formatDateStr(new Date())
+        
+        for (const avBlockId of blockIds) {
+            // Toggle the block type to a paragraph first to force Siyuan editor to unmount the AV widget
+            console.log(`[SQLiteManager] Force reloading columns by toggling block ${avBlockId}`);
+            await post("/api/block/updateBlock", {
+                id: avBlockId,
+                dataType: "markdown",
+                data: `<p>Refreshing Database UI...</p>`
+            });
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        for (const avBlockId of blockIds) {
+            // Then set it back to the Attribute View block
+            await post("/api/block/updateBlock", {
+                id: avBlockId,
+                dataType: "markdown",
+                data: `<div data-type="NodeAttributeView" data-av-type="table" data-av-id="${avID}"></div>`
+            });
+            
+            await post("/api/transactions", {
+                app: "plugin-index",
+                reqId: Date.now(),
+                transactions: [{
+                    doOperations: [{
+                        action: "doUpdateUpdated",
+                        id: avBlockId,
+                        data: formatDateStr(new Date())
+                    }]
                 }]
-            }]
-        });
-        console.log(`[SQLiteManager] Triggered unmount/remount re-render of block ${avBlockId} for avID ${avID}`);
+            });
+            console.log(`[SQLiteManager] Triggered unmount/remount re-render of block ${avBlockId} for avID ${avID}`);
+        }
     } else {
-        console.warn(`[SQLiteManager] Failed to find block ID for avID ${avID} to trigger re-render`);
+        console.warn(`[SQLiteManager] Failed to find any block ID for avID ${avID} to trigger re-render`);
     }
 }
 
