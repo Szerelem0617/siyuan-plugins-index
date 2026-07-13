@@ -8,6 +8,7 @@
     import { reverseDbToList } from "../../command/hierarchy/db-reverse-list";
     import { getSystemTableNames, initSystemTables } from "../../command/indexos/command-sqlite";
     import { canUseFeature } from "../../dev-mode/policy-guard";
+    import { tagSuggestionState, setTagSuggestionEnabled } from "../../data/av-setting/tag-suggestion";
 
     let loading = true;
     let showPullModal = false;
@@ -27,6 +28,11 @@
     // Search and filter
     let cmdSearchQuery = "";
     let typeSearchQuery = "";
+    let tagSuggestionEnabled = tagSuggestionState.enabled;
+
+    function handleTagSuggestionToggle() {
+        setTagSuggestionEnabled(tagSuggestionEnabled);
+    }
 
     async function loadData() {
         loading = true;
@@ -349,15 +355,27 @@
 
         <!-- Section 2: Type Bindings (超级标签管理) -->
         <div class="db-section fn__flex-column" style="flex: 1; min-height: 180px; display: flex; flex-direction: column;">
-            <div class="fn__flex" style="align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🖇️ 超级标签管理 (Type-DB)</h3>
-                <input
-                    type="text"
-                    class="b3-text-field"
-                    style="font-size: 10px; padding: 2px 8px; width: 180px;"
-                    placeholder="过滤 Supertag..."
-                    bind:value={typeSearchQuery}
-                />
+            <div class="fn__flex" style="align-items: center; margin-bottom: 8px; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <div class="fn__flex" style="align-items: center; gap: 8px;">
+                    <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🖇️ 超级标签管理 (Type-DB)</h3>
+                    <input
+                        type="text"
+                        class="b3-text-field"
+                        style="font-size: 10px; padding: 2px 8px; width: 180px;"
+                        placeholder="过滤 Supertag..."
+                        bind:value={typeSearchQuery}
+                    />
+                </div>
+                <!-- Tag Suggestion Toggle -->
+                <div class="fn__flex" style="align-items: center; gap: 8px; font-size: 11px; user-select: none;">
+                    <span style="opacity: 0.8;">🐬 启用标签输入推荐 (#)</span>
+                    <input
+                        type="checkbox"
+                        class="b3-switch"
+                        bind:checked={tagSuggestionEnabled}
+                        on:change={handleTagSuggestionToggle}
+                    />
+                </div>
             </div>
 
             <div class="table-container fn__flex-1" style="overflow: auto; border: 1px solid var(--b3-border-color); border-radius: 6px; background: #111113;">

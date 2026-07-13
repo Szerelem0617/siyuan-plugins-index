@@ -28,6 +28,10 @@ export class SupertagMonitor {
         this.lastUpdate = Date.now();
     }
 
+    public getDataRegistry(): TypeConfig[] {
+        return this.dataRegistry;
+    }
+
     private boundHandler = this.handleWsMessage.bind(this);
     private pluginInstance: any = null;
 
