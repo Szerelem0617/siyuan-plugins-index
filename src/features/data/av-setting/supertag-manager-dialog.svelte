@@ -203,18 +203,13 @@
                 >
                     <span
                         class="b3-list-item__text"
-                        style="font-weight: bold; opacity: 0.6; flex: 1;"
+                        style="font-weight: bold; opacity: 0.6; flex: 1.2;"
                         >标签 (Type)</span
                     >
                     <span
                         class="b3-list-item__text"
-                        style="font-weight: bold; opacity: 0.6; flex: 2.5;"
+                        style="font-weight: bold; opacity: 0.6; flex: 3.5;"
                         >绑定详情 (Storage / Logic)</span
-                    >
-                    <span
-                        class="b3-list-item__text"
-                        style="font-weight: bold; opacity: 0.6; text-align: right; flex: 1;"
-                        >操作</span
                     >
                 </div>
 
@@ -229,15 +224,15 @@
                         <!-- Tag Name Column -->
                         <span
                             class="b3-list-item__text"
-                            style="font-weight: bold; flex: 1;"
+                            style="font-weight: bold; flex: 1.2;"
                         >
-                            #{group.typeName}#
+                            {group.typeName}
                         </span>
 
                         <!-- Details Column -->
                         <div
                             class="b3-list-item__text fn__flex-column"
-                            style="flex: 2.5; gap: 4px;"
+                            style="flex: 3.5; gap: 4px;"
                         >
                             {#if group.dataConfigs.length > 0}
                                 <div
@@ -308,26 +303,6 @@
                                         </span>
                                     {/each}
                                 </div>
-                            {/if}
-                        </div>
-
-                        <!-- Actions Column -->
-                        <div
-                            class="fn__flex"
-                            style="flex: 1; justify-content: flex-end;"
-                        >
-                            {#if group.dataConfigs.length > 0}
-                                <button
-                                    class="b3-button b3-button--outline b3-button--small"
-                                    on:click={() =>
-                                        handleConfigureTemplate(group)}
-                                    title="配置模板"
-                                >
-                                    <svg style="width: 14px; height: 14px;"
-                                        ><use xlink:href="#iconLayout"
-                                        ></use></svg
-                                    >
-                                </button>
                             {/if}
                         </div>
                     </div>

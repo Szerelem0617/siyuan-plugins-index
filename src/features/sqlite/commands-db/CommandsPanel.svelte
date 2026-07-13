@@ -376,7 +376,9 @@
                         <tbody>
                             {#each filteredTypes as row}
                                 <tr class:disabled={Number(row[typeEnableIdx]) === 0}>
-                                    <td class="primary-col" style="color: var(--b3-theme-primary); font-weight: bold;">{row[typeSupertagIdx]}</td>
+                                    <td class="primary-col" style="color: var(--b3-theme-primary); font-weight: bold;">
+                                        {String(row[typeSupertagIdx] || "").replace(/#/g, "")}
+                                    </td>
                                     <td>
                                         {#if row[typeBlockMenuIdx]}
                                             {#each String(row[typeBlockMenuIdx]).split(/[,，]/).map(s => s.trim()).filter(Boolean) as cmdName}
