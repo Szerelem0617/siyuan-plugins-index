@@ -576,7 +576,13 @@ export function addCommandTestMenuItem({ detail }: any) {
                         setTimeout(async () => {
                             try {
                                 focusBlockForDispatch(targetEl, protyleEl);
-                                await dispatchCommand(match.commandRef, match.paramMapping, { blockEl: targetEl, protyleEl, supertag: tag });
+                                // Force reload registry from Siyuan/SQLite to get the latest parameter mappings
+                                await refreshSupertagRegistry();
+                                const freshMatch = SUPERTAG_REGISTRY.find(item =>
+                                    item.commandRef === match.commandRef && item.typeTag === match.typeTag
+                                ) || match;
+
+                                await dispatchCommand(freshMatch.commandRef, freshMatch.paramMapping, { blockEl: targetEl, protyleEl, supertag: tag });
                             } catch (err) {
                                 console.error("[IndexOS] Command Execution Failed:", err);
                             } finally {
