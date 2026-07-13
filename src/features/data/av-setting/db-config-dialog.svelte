@@ -13,15 +13,10 @@
     export let currentConfig: DbConfig;
     export let columns: any[];
     export let dialog: any;
+    export let dbName = "";
 
     let activeTab = "type"; // type | inheritance
-    // Auto-detect mode for backward compatibility
-    let mode: "single" | "multi" =
-        currentConfig.mode ||
-        (currentConfig.typeMappings && currentConfig.typeMappings.length > 0
-            ? "multi"
-            : "single");
-    let singleClassName = currentConfig.singleClassName || "";
+    let enableSupertag = currentConfig.enableSupertag !== false;
     let typeFieldId = currentConfig.typeFieldId || "";
     let typeMappings: IDBTypeMapping[] = currentConfig.typeMappings || [];
     let inheritanceRules = currentConfig.inheritanceRules || [];
@@ -35,8 +30,7 @@
 
     // List of columns to exclude from Inheritance settings
     const inheritanceDenyList = new Set([
-        "level", // Deny inheritance for Level
-        // "icon",  // Allow inheritance for Icon
+        "level",
         "father",
         "parent_id",
         "path",
@@ -82,18 +76,8 @@
             return;
         }
 
-        console.log(
-            `[DbConfig] 1. User selected column: ${selectedCol.name} (ID: ${selectedCol.id})`,
-        );
-        console.log("[DbConfig] Column Definition:", selectedCol);
-
         let potentialValues: string[] = [];
 
-        console.log(
-            `[DbConfig] 2. Searching database column '${selectedCol.name}' for values...`,
-        );
-
-        // 1. Try configuration values (Select/mSelect options)
         if (selectedCol.values && selectedCol.values.length > 0) {
             const uniqueVals = new Set<string>();
             selectedCol.values?.forEach((v: any) => {
@@ -124,22 +108,7 @@
                 if (text) uniqueVals.add(text);
             });
             potentialValues = Array.from(uniqueVals).filter((v) => v !== "");
-            console.log(
-                `[DbConfig] Found ${potentialValues.length} unique values from column data.`,
-            );
         }
-
-        // 2. Fallback Scan removed as per architectural clarification (AV data not in IAL)
-        /*
-        if (potentialValues.length === 0) {
-            // ... (removed)
-        }
-        */
-
-        console.log(
-            `[DbConfig] 3. Found total potential values:`,
-            potentialValues,
-        );
 
         // Merge with existing mappings
         const newMappings: IDBTypeMapping[] = [];
@@ -158,11 +127,10 @@
             }
         });
 
-        // Sort: Empty first, then alphabetical
+        // Sort
         newMappings.sort((a, b) => {
             if (a.value === "") return -1;
             if (b.value === "") return 1;
-            // Try numeric sort for values like "1", "2", "10"
             const numA = parseFloat(a.value);
             const numB = parseFloat(b.value);
             if (!isNaN(numA) && !isNaN(numB)) {
@@ -172,29 +140,10 @@
         });
 
         typeMappings = newMappings;
-        console.log("[DbConfig] Final Mappings for UI:", typeMappings);
     }
 
     const save = async () => {
         const activeMappings = typeMappings.filter((m) => m.name.trim() !== "");
-
-        // 1. Validate internal uniqueness (within this DB)
-        if (mode === "multi") {
-            const names = activeMappings.map((m) => m.name);
-            const internalDuplicates = names.filter(
-                (name, index) => names.indexOf(name) !== index,
-            );
-            if (internalDuplicates.length > 0) {
-                showMessage(
-                    `${i18n.dbConfig.errInternalConflict} "${internalDuplicates[0]}"`,
-                    3000,
-                    "error",
-                );
-                return;
-            }
-        }
-
-        // Global uniqueness validation removed: duplicate types are allowed and resolved in Supertag Manager.
 
         const finalInheritanceRules = inheritanceList
             .filter((i) => i.mode !== "none")
@@ -202,8 +151,7 @@
 
         const config: DbConfig = {
             avId,
-            mode,
-            singleClassName: singleClassName.trim(),
+            enableSupertag,
             typeFieldId: typeFieldId,
             typeMappings: activeMappings,
             inheritanceRules: finalInheritanceRules as any,
@@ -237,22 +185,16 @@
     $: normalColumns = columns.filter((c) => {
         if (c.isPinned) return false;
         if (c.isPrimary) return false;
-        if (c.isSystem) return false; // Filter out other system columns if any
+        if (c.isSystem) return false;
         return true;
     });
-
-    function toggleMode() {
-        if (window.confirm(i18n.dbConfig.switchModePrompt)) {
-            mode = mode === "single" ? "multi" : "single";
-        }
-    }
 </script>
 
 <div
     class="fn__flex-column"
     style="height: 100%; padding: 12px; box-sizing: border-box;"
 >
-    <!-- ... Tabs ... -->
+    <!-- Tabs -->
     <div
         class="fn__flex"
         style="margin-bottom: 16px; border-bottom: 1px solid var(--b3-theme-surface-lighter); flex-shrink: 0;"
@@ -277,8 +219,8 @@
 
     <div style="flex: 1; overflow-y: auto; overflow-x: hidden;">
         {#if activeTab === "type"}
-            <div class="config-section">
-                <!-- Mode Selection -->
+            <div class="config-section" style="padding: 4px;">
+                <!-- Supertag Toggle Switch -->
                 <div
                     class="fn__flex"
                     style="margin-bottom: 16px; align-items: center; justify-content: space-between;"
@@ -287,75 +229,43 @@
                         class="b3-label"
                         style="margin: 0; font-weight: bold; font-size: 14px;"
                     >
-                        {mode === "single"
-                            ? i18n.dbConfig.modeSingle
-                            : i18n.dbConfig.modeMulti}
-                        <span
-                            style="font-size: 12px; font-weight: normal; margin-left: 8px; color: var(--b3-theme-on-surface-light);"
-                            >( 当前生效模式 )</span
-                        >
+                        启用 Supertag 功能
                     </span>
-                    <button
-                        class="b3-button b3-button--cancel"
-                        style="padding: 4px 8px;"
-                        on:click={toggleMode}
-                    >
-                        <svg
-                            class="b3-list-item__graphic"
-                            style="height: 14px; width: 14px; margin-right: 4px;"
-                            ><use xlink:href="#iconRefresh"></use></svg
-                        >
-                        切换至 {mode === "single"
-                            ? i18n.dbConfig.modeMulti
-                            : i18n.dbConfig.modeSingle}
-                    </button>
+                    <label class="fn__flex" style="align-items: center; cursor: pointer;">
+                        <input
+                            type="checkbox"
+                            class="b3-switch"
+                            bind:checked={enableSupertag}
+                        />
+                    </label>
                 </div>
 
-                <div class="fn__hr"></div>
-
-                {#if mode === "single"}
-                    <!-- Single Mode Config -->
-                    <div style="margin-top: 12px; padding: 0 4px;">
-                        <div
-                            class="fn__flex"
-                            style="align-items: center; justify-content: space-between; gap: 16px;"
-                        >
-                            <div
-                                class="b3-label"
-                                style="margin: 0; font-weight: bold; flex-shrink: 0;"
-                            >
-                                {i18n.dbConfig.singleClassLabel}
-                            </div>
-                            <input
-                                class="b3-input fn__flex-1"
-                                placeholder={i18n.dbConfig.typeNamePlaceholder}
-                                bind:value={singleClassName}
-                            />
+                {#if enableSupertag}
+                    <div style="background: var(--b3-theme-surface); padding: 12px; border-radius: 6px; border: 1px solid var(--b3-border-color); margin-bottom: 16px;">
+                        <div style="font-weight: bold; font-size: 13px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                            🏷️ 超级标签将注册为：
+                            <span class="b3-chip b3-chip--primary" style="font-family: monospace;">#{dbName.toLowerCase() || '表名'}</span>
                         </div>
-                        <div
-                            class="b3-label__text"
-                            style="margin-top: 12px; white-space: pre-wrap;"
-                        >
-                            {i18n.dbConfig.mapInfo}
+                        <div class="b3-label__text" style="font-size: 12px; opacity: 0.8; line-height: 1.4;">
+                            开启后，向任意块添加标签 <code style="color: #4ec9b0;">#{dbName.toLowerCase() || '表名'}</code> 将会自动把该块作为行录入到本数据库中。
                         </div>
                     </div>
-                {:else}
-                    <!-- Multi Mode Config (unchanged) -->
-                    <label class="b3-label">
-                        {i18n.dbConfig.typeFieldLabel}
-                        <div class="b3-form__icon">
+
+                    <div class="fn__hr" style="margin-bottom: 16px;"></div>
+
+                    <!-- Column selection for sub-type mappings -->
+                    <label class="b3-label" style="font-weight: bold; margin-bottom: 8px; display: block;">
+                        配置细分类型映射 (可选)
+                        <div class="b3-form__icon" style="margin-top: 6px;">
                             <select
                                 class="b3-select fn__block"
                                 bind:value={typeFieldId}
                                 on:change={() => {
-                                    // Clear existing mappings when switching column manually
                                     typeMappings = [];
                                     onTypeFieldChange();
                                 }}
                             >
-                                <option value=""
-                                    >{i18n.dbConfig.selectField}</option
-                                >
+                                <option value="">-- 选择用于细分类型的列 --</option>
 
                                 <optgroup label={i18n.dbConfig.systemProps}>
                                     {#each pinnedColumns as col}
@@ -367,9 +277,7 @@
 
                                 <optgroup label={i18n.dbConfig.columns}>
                                     {#each normalColumns as col}
-                                        <option value={col.id}
-                                            >{col.name}</option
-                                        >
+                                        <option value={col.id}>{col.name}</option>
                                     {/each}
                                 </optgroup>
                             </select>
@@ -377,44 +285,53 @@
                     </label>
 
                     {#if typeFieldId}
-                        <div style="margin-top: 12px;">
-                            <div class="b3-label">
-                                {i18n.dbConfig.valueMappings}
+                        <div style="margin-top: 16px;">
+                            <div class="b3-label" style="font-weight: bold; margin-bottom: 8px;">
+                                细分值与 Sub-tag 映射配置
                             </div>
-                            <div class="fn__hr"></div>
+                            <div class="fn__hr" style="margin-bottom: 12px;"></div>
+                            
                             {#each typeMappings as map}
                                 <div
                                     class="fn__flex"
-                                    style="margin-bottom: 8px; align-items: center;"
+                                    style="margin-bottom: 8px; align-items: center; gap: 8px;"
                                 >
                                     <div
-                                        style="width: 200px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex-shrink: 0;"
+                                        style="width: 180px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex-shrink: 0;"
                                         title="{selectedColumn?.name}-{map.value}"
                                     >
-                                        <span
-                                            class="b3-chip b3-chip--secondary"
-                                        >
-                                            {selectedColumn?.name}
-                                            - {map.value || "(Empty/Null)"}
+                                        <span class="b3-chip b3-chip--secondary">
+                                            {selectedColumn?.name} = {map.value || "(空/未设置)"}
                                         </span>
                                     </div>
-                                    <span style="margin: 0 8px;">→</span>
-                                    <input
-                                        class="b3-input fn__flex-1"
-                                        placeholder={i18n.dbConfig
-                                            .typeNamePlaceholder}
-                                        bind:value={map.name}
-                                    />
+                                    <span style="opacity: 0.5;">➔</span>
+                                    
+                                    <div class="fn__flex-1" style="display: flex; align-items: center; gap: 4px;">
+                                        <span style="opacity: 0.7; font-family: monospace; font-size: 12px;">#{dbName.toLowerCase()}.</span>
+                                        <input
+                                            class="b3-input fn__flex-1"
+                                            style="font-family: monospace;"
+                                            placeholder="自定义子标签名 (如 male)"
+                                            bind:value={map.name}
+                                        />
+                                    </div>
                                 </div>
                             {/each}
+
                             <div
                                 class="b3-label__text"
-                                style="margin-top: 8px; white-space: pre-wrap;"
+                                style="margin-top: 12px; white-space: pre-wrap; font-size: 11px; opacity: 0.7; line-height: 1.4;"
                             >
-                                {i18n.dbConfig.mapInfo}
+                                💡 <b>映射规则：</b><br/>
+                                配置了子标签名（如 <code style="color: #4ec9b0;">male</code>）后，对应的 Supertag 将会是 <code style="color: #4ec9b0;">#{dbName.toLowerCase()}.male</code>。<br/>
+                                当给块打上 <code style="color: #4ec9b0;">#{dbName.toLowerCase()}.male</code> 标签时，块除了会自动被录入到本表中，其 <b>{selectedColumn?.name}</b> 列的值也会被自动设为 <b>"{typeMappings[0]?.value || '对应值'}"</b>。
                             </div>
                         </div>
                     {/if}
+                {:else}
+                    <div style="text-align: center; padding: 40px 20px; opacity: 0.5; font-size: 13px;">
+                        ⚠️ Supertag 功能已关闭。该数据库不会自动对超级标签的块进行自动录入。
+                    </div>
                 {/if}
             </div>
         {/if}

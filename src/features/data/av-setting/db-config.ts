@@ -203,9 +203,7 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
         if (res.data) {
             for (const row of res.data) {
                 const configStr = getAttrFromIAL(row.ial, ATTR_DB_CONFIG);
-                // The actual name of the AV could be in row.name or as a block attribute
                 const blockAttr = getAttrFromIAL(row.ial, "name") || getAttrFromIAL(row.ial, "custom-av-name") || "";
-
                 let dbName = row.name || blockAttr || "";
 
                 if (configStr) {
@@ -215,14 +213,14 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
 
                         // Helper to resolve the DB name dynamically
                         const resolveDBName = async () => {
-                            let finalAvName = dbName;
+                            let finalAvName = dbName.trim();
                             if (!finalAvName) {
                                 if (avNameCache.has(targetAvId)) {
                                     finalAvName = avNameCache.get(targetAvId) || "";
                                 } else {
                                     try {
                                         const renderRes = await post("/api/av/renderAttributeView", { id: targetAvId });
-                                        finalAvName = renderRes?.name || "";
+                                        finalAvName = (renderRes?.name || renderRes?.view?.name || "").trim();
                                         avNameCache.set(targetAvId, finalAvName);
                                     } catch (e) {
                                         avNameCache.set(targetAvId, "");
@@ -232,26 +230,27 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                             return finalAvName;
                         };
 
-                        if (config.mode !== "multi" && config.singleClassName) {
-                            // Single mode
-                            const finalAvName = await resolveDBName();
+                        const finalAvName = await resolveDBName();
+                        const enableSupertag = config.enableSupertag !== false;
+
+                        if (enableSupertag && finalAvName) {
+                            // 1. Add base table-name supertag
                             configs.push({
-                                typeName: config.singleClassName,
+                                typeName: finalAvName.toLowerCase(),
                                 avId: targetAvId,
                                 blockId: row.id,
-                                typeFieldId: undefined,
-                                mappedValue: undefined,
                                 avName: finalAvName
                             });
-                        } else if (config.mode === "multi" || (config.typeMappings && config.typeFieldId)) {
-                            // Multi mode (or legacy with no mode explicitly set but has mappings)
-                            if (config.typeMappings && config.typeFieldId) {
+
+                            // 2. Add sub-type supertags (TableName.CustomName) if configured
+                            if (config.typeFieldId && config.typeMappings) {
                                 for (const m of config.typeMappings) {
-                                    if (m.name) {
-                                        const finalAvName = await resolveDBName();
+                                    const subTagName = (m.name || "").trim();
+                                    if (subTagName) {
+                                        const fullSubTagName = `${finalAvName}.${subTagName}`.toLowerCase();
                                         configs.push({
-                                            typeName: m.name,
-                                            avId: targetAvId, // Fallback to blockId if avId not set
+                                            typeName: fullSubTagName,
+                                            avId: targetAvId,
                                             blockId: row.id,
                                             typeFieldId: config.typeFieldId,
                                             mappedValue: m.value,
@@ -415,6 +414,11 @@ export async function openDbConfigDialog(avId: string, blockId: string) {
 
 
     const currentConfig = await loadDbConfig(blockId);
+    let dbName = "";
+    try {
+        const renderRes = await post("/api/av/renderAttributeView", { id: avId });
+        dbName = renderRes?.name || renderRes?.view?.name || "";
+    } catch (e) {}
 
     const dialog = new Dialog({
         title: i18n.dbConfig.dialogTitle,
@@ -430,7 +434,8 @@ export async function openDbConfigDialog(avId: string, blockId: string) {
             blockId,
             currentConfig,
             columns,
-            dialog
+            dialog,
+            dbName
         }
     });
 }
