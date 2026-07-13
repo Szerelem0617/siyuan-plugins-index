@@ -22,6 +22,7 @@ import { version } from "../plugin.json";
 import { initSystemTables } from "./features/command/indexos/command-sqlite";
 import { canUseFeature } from "./features/dev-mode/policy-guard";
 import { triggerFireworks } from "./features/command/effect/fireworks";
+import { triggerShowMessage } from "./features/command/effect/show-message";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -43,9 +44,14 @@ export default class IndexPlugin extends Plugin {
         // 内置命令表先行加载，其他所有模块（Dispatcher、第三方插件）均可安全地调用 getCommand()
         commandRegistry.loadBuiltins();
         
-        const fireworksCmd = commandRegistry.getCommand("plugin.index.effect.fireworks");
+        const fireworksCmd = commandRegistry.getCommand("plugin-index.effect.fireworks");
         if (fireworksCmd) {
             fireworksCmd.dispatch.executor = triggerFireworks;
+        }
+
+        const showMsgCmd = commandRegistry.getCommand("siyuan.ui.toast");
+        if (showMsgCmd) {
+            showMsgCmd.dispatch.executor = triggerShowMessage;
         }
 
         if (DEV_ENABLE_INIT_SYS) {

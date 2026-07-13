@@ -332,11 +332,13 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
     }
 
     const cleanTag = supertag ? supertag.replace(/^#/, "").trim().toLowerCase() : "";
+    console.log(`[Layer4Params-Debug] Starting Layer 4 resolution. blockId: "${blockId}", supertag: "${supertag}", cleanTag: "${cleanTag}"`);
 
     const querySQLite = async (): Promise<Array<{ tableName: string; avId: string; name: string; rowData: Record<string, string> }>> => {
         const tablesRes = await runQuery(`
             SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'av_%'
         `);
+        console.log(`[Layer4Params-Debug] SQLite Master av_ tables:`, JSON.stringify(tablesRes?.values || []));
         if (!tablesRes || !tablesRes.values || tablesRes.values.length === 0) {
             return [];
         }
@@ -350,6 +352,7 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
             try {
                 const existsRes = await runQuery(`SELECT count(*) FROM "${tableName}" WHERE rowID = ?`, [blockId]);
                 const existsCount = existsRes?.values?.[0]?.[0] || 0;
+                console.log(`[Layer4Params-Debug] Table "${tableName}" exists check for block "${blockId}": existsCount=${existsCount}`);
                 if (Number(existsCount) > 0) {
                     const avId = tableNameToAvId(tableName);
                     
@@ -367,6 +370,7 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
                         cols.forEach((colName, idx) => {
                             rowData[colName] = vals[idx] !== null && vals[idx] !== undefined ? String(vals[idx]) : "";
                         });
+                        console.log(`[Layer4Params-Debug] Match found in table "${tableName}" (${dbRealName}). RowData:`, JSON.stringify(rowData));
                         matches.push({ tableName, avId, name: dbRealName, rowData });
                     }
                 }
@@ -383,14 +387,16 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
 
         // 2. If not found in SQLite, trigger passive sync fallback
         if (matchedDbs.length === 0) {
-            
+            console.log(`[Layer4Params-Debug] Block "${blockId}" not found in SQLite cache. Pulling attributes from Siyuan...`);
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
             const avsAttr = attrsRes.data?.["custom-avs"] || "";
+            console.log(`[Layer4Params-Debug] Siyuan block custom-avs attribute value: "${avsAttr}"`);
             const avIds = avsAttr.split(",").map((id: string) => id.trim()).filter(Boolean);
             
             let syncedAny = false;
             for (const avId of avIds) {
                 try {
+                    console.log(`[Layer4Params-Debug] Instantiating block's containing AV: "${avId}"`);
                     await instantiateAV(avId, true); // force sync
                     syncedAny = true;
                 } catch (syncErr) {
@@ -399,14 +405,17 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
             }
 
             if (avIds.length === 0 && cleanTag) {
+                console.log(`[Layer4Params-Debug] No containing AVs found. Fallback matching global database configurations for cleanTag: "${cleanTag}"`);
                 const configs = await getGlobalTypeConfigs();
                 const matchedConfigs = configs.filter(c => {
                     const typeName = (c.typeName || "").trim().toLowerCase();
                     return typeName === cleanTag || typeName.includes(cleanTag) || cleanTag.includes(typeName);
                 });
+                console.log(`[Layer4Params-Debug] Global matched configurations:`, JSON.stringify(matchedConfigs));
                 for (const config of matchedConfigs) {
                     if (config.avId) {
                         try {
+                            console.log(`[Layer4Params-Debug] Syncing matched database: "${config.avId}"`);
                             await instantiateAV(config.avId, true); // force sync
                             syncedAny = true;
                         } catch (syncErr) { /* ignore */ }
@@ -421,6 +430,7 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
         }
 
         if (matchedDbs.length === 0) {
+            console.warn(`[Layer4Params-Debug] No databases containing block "${blockId}" found after sync.`);
             return params;
         }
 
@@ -433,6 +443,9 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
             });
             if (sameNameDb) {
                 targetDb = sameNameDb;
+                console.log(`[Layer4Params-Debug] Priority match selected table: "${targetDb.tableName}" (${targetDb.name})`);
+            } else {
+                console.log(`[Layer4Params-Debug] No exact name match for tag "${cleanTag}". Selecting first available table: "${targetDb.tableName}" (${targetDb.name})`);
             }
         }
 
@@ -451,6 +464,7 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
                 if (keyName) params[keyName] = cellValue;
             }
         }
+        console.log(`[Layer4Params-Debug] Successfully resolved database parameters:`, JSON.stringify(params));
     } catch (e) {
         console.error("[Layer4Params-Debug] Error resolving Layer 4 params:", e);
     }
@@ -466,6 +480,7 @@ async function resolveLayer4Params(blockId: string, supertag?: string): Promise<
  *   3. 块自身的自定义属性 / 系统同步/API变量。
  */
 async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
+    console.log(`[Dispatcher-Debug] resolveTemplate input: "${text}"`);
     if (!text.includes("{{")) return text;
 
     const blockId = context.blockEl?.getAttribute("data-node-id") ?? "";
@@ -476,6 +491,7 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
     let layer4Params: Record<string, string> = {};
 
     if (context.supertag) {
+        console.log(`[Dispatcher-Debug] Resolving template with supertag: "${context.supertag}"`);
         layer4Params = await resolveLayer4Params(blockId, context.supertag);
         // If we found database columns matching, it's Class Method Mode
         if (Object.keys(layer4Params).length > 0) {
@@ -528,9 +544,13 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
                 const attrs: Record<string, string> = res.data ?? {};
                 for (const match of attrMatches) {
                     const attrKey = match.slice(7, -2);
-                    result = result.replaceAll(match, attrs[attrKey] ?? "");
+                    const val = attrs[attrKey] ?? "";
+                    console.log(`[Dispatcher-Debug] Resolving custom attribute {{attr:${attrKey}}} with value: "${val}"`);
+                    result = result.replaceAll(match, val);
                 }
-            } catch { /* ignore */ }
+            } catch (err) {
+                console.error("[Dispatcher-Debug] Error resolving custom attributes:", err);
+            }
         } else {
             // For Tool Component mode, replace any residual {{attr:KEY}} with empty string to prevent exposure/errors
             console.log(`[Dispatcher] Custom attribute mapping {{attr:...}} is disabled in Tool Component mode.`);
@@ -540,6 +560,7 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
         }
     }
 
+    console.log(`[Dispatcher-Debug] resolveTemplate final output: "${result}"`);
     return result;
 }
 
@@ -561,7 +582,7 @@ export function parseParam(raw: string | null | undefined): Record<string, unkno
 
 /**
  * 降级路由：当 commandId 不在注册表中时，按前缀猜测执行方式。
- * 保证向后兼容——手写的 ID（如 "general.graphView"）即使没注册也能工作。
+ * 保证向后兼容——即使没注册的指令也能智能路由。
  */
 function dispatchByPrefix(
     commandId: string,
@@ -571,10 +592,17 @@ function dispatchByPrefix(
     const prefix = commandId.split(".")[0];
 
     if (prefix === "editor") {
-        // keyboard 路经：在 keymap 里按路径查找
+        // keyboard 路径：在 keymap 里按路径查找
         const parts = commandId.split(".");
         let node: any = (window as any).siyuan?.config?.keymap;
-        for (const part of parts) { node = node?.[part]; if (!node) break; }
+        for (const part of parts) {
+            let pathPart = part;
+            if (pathPart === "block" || pathPart === "text") {
+                pathPart = "general"; // 映射我们的逻辑分类到思源底层的 general 类别中
+            }
+            node = node?.[pathPart];
+            if (!node) break;
+        }
         const hotkey: string | null = node?.custom || node?.default || null;
 
         if (hotkey) {
@@ -593,10 +621,13 @@ function dispatchByPrefix(
         return { success: false, method: "keyboard", detail: `No hotkey for ${commandId}` };
     }
 
-    if (prefix === "general") {
+    if (prefix === "general" || prefix === "siyuan") {
         const bareCmd = commandId.split(".").pop()!;
-        globalCommand(bareCmd, plugin.app);
-        return { success: true, method: "global", detail: `fallback:${bareCmd}` };
+        let target = bareCmd;
+        if (bareCmd === "graph") target = "graphView";
+        if (bareCmd === "splitRight") target = "splitLR";
+        globalCommand(target, plugin.app);
+        return { success: true, method: "global", detail: `fallback:${target}` };
     }
 
     if (prefix === "api") {

@@ -5,13 +5,15 @@ import { sleep } from "../../shared/utils";
 import { setCommandAvId, setTypeAvId, setCommandDocId, setTypeDocId } from "./registration";
 import { getSqliteEngine, runQuery, instantiateAV, saveDatabaseToDisk } from "../sqlite/sqlite-manager";
 
-const NOTEBOOK_NAME = "类与命令管理";
+const NOTEBOOK_NAME = "IndexOS";
+const OLD_NOTEBOOK_NAME = "类与命令管理";
 
 /**
  * Initializes the Command & Type DB notebook and internal pages.
- * 1. Creates a Notebook called "类与命令管理" if it doesn't exist.
- * 2. Creates a Page called "逻辑工厂 (Command-DB)" with a pure Attribute View.
- * 3. Creates a Page called "类型绑定 (Type-DB)" with a pure Attribute View.
+ * 1. Creates a Notebook called "IndexOS" if it doesn't exist, renaming old one if found.
+ * 2. Sets the Notebook icon to 🐬.
+ * 3. Extracts existing database IDs (avId) from old documents and deletes old documents.
+ * 4. Creates root-level "命令管理" and "超级标签管理" pages, reusing the existing databases.
  */
 export async function constructCommandStorage() {
     try {
@@ -22,18 +24,92 @@ export async function constructCommandStorage() {
         let targetNotebookId = notebooks.find((n: any) => n.name === NOTEBOOK_NAME && !n.closed)?.id;
 
         if (!targetNotebookId) {
-            console.log(`[IndexOS] Notebook not found, creating new: ${NOTEBOOK_NAME}`);
-            const res = await post("/api/notebook/createNotebook", { name: NOTEBOOK_NAME });
-            targetNotebookId = res.notebook.id;
+            const oldNotebook = notebooks.find((n: any) => n.name === OLD_NOTEBOOK_NAME && !n.closed);
+            if (oldNotebook) {
+                console.log(`[IndexOS] Renaming old notebook "${OLD_NOTEBOOK_NAME}" to "${NOTEBOOK_NAME}"`);
+                await post("/api/notebook/renameNotebook", { notebook: oldNotebook.id, name: NOTEBOOK_NAME });
+                targetNotebookId = oldNotebook.id;
+            } else {
+                console.log(`[IndexOS] Notebook not found, creating new: ${NOTEBOOK_NAME}`);
+                const res = await post("/api/notebook/createNotebook", { name: NOTEBOOK_NAME });
+                targetNotebookId = res.notebook.id;
+            }
             await sleep(500);
         }
 
-        // 2. Init Command-DB (逻辑工厂)
+        // Set notebook icon to 🐬 (Unicode: U+1F42C, Hex string: "1f42c")
+        if (targetNotebookId) {
+            try {
+                console.log(`[IndexOS] Setting notebook icon to 🐬`);
+                await post("/api/notebook/setNotebookIcon", { notebook: targetNotebookId, icon: "1f42c" });
+            } catch (iconErr) {
+                console.error("[IndexOS] Failed to set notebook icon:", iconErr);
+            }
+        }
+
+        // 1.5 Find existing documents and extract their avIds before clean recreation
+        const cmdDocs = await post("/api/query/sql", { stmt: `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1` });
+        const typeDocs = await post("/api/query/sql", { stmt: `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1` });
+
+        let existingCommandAvId = "";
+        let existingTypeAvId = "";
+        let oldCmdDocId = cmdDocs && cmdDocs.length > 0 ? cmdDocs[0].root_id : "";
+        let oldTypeDocId = typeDocs && typeDocs.length > 0 ? typeDocs[0].root_id : "";
+
+        if (oldCmdDocId) {
+            const avRes = await post("/api/query/sql", { stmt: `SELECT id FROM blocks WHERE root_id = '${oldCmdDocId}' AND type = 'av' LIMIT 1` });
+            if (avRes && avRes.length > 0) {
+                const domRes = await client.getBlockDOM({ id: avRes[0].id });
+                const match = (domRes.data?.dom || "").match(/data-av-id="([^"]+)"/);
+                existingCommandAvId = match ? match[1] : avRes[0].id;
+            }
+        }
+
+        if (oldTypeDocId) {
+            const avRes = await post("/api/query/sql", { stmt: `SELECT id FROM blocks WHERE root_id = '${oldTypeDocId}' AND type = 'av' LIMIT 1` });
+            if (avRes && avRes.length > 0) {
+                const domRes = await client.getBlockDOM({ id: avRes[0].id });
+                const match = (domRes.data?.dom || "").match(/data-av-id="([^"]+)"/);
+                existingTypeAvId = match ? match[1] : avRes[0].id;
+            }
+        }
+
+        // Clean up old document pages so they get re-created cleanly at root level
+        if (oldTypeDocId) {
+            try {
+                const parentRes = await post("/api/query/sql", {
+                    stmt: `SELECT parent_id FROM blocks WHERE id = '${oldTypeDocId}' LIMIT 1`
+                });
+                if (parentRes && parentRes.length > 0) {
+                    const parentId = parentRes[0].parent_id;
+                    if (parentId && parentId !== targetNotebookId) {
+                        const parentDocCheck = await post("/api/query/sql", {
+                            stmt: `SELECT id FROM blocks WHERE id = '${parentId}' AND type = 'd' LIMIT 1`
+                        });
+                        if (parentDocCheck && parentDocCheck.length > 0) {
+                            console.log(`[IndexOS] Deleting old parent doc: ${parentId}`);
+                            await post("/api/filetree/removeDocByID", { id: parentId });
+                        }
+                    }
+                }
+            } catch (_) {}
+            console.log(`[IndexOS] Deleting old Type-DB doc: ${oldTypeDocId}`);
+            await post("/api/filetree/removeDocByID", { id: oldTypeDocId });
+        }
+
+        if (oldCmdDocId) {
+            console.log(`[IndexOS] Deleting old Command-DB doc: ${oldCmdDocId}`);
+            await post("/api/filetree/removeDocByID", { id: oldCmdDocId });
+        }
+
+        await sleep(1000); // Wait for deletions to propagate
+
+        // 2. Init Command-DB (命令管理)
         const commandDb = await initDbDoc(
             targetNotebookId,
-            "逻辑工厂 (Command-DB)",
+            "命令管理",
             "custom-index-command-db",
-            `# 逻辑工厂 (Command-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 2，用于编排复合指令和参数流转。\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
+            (avIdStr) => `# 命令管理\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 2，用于编排复合指令和参数流转。\n\n<div data-type="NodeAttributeView"${avIdStr} data-av-type="table"></div>\n`,
             "Command ID",
             async (avId) => {
                 const addCol = async (name: string, type: string, icon: string, prevKey: string) => {
@@ -52,15 +128,15 @@ export async function constructCommandStorage() {
 
                 const commandIdKey = await addCol("Command ID", "text", "iconCode", lastKeyID);
                 const paramMappingKey = await addCol("Param Mapping", "text", "iconList", commandIdKey);
-                const commandTypeKey = await addCol("Command Type", "text", "iconTags", paramMappingKey);
-                const targetScopeKey = await addCol("Target Scope", "text", "iconFocus", commandTypeKey);
+                const requiresParamsKey = await addCol("Requires Params", "text", "iconTags", paramMappingKey);
+                const targetScopeKey = await addCol("Target Scope", "text", "iconFocus", requiresParamsKey);
                 const enableKey = await addCol("Enable", "checkbox", "iconCheck", targetScopeKey);
                 const topBarKey = await addCol("Top Bar", "checkbox", "iconLayout", enableKey);
                 const buttonKey = await addCol("Inline Button", "checkbox", "iconPlay", topBarKey);
                 const paletteKey = await addCol("Command Palette", "checkbox", "iconSearch", buttonKey);
 
                 // Fetch seed data from SQLite sys_command_db
-                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette FROM sys_command_db`);
+                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette FROM sys_command_db`);
 
                 // Insert seed items as detached rows
                 const addRows: any[] = [];
@@ -87,7 +163,7 @@ export async function constructCommandStorage() {
 
                 const populateOps: any[] = [];
                 for (const match of seedRes.values) {
-                    const [rowID, labelVal, commandID, paramMapping, commandType, targetScope, enable, topBar, inlineButton, commandPalette] = match;
+                    const [rowID, labelVal, commandID, paramMapping, requiresParams, targetScope, enable, topBar, inlineButton, commandPalette] = match;
                     
                     if (primaryKeyId) {
                         populateOps.push({
@@ -99,7 +175,7 @@ export async function constructCommandStorage() {
 
                     populateOps.push({ keyID: commandIdKey, itemID: rowID, value: { type: "text", text: { content: String(commandID || "") } } });
                     populateOps.push({ keyID: paramMappingKey, itemID: rowID, value: { type: "text", text: { content: String(paramMapping || "") } } });
-                    populateOps.push({ keyID: commandTypeKey, itemID: rowID, value: { type: "text", text: { content: String(commandType || "") } } });
+                    populateOps.push({ keyID: requiresParamsKey, itemID: rowID, value: { type: "text", text: { content: String(requiresParams || "否") } } });
                     populateOps.push({ keyID: targetScopeKey, itemID: rowID, value: { type: "text", text: { content: String(targetScope || "") } } });
                     populateOps.push({ keyID: enableKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
                     populateOps.push({ keyID: topBarKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(topBar) === 1 } } });
@@ -110,15 +186,16 @@ export async function constructCommandStorage() {
                 if (populateOps.length > 0) {
                     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: avId, values: populateOps });
                 }
-            }
+            },
+            existingCommandAvId
         );
 
-        // 3. Init Type-DB (类型绑定)
+        // 3. Init Type-DB (超级标签管理)
         const typeDb = await initDbDoc(
             targetNotebookId,
-            "超级标签与类/组件绑定 (Type-DB)",
+            "超级标签管理",
             "custom-index-type-db",
-            `# 超级标签与类/组件绑定 (Type-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
+            (avIdStr) => `# 超级标签管理\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将命令管理中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n<div data-type="NodeAttributeView"${avIdStr} data-av-type="table"></div>\n`,
             "Block Icon Menu",
             async (avId) => {
                 const addCol = async (name: string, type: string, icon: string, prevKey: string) => {
@@ -185,7 +262,8 @@ export async function constructCommandStorage() {
                 if (populateOps.length > 0) {
                     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: avId, values: populateOps });
                 }
-            }
+            },
+            existingTypeAvId
         );
 
         if (commandDb?.avId && typeDb?.avId) {
@@ -416,9 +494,10 @@ async function initDbDoc(
     notebookId: string,
     docName: string,
     attrName: string,
-    initMarkdown: string,
+    initMarkdownTemplate: (avIdStr: string) => string,
     expectedColName: string,
-    initColsCallback: (avId: string) => Promise<void>
+    initColsCallback: (avId: string) => Promise<void>,
+    existingAvId?: string
 ): Promise<{ docId: string; avId: string }> {
     // 0. Check via attributes first
     const sql = `SELECT root_id FROM attributes WHERE name = '${attrName}' LIMIT 1`;
@@ -457,6 +536,8 @@ async function initDbDoc(
         console.log(`[IndexOS] ${docName} doc not found, creating new...`);
         try {
             // Attempt to insert markdown
+            const avIdPlaceholder = existingAvId ? ` data-av-id="${existingAvId}"` : "";
+            const initMarkdown = initMarkdownTemplate(avIdPlaceholder);
             const createRes = await post("/api/filetree/createDocWithMd", {
                 notebook: notebookId,
                 path: docPath,

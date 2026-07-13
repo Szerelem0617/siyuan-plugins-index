@@ -14,7 +14,7 @@ export interface TopBarCommand {
     label: string;
     commandId: string;
     commandParam: string;
-    commandType: string;
+    requiresParams: string;
 }
 
 let registeredTopBars: { id: string, element: HTMLElement }[] = [];
@@ -72,7 +72,10 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
         const labelIdx = colIdx(commandLabelCol);
         const cmdIdIdx = colIdx("Command_ID");
         const paramIdx = colIdx("Param_Mapping");
-        const typeIdx = colIdx("Command_Type");
+        let typeIdx = colIdx("Requires_Params");
+        if (typeIdx === -1) {
+            typeIdx = colIdx("Command_Type");
+        }
         const topBarIdx = colIdx("Top_Bar");
         const ibIdx = colIdx("Inline_Button");
         const paletteIdx = colIdx("Command_Palette");
@@ -82,7 +85,7 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             const label = String(row[labelIdx] || "");
             const commandId = String(row[cmdIdIdx] || "");
             const commandParam = String(row[paramIdx] || "");
-            const commandType = String(row[typeIdx] || "");
+            const requiresParams = String(row[typeIdx] || "否");
             
             // Critical check: SQLite INTEGER might be returned as number 1
             const isTopBar = Number(row[topBarIdx]) === 1;
@@ -90,13 +93,13 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             const isPalette = Number(row[paletteIdx]) === 1;
 
             if (isTopBar && label && commandId) {
-                newTopBars.push({ id, label, commandId, commandParam, commandType });
+                newTopBars.push({ id, label, commandId, commandParam, requiresParams });
             }
             if (isIB && label && commandId) {
-                newInlineBtns.push({ id, label, commandId, commandParam, commandType });
+                newInlineBtns.push({ id, label, commandId, commandParam, requiresParams });
             }
             if (isPalette && label && commandId) {
-                newPaletteCmds.push({ id, label, commandId, commandParam, commandType });
+                newPaletteCmds.push({ id, label, commandId, commandParam, requiresParams });
             }
         }
 
@@ -185,9 +188,9 @@ async function refreshTopBarFromApi() {
             let label = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
             label = label.replace(/#/g, "").split("|")[0].split("(")[0].trim();
             const commandId = getCellText("Command ID");
-            const commandParam = getCellText("Command Param");
-            const commandType = getCellText("Command Type");
-
+            const commandParam = getCellText("Command Param") || getCellText("Param Mapping");
+            const requiresParams = getCellText("Requires Params") || getCellText("Command Type") || "否";
+            
             const getBool = (name: string) => {
                 const idx = columns.findIndex((c: any) => c.name === name || c.keyName === name);
                 if (idx < 0) return false;
@@ -196,9 +199,9 @@ async function refreshTopBarFromApi() {
             }
 
             if (getBool("Enable") && commandId) {
-                if (getBool("Top Bar") && label) newTopBars.push({ id: row.id, label, commandId, commandParam, commandType });
-                if (getBool("Inline Button") && label) newInlineBtns.push({ id: row.id, label, commandId, commandParam, commandType });
-                if (getBool("Command Palette") && label) newPaletteCmds.push({ id: row.id, label, commandId, commandParam, commandType });
+                if (getBool("Top Bar") && label) newTopBars.push({ id: row.id, label, commandId, commandParam, requiresParams });
+                if (getBool("Inline Button") && label) newInlineBtns.push({ id: row.id, label, commandId, commandParam, requiresParams });
+                if (getBool("Command Palette") && label) newPaletteCmds.push({ id: row.id, label, commandId, commandParam, requiresParams });
             }
         }
 

@@ -269,7 +269,7 @@ async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
 
     const commandAvId = getCommandAvId();
     if (!commandAvId) {
-        showMessage("未能加载逻辑工厂 (Command-DB) 数据库", 3000, "error");
+        showMessage("未能加载命令管理 数据库", 3000, "error");
         return;
     }
 
@@ -301,14 +301,14 @@ async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
         }
 
         if (!cmdRowItemId) {
-            showMessage(`未在逻辑工厂 (Command-DB) 中找到名称为 "${cleanLabel}" 的行，请先创建`, 3000, "warning");
+            showMessage(`未在命令管理中找到名称为 "${cleanLabel}" 的行，请先创建`, 3000, "warning");
             return;
         }
 
         // 3. 获取 Param Mapping 的 Siyuan key ID
         const paramColKeyId = await getParamColKeyId(commandAvId);
         if (!paramColKeyId) {
-            showMessage("未能在逻辑工厂中找到 'Param Mapping' 列", 3000, "error");
+            showMessage("未能在命令管理中找到 'Param Mapping' 列", 3000, "error");
             return;
         }
 

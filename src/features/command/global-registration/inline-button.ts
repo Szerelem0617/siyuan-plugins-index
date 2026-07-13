@@ -105,7 +105,7 @@ export interface InlineButtonCmd {
     label: string;
     commandId: string;
     commandParam: string;
-    commandType: string;
+    requiresParams: string;
 }
 
 let availableInlineCommands: InlineButtonCmd[] = [];

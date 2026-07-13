@@ -4,7 +4,7 @@
     "version": "1.0.0",
     "commands": [
         {
-            "id": "general.graphView",
+            "id": "siyuan.view.graph",
             "name": "全局关系图",
             "description": "呼出全局块关系图面板。",
             "dispatch": {
@@ -25,7 +25,7 @@
             }
         },
         {
-            "id": "general.inbox",
+            "id": "siyuan.view.inbox",
             "name": "打开收集箱",
             "description": "打开每日收集箱。",
             "dispatch": {
@@ -45,7 +45,7 @@
             }
         },
         {
-            "id": "general.splitLR",
+            "id": "siyuan.view.splitRight",
             "name": "在右侧分屏打开",
             "description": "将当前文档在右侧新面板打开。",
             "dispatch": {
@@ -65,7 +65,7 @@
             }
         },
         {
-            "id": "editor.general.duplicate",
+            "id": "editor.block.duplicate",
             "name": "复制当前块",
             "description": "将光标所在块复制一份，插入到其下方。依赖编辑器焦点，只能在当前可见块上触发，无法通过定时或远程调用任意块。",
             "dispatch": {
@@ -87,11 +87,11 @@
                 "scope": "self",
                 "category": "edit",
                 "source": "builtin",
-                "apiEquivalent": "api.block.insertBlock"
+                "apiEquivalent": "api.block.insert"
             }
         },
         {
-            "id": "editor.general.insertAfter",
+            "id": "editor.block.insertBelow",
             "name": "在下方插入同级块",
             "description": "在当前块下方插入一个新的空块。依赖焦点。",
             "dispatch": {
@@ -112,11 +112,11 @@
                 "scope": "sibling",
                 "category": "edit",
                 "source": "builtin",
-                "apiEquivalent": "api.block.insertBlock"
+                "apiEquivalent": "api.block.insert"
             }
         },
         {
-            "id": "editor.general.copyBlockRef",
+            "id": "editor.block.copyRef",
             "name": "复制块引用",
             "description": "将当前块的引用格式复制到剪贴板（((block-id '内容'))）。",
             "dispatch": {
@@ -140,7 +140,7 @@
             }
         },
         {
-            "id": "api.block.insertBlock",
+            "id": "api.block.insert",
             "name": "API：插入块",
             "description": "通过后端 API 在指定块前/后插入指定内容的块。完全不依赖 UI 焦点，支持定时任务和远程触发。",
             "dispatch": {
@@ -206,7 +206,7 @@
             }
         },
         {
-            "id": "api.block.updateBlock",
+            "id": "api.block.update",
             "name": "API：更新块内容",
             "description": "通过后端 API 更新指定块的内容。完全不依赖 UI，支持定时任务。",
             "dispatch": {
@@ -260,7 +260,7 @@
             }
         },
         {
-            "id": "api.attr.setBlockAttrs",
+            "id": "api.attr.setAttrs",
             "name": "API：设置块属性",
             "description": "通过后端 API 为指定块写入或修改自定义属性键值对。",
             "dispatch": {
@@ -297,7 +297,7 @@
             }
         },
         {
-            "id": "plugin.index.effect.fireworks",
+            "id": "plugin-index.effect.fireworks",
             "name": "烟花",
             "description": "在命令按钮或当前光标块位置播放炫丽的放烟花动画特效。",
             "dispatch": {
@@ -308,6 +308,36 @@
                 "requiresFocus": false,
                 "uiOnly": true,
                 "schedulable": false
+            },
+            "meta": {
+                "scope": "self",
+                "category": "custom",
+                "source": "plugin",
+                "plugin": "index"
+            }
+        },
+        {
+            "id": "siyuan.ui.toast",
+            "name": "消息提示 (showMessage)",
+            "description": "在思源右上角弹出气泡提示。支持自定义消息内容；无传参时显示默认内容。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "message",
+                    "label": "消息内容",
+                    "type": "text",
+                    "required": false,
+                    "paramMode": "template",
+                    "default": "看到这条消息会有好运～",
+                    "templateVars": ["{{date}}", "{{time}}", "{{block_id}}", "{{attr:KEY}}"]
+                }
+            ],
+            "constraints": {
+                "requiresFocus": false,
+                "uiOnly": true,
+                "schedulable": true
             },
             "meta": {
                 "scope": "self",

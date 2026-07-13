@@ -21,7 +21,7 @@ export interface PaletteCommand {
     description?: string;
     commandId: string;
     commandParam: string;
-    commandType: string;
+    requiresParams: string;
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────

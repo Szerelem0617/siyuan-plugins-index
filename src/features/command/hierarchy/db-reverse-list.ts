@@ -44,7 +44,7 @@ export async function reverseDbToList(): Promise<boolean> {
         const cmdSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
         const cmdDocs = await post("/api/query/sql", { stmt: cmdSql });
         if (!cmdDocs || cmdDocs.length === 0) {
-            showMessage("未找到 逻辑工厂 (Command-DB) 的系统属性", 4000, "error");
+            showMessage("未找到 命令管理 的系统属性", 4000, "error");
             return false;
         }
         const cmdDocId = cmdDocs[0].root_id;
@@ -52,18 +52,18 @@ export async function reverseDbToList(): Promise<boolean> {
         const typeSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
         const typeDocs = await post("/api/query/sql", { stmt: typeSql });
         if (!typeDocs || typeDocs.length === 0) {
-            showMessage("未找到 超级标签与类/组件绑定 (Type-DB) 的系统属性", 4000, "error");
+            showMessage("未找到 超级标签管理 的系统属性", 4000, "error");
             return false;
         }
         const typeDocId = typeDocs[0].root_id;
 
-        // 3. Process Command-DB (逻辑工厂)
-        showMessage("[IndexOS] 正在构建逻辑工厂大纲列表...", 2000);
+        // 3. Process Command-DB (命令管理)
+        showMessage("[IndexOS] 正在构建命令管理大纲列表...", 2000);
         const cmdSuccess = await processSingleDbReverse(commandAvId, cmdDocId, tablesInfo.commandLabelCol);
         if (!cmdSuccess) return false;
 
-        // 4. Process Type-DB (超级标签与类/组件绑定)
-        showMessage("[IndexOS] 正在构建超级标签与类/组件绑定大纲列表...", 2000);
+        // 4. Process Type-DB (超级标签管理)
+        showMessage("[IndexOS] 正在构建超级标签管理大纲列表...", 2000);
         const typeSuccess = await processSingleDbReverse(typeAvId, typeDocId, tablesInfo.typeSupertagCol);
         if (!typeSuccess) return false;
 

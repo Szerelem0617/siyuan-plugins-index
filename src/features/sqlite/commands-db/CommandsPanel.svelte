@@ -139,21 +139,26 @@
             const randPart = Math.random().toString(36).slice(2, 9);
             const rowID = `${formatPart}-${randPart}`;
 
-            const cmdType = cmd.dispatch?.method === "api" ? "API" : "Native";
+            const requiresParams = (Array.isArray(cmd.params) && cmd.params.length > 0) ? "是" : "否";
             const targetScope = cmd.meta?.scope ? (cmd.meta.scope.charAt(0).toUpperCase() + cmd.meta.scope.slice(1)) : "Global";
 
             const { db } = await getSqliteEngine();
             const { commands: commandsTable } = getSystemTableNames();
 
+            // Detect if table has Requires_Params column or Command_Type column
+            const columnsInfo = db.exec(`PRAGMA table_info(${commandsTable})`);
+            const hasRequiresParams = columnsInfo[0]?.values.some(v => v[1] === "Requires_Params");
+            const colName = hasRequiresParams ? "Requires_Params" : "Command_Type";
+
             db.run(`
-                INSERT INTO ${commandsTable} (rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette)
+                INSERT INTO ${commandsTable} (rowID, label, Command_ID, Param_Mapping, ${colName}, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette)
                 VALUES (?, ?, ?, ?, ?, ?, 1, 0, 0, 0)
             `, [
                 rowID,
                 cmd.name,
                 cmd.id,
                 "",
-                cmdType,
+                requiresParams,
                 targetScope
             ]);
 
@@ -216,7 +221,7 @@
     $: cmdLabelIdx = colIdx(commandCols, commandLabelCol);
     $: cmdIdIdx = colIdx(commandCols, "Command_ID");
     $: cmdParamIdx = colIdx(commandCols, "Param_Mapping");
-    $: cmdTypeIdx = colIdx(commandCols, "Command_Type");
+    $: cmdTypeIdx = colIdx(commandCols, "Requires_Params") !== -1 ? colIdx(commandCols, "Requires_Params") : colIdx(commandCols, "Command_Type");
     $: cmdScopeIdx = colIdx(commandCols, "Target_Scope");
     $: cmdEnableIdx = colIdx(commandCols, "Enable");
     $: cmdTopBarIdx = colIdx(commandCols, "Top_Bar");
@@ -283,10 +288,10 @@
             {/if}
         </div>
 
-        <!-- Section 1: Command List (逻辑工厂) -->
+        <!-- Section 1: Command List (命令管理) -->
         <div class="db-section fn__flex-column" style="flex: 1; min-height: 200px; display: flex; flex-direction: column;">
             <div class="fn__flex" style="align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🛠️ 指令注册列表 (Command-DB)</h3>
+                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🛠️ 命令管理 (Command-DB)</h3>
                 <input
                     type="text"
                     class="b3-text-field"
@@ -305,7 +310,7 @@
                             <tr>
                                 <th>指令名称 (主键)</th>
                                 <th>Command ID</th>
-                                <th>类别</th>
+                                <th>需要参数</th>
                                 <th>作用域</th>
                                 <th style="text-align: center;">启用</th>
                                 <th style="text-align: center;">位置 (T/I/P)</th>
@@ -317,7 +322,7 @@
                                 <tr class:disabled={Number(row[cmdEnableIdx]) === 0}>
                                     <td class="primary-col" title={row[cmdLabelIdx]}>{row[cmdLabelIdx]}</td>
                                     <td><code style="color: #4ec9b0;">{row[cmdIdIdx] || ""}</code></td>
-                                    <td style="opacity: 0.7;">{row[cmdTypeIdx] || "Native"}</td>
+                                    <td style="opacity: 0.7;">{row[cmdTypeIdx] || "否"}</td>
                                     <td style="opacity: 0.7;">{row[cmdScopeIdx] || "Global"}</td>
                                     <td style="text-align: center;">
                                         <span class="status-dot" class:active={Number(row[cmdEnableIdx]) === 1}></span>
@@ -345,7 +350,7 @@
         <!-- Section 2: Type Bindings (超级标签与类/组件绑定) -->
         <div class="db-section fn__flex-column" style="flex: 1; min-height: 180px; display: flex; flex-direction: column;">
             <div class="fn__flex" style="align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🖇️ 超级标签与类/组件绑定 (Type-DB)</h3>
+                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🖇️ 超级标签管理 (Type-DB)</h3>
                 <input
                     type="text"
                     class="b3-text-field"

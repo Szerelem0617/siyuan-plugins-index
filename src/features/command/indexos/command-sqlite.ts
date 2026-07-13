@@ -29,7 +29,7 @@ export async function initSystemTables() {
         label TEXT,
         Command_ID TEXT,
         Param_Mapping TEXT,
-        Command_Type TEXT,
+        Requires_Params TEXT,
         Target_Scope TEXT,
         Enable INTEGER DEFAULT 1,
         Top_Bar INTEGER DEFAULT 0,
@@ -69,33 +69,52 @@ export async function initSystemTables() {
     const cmdCount = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS}`)[0].values[0][0];
     if (cmdCount === 0) {
         const defaultCmds = [
-            // rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette
-            ["20260526204558-bp28zp8", "🌐 全局关系图 (无上下文测试)", "general.graphView", "", "Native", "Global", 1, 1, 1, 1],
-            ["20260526204558-6l2h54b", "📥 收集箱 (无上下文测试)", "general.inbox", "", "Native", "Global", 1, 0, 0, 1],
-            ["20260526204558-iilvqz3", "🔍 在右侧分屏打开", "general.splitLR", "", "Native", "Global", 1, 0, 1, 1],
-            ["20260526204558-6nbjc0b", "⬇️ 下方插入同级块", "editor.general.insertAfter", "", "Native", "Sibling", 1, 0, 0, 1],
-            ["20260526204558-zxrigm8", "📑 复制当前块", "editor.general.duplicate", "", "Native", "Sibling", 1, 0, 0, 1],
-            ["20260526204558-6y7laha", "🖇️ 复制块引用", "editor.general.copyBlockRef", "", "Native", "Global", 1, 0, 0, 1],
-            ["20260527120000-insert", "⚡ API 插入块测试", "api.block.insertBlock", "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}", "API", "Global", 1, 0, 0, 1],
-            ["20260701100000-fireworks", "烟花", "plugin.index.effect.fireworks", "", "Custom", "Self", 1, 0, 1, 1]
+            // rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette
+            ["20260526204558-bp28zp8", "🌐 全局关系图 (无上下文测试)", "siyuan.view.graph", "", "否", "Global", 1, 1, 1, 1],
+            ["20260526204558-6l2h54b", "📥 收集箱 (无上下文测试)", "siyuan.view.inbox", "", "否", "Global", 1, 0, 0, 1],
+            ["20260526204558-iilvqz3", "🔍 在右侧分屏打开", "siyuan.view.splitRight", "", "否", "Global", 1, 0, 1, 1],
+            ["20260526204558-6nbjc0b", "⬇️ 下方插入同级块", "editor.block.insertBelow", "", "否", "Sibling", 1, 0, 0, 1],
+            ["20260526204558-zxrigm8", "📑 复制当前块", "editor.block.duplicate", "", "否", "Sibling", 1, 0, 0, 1],
+            ["20260526204558-6y7laha", "🖇️ 复制块引用", "editor.block.copyRef", "", "否", "Global", 1, 0, 0, 1],
+            ["20260527120000-insert", "⚡ API 插入块测试", "api.block.insert", "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}", "是", "Global", 1, 0, 0, 1],
+            ["20260701100000-fireworks", "烟花", "plugin-index.effect.fireworks", "", "否", "Self", 1, 0, 1, 1],
+            ["20260713120000-showmessage", "消息提示 (showMessage)", "siyuan.ui.toast", "", "是", "Self", 1, 0, 1, 1]
         ];
-        const stmt = db.prepare(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const stmt = db.prepare(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const cmd of defaultCmds) {
             stmt.run(cmd);
         }
         stmt.free();
     } else {
-        // Ensure plugin.index.effect.fireworks exists in TABLE_COMMANDS even if the database was already seeded
+        // Ensure plugin-index.effect.fireworks exists in TABLE_COMMANDS even if the database was already seeded
         try {
-            const checkExists = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS} WHERE Command_ID = 'plugin.index.effect.fireworks'`);
+            const checkExists = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS} WHERE Command_ID = 'plugin-index.effect.fireworks'`);
             const existsCount = checkExists?.[0]?.values?.[0]?.[0] || 0;
             if (Number(existsCount) === 0) {
-                db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Command_Type, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
+                db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
-                        ["20260701100000-fireworks", "烟花", "plugin.index.effect.fireworks", "", "Custom", "Self", 1, 0, 1, 1]);
+                        ["20260701100000-fireworks", "烟花", "plugin-index.effect.fireworks", "", "否", "Self", 1, 0, 1, 1]);
             }
         } catch (e) {
-            console.error("[SQLite-Init] Failed to ensure plugin.index.effect.fireworks seeded:", e);
+            console.error("[SQLite-Init] Failed to ensure plugin-index.effect.fireworks seeded:", e);
+        }
+
+        // Clean up old temporary command ID if exists
+        try {
+            db.run(`DELETE FROM ${TABLE_COMMANDS} WHERE Command_ID IN ('plugin.index.general.showMessage', 'siyuan.general.showMessage', 'plugin.index.effect.fireworks')`);
+        } catch (_) { /* ignore */ }
+
+        // Ensure siyuan.ui.toast exists in TABLE_COMMANDS
+        try {
+            const checkExists = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS} WHERE Command_ID = 'siyuan.ui.toast'`);
+            const existsCount = checkExists?.[0]?.values?.[0]?.[0] || 0;
+            if (Number(existsCount) === 0) {
+                db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+                        ["20260713120000-showmessage", "消息提示 (showMessage)", "siyuan.ui.toast", "", "是", "Self", 1, 0, 1, 1]);
+            }
+        } catch (e) {
+            console.error("[SQLite-Init] Failed to ensure siyuan.ui.toast seeded:", e);
         }
     }
 
