@@ -89,7 +89,7 @@
 
     async function handleGenerateOutline() {
         try {
-            showMessage("📑 正在生成大纲列表模式...");
+            showMessage("📑 正在实例化命令数据库到本地...");
             const success = await reverseDbToList();
             if (success) {
                 await refreshSupertagRegistry();
@@ -97,7 +97,7 @@
             }
         } catch (e: any) {
             console.error("Generate outline failed", e);
-            showMessage(`生成失败: ${e.message}`, 5000, "error");
+            showMessage(`实例化失败: ${e.message}`, 5000, "error");
         }
     }
 
@@ -274,7 +274,7 @@
                 ⟳ 重置内置 SQLite 数据库
             </button>
             <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleGenerateOutline} disabled={!isInitialized}>
-                📑 生成大纲列表模式
+                📑 实例化命令数据库到本地
             </button>
             {#if canUseFeature("commands.pull")}
                 <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={openPullModal}>
@@ -342,10 +342,10 @@
             </div>
         </div>
 
-        <!-- Section 2: Type Bindings (类型绑定) -->
+        <!-- Section 2: Type Bindings (超级标签与类/组件绑定) -->
         <div class="db-section fn__flex-column" style="flex: 1; min-height: 180px; display: flex; flex-direction: column;">
             <div class="fn__flex" style="align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🖇️ 标签类型绑定 (Type-DB)</h3>
+                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🖇️ 超级标签与类/组件绑定 (Type-DB)</h3>
                 <input
                     type="text"
                     class="b3-text-field"
@@ -357,14 +357,14 @@
 
             <div class="table-container fn__flex-1" style="overflow: auto; border: 1px solid var(--b3-border-color); border-radius: 6px; background: #111113;">
                 {#if filteredTypes.length === 0}
-                    <div style="text-align: center; padding: 20px; opacity: 0.4; font-size: 11px;">未找到标签绑定</div>
+                    <div style="text-align: center; padding: 20px; opacity: 0.4; font-size: 11px;">未找到超级标签绑定</div>
                 {:else}
                     <table class="db-table">
                         <thead>
                             <tr>
-                                <th>Supertag 名称</th>
-                                <th>块图标菜单绑定</th>
-                                <th>当前页面菜单绑定</th>
+                                <th>超级标签 (Supertag)</th>
+                                <th>块图标菜单绑定 (Class Methods)</th>
+                                <th>当前页面菜单绑定 (Class Methods)</th>
                                 <th style="text-align: center; width: 60px;">启用</th>
                             </tr>
                         </thead>

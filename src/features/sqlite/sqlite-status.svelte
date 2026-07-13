@@ -41,7 +41,7 @@
     let locateIndices: Record<string, number> = {};
 
     // Tabs
-    let activeTab: "databases" | "console" | "commands" = "commands";
+    let activeTab: "databases" | "console" | "commands" = "databases";
 
 
 
@@ -255,24 +255,8 @@
 </script>
 
 <div class="av-explorer-panel fn__flex-column" style="padding: 16px; background: var(--b3-theme-background); color: var(--b3-theme-on-background); height: 100%; display: flex; flex-direction: column; min-height: 480px;">
-    <!-- Header -->
-    <div class="fn__flex" style="align-items: center; margin-bottom: 12px; gap: 8px;">
-        <h1 style="font-size: 16px; margin: 0; font-weight: 600; letter-spacing: -0.3px;">⚡ AV SQL Explorer</h1>
-        <div style="flex: 1;"></div>
-        <button class="b3-button b3-button--outline" style="font-size: 11px; padding: 4px 10px;" on:click={init} disabled={loading || batchProcessing}>
-            {loading ? "..." : "Scan"}
-        </button>
-    </div>
-
     <!-- Tab Bar -->
-    <div class="fn__flex" style="gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--b3-border-color);">
-        <button
-            class="tab-btn"
-            class:active={activeTab === "commands"}
-            on:click={() => activeTab = "commands"}
-        >
-            Command Control (命令面板)
-        </button>
+    <div class="fn__flex" style="gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--b3-border-color); align-items: center;">
         <button
             class="tab-btn"
             class:active={activeTab === "databases"}
@@ -286,6 +270,23 @@
             on:click={() => activeTab = "console"}
         >
             SQL Console
+        </button>
+        <button
+            class="tab-btn"
+            class:active={activeTab === "commands"}
+            on:click={() => activeTab = "commands"}
+        >
+            命令管理
+        </button>
+        <div style="flex: 1;"></div>
+        <button 
+            class="b3-button b3-button--text" 
+            style="font-size: 11px; padding: 2px 6px; display: flex; align-items: center; gap: 4px; border: none; background: none; color: var(--b3-theme-on-surface-light); cursor: pointer;" 
+            on:click={init} 
+            disabled={loading}
+        >
+            <svg style="width: 12px; height: 12px; fill: currentColor; margin-right: 2px;"><use xlink:href="#iconRefresh"></use></svg>
+            {loading ? "扫描中..." : "刷新扫描"}
         </button>
     </div>
 

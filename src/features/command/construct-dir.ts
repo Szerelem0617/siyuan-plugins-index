@@ -116,9 +116,9 @@ export async function constructCommandStorage() {
         // 3. Init Type-DB (类型绑定)
         const typeDb = await initDbDoc(
             targetNotebookId,
-            "类型绑定 (Type-DB)",
+            "超级标签与类/组件绑定 (Type-DB)",
             "custom-index-type-db",
-            `# 类型绑定 (Type-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
+            `# 超级标签与类/组件绑定 (Type-DB)\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
             "Block Icon Menu",
             async (avId) => {
                 const addCol = async (name: string, type: string, icon: string, prevKey: string) => {

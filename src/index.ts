@@ -211,7 +211,7 @@ export default class IndexPlugin extends Plugin {
 
     private openSqliteStatus() {
         const dialog = new Dialog({
-            title: "IndexOS - Database Diagnostic",
+            title: "数据库管理",
             content: `<div id="sqlite-status-container" class="fn__flex-1" style="height: 100%;"></div>`,
             width: "850px",
             height: "650px",

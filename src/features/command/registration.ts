@@ -507,8 +507,8 @@ export function getInitSystemSlashCommand() {
             }
         },
         {
-            filter: ["reverse db list", "生成大纲列表", "scdg"],
-            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">生成大纲列表模式</span><span class="b3-list-item__meta">Outline</span></div>`,
+            filter: ["reverse db list", "实例化命令数据库到本地", "sxlm"],
+            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">实例化命令数据库到本地</span><span class="b3-list-item__meta">Outline</span></div>`,
             id: "reverseDbList",
             async callback(protyle: Protyle) {
                 protyle.insert("");
