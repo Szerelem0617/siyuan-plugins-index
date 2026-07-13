@@ -288,10 +288,10 @@
             {/if}
         </div>
 
-        <!-- Section 1: Command List (命令管理) -->
+        <!-- Section 1: Command List (逻辑工厂) -->
         <div class="db-section fn__flex-column" style="flex: 1; min-height: 200px; display: flex; flex-direction: column;">
             <div class="fn__flex" style="align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🛠️ 命令管理 (Command-DB)</h3>
+                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🛠️ 指令注册列表 (Command-DB)</h3>
                 <input
                     type="text"
                     class="b3-text-field"
@@ -347,7 +347,7 @@
             </div>
         </div>
 
-        <!-- Section 2: Type Bindings (超级标签与类/组件绑定) -->
+        <!-- Section 2: Type Bindings (超级标签管理) -->
         <div class="db-section fn__flex-column" style="flex: 1; min-height: 180px; display: flex; flex-direction: column;">
             <div class="fn__flex" style="align-items: center; margin-bottom: 8px; gap: 8px;">
                 <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🖇️ 超级标签管理 (Type-DB)</h3>

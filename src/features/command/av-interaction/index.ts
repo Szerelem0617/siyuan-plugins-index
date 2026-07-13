@@ -269,7 +269,7 @@ async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
 
     const commandAvId = getCommandAvId();
     if (!commandAvId) {
-        showMessage("未能加载命令管理 数据库", 3000, "error");
+        showMessage("未能加载命令管理 (Command-DB) 数据库", 3000, "error");
         return;
     }
 
@@ -301,7 +301,7 @@ async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
         }
 
         if (!cmdRowItemId) {
-            showMessage(`未在命令管理中找到名称为 "${cleanLabel}" 的行，请先创建`, 3000, "warning");
+            showMessage(`未在命令管理 (Command-DB) 中找到名称为 "${cleanLabel}" 的行，请先创建`, 3000, "warning");
             return;
         }
 
