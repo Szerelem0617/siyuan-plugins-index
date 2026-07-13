@@ -1,8 +1,7 @@
 import { dispatchCommand } from "../command-dispatcher";
 import { commandRegistry } from "../registry/command-registry";
 import { showMessage, Dialog } from "siyuan";
-import { DEV_ENABLE_INIT_SYS, getTargetTablesInfo } from "../registration";
-import { runQuery } from "../../sqlite/sqlite-manager";
+import { DEV_ENABLE_INIT_SYS, refreshSupertagRegistry, SUPERTAG_REGISTRY, COMMAND_REGISTRY } from "../registration";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Protocol helpers
@@ -199,24 +198,52 @@ export async function handleInlineButtonClick(event: MouseEvent) {
         return;
     }
 
-    // Try to load custom parameters from SQLite if no explicit parameters are embedded in the button link
-    let paramMapping = payload.param ?? null;
-    if (!paramMapping) {
-        try {
-            const { commandsTable } = await getTargetTablesInfo();
-            if (commandsTable) {
-                const res = await runQuery(`SELECT Param_Mapping FROM ${commandsTable} WHERE Command_ID = ? LIMIT 1`, [def.id]);
-                if (res && res.values && res.values.length > 0) {
-                    paramMapping = res.values[0][0] || null;
-                }
+    // 1. Force refresh registry to get latest database mapping details
+    try {
+        await refreshSupertagRegistry();
+    } catch (e) {
+        console.warn("[InlineButton] Failed to refresh registry:", e);
+    }
+
+    // Resolve Param Mapping dynamically with priority
+    let paramMapping: string | null = null;
+    const parentBlock = linkEl.closest("[data-node-id]") as HTMLElement | null;
+
+    if (parentBlock) {
+        // Priority 1: Check if the parent block has any supertags, and use the parameter mapping of the matching supertag
+        const ialString = parentBlock.getAttribute("custom-index-tags") || parentBlock.getAttribute("tag") || parentBlock.getAttribute("tags") || "";
+        const blockTags = ialString.split(/[,\s]+/).map((t: string) => t.trim().replace(/#/g, "")).filter(Boolean);
+        
+        for (const tag of blockTags) {
+            const match = SUPERTAG_REGISTRY.find(item =>
+                item.commandRef === def.id && item.typeTag === tag
+            );
+            if (match) {
+                paramMapping = match.paramMapping ? JSON.stringify(match.paramMapping) : "";
+                console.log(`[InlineButton-Debug] Found matching supertag mapping for tag "${tag}":`, paramMapping);
+                break;
             }
-        } catch (e) {
-            console.error("[InlineButton] Failed to fetch custom param mapping from SQLite:", e);
         }
     }
 
+    // Priority 2: Use mapping defined for the command globally in Command-DB
+    if (paramMapping === null) {
+        // Look up by command ID in COMMAND_REGISTRY
+        const cmdConfig = Object.values(COMMAND_REGISTRY).find(c => c.commandRef === def.id);
+        if (cmdConfig) {
+            paramMapping = cmdConfig.paramMapping;
+            console.log(`[InlineButton-Debug] Found global command mapping:`, paramMapping);
+        }
+    }
+
+    // Priority 3: Fall back to static baked parameter in button payload
+    if (paramMapping === null) {
+        paramMapping = payload.param ?? null;
+        console.log(`[InlineButton-Debug] Fallback to baked link param:`, paramMapping);
+    }
+
     const mockContext = {
-        blockEl: linkEl.closest("[data-node-id]") || document.body,
+        blockEl: parentBlock || document.body,
         protyleEl: null,
         triggerEl: linkEl
     };
