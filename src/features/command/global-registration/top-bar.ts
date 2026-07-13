@@ -85,7 +85,7 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             const label = String(row[labelIdx] || "");
             const commandId = String(row[cmdIdIdx] || "");
             const commandParam = String(row[paramIdx] || "");
-            const requiresParams = String(row[typeIdx] || "false");
+            const requiresParams = Number(row[typeIdx]) === 1 ? "true" : "false";
             
             // Critical check: SQLite INTEGER might be returned as number 1
             const isTopBar = Number(row[topBarIdx]) === 1;
@@ -189,7 +189,7 @@ async function refreshTopBarFromApi() {
             label = label.replace(/#/g, "").split("|")[0].split("(")[0].trim();
             const commandId = getCellText("Command ID");
             const commandParam = getCellText("Command Param") || getCellText("Param Mapping");
-            const requiresParams = getCellText("Requires Params") || getCellText("Command Type") || "false";
+            const requiresParams = (getBool("Requires Params") || getCellText("Command Type") === "是" || getCellText("Command Type") === "true") ? "true" : "false";
             
             const getBool = (name: string) => {
                 const idx = columns.findIndex((c: any) => c.name === name || c.keyName === name);

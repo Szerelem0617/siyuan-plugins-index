@@ -59,9 +59,9 @@ export async function constructCommandStorage() {
                 let lastKeyID = currentKeys.length > 0 ? currentKeys[currentKeys.length - 1].id : "";
 
                 const commandIdKey = await addCol("Command ID", "text", "iconCode", lastKeyID);
-                const paramMappingKey = await addCol("Param Mapping", "text", "iconList", commandIdKey);
-                const requiresParamsKey = await addCol("Requires Params", "text", "iconTags", paramMappingKey);
-                const targetScopeKey = await addCol("Target Scope", "text", "iconFocus", requiresParamsKey);
+                const requiresParamsKey = await addCol("Requires Params", "checkbox", "iconCheck", commandIdKey);
+                const paramMappingKey = await addCol("Param Mapping", "text", "iconList", requiresParamsKey);
+                const targetScopeKey = await addCol("Target Scope", "text", "iconFocus", paramMappingKey);
                 const enableKey = await addCol("Enable", "checkbox", "iconCheck", targetScopeKey);
                 const topBarKey = await addCol("Top Bar", "checkbox", "iconLayout", enableKey);
                 const buttonKey = await addCol("Inline Button", "checkbox", "iconPlay", topBarKey);
@@ -107,7 +107,7 @@ export async function constructCommandStorage() {
 
                     populateOps.push({ keyID: commandIdKey, itemID: rowID, value: { type: "text", text: { content: String(commandID || "") } } });
                     populateOps.push({ keyID: paramMappingKey, itemID: rowID, value: { type: "text", text: { content: String(paramMapping || "") } } });
-                    populateOps.push({ keyID: requiresParamsKey, itemID: rowID, value: { type: "text", text: { content: String(requiresParams === "true" || requiresParams === "是" ? "true" : "false") } } });
+                    populateOps.push({ keyID: requiresParamsKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(requiresParams) === 1 || String(requiresParams) === "true" || String(requiresParams) === "是" } } });
                     populateOps.push({ keyID: targetScopeKey, itemID: rowID, value: { type: "text", text: { content: String(targetScope || "") } } });
                     populateOps.push({ keyID: enableKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
                     populateOps.push({ keyID: topBarKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(topBar) === 1 } } });
