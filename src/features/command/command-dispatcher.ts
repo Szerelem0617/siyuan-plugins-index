@@ -471,14 +471,30 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
     const blockId = context.blockEl?.getAttribute("data-node-id") ?? "";
     let result = text;
 
-    // 1. 获取 Layer 4 本地表优先级参数并进行替换 (Priority 1 & 2)
-    const layer4Params = await resolveLayer4Params(blockId, context.supertag);
-    for (const [key, value] of Object.entries(layer4Params)) {
-        result = result.replaceAll(`{{${key}}}`, value);
-        result = result.replaceAll(`{{attr:${key}}}`, value);
+    // Detect if we have Class Method Mode or Tool Component Mode
+    let isClassMethodMode = false;
+    let layer4Params: Record<string, string> = {};
+
+    if (context.supertag) {
+        layer4Params = await resolveLayer4Params(blockId, context.supertag);
+        // If we found database columns matching, it's Class Method Mode
+        if (Object.keys(layer4Params).length > 0) {
+            isClassMethodMode = true;
+        }
     }
 
-    // 2. 基础同步/内置变量
+    if (isClassMethodMode) {
+        console.log(`[Dispatcher] Executing in Class Method mode for supertag: ${context.supertag}`);
+        // 1. Resolve Layer 4 database columns (Priority 1 & 2)
+        for (const [key, value] of Object.entries(layer4Params)) {
+            result = result.replaceAll(`{{${key}}}`, value);
+            result = result.replaceAll(`{{attr:${key}}}`, value);
+        }
+    } else {
+        console.log(`[Dispatcher] Executing in Tool Component mode (no active Class/Database mapping). Database attributes mapping is disabled.`);
+    }
+
+    // 2. Resolve basic system / sync variables (both modes support this)
     const syncVars: Record<string, string> = {
         "date": formatDate(new Date()),
         "time": formatTime(new Date()),
@@ -488,7 +504,7 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
         result = result.replaceAll(`{{${key}}}`, value);
     }
 
-    // 3. root_id / parent_id (需API)
+    // 3. root_id / parent_id (both modes support this)
     if (result.includes("{{root_id}}") || result.includes("{{parent_id}}")) {
         try {
             const res = await post("/api/block/getBlockBreadcrumb", { id: blockId });
@@ -503,17 +519,25 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
         }
     }
 
-    // 4. 优先级 3：退回到块自身的自定义属性 (查询 /api/attr/getBlockAttrs)
+    // 4. Resolve custom attributes (Only Class Method Mode allows {{attr:KEY}} from custom block attributes)
     const attrMatches = result.match(/\{\{attr:([^}]+)\}\}/g);
     if (attrMatches && blockId) {
-        try {
-            const res = await post("/api/attr/getBlockAttrs", { id: blockId });
-            const attrs: Record<string, string> = res.data ?? {};
+        if (isClassMethodMode) {
+            try {
+                const res = await post("/api/attr/getBlockAttrs", { id: blockId });
+                const attrs: Record<string, string> = res.data ?? {};
+                for (const match of attrMatches) {
+                    const attrKey = match.slice(7, -2);
+                    result = result.replaceAll(match, attrs[attrKey] ?? "");
+                }
+            } catch { /* ignore */ }
+        } else {
+            // For Tool Component mode, replace any residual {{attr:KEY}} with empty string to prevent exposure/errors
+            console.log(`[Dispatcher] Custom attribute mapping {{attr:...}} is disabled in Tool Component mode.`);
             for (const match of attrMatches) {
-                const attrKey = match.slice(7, -2);
-                result = result.replaceAll(match, attrs[attrKey] ?? "");
+                result = result.replaceAll(match, "");
             }
-        } catch { /* ignore */ }
+        }
     }
 
     return result;
