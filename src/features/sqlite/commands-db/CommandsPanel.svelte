@@ -145,7 +145,7 @@
             const randPart = Math.random().toString(36).slice(2, 9);
             const rowID = `${formatPart}-${randPart}`;
 
-            const requiresParams = (Array.isArray(cmd.params) && cmd.params.length > 0) ? "是" : "否";
+            const requiresParams = (Array.isArray(cmd.params) && cmd.params.length > 0) ? "true" : "false";
             const targetScope = cmd.meta?.scope ? (cmd.meta.scope.charAt(0).toUpperCase() + cmd.meta.scope.slice(1)) : "Global";
 
             const { db } = await getSqliteEngine();
@@ -328,7 +328,7 @@
                                 <tr class:disabled={Number(row[cmdEnableIdx]) === 0}>
                                     <td class="primary-col" title={row[cmdLabelIdx]}>{row[cmdLabelIdx]}</td>
                                     <td><code style="color: #4ec9b0;">{row[cmdIdIdx] || ""}</code></td>
-                                    <td style="opacity: 0.7;">{row[cmdTypeIdx] || "否"}</td>
+                                    <td style="opacity: 0.7;">{row[cmdTypeIdx] || "false"}</td>
                                     <td style="opacity: 0.7;">{row[cmdScopeIdx] || "Global"}</td>
                                     <td style="text-align: center;">
                                         <span class="status-dot" class:active={Number(row[cmdEnableIdx]) === 1}></span>

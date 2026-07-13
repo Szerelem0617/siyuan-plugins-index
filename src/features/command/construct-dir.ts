@@ -107,7 +107,7 @@ export async function constructCommandStorage() {
 
                     populateOps.push({ keyID: commandIdKey, itemID: rowID, value: { type: "text", text: { content: String(commandID || "") } } });
                     populateOps.push({ keyID: paramMappingKey, itemID: rowID, value: { type: "text", text: { content: String(paramMapping || "") } } });
-                    populateOps.push({ keyID: requiresParamsKey, itemID: rowID, value: { type: "text", text: { content: String(requiresParams || "否") } } });
+                    populateOps.push({ keyID: requiresParamsKey, itemID: rowID, value: { type: "text", text: { content: String(requiresParams === "true" || requiresParams === "是" ? "true" : "false") } } });
                     populateOps.push({ keyID: targetScopeKey, itemID: rowID, value: { type: "text", text: { content: String(targetScope || "") } } });
                     populateOps.push({ keyID: enableKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
                     populateOps.push({ keyID: topBarKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(topBar) === 1 } } });

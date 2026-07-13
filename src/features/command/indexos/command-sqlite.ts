@@ -70,15 +70,11 @@ export async function initSystemTables() {
     if (cmdCount === 0) {
         const defaultCmds = [
             // rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette
-            ["20260526204558-bp28zp8", "🌐 全局关系图 (无上下文测试)", "siyuan.view.graph", "", "否", "Global", 1, 1, 1, 1],
-            ["20260526204558-6l2h54b", "📥 收集箱 (无上下文测试)", "siyuan.view.inbox", "", "否", "Global", 1, 0, 0, 1],
-            ["20260526204558-iilvqz3", "🔍 在右侧分屏打开", "siyuan.view.splitRight", "", "否", "Global", 1, 0, 1, 1],
-            ["20260526204558-6nbjc0b", "⬇️ 下方插入同级块", "editor.block.insertBelow", "", "否", "Sibling", 1, 0, 0, 1],
-            ["20260526204558-zxrigm8", "📑 复制当前块", "editor.block.duplicate", "", "否", "Sibling", 1, 0, 0, 1],
-            ["20260526204558-6y7laha", "🖇️ 复制块引用", "editor.block.copyRef", "", "否", "Global", 1, 0, 0, 1],
-            ["20260527120000-insert", "⚡ API 插入块测试", "api.block.insert", "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}", "是", "Global", 1, 0, 0, 1],
-            ["20260701100000-fireworks", "烟花", "plugin-index.effect.fireworks", "", "否", "Self", 1, 0, 1, 1],
-            ["20260713120000-showmessage", "消息提示 (showMessage)", "siyuan.ui.toast", "", "是", "Self", 1, 0, 1, 1]
+            ["20260526204558-bp28zp8", "🌐 全局关系图", "siyuan.view.graph", "", "false", "Global", 1, 1, 1, 1],
+            ["20260526204558-zxrigm8", "📑 复制当前块", "editor.block.duplicate", "", "false", "Sibling", 1, 0, 0, 1],
+            ["20260527120000-insert", "⚡ API 插入块测试", "api.block.insert", "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}", "true", "Global", 1, 0, 0, 1],
+            ["20260701100000-fireworks", "🎆 烟花", "plugin-index.effect.fireworks", "", "false", "Self", 1, 0, 1, 1],
+            ["20260713120000-showmessage", "💬 消息提示", "siyuan.ui.toast", "", "true", "Self", 1, 0, 1, 1]
         ];
         const stmt = db.prepare(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const cmd of defaultCmds) {
@@ -93,7 +89,7 @@ export async function initSystemTables() {
             if (Number(existsCount) === 0) {
                 db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
-                        ["20260701100000-fireworks", "烟花", "plugin-index.effect.fireworks", "", "否", "Self", 1, 0, 1, 1]);
+                        ["20260701100000-fireworks", "🎆 烟花", "plugin-index.effect.fireworks", "", "false", "Self", 1, 0, 1, 1]);
             }
         } catch (e) {
             console.error("[SQLite-Init] Failed to ensure plugin-index.effect.fireworks seeded:", e);
@@ -111,7 +107,7 @@ export async function initSystemTables() {
             if (Number(existsCount) === 0) {
                 db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
-                        ["20260713120000-showmessage", "消息提示 (showMessage)", "siyuan.ui.toast", "", "是", "Self", 1, 0, 1, 1]);
+                        ["20260713120000-showmessage", "💬 消息提示", "siyuan.ui.toast", "", "true", "Self", 1, 0, 1, 1]);
             }
         } catch (e) {
             console.error("[SQLite-Init] Failed to ensure siyuan.ui.toast seeded:", e);
@@ -121,7 +117,7 @@ export async function initSystemTables() {
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
     if (typeCount === 0) {
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable) VALUES (?, ?, ?, ?, ?)`, 
-            ["20260526204605-7hun58a", "#Project", "在右侧分屏打开, 全局关系图", "", 1]);
+            ["20260526204605-7hun58a", "#Project", "全局关系图", "", 1]);
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable) VALUES (?, ?, ?, ?, ?)`, 
             ["20260526204605-v11e2ta", "#Person", "", "", 1]);
     }
