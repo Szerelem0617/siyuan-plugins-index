@@ -8,12 +8,18 @@
         SUPERTAG_REGISTRY,
         type SupertagCommand,
     } from "../../command/registration";
+    import { tagSuggestionState, setTagSuggestionEnabled } from "./tag-suggestion";
 
     export let dialog: any;
     export let supertagManager: any;
 
     let loading = true;
     let activeTab: "data" | "tool" | "class" = "class";
+    let tagSuggestionEnabled = tagSuggestionState.enabled;
+
+    function handleTagSuggestionToggle() {
+        setTagSuggestionEnabled(tagSuggestionEnabled);
+    }
 
     interface TagGroup {
         typeName: string;
@@ -117,48 +123,61 @@
     <!-- Tabs Header -->
     <div
         class="layout-tab-bar fn__flex"
-        style="flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--b3-border-color);"
+        style="flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--b3-border-color); align-items: center; justify-content: space-between;"
     >
-        <div
-            class="item {activeTab === 'data' ? 'item--focus' : ''}"
-            role="tab"
-            tabindex="0"
-            on:click={() => (activeTab = "data")}
-            on:keydown={(e) => e.key === 'Enter' && (activeTab = "data")}
-        >
-            <span class="item__text">数据组件</span>
-            <span
-                class="b3-chip b3-chip--small"
-                style="margin-left: 4px; opacity: 0.6;"
-                >{dataComponents.length}</span
+        <div class="fn__flex">
+            <div
+                class="item {activeTab === 'data' ? 'item--focus' : ''}"
+                role="tab"
+                tabindex="0"
+                on:click={() => (activeTab = "data")}
+                on:keydown={(e) => e.key === 'Enter' && (activeTab = "data")}
             >
+                <span class="item__text">数据组件</span>
+                <span
+                    class="b3-chip b3-chip--small"
+                    style="margin-left: 4px; opacity: 0.6;"
+                    >{dataComponents.length}</span
+                >
+            </div>
+            <div
+                class="item {activeTab === 'tool' ? 'item--focus' : ''}"
+                role="tab"
+                tabindex="0"
+                on:click={() => (activeTab = "tool")}
+                on:keydown={(e) => e.key === 'Enter' && (activeTab = "tool")}
+            >
+                <span class="item__text">工具组件</span>
+                <span
+                    class="b3-chip b3-chip--small"
+                    style="margin-left: 4px; opacity: 0.6;"
+                    >{toolComponents.length}</span
+                >
+            </div>
+            <div
+                class="item {activeTab === 'class' ? 'item--focus' : ''}"
+                role="tab"
+                tabindex="0"
+                on:click={() => (activeTab = "class")}
+                on:keydown={(e) => e.key === 'Enter' && (activeTab = "class")}
+            >
+                <span class="item__text">类 (Class)</span>
+                <span
+                    class="b3-chip b3-chip--small"
+                    style="margin-left: 4px; opacity: 0.6;">{classes.length}</span
+                >
+            </div>
         </div>
-        <div
-            class="item {activeTab === 'tool' ? 'item--focus' : ''}"
-            role="tab"
-            tabindex="0"
-            on:click={() => (activeTab = "tool")}
-            on:keydown={(e) => e.key === 'Enter' && (activeTab = "tool")}
-        >
-            <span class="item__text">工具组件</span>
-            <span
-                class="b3-chip b3-chip--small"
-                style="margin-left: 4px; opacity: 0.6;"
-                >{toolComponents.length}</span
-            >
-        </div>
-        <div
-            class="item {activeTab === 'class' ? 'item--focus' : ''}"
-            role="tab"
-            tabindex="0"
-            on:click={() => (activeTab = "class")}
-            on:keydown={(e) => e.key === 'Enter' && (activeTab = "class")}
-        >
-            <span class="item__text">类 (Class)</span>
-            <span
-                class="b3-chip b3-chip--small"
-                style="margin-left: 4px; opacity: 0.6;">{classes.length}</span
-            >
+
+        <!-- Tag Suggestion Toggle -->
+        <div class="fn__flex" style="align-items: center; gap: 8px; font-size: 11px; user-select: none; padding-right: 8px;">
+            <span style="opacity: 0.8; white-space: nowrap;">🐬 启用标签推荐 (#)</span>
+            <input
+                type="checkbox"
+                class="b3-switch"
+                bind:checked={tagSuggestionEnabled}
+                on:change={handleTagSuggestionToggle}
+            />
         </div>
     </div>
 
