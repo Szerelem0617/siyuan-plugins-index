@@ -12,7 +12,6 @@ let cachedNativeTags: string[] = [];
 let lastNativeFetch = 0;
 
 export async function refreshNativeTagsCache() {
-    // Rate limit to once every 2 seconds to avoid spamming the Go kernel
     if (Date.now() - lastNativeFetch < 2000) return;
     lastNativeFetch = Date.now();
 
@@ -48,23 +47,23 @@ export async function initTagSuggestion(plugin: Plugin) {
         console.error("[TagSuggestion] Failed to load config:", e);
     }
 
-    // Trigger initial cache populate
     refreshNativeTagsCache().catch(() => {});
+}
 
-    // Register protyle hint extend for key "#"
-    plugin.protyleOptions = plugin.protyleOptions || {};
-    plugin.protyleOptions.hint = plugin.protyleOptions.hint || {};
-    plugin.protyleOptions.hint.extend = plugin.protyleOptions.hint.extend || [];
+export function bindProtyleHintExtend(protyle: any) {
+    if (!protyle || !protyle.options) return;
 
-    // Filter out any duplicate "#" trigger we might have registered
-    plugin.protyleOptions.hint.extend = plugin.protyleOptions.hint.extend.filter(
-        (ext: any) => !(ext.key === "#" && ext.isIndexOS)
-    );
+    protyle.options.hint = protyle.options.hint || {};
+    protyle.options.hint.extend = protyle.options.hint.extend || [];
 
-    plugin.protyleOptions.hint.extend.push({
+    // Avoid duplicate registration on the same instance
+    const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === "#");
+    if (hasRegistered) return;
+
+    protyle.options.hint.extend.push({
         key: "#",
         isIndexOS: true, // Marker to avoid duplicates
-        hint(value: string, protyle: any, source: string) {
+        hint(value: string, protyleInstance: any, source: string) {
             // Trigger asynchronous background refresh for future keystrokes
             refreshNativeTagsCache().catch(() => {});
 
@@ -76,7 +75,8 @@ export async function initTagSuggestion(plugin: Plugin) {
                 return matchedNative.map(tag => {
                     return {
                         html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span></div>`,
-                        value: `#${tag}#`
+                        value: `#${tag}#`,
+                        filter: [tag, `#${tag}`, `#${tag}#`]
                     };
                 });
             }
@@ -113,7 +113,8 @@ export async function initTagSuggestion(plugin: Plugin) {
             const superItems = matchedSuper.map(tag => {
                 return {
                     html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span><span class="b3-list-item__meta" style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
-                    value: `#${tag}#`
+                    value: `#${tag}#`,
+                    filter: [tag, `#${tag}`, `#${tag}#`]
                 };
             });
 
@@ -123,7 +124,8 @@ export async function initTagSuggestion(plugin: Plugin) {
                 .map(tag => {
                     return {
                         html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span></div>`,
-                        value: `#${tag}#`
+                        value: `#${tag}#`,
+                        filter: [tag, `#${tag}`, `#${tag}#`]
                     };
                 });
 

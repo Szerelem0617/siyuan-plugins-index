@@ -12,7 +12,7 @@ import { addCommandTestMenuItem, refreshSupertagRegistry, DEV_ENABLE_INIT_SYS } 
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { supertagMonitor } from "./features/data/av-setting/supertag";
 import { supertagManager } from "./features/data/av-setting/supertag-manager";
-import { initTagSuggestion } from "./features/data/av-setting/tag-suggestion";
+import { initTagSuggestion, bindProtyleHintExtend } from "./features/data/av-setting/tag-suggestion";
 import { refreshTopBarCommands, handleTopBarEvents, destroyTopBarCommands } from "./features/command/global-registration/top-bar";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
@@ -72,6 +72,14 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.on("open-menu-av", addAVMenuItems);
         //监听文档载入事件
         this.eventBus.on("loaded-protyle-static", updateIndex);
+        this.eventBus.on("loaded-protyle-static", (event: any) => {
+            const protyle = event.detail.protyle;
+            if (protyle) bindProtyleHintExtend(protyle);
+        });
+        this.eventBus.on("loaded-protyle-dynamic", (event: any) => {
+            const protyle = event.detail.protyle;
+            if (protyle) bindProtyleHintExtend(protyle);
+        });
 
         this.switchHandler = this.onTabSwitch.bind(this);
         this.eventBus.on("switch-protyle", this.switchHandler);
