@@ -1,13 +1,13 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { getGlobalTypeConfigs } from "./db-config";
-    import { type TypeConfig } from "./types";
+    import { getGlobalTypeConfigs } from "../../data/av-setting/db-config";
+    import { type TypeConfig } from "../../data/av-setting/types";
     import { i18n } from "../../../shared/utils";
     import { supertagMonitor } from "./supertag";
     import {
         SUPERTAG_REGISTRY,
         type SupertagCommand,
-    } from "../../command/registration";
+    } from "../registration";
     import { tagSuggestionState, setTagSuggestionEnabled } from "./tag-suggestion";
 
     export let dialog: any;

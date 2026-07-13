@@ -1,7 +1,7 @@
 import { post } from "../../../shared/api-client/request";
-import { SUPERTAG_REGISTRY, refreshSupertagRegistry } from "../../command/registration";
-import { getGlobalTypeConfigs } from "./db-config";
-import { type TypeConfig } from "./types";
+import { SUPERTAG_REGISTRY, refreshSupertagRegistry } from "../registration";
+import { getGlobalTypeConfigs } from "../../data/av-setting/db-config";
+import { type TypeConfig } from "../../data/av-setting/types";
 import { showMessage } from "siyuan";
 import { formatDate } from "../../../shared/utils";
 import { getColIDMap } from "../../../shared/utils/av-utils";

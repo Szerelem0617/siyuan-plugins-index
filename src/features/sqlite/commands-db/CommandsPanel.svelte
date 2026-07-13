@@ -8,7 +8,7 @@
     import { reverseDbToList } from "../../command/hierarchy/db-reverse-list";
     import { getSystemTableNames, initSystemTables } from "../../command/indexos/command-sqlite";
     import { canUseFeature } from "../../dev-mode/policy-guard";
-    import { tagSuggestionState, setTagSuggestionEnabled } from "../../data/av-setting/tag-suggestion";
+    import { tagSuggestionState, setTagSuggestionEnabled } from "../../command/supertag/tag-suggestion";
 
     let loading = true;
     let showPullModal = false;

@@ -1,7 +1,7 @@
 import { Plugin } from "siyuan";
 import { post } from "../../../shared/api-client/request";
 import { supertagMonitor } from "./supertag";
-import { SUPERTAG_REGISTRY } from "../../command/registration";
+import { SUPERTAG_REGISTRY } from "../registration";
 
 export const tagSuggestionState = {
     enabled: false,
