@@ -332,6 +332,35 @@
                     "paramMode": "template",
                     "default": "看到这条消息会有好运～",
                     "templateVars": ["{{date}}", "{{time}}", "{{block_id}}", "{{attr:KEY}}"]
+                },
+                {
+                    "key": "timeout",
+                    "label": "显示时长 (毫秒)",
+                    "type": "number",
+                    "required": false,
+                    "paramMode": "static",
+                    "default": 6000,
+                    "description": "提示悬浮时长（毫秒）。默认6000；0表示显示手动关闭按钮；-1表示永不自动淡出。"
+                },
+                {
+                    "key": "type",
+                    "label": "提示类型",
+                    "type": "enum",
+                    "values": ["info", "error"],
+                    "required": false,
+                    "paramMode": "static",
+                    "default": "info",
+                    "hidden": true,
+                    "description": "info（普通信息）或 error（红底错误）。"
+                },
+                {
+                    "key": "messageId",
+                    "label": "消息 ID",
+                    "type": "text",
+                    "required": false,
+                    "paramMode": "static",
+                    "hidden": true,
+                    "description": "指定唯一 ID。重复触发该 ID 时，气泡会在原地更新内容而非不断堆叠。"
                 }
             ],
             "constraints": {
