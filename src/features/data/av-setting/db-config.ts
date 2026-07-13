@@ -4,6 +4,7 @@ import DbConfigDialog from "./db-config-dialog.svelte";
 import { getColIDMap, buildAvHierarchy, resolveInheritance, isValueEmpty } from "../../../shared/utils/av-utils";
 import { post } from "../../../shared/api-client/request";
 import { formatDate, getAttrFromIAL, i18n } from "../../../shared/utils";
+import { SUPERTAG_REGISTRY } from "../../command/registration";
 
 export const ATTR_DB_CONFIG = "custom-index-db-config";
 
@@ -266,6 +267,39 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                 }
             }
         }
+
+        // Fallback: Scan all databases ('av' blocks) and match their names against SUPERTAG_REGISTRY tags
+        try {
+            const allAvBlocks = await client.sql({ stmt: "SELECT id, name, content, ial FROM blocks WHERE type = 'av'" });
+            if (allAvBlocks && allAvBlocks.data) {
+                for (const avRow of allAvBlocks.data) {
+                    const avId = avRow.id;
+                    const hasExisting = configs.some(c => c.avId === avId);
+                    if (hasExisting) continue;
+
+                    const blockName = avRow.name || getAttrFromIAL(avRow.ial, "name") || getAttrFromIAL(avRow.ial, "custom-av-name") || "";
+                    if (!blockName) continue;
+
+                    const cleanDbName = blockName.trim().toLowerCase();
+
+                    const uniqueTags = new Set(SUPERTAG_REGISTRY.map(item => item.typeTag.trim().toLowerCase()));
+                    for (const tag of uniqueTags) {
+                        if (tag === cleanDbName || cleanDbName.includes(tag) || tag.includes(cleanDbName)) {
+                            console.log(`[Supertag-Fallback] Found unregistered AV "${blockName}" (${avId}) matching tag "${tag}". Auto-registering config mapping.`);
+                            configs.push({
+                                typeName: tag,
+                                avId: avId,
+                                blockId: avRow.id,
+                                avName: blockName
+                            });
+                        }
+                    }
+                }
+            }
+        } catch (fallbackErr) {
+            console.error("[Supertag-Fallback] Failed to run database scan fallback:", fallbackErr);
+        }
+
         return configs;
     } catch (e) {
         console.error("Failed to get global type configs", e);

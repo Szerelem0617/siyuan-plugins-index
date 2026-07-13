@@ -73,7 +73,6 @@ export class SupertagMonitor {
         if (detail.cmd !== "transactions") return;
 
         const transactions = detail.data;
-
         for (const trans of transactions) {
             for (const op of trans.doOperations) {
                 // Focus on operations that carry tag info: update (DOM), insert (DOM), setAttrs (JSON string), updateAttrs (Object/JSON)
@@ -85,12 +84,14 @@ export class SupertagMonitor {
                     const newTags = this.extractTagsFromPayload(op.data, op.action, blockId);
                     if (newTags === null) continue; // Skip if this operation doesn't carry definitive tag information
 
+                    console.log(`[SupertagMonitor-Debug] Parsed tags for block ${blockId}:`, Array.from(newTags));
+
                     // Compare with virtual cache
                     const cachedTags = this.tagCache.get(blockId) || new Set<string>();
                     const addedTags = Array.from(newTags).filter(t => !cachedTags.has(t));
 
                     if (addedTags.length > 0) {
-
+                        console.log(`[SupertagMonitor-Debug] Detected newly added tags:`, addedTags);
                         // Update cache
                         this.tagCache.set(blockId, newTags);
 
@@ -113,10 +114,15 @@ export class SupertagMonitor {
 
         // Condition 0: payload is an object (common in updateAttrs)
         if (typeof payload === "object") {
-            const hasTagsProp = (payload.new && payload.new.tags !== undefined) || payload.tags !== undefined;
+            const hasTagsProp = 
+                (payload.new && (payload.new.tags !== undefined || payload.new.tag !== undefined)) || 
+                payload.tags !== undefined || 
+                payload.tag !== undefined;
             if (!hasTagsProp) return null; // Authority: No tag info here, don't clear cache
 
-            const rawTags = payload.new?.tags !== undefined ? payload.new.tags : payload.tags;
+            const rawTags = payload.new?.tags !== undefined ? payload.new.tags :
+                            (payload.new?.tag !== undefined ? payload.new.tag :
+                            (payload.tags !== undefined ? payload.tags : payload.tag));
             if (typeof rawTags === "string") {
                 // Determine separator: updateAttrs uses comma, setAttrs/DOM uses space
                 const sep = rawTags.includes(',') ? ',' : ' ';
@@ -135,10 +141,15 @@ export class SupertagMonitor {
             try {
                 const attrs = JSON.parse(payload);
                 // Check if this JSON actually contains attribute data
-                const hasTagsProp = (attrs.new && attrs.new.tags !== undefined) || attrs.tags !== undefined;
+                const hasTagsProp = 
+                    (attrs.new && (attrs.new.tags !== undefined || attrs.new.tag !== undefined)) || 
+                    attrs.tags !== undefined || 
+                    attrs.tag !== undefined;
                 if (!hasTagsProp && action === "updateAttrs") return null;
 
-                const rawTags = attrs.new?.tags !== undefined ? attrs.new.tags : attrs.tags;
+                const rawTags = attrs.new?.tags !== undefined ? attrs.new.tags :
+                                (attrs.new?.tag !== undefined ? attrs.new.tag :
+                                (attrs.tags !== undefined ? attrs.tags : attrs.tag));
                 if (typeof rawTags === "string") {
                     const sep = rawTags.includes(',') ? ',' : ' ';
                     rawTags.split(sep).forEach((t: string) => {
