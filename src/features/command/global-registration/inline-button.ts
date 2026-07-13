@@ -1,7 +1,8 @@
 import { dispatchCommand } from "../command-dispatcher";
 import { commandRegistry } from "../registry/command-registry";
 import { showMessage, Dialog } from "siyuan";
-import { DEV_ENABLE_INIT_SYS } from "../registration";
+import { DEV_ENABLE_INIT_SYS, getTargetTablesInfo } from "../registration";
+import { runQuery } from "../../sqlite/sqlite-manager";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Protocol helpers
@@ -158,7 +159,7 @@ export function getInlineButtonSlashCommand() {
 // Click handler
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function handleInlineButtonClick(event: MouseEvent) {
+export async function handleInlineButtonClick(event: MouseEvent) {
     const path = event.composedPath();
     const linkEl = path.find((el: any) =>
         el instanceof HTMLElement &&
@@ -198,12 +199,28 @@ export function handleInlineButtonClick(event: MouseEvent) {
         return;
     }
 
+    // Try to load custom parameters from SQLite if no explicit parameters are embedded in the button link
+    let paramMapping = payload.param ?? null;
+    if (!paramMapping) {
+        try {
+            const { commandsTable } = await getTargetTablesInfo();
+            if (commandsTable) {
+                const res = await runQuery(`SELECT Param_Mapping FROM ${commandsTable} WHERE Command_ID = ? LIMIT 1`, [def.id]);
+                if (res && res.values && res.values.length > 0) {
+                    paramMapping = res.values[0][0] || null;
+                }
+            }
+        } catch (e) {
+            console.error("[InlineButton] Failed to fetch custom param mapping from SQLite:", e);
+        }
+    }
+
     const mockContext = {
         blockEl: linkEl.closest("[data-node-id]") || document.body,
         protyleEl: null,
         triggerEl: linkEl
     };
-    dispatchCommand(def.id, payload.param ?? null, mockContext as any);
+    dispatchCommand(def.id, paramMapping, mockContext as any);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
