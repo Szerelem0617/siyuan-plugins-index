@@ -5,6 +5,7 @@ import { type TypeConfig } from "./types";
 import { showMessage } from "siyuan";
 import { formatDate } from "../../../shared/utils";
 import { getColIDMap } from "../../../shared/utils/av-utils";
+import { tableSyncTimes, instantiateAV } from "../../sqlite/sqlite-manager";
 
 export class SupertagMonitor {
     private dataRegistry: TypeConfig[] = [];
@@ -251,23 +252,27 @@ export class SupertagMonitor {
     private async applySupertag(blockId: string, cleanTag: string, config: TypeConfig) {
         try {
             const avId = config.avId;
+            console.log(`[Supertag-Debug] Applying supertag: "${cleanTag}" for block "${blockId}". Database: "${config.avName}" (${avId})`);
 
             // 1. Get current state of the AV
             const { blockToItem, idToType, keyValues } = await getColIDMap(avId);
             let itemId = blockToItem.get(blockId);
+            console.log(`[Supertag-Debug] Current block to item mapping: "${itemId || 'not found'}"`);
 
             if (!itemId) {
                 // 2. Add block to AV if not present
                 // @ts-ignore
                 itemId = window.Lute.NewNodeID();
+                console.log(`[Supertag-Debug] Block not in database. Generating new itemId: "${itemId}" and adding block...`);
 
-                await post("/api/av/addAttributeViewBlocks", {
+                const addRes = await post("/api/av/addAttributeViewBlocks", {
                     avID: avId,
                     srcs: [{ itemID: itemId, id: blockId, isDetached: false }]
                 });
+                console.log(`[Supertag-Debug] addAttributeViewBlocks response:`, JSON.stringify(addRes));
 
-                // Wait a bit for backend to process
-                await new Promise(r => setTimeout(r, 100));
+                // Wait 300ms for Siyuan to complete disk/memory write transaction for new row
+                await new Promise(r => setTimeout(r, 300));
             } else {
                 // 3. IDEMPOTENCY check
                 if (config.typeFieldId && config.mappedValue !== undefined) {
@@ -276,7 +281,9 @@ export class SupertagMonitor {
                         const cell = colKV.values.find((v: any) => (v.itemID || v.itemId || v.id) === itemId);
                         if (cell) {
                             const currentVal = (cell.mSelect?.[0]?.content || cell.text?.content || cell.number?.content || cell.content || "").toString();
+                            console.log(`[Supertag-Debug] Idempotency check. Column: "${colKV.key.name}", expected: "${config.mappedValue}", current: "${currentVal}"`);
                             if (currentVal === config.mappedValue.toString()) {
+                                console.log(`[Supertag-Debug] Value matches expected. Skipping update.`);
                                 return;
                             }
                         }
@@ -288,8 +295,9 @@ export class SupertagMonitor {
             if (config.typeFieldId && config.mappedValue !== undefined) {
                 const colType = idToType[config.typeFieldId] || "text";
                 const valuePayload = this.formatValue(String(config.mappedValue).trim(), colType);
+                console.log(`[Supertag-Debug] Setting column ${config.typeFieldId} (type: ${colType}) to value:`, JSON.stringify(valuePayload));
 
-                await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                const setRes = await post("/api/av/batchSetAttributeViewBlockAttrs", {
                     avID: avId,
                     values: [{
                         keyID: config.typeFieldId,
@@ -297,7 +305,14 @@ export class SupertagMonitor {
                         value: valuePayload
                     }]
                 });
+                console.log(`[Supertag-Debug] batchSetAttributeViewBlockAttrs response:`, JSON.stringify(setRes));
             }
+
+            // Clear SQLite cache and force sync to SQLite in-memory DB immediately
+            tableSyncTimes.delete(avId);
+            console.log(`[Supertag-Debug] Cleared SQLite sync cache for AV: "${avId}". Force-synchronizing AV to SQLite...`);
+            await instantiateAV(avId, true);
+            console.log(`[Supertag-Debug] SQLite synchronization complete.`);
 
             // 5. Force UI refresh
             await post("/api/transactions", {
