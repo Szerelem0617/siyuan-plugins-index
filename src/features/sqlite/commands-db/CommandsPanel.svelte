@@ -8,7 +8,6 @@
     import { reverseDbToList } from "../../command/hierarchy/db-reverse-list";
     import { getSystemTableNames, initSystemTables } from "../../command/indexos/command-sqlite";
     import { canUseFeature } from "../../dev-mode/policy-guard";
-    import { tagSuggestionState, setTagSuggestionEnabled } from "../../command/supertag/tag-suggestion";
 
     let loading = true;
     let showPullModal = false;
@@ -28,11 +27,6 @@
     // Search and filter
     let cmdSearchQuery = "";
     let typeSearchQuery = "";
-    let tagSuggestionEnabled = tagSuggestionState.enabled;
-
-    function handleTagSuggestionToggle() {
-        setTagSuggestionEnabled(tagSuggestionEnabled);
-    }
 
     async function loadData() {
         loading = true;
@@ -202,10 +196,7 @@
         if (!cmdId) return;
         try {
             const cmdPart = encodeURIComponent(cmdId);
-            const params = new URLSearchParams();
-            if (paramStr) params.set("p", paramStr);
-            const query = params.toString();
-            const href = `siyuan-btn://exec/${cmdPart}${query ? "?" + query : ""}`;
+            const href = `siyuan-btn://exec/${cmdPart}`;
 
             navigator.clipboard.writeText(href).then(() => {
                 showMessage(`📋 已复制命令按钮链接: ${label || cmdId}`);
@@ -364,16 +355,6 @@
                         style="font-size: 10px; padding: 2px 8px; width: 180px;"
                         placeholder="过滤 Supertag..."
                         bind:value={typeSearchQuery}
-                    />
-                </div>
-                <!-- Tag Suggestion Toggle -->
-                <div class="fn__flex" style="align-items: center; gap: 8px; font-size: 11px; user-select: none;">
-                    <span style="opacity: 0.8;">🐬 启用标签输入推荐 (#)</span>
-                    <input
-                        type="checkbox"
-                        class="b3-switch"
-                        bind:checked={tagSuggestionEnabled}
-                        on:change={handleTagSuggestionToggle}
                     />
                 </div>
             </div>

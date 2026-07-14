@@ -92,6 +92,16 @@ function injectButtonCSS() {
             background-color: var(--b3-theme-hover, #f3f4f6);
             border-color: var(--b3-border-color-hover, #9ca3af);
         }
+        /* Detached commands styling (contains parameters) */
+        span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="] {
+            border-color: var(--b3-theme-secondary, #9065f4);
+            color: var(--b3-theme-secondary, #9065f4);
+            background-color: var(--b3-theme-background-light, #f5f3ff);
+        }
+        span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="]:hover {
+            background-color: var(--b3-theme-hover, #ede9fe);
+            border-color: var(--b3-theme-secondary, #7c3aed);
+        }
     `;
     document.head.appendChild(style);
 }
@@ -180,6 +190,12 @@ export async function handleInlineButtonClick(event: MouseEvent) {
         return;
     }
 
+    // Alt+Click intercepting to open detached parameters dialog
+    if (event.altKey && payload.command !== "sys.configure") {
+        const { configureDetachedCommand } = await import("./detached-config");
+        configureDetachedCommand(linkEl);
+        return;
+    }
 
     // ── 配置模式 ──────────────────────────────────────────────────────────
     if (payload.command === "sys.configure") {
@@ -209,37 +225,37 @@ export async function handleInlineButtonClick(event: MouseEvent) {
     let paramMapping: string | null = null;
     const parentBlock = linkEl.closest("[data-node-id]") as HTMLElement | null;
 
-    if (parentBlock) {
-        // Priority 1: Check if the parent block has any supertags, and use the parameter mapping of the matching supertag
-        const ialString = parentBlock.getAttribute("custom-index-tags") || parentBlock.getAttribute("tag") || parentBlock.getAttribute("tags") || "";
-        const blockTags = ialString.split(/[,\s]+/).map((t: string) => t.trim().replace(/#/g, "")).filter(Boolean);
-        
-        for (const tag of blockTags) {
-            const match = SUPERTAG_REGISTRY.find(item =>
-                item.commandRef === def.id && item.typeTag === tag
-            );
-            if (match) {
-                paramMapping = match.paramMapping ? JSON.stringify(match.paramMapping) : "";
-                console.log(`[InlineButton-Debug] Found matching supertag mapping for tag "${tag}":`, paramMapping);
-                break;
+    // Detached Command Priority: Respect baked parameter inside payload first
+    if (payload.param !== undefined && payload.param !== null) {
+        paramMapping = payload.param;
+        console.log(`[InlineButton-Debug] Detached command - respecting baked link param:`, paramMapping);
+    } else {
+        if (parentBlock) {
+            // Priority 1: Check if the parent block has any supertags, and use the parameter mapping of the matching supertag
+            const ialString = parentBlock.getAttribute("custom-index-tags") || parentBlock.getAttribute("tag") || parentBlock.getAttribute("tags") || "";
+            const blockTags = ialString.split(/[,\s]+/).map((t: string) => t.trim().replace(/#/g, "")).filter(Boolean);
+            
+            for (const tag of blockTags) {
+                const match = SUPERTAG_REGISTRY.find(item =>
+                    item.commandRef === def.id && item.typeTag === tag
+                );
+                if (match) {
+                    paramMapping = match.paramMapping ? JSON.stringify(match.paramMapping) : "";
+                    console.log(`[InlineButton-Debug] Found matching supertag mapping for tag "${tag}":`, paramMapping);
+                    break;
+                }
             }
         }
-    }
 
-    // Priority 2: Use mapping defined for the command globally in Command-DB
-    if (paramMapping === null) {
-        // Look up by command ID in COMMAND_REGISTRY
-        const cmdConfig = Object.values(COMMAND_REGISTRY).find(c => c.commandRef === def.id);
-        if (cmdConfig) {
-            paramMapping = cmdConfig.paramMapping;
-            console.log(`[InlineButton-Debug] Found global command mapping:`, paramMapping);
+        // Priority 2: Use mapping defined for the command globally in Command-DB
+        if (paramMapping === null) {
+            // Look up by command ID in COMMAND_REGISTRY
+            const cmdConfig = Object.values(COMMAND_REGISTRY).find(c => c.commandRef === def.id);
+            if (cmdConfig) {
+                paramMapping = cmdConfig.paramMapping;
+                console.log(`[InlineButton-Debug] Found global command mapping:`, paramMapping);
+            }
         }
-    }
-
-    // Priority 3: Fall back to static baked parameter in button payload
-    if (paramMapping === null) {
-        paramMapping = payload.param ?? null;
-        console.log(`[InlineButton-Debug] Fallback to baked link param:`, paramMapping);
     }
 
     const mockContext = {

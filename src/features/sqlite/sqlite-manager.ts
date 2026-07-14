@@ -31,7 +31,6 @@ export function registerFriendlyTableName(friendlyName: string, avId: string) {
             friendlyTableNameMap.set(name, list);
         }
     }
-    console.log(`[SQLiteManager] Registered friendly table name mapping: "${cleanName}" -> "${avId}" (total mappings: ${friendlyTableNameMap.get(cleanName)?.length})`);
 }
 
 export function resolveTableAvId(tableName: string): string | null {
@@ -281,8 +280,8 @@ function _extractSelectOptions(kv: any): string | null {
 export async function instantiateAV(avID: string, force: boolean = false): Promise<SyncResult> {
     const { db } = await getSqliteEngine();
     const res = await post("/api/av/getAttributeView", { id: avID });
-    
-    // Debug: Check if the response is actually valid
+
+    // Check if the response is actually valid
     if (!res || (res.code && res.code !== 0)) {
         console.error(`[SQLiteManager] API Error for ${avID}:`, res);
         return { success: false, message: `API Error: ${res?.msg || "Unknown"}` };
@@ -292,9 +291,25 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
     if (av.name && av.name !== "Unnamed" && av.name !== "Unnamed Database") {
         registerFriendlyTableName(av.name, avID);
     }
-    const keyValues = av.keyValues || [];
+    let keyValues = av.keyValues || [];
     
-    if (keyValues.length === 0) return { success: false, message: "Empty/No columns" };
+    if (keyValues.length === 0) {
+        console.warn(`[SQLiteManager] instantiateAV: keyValues empty for ${avID}, attempting fallback via getAttributeViewKeysByAvID...`);
+        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avID });
+        const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
+        if (currentKeys.length > 0) {
+            keyValues = currentKeys.map((k: any) => ({
+                key: k,
+                values: []
+            }));
+            console.log(`[SQLiteManager] Successfully loaded ${keyValues.length} columns using getAttributeViewKeysByAvID for ${avID}`);
+        }
+    }
+    
+    if (keyValues.length === 0) {
+        console.warn(`[SQLiteManager] instantiateAV warning: No columns/keyValues for ${avID} even after fallback. Res:`, JSON.stringify(res));
+        return { success: false, message: "Empty/No columns" };
+    }
 
     // ── Incremental Sync: Check if data has changed ──
     if (!force) {
@@ -493,7 +508,8 @@ export function preprocessSql(sql: string): string {
         
         // Escape special regex characters in friendlyName
         const escapedName = friendlyName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        const regex = new RegExp(`(["'\`]?)${escapedName}\\1`, 'g');
+        // Use lookbehind and lookahead to ensure we only match standalone identifiers
+        const regex = new RegExp(`(?<![a-zA-Z0-9_])(["'\`]?)${escapedName}\\1(?![a-zA-Z0-9_])`, 'g');
         
         // Check if the query actually contains this friendlyName
         if (regex.test(processed)) {
@@ -537,8 +553,12 @@ export async function runQuery(sql: string, params?: any[], options?: DDLOptions
             const lastSync = tableSyncTimes.get(avID) || 0;
             if (Date.now() - lastSync > TTL_MS) {
                 try {
-                    await instantiateAV(avID, true);
-                    tableSyncTimes.set(avID, Date.now());
+                    const instRes = await instantiateAV(avID, true);
+                    if (instRes && !instRes.success) {
+                        console.error(`[SQLiteManager] Failed to instantiate table ${cleanName}:`, instRes.message);
+                    } else {
+                        tableSyncTimes.set(avID, Date.now());
+                    }
                 } catch (e) {
                     console.error(`[SQLiteManager] Failed to auto-instantiate table ${cleanName}:`, e);
                 }
