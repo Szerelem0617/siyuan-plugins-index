@@ -1,5 +1,4 @@
 import { post } from "../../../shared/api-client/request";
-import { runQuery } from "../../sqlite/sqlite-manager";
 import { showMessage } from "siyuan";
 import type { CommandContext } from "../command-dispatcher";
 
@@ -20,13 +19,17 @@ export async function triggerTurnIntoTask(
     }
 
     // 1. 查询块的属性 (type, parent_id, subtype, markdown)
-    const blockRes = await runQuery(`SELECT type, subtype, parent_id, markdown FROM blocks WHERE id = '${blockId}' LIMIT 1`);
-    if (!blockRes || !blockRes.values || blockRes.values.length === 0) {
+    const blockRes = await post("/api/query/sql", { stmt: `SELECT type, subtype, parent_id, markdown FROM blocks WHERE id = '${blockId}' LIMIT 1` });
+    if (!blockRes || blockRes.length === 0) {
         showMessage("❌ 转换为任务失败：未找到该块的数据库记录", 5000, "error");
         return;
     }
 
-    let [type, subtype, parentId, markdown] = blockRes.values[0];
+    const firstBlock = blockRes[0];
+    let type = firstBlock.type;
+    let subtype = firstBlock.subtype;
+    let parentId = firstBlock.parent_id;
+    let markdown = firstBlock.markdown;
     console.log(`[TurnIntoTask] Target block type: "${type}", subtype: "${subtype}", parentId: "${parentId}"`);
 
     // 黑名单校验 (只读、非文本等不可转换的块类型)
@@ -39,9 +42,10 @@ export async function triggerTurnIntoTask(
     // 2. 路由分支：如果是列表项 NodeListItem ('i')，重路由至其父级列表 NodeList ('l')
     let targetId = blockId;
     if (type === "i" && parentId) {
-        const parentRes = await runQuery(`SELECT type, subtype FROM blocks WHERE id = '${parentId}' LIMIT 1`);
-        if (parentRes && parentRes.values && parentRes.values.length > 0) {
-            const [parentType, parentSubtype] = parentRes.values[0];
+        const parentRes = await post("/api/query/sql", { stmt: `SELECT type, subtype FROM blocks WHERE id = '${parentId}' LIMIT 1` });
+        if (parentRes && parentRes.length > 0) {
+            const parentType = parentRes[0].type;
+            const parentSubtype = parentRes[0].subtype;
             if (parentType === "l") {
                 type = "l";
                 subtype = parentSubtype;
@@ -91,15 +95,15 @@ export async function triggerTurnIntoTask(
     try {
         if (type === "l") {
             // 查出该 List 下所有直属子 ListItem 的 Markdown 内容
-            const itemsRes = await runQuery(`SELECT id, markdown FROM blocks WHERE parent_id = '${targetId}' AND type = 'i' ORDER BY sort ASC`);
-            if (!itemsRes || !itemsRes.values || itemsRes.values.length === 0) {
+            const itemsRes = await post("/api/query/sql", { stmt: `SELECT id, markdown FROM blocks WHERE parent_id = '${targetId}' AND type = 'i' ORDER BY sort ASC` });
+            if (!itemsRes || itemsRes.length === 0) {
                 showMessage("❌ 转换为任务失败：列表内未找到列表项", 5000, "error");
                 return;
             }
 
             // 对每一项重新做 markdown 包装为 task list item 格式
-            const newMarkdownList = itemsRes.values.map(([_, md]: [string, string]) => {
-                let cleanText = md.replace(/^([\s\t]*)([*+-]|\d+\.)\s+/, "");
+            const newMarkdownList = itemsRes.map((item: any) => {
+                let cleanText = (item.markdown || "").replace(/^([\s\t]*)([*+-]|\d+\.)\s+/, "");
                 cleanText = cleanText.replace(/^\[[ xX]\]\s+/, "");
                 return `* [ ] ${cleanText}`;
             }).join("\n");
