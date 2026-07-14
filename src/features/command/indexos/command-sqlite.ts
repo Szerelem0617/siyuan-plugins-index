@@ -117,9 +117,9 @@ export async function initSystemTables() {
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
     if (typeCount === 0) {
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable) VALUES (?, ?, ?, ?, ?)`, 
-            ["20260526204605-7hun58a", "#Project", "全局关系图", "", 1]);
+            ["20260526204605-7hun58a", "#Project", "🌐 全局关系图", "", 1]);
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable) VALUES (?, ?, ?, ?, ?)`, 
-            ["20260526204605-v11e2ta", "#Person", "", "", 1]);
+            ["20260526204605-v11e2ta", "#Person", "🎆 烟花, 💬 消息提示", "", 1]);
     }
 
     await saveDatabaseToDisk();
