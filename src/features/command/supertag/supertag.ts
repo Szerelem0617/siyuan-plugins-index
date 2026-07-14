@@ -90,14 +90,11 @@ export class SupertagMonitor {
                     const newTags = this.extractTagsFromPayload(op.data, op.action, blockId);
                     if (newTags === null) continue; // Skip if this operation doesn't carry definitive tag information
 
-                    console.log(`[SupertagMonitor-Debug] Parsed tags for block ${blockId}:`, Array.from(newTags));
-
                     // Compare with virtual cache
                     const cachedTags = this.tagCache.get(blockId) || new Set<string>();
                     const addedTags = Array.from(newTags).filter(t => !cachedTags.has(t));
 
                     if (addedTags.length > 0) {
-                        console.log(`[SupertagMonitor-Debug] Detected newly added tags:`, addedTags);
                         // Update cache
                         this.tagCache.set(blockId, newTags);
 
@@ -279,12 +276,10 @@ export class SupertagMonitor {
                 onCreateColName = String(schemaOnCreate[0].values[0][0]);
             }
 
-            const typeDbRes = await post("/api/query/sql", {
-                stmt: `SELECT "${onCreateColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag}' OR LOWER("${supertagColName}") = '${cleanTag}'`
-            });
+            const typeDbRes = db.exec(`SELECT "${onCreateColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag}' OR LOWER("${supertagColName}") = '${cleanTag}'`);
 
-            if (typeDbRes && typeDbRes.length > 0) {
-                const onCreateVal = typeDbRes[0][onCreateColName];
+            if (typeDbRes && typeDbRes.length > 0 && typeDbRes[0].values.length > 0) {
+                const onCreateVal = typeDbRes[0].values[0][0];
                 if (onCreateVal) {
                     const onCreateCmds = String(onCreateVal)
                         .split(/[,，]/)
