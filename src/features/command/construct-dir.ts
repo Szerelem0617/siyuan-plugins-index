@@ -364,59 +364,98 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
     const typeRender = await post("/api/av/renderAttributeView", { id: typeAvId });
     const typeRows = typeRender?.view?.rows || typeRender?.rows || [];
 
-    let splitLRRowId = "";
+    console.log(`[IndexOS-Debug] bindDefaultRelation commandRows: ${commandRows.length}, typeRows: ${typeRows.length}`);
+
     let graphViewRowId = "";
+    let fireworksRowId = "";
+    let showMessageRowId = "";
     let projectRowId = "";
+    let personRowId = "";
 
     for (const row of commandRows) {
         const firstCell = row.cells[0];
         const label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
-        if (label.includes("在右侧分屏打开")) {
-            splitLRRowId = row.id;
-        } else if (label.includes("全局关系图")) {
+        console.log(`[IndexOS-Debug] Command Row ID: ${row.id}, Label: "${label}"`);
+        if (label.includes("全局关系图")) {
             graphViewRowId = row.id;
+        } else if (label.includes("烟花")) {
+            fireworksRowId = row.id;
+        } else if (label.includes("消息提示")) {
+            showMessageRowId = row.id;
         }
     }
 
     for (const row of typeRows) {
         const firstCell = row.cells[0];
         const label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
-        if (label.includes("#Project")) {
+        console.log(`[IndexOS-Debug] Type Row ID: ${row.id}, Label: "${label}"`);
+        if (label.toLowerCase().includes("#project")) {
             projectRowId = row.id;
+        } else if (label.toLowerCase().includes("#person")) {
+            personRowId = row.id;
         }
     }
 
-    if (!projectRowId || !splitLRRowId || !graphViewRowId) {
-        console.warn("[IndexOS] Default rows not found. CommandRows:", commandRows.length, "TypeRows:", typeRows.length);
-        return;
-    }
+    console.log(`[IndexOS-Debug] Resolved IDs:
+      - graphViewRowId: ${graphViewRowId}
+      - fireworksRowId: ${fireworksRowId}
+      - showMessageRowId: ${showMessageRowId}
+      - projectRowId: ${projectRowId}
+      - personRowId: ${personRowId}`);
 
     const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
     const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
     const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
 
-    if (typeRelKey) {
-        const typeRelKeyId = typeRelKey.id;
-        console.log(`[IndexOS] Found type relation key: ${typeRelKeyId}. Binding row ${projectRowId} to [${splitLRRowId}, ${graphViewRowId}]...`);
-        
-        await post("/api/av/batchSetAttributeViewBlockAttrs", {
-            avID: typeAvId,
-            values: [
-                {
-                    keyID: typeRelKeyId,
-                    itemID: projectRowId,
-                    value: {
-                        type: "relation",
-                        relation: {
-                            blockIDs: [splitLRRowId, graphViewRowId]
-                        }
-                    }
-                }
-            ]
-        });
-        console.log("[IndexOS] Default relation binding completed successfully!");
-    } else {
+    if (!typeRelKey) {
         console.warn("[IndexOS] Relation key '绑定命令' not found in Type-DB keys.");
+        return;
+    }
+
+    const typeRelKeyId = typeRelKey.id;
+    const batchValues: any[] = [];
+
+    if (projectRowId && graphViewRowId) {
+        console.log(`[IndexOS] Binding Project (${projectRowId}) to Graph View (${graphViewRowId})...`);
+        batchValues.push({
+            keyID: typeRelKeyId,
+            itemID: projectRowId,
+            value: {
+                type: "relation",
+                relation: {
+                    blockIDs: [graphViewRowId]
+                }
+            }
+        });
+    } else {
+        console.warn(`[IndexOS] Cannot bind Project: projectRowId or graphViewRowId is missing.`);
+    }
+
+    if (personRowId && fireworksRowId && showMessageRowId) {
+        console.log(`[IndexOS] Binding Person (${personRowId}) to [Fireworks (${fireworksRowId}), ShowMessage (${showMessageRowId})]...`);
+        batchValues.push({
+            keyID: typeRelKeyId,
+            itemID: personRowId,
+            value: {
+                type: "relation",
+                relation: {
+                    blockIDs: [fireworksRowId, showMessageRowId]
+                }
+            }
+        });
+    } else {
+        console.warn(`[IndexOS] Cannot bind Person: personRowId, fireworksRowId, or showMessageRowId is missing.`);
+    }
+
+    if (batchValues.length > 0) {
+        const batchRes = await post("/api/av/batchSetAttributeViewBlockAttrs", {
+            avID: typeAvId,
+            values: batchValues
+        });
+        console.log("[IndexOS-Debug] batchSetAttributeViewBlockAttrs response:", batchRes);
+        console.log("[IndexOS] Default relation bindings updated successfully!");
+    } else {
+        console.warn("[IndexOS] No relation bindings to update.");
     }
 }
 
