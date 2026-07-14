@@ -266,123 +266,45 @@
         </div>
 
         <!-- Section 1: Command List (逻辑工厂) -->
-        <div class="db-section fn__flex-column" style="flex: 1; min-height: 200px; display: flex; flex-direction: column;">
-            <div class="fn__flex" style="align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🛠️ 指令注册列表 (Command-DB)</h3>
-                <input
-                    type="text"
-                    class="b3-text-field"
-                    style="font-size: 10px; padding: 2px 8px; width: 180px;"
-                    placeholder="过滤指令名称或ID..."
-                    bind:value={cmdSearchQuery}
-                />
-            </div>
-
-            <div class="table-container fn__flex-1" style="overflow: auto; border: 1px solid var(--b3-border-color); border-radius: 6px; background: #111113;">
-                {#if filteredCommands.length === 0}
-                    <div style="text-align: center; padding: 20px; opacity: 0.4; font-size: 11px;">未找到指令</div>
-                {:else}
-                    <table class="db-table">
-                        <thead>
-                            <tr>
-                                <th>指令名称 (主键)</th>
-                                <th>Command ID</th>
-                                <th>需要参数</th>
-                                <th>作用域</th>
-                                <th style="text-align: center;">启用</th>
-                                <th style="text-align: center;">位置 (T/I/P)</th>
-                                <th style="text-align: center; width: 80px;">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each filteredCommands as row}
-                                <tr class:disabled={Number(row[cmdEnableIdx]) === 0}>
-                                    <td class="primary-col" title={row[cmdLabelIdx]}>{row[cmdLabelIdx]}</td>
-                                    <td><code style="color: #4ec9b0;">{row[cmdIdIdx] || ""}</code></td>
-                                    <td style="opacity: 0.7; text-align: center;">{Number(row[cmdTypeIdx]) === 1 ? "☑" : "☐"}</td>
-                                    <td style="opacity: 0.7;">{row[cmdScopeIdx] || "Global"}</td>
-                                    <td style="text-align: center;">
-                                        <span class="status-dot" class:active={Number(row[cmdEnableIdx]) === 1}></span>
-                                    </td>
-                                    <td style="text-align: center; font-size: 10px; opacity: 0.6;">
-                                        {Number(row[cmdTopBarIdx]) ? '顶' : '-'}/{Number(row[cmdInlineIdx]) ? '内' : '-'}/{Number(row[cmdPaletteIdx]) ? '板' : '-'}
-                                    </td>
-                                    <td style="text-align: center;">
-                                        <button
-                                            class="b3-button b3-button--text run-btn"
-                                            disabled={Number(row[cmdEnableIdx]) === 0}
-                                            on:click={() => copyButtonLink(row[cmdIdIdx], row[cmdParamIdx], row[cmdLabelIdx])}
-                                        >
-                                            🔗 复制链接
-                                        </button>
-                                    </td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
-                {/if}
-            </div>
-        </div>
-
-        <!-- Section 2: Type Bindings (超级标签管理) -->
-        <div class="db-section fn__flex-column" style="flex: 1; min-height: 180px; display: flex; flex-direction: column;">
-            <div class="fn__flex" style="align-items: center; margin-bottom: 8px; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <div class="db-section fn__flex-column" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+            <div class="fn__flex" style="align-items: center; margin-bottom: 12px; gap: 8px; justify-content: space-between; flex-wrap: wrap;">
                 <div class="fn__flex" style="align-items: center; gap: 8px;">
-                    <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🖇️ 超级标签管理 (Type-DB)</h3>
+                    <h3 style="margin: 0; font-size: 13px; font-weight: 600;">🛠️ 指令注册列表 (Command-DB)</h3>
                     <input
                         type="text"
                         class="b3-text-field"
                         style="font-size: 10px; padding: 2px 8px; width: 180px;"
-                        placeholder="过滤 Supertag..."
-                        bind:value={typeSearchQuery}
+                        placeholder="过滤指令名称或ID..."
+                        bind:value={cmdSearchQuery}
                     />
+                </div>
+                <div style="font-size: 11px; opacity: 0.8; color: var(--b3-theme-primary); font-weight: 500;">
+                    💡 点击任意指令卡片，即可快速复制对应的“按钮链接 (siyuan-btn://)”到剪贴板。
                 </div>
             </div>
 
-            <div class="table-container fn__flex-1" style="overflow: auto; border: 1px solid var(--b3-border-color); border-radius: 6px; background: #111113;">
-                {#if filteredTypes.length === 0}
-                    <div style="text-align: center; padding: 20px; opacity: 0.4; font-size: 11px;">未找到超级标签绑定</div>
+            <div class="table-container fn__flex-1" style="overflow: auto; border: 1px solid var(--b3-border-color); border-radius: 8px; background: #111113; padding: 16px;">
+                {#if filteredCommands.length === 0}
+                    <div style="text-align: center; padding: 20px; opacity: 0.4; font-size: 11px;">未找到指令</div>
                 {:else}
-                    <table class="db-table">
-                        <thead>
-                            <tr>
-                                <th>超级标签 (Supertag)</th>
-                                <th>块图标菜单绑定 (Class Methods)</th>
-                                <th>当前页面菜单绑定 (Class Methods)</th>
-                                <th style="text-align: center; width: 60px;">启用</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each filteredTypes as row}
-                                <tr class:disabled={Number(row[typeEnableIdx]) === 0}>
-                                    <td class="primary-col" style="color: var(--b3-theme-primary); font-weight: bold;">
-                                        {String(row[typeSupertagIdx] || "").replace(/#/g, "")}
-                                    </td>
-                                    <td>
-                                        {#if row[typeBlockMenuIdx]}
-                                            {#each String(row[typeBlockMenuIdx]).split(/[,，]/).map(s => s.trim()).filter(Boolean) as cmdName}
-                                                <span class="cmd-chip">{cmdName}</span>
-                                            {/each}
-                                        {:else}
-                                            <span style="opacity: 0.3; font-size: 10px;">-</span>
-                                        {/if}
-                                    </td>
-                                    <td>
-                                        {#if row[typePageMenuIdx]}
-                                            {#each String(row[typePageMenuIdx]).split(/[,，]/).map(s => s.trim()).filter(Boolean) as cmdName}
-                                                <span class="cmd-chip page-chip">{cmdName}</span>
-                                            {/each}
-                                        {:else}
-                                            <span style="opacity: 0.3; font-size: 10px;">-</span>
-                                        {/if}
-                                    </td>
-                                    <td style="text-align: center;">
-                                        <span class="status-dot" class:active={Number(row[typeEnableIdx]) === 1}></span>
-                                    </td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; align-content: start;">
+                        {#each filteredCommands as row}
+                            <!-- svelte-ignore a11y-click-events-have-key-events -->
+                            <!-- svelte-ignore a11y-no-static-element-interactions -->
+                            <div 
+                                class="cmd-item-card" 
+                                class:disabled={Number(row[cmdEnableIdx]) === 0}
+                                on:click={() => Number(row[cmdEnableIdx]) !== 0 && copyButtonLink(row[cmdIdIdx], row[cmdParamIdx], row[cmdLabelIdx])}
+                            >
+                                <div class="cmd-card-body" style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+                                    <span class="cmd-name-label" style="font-weight: 500; font-size: 12px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        {row[cmdLabelIdx]}
+                                    </span>
+                                    <span class="copy-hint-icon" style="font-size: 12px; opacity: 0.3; transition: opacity 0.2s ease;">🔗</span>
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
                 {/if}
             </div>
         </div>
@@ -390,89 +312,40 @@
 </div>
 
 <style>
-    /* ─── Table Styling ─── */
-    .db-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 11px;
-        font-family: system-ui, -apple-system, sans-serif;
-        color: #e5e5e5;
-    }
-    .db-table thead {
+    /* ─── Command Cards Grid Styling ─── */
+    .cmd-item-card {
+        display: flex;
+        align-items: center;
+        padding: 10px 14px;
         background: #1e1e22;
-        position: sticky;
-        top: 0;
-        z-index: 2;
+        border: 1px solid #2a2a2e;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
     }
-    .db-table th {
-        padding: 8px 12px;
-        text-align: left;
-        border-right: 1px solid #2a2a2e;
-        border-bottom: 1px solid #2a2a2e;
-        color: #b0b0b5;
-        white-space: nowrap;
-        font-weight: 600;
+    .cmd-item-card:hover {
+        background: var(--b3-theme-primary);
+        border-color: var(--b3-theme-primary);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    .db-table td {
-        padding: 6px 12px;
-        border-right: 1px solid #1e1e22;
-        border-bottom: 1px solid #1e1e22;
-        max-width: 250px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+    .cmd-item-card:hover .cmd-name-label {
+        color: var(--b3-theme-on-primary) !important;
     }
-    .db-table tbody tr:hover {
-        background: #1d1d21;
+    .cmd-item-card:hover .copy-hint-icon {
+        opacity: 0.9 !important;
+        color: var(--b3-theme-on-primary);
     }
-    .db-table tbody tr.disabled {
-        opacity: 0.45;
-        background: rgba(0,0,0,0.1);
+    .cmd-item-card.disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
     }
-    .primary-col {
-        font-weight: 500;
-        color: #fff;
-    }
-
-    /* ─── Status Dot ─── */
-    .status-dot {
-        display: inline-block;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #6b7280;
-    }
-    .status-dot.active {
-        background: #10b981;
-        box-shadow: 0 0 4px rgba(16, 185, 129, 0.5);
-    }
-
-    /* ─── Buttons ─── */
-    .run-btn {
-        font-size: 10px;
-        padding: 2px 6px;
-        color: var(--b3-theme-primary);
-        border-radius: 3px;
-    }
-    .run-btn:hover {
-        background: rgba(144, 205, 244, 0.1);
-    }
-
-    /* ─── Chips ─── */
-    .cmd-chip {
-        display: inline-block;
-        background: rgba(99, 102, 241, 0.15);
-        color: #a5b4fc;
-        padding: 1px 6px;
-        border-radius: 10px;
-        font-size: 9px;
-        margin-right: 4px;
-        border: 1px solid rgba(99, 102, 241, 0.2);
-    }
-    .cmd-chip.page-chip {
-        background: rgba(236, 72, 153, 0.15);
-        color: #fbcfe8;
-        border-color: rgba(236, 72, 153, 0.2);
+    .cmd-item-card.disabled:hover {
+        background: #1e1e22;
+        border-color: #2a2a2e;
+        transform: none;
+        box-shadow: none;
     }
 
     /* ─── Modal styling ─── */
