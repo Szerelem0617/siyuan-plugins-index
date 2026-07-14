@@ -24,6 +24,7 @@ import { initSystemTables } from "./features/command/indexos/command-sqlite";
 import { canUseFeature } from "./features/dev-mode/policy-guard";
 import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
+import { triggerTurnIntoTask } from "./features/command/effect/turn-into-task";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -53,6 +54,11 @@ export default class IndexPlugin extends Plugin {
         const showMsgCmd = commandRegistry.getCommand("siyuan.ui.toast");
         if (showMsgCmd) {
             showMsgCmd.dispatch.executor = triggerShowMessage;
+        }
+
+        const turnIntoTaskCmd = commandRegistry.getCommand("plugin-index.command.turnIntoTask");
+        if (turnIntoTaskCmd) {
+            turnIntoTaskCmd.dispatch.executor = triggerTurnIntoTask;
         }
 
         if (DEV_ENABLE_INIT_SYS) {

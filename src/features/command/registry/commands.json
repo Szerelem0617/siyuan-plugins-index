@@ -424,6 +424,36 @@
                 "inlineButton": 1,
                 "commandPalette": 1
             }
+        },
+        {
+            "id": "plugin-index.command.turnIntoTask",
+            "name": "转换为任务",
+            "description": "将选中的普通段落、标题或整个列表转换为任务列表。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [],
+            "constraints": {
+                "requiresFocus": false,
+                "uiOnly": false,
+                "schedulable": false
+            },
+            "meta": {
+                "scope": "self",
+                "category": "edit",
+                "source": "plugin",
+                "plugin": "index"
+            },
+            "seed": {
+                "rowID": "20260714160000-turnintotask",
+                "label": "☑ 转换为任务",
+                "paramMapping": "",
+                "requiresParams": false,
+                "enable": 1,
+                "topBar": 0,
+                "inlineButton": 0,
+                "commandPalette": 1
+            }
         }
     ],
     "paramModes": {
