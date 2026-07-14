@@ -5,6 +5,7 @@ import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../data/attribute-view/special/special-handlers";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import ParamConfigDialog from "./ParamConfigDialog.svelte";
+import OnCreateSelectorDialog from "./OnCreateSelectorDialog.svelte";
 import { parseAVClickEvent } from "../../../shared/utils";
 
 /**
@@ -206,6 +207,27 @@ async function handleAvAltClick(event: MouseEvent) {
         event.preventDefault();
         event.stopPropagation();
 
+        const { db } = await getSqliteEngine();
+
+        // Check if the clicked column name in Siyuan matches "On Create" or "创建时"
+        let isOnCreateCol = false;
+        try {
+            const checkColRes = db.exec(`SELECT key_name FROM _av_schema WHERE av_id = ? AND col_name = ?`, [avId, colId]);
+            if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
+                const keyName = checkColRes[0].values[0][0];
+                if (keyName === "On Create" || keyName === "创建时") {
+                    isOnCreateCol = true;
+                }
+            }
+        } catch (e) {
+            console.error("[AltClick-TypeDB] Schema check failed:", e);
+        }
+
+        if (isOnCreateCol) {
+            await openOnCreateSelector(avId, rowId, colId);
+            return;
+        }
+
         // 提取所点单元格内的命令名（可以是 Block Icon Menu 的逗号分隔，也可以是关联字段的标签）
         const cellText = cellEl.textContent || "";
         const tags = Array.from(cellEl.querySelectorAll(".av__cell--relation-tag, span")).map(el => el.textContent?.trim()).filter(Boolean);
@@ -355,6 +377,99 @@ async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
         });
     } catch (e: any) {
         console.error("Open Config for Command error:", e);
+        showMessage(`读取配置失败: ${e.message}`, 3000, "error");
+    }
+}
+
+async function openOnCreateSelector(avId: string, rowId: string, colId: string) {
+    const commandAvId = getCommandAvId();
+    if (!commandAvId) {
+        showMessage("无法获取命令管理数据库 (Command-DB)", 3000, "error");
+        return;
+    }
+
+    try {
+        const { db } = await getSqliteEngine();
+        
+        // 1. Get the relation column name "绑定命令" in Type-DB
+        const relColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = '绑定命令'`, [avId]);
+        if (relColRes.length === 0 || relColRes[0].values.length === 0) {
+            showMessage("未能在超级标签管理表中找到'绑定命令'关系列", 3000, "error");
+            return;
+        }
+        const typeRelationCol = relColRes[0].values[0][0];
+
+        // 2. Query supertag name for the clicked row
+        const typeTableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        const supertagColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [avId]);
+        let supertagCol = "supertag";
+        if (supertagColRes.length > 0 && supertagColRes[0].values.length > 0) {
+            supertagCol = supertagColRes[0].values[0][0];
+        }
+
+        const supertagQuery = db.exec(`SELECT "${supertagCol}", "${typeRelationCol}", "${colId}" FROM ${typeTableName} WHERE _itemID = ?`, [rowId]);
+        if (supertagQuery.length === 0 || supertagQuery[0].values.length === 0) {
+            showMessage("未找到该超级标签的行记录", 3000, "error");
+            return;
+        }
+
+        const supertagLabel = String(supertagQuery[0].values[0][0] || "").trim();
+        const relationRaw = String(supertagQuery[0].values[0][1] || "");
+        const currentOnCreateVal = String(supertagQuery[0].values[0][2] || "").trim();
+
+        // 3. Resolve linked rowIDs
+        let linkedRowIds: string[] = [];
+        if (relationRaw) {
+            try {
+                linkedRowIds = JSON.parse(relationRaw);
+            } catch (_) {}
+        }
+
+        // 4. Query labels of bound commands from Command-DB
+        const cmdTableName = `av_${commandAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        const cmdLabelColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [commandAvId]);
+        let cmdLabelCol = "label";
+        if (cmdLabelColRes.length > 0 && cmdLabelColRes[0].values.length > 0) {
+            cmdLabelCol = cmdLabelColRes[0].values[0][0];
+        }
+
+        const boundCommands: { label: string; rowId: string }[] = [];
+        if (linkedRowIds.length > 0) {
+            const placeholders = linkedRowIds.map(() => "?").join(",");
+            const cmdsQuery = db.exec(`SELECT _itemID, "${cmdLabelCol}" FROM ${cmdTableName} WHERE _itemID IN (${placeholders})`, linkedRowIds);
+            if (cmdsQuery.length > 0 && cmdsQuery[0].values.length > 0) {
+                cmdsQuery[0].values.forEach((row: any) => {
+                    boundCommands.push({
+                        rowId: String(row[0]),
+                        label: String(row[1] || "").trim()
+                    });
+                });
+            }
+        }
+
+        // 5. Open dialog and mount Svelte component
+        const dialog = new Dialog({
+            title: "配置 On Create 命令",
+            content: `<div class="b3-dialog__content" id="on-create-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
+            width: "400px",
+            height: "480px"
+        });
+
+        new OnCreateSelectorDialog({
+            target: dialog.element.querySelector("#on-create-config-container")!,
+            props: {
+                dialog,
+                supertag: supertagLabel,
+                boundCommands,
+                currentValue: currentOnCreateVal,
+                onSave: async (updatedVal: string) => {
+                    await updateCellValue(null, avId, rowId, colId, updatedVal);
+                }
+            }
+        });
+
+    } catch (e: any) {
+        console.error("Open On Create Config error:", e);
         showMessage(`读取配置失败: ${e.message}`, 3000, "error");
     }
 }

@@ -43,8 +43,13 @@ export async function initSystemTables() {
         supertag TEXT,
         Block_Icon_Menu TEXT,
         Current_Page_Menu TEXT,
-        Enable INTEGER DEFAULT 1
+        Enable INTEGER DEFAULT 1,
+        On_Create TEXT
     );`);
+
+    try {
+        db.run(`ALTER TABLE ${TABLE_TYPES} ADD COLUMN On_Create TEXT;`);
+    } catch (_) { /* ignore */ }
 
     // 2.5 清理旧的内置命令数据并重新从 commands.json 载入以保证热更新生效
     try {
@@ -135,10 +140,14 @@ export async function initSystemTables() {
 
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
     if (typeCount === 0) {
-        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable) VALUES (?, ?, ?, ?, ?)`, 
-            ["20260526204605-7hun58a", "#Project", "🌐 全局关系图", "", 1]);
-        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable) VALUES (?, ?, ?, ?, ?)`, 
-            ["20260526204605-v11e2ta", "#Person", "🎆 烟花, 💬 消息提示", "", 1]);
+        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable, On_Create) VALUES (?, ?, ?, ?, ?, ?)`, 
+            ["20260526204605-7hun58a", "#Project", "🌐 全局关系图", "", 1, ""]);
+        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable, On_Create) VALUES (?, ?, ?, ?, ?, ?)`, 
+            ["20260526204605-v11e2ta", "#Person", "🎆 烟花, 💬 消息提示", "", 1, "🎆 烟花, 💬 消息提示"]);
+    } else {
+        try {
+            db.run(`UPDATE ${TABLE_TYPES} SET On_Create = '🎆 烟花, 💬 消息提示' WHERE supertag = '#Person' AND (On_Create IS NULL OR On_Create = '')`);
+        } catch (_) { /* ignore */ }
     }
 
     await saveDatabaseToDisk();

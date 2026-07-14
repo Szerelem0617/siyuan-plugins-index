@@ -1,11 +1,12 @@
 import { post } from "../../../shared/api-client/request";
-import { SUPERTAG_REGISTRY, refreshSupertagRegistry } from "../registration";
+import { SUPERTAG_REGISTRY, refreshSupertagRegistry, COMMAND_REGISTRY, getTypeAvId } from "../registration";
 import { getGlobalTypeConfigs } from "../../data/av-setting/db-config";
 import { type TypeConfig } from "../../data/av-setting/types";
 import { showMessage } from "siyuan";
 import { formatDate } from "../../../shared/utils";
 import { getColIDMap } from "../../../shared/utils/av-utils";
-import { tableSyncTimes, instantiateAV } from "../../sqlite/sqlite-manager";
+import { tableSyncTimes, instantiateAV, getSqliteEngine } from "../../sqlite/sqlite-manager";
+import { dispatchCommand } from "../command-dispatcher";
 
 export class SupertagMonitor {
     private dataRegistry: TypeConfig[] = [];
@@ -248,8 +249,82 @@ export class SupertagMonitor {
                 await this.applySupertag(blockId, cleanTag, targetConfig);
             } else {
             }
+
+            // --- Path C: Execute On Create Commands (Layer 3 trigger) ---
+            await this.triggerOnCreateCommands(blockId, cleanTag);
         } catch (e) {
             console.error("[Supertag] Failed to process new tag:", blockId, e);
+        }
+    }
+
+    private async triggerOnCreateCommands(blockId: string, cleanTag: string) {
+        const typeAvId = getTypeAvId();
+        if (!typeAvId) return;
+
+        try {
+            const tableName = `av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+            const { db } = await getSqliteEngine();
+            
+            // Find primary key column name (usually block type)
+            const schemaCols = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [typeAvId]);
+            let supertagColName = "supertag";
+            if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
+                supertagColName = String(schemaCols[0].values[0][0]);
+            }
+
+            // Find On Create column name
+            const schemaOnCreate = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'On Create' OR key_name = '创建时')`, [typeAvId]);
+            let onCreateColName = "On_Create";
+            if (schemaOnCreate.length > 0 && schemaOnCreate[0].values.length > 0) {
+                onCreateColName = String(schemaOnCreate[0].values[0][0]);
+            }
+
+            const typeDbRes = await post("/api/query/sql", {
+                stmt: `SELECT "${onCreateColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag}' OR LOWER("${supertagColName}") = '${cleanTag}'`
+            });
+
+            if (typeDbRes && typeDbRes.length > 0) {
+                const onCreateVal = typeDbRes[0][onCreateColName];
+                if (onCreateVal) {
+                    const onCreateCmds = String(onCreateVal)
+                        .split(/[,，]/)
+                        .map(s => s.trim())
+                        .filter(Boolean);
+
+                    console.log(`[Supertag-OnCreate] Found On_Create commands for tag #${cleanTag}:`, onCreateCmds);
+
+                    // Execute sequentially in order (有顺序的)
+                    for (const cmdLabel of onCreateCmds) {
+                        const cmdInfo = COMMAND_REGISTRY[cmdLabel];
+                        const commandRef = cmdInfo?.commandRef || cmdLabel;
+                        const paramMapping = cmdInfo?.paramMapping || "";
+
+                        console.log(`[Supertag-OnCreate] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId}`);
+
+                        const doc = document;
+                        const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
+                        if (blockEl && !blockEl.getAttribute("data-node-id")) {
+                            blockEl.setAttribute("data-node-id", blockId);
+                        }
+
+                        const protyle = (window as any).siyuan?.ws?.protyle || null;
+                        const context = {
+                            blockEl,
+                            protyleEl: protyle?.element || null,
+                            protyle,
+                            supertag: cleanTag
+                        };
+
+                        try {
+                            await dispatchCommand(commandRef, paramMapping, context);
+                        } catch (cmdErr) {
+                            console.error(`[Supertag-OnCreate] Failed to dispatch command: ${cmdLabel}`, cmdErr);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[Supertag-OnCreate] Error triggering On Create commands:", e);
         }
     }
 
