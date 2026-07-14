@@ -55,7 +55,7 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             }
         }
 
-        const cmdRes = await runQuery(`SELECT * FROM ${commandsTable} WHERE Enable = 1`);
+        const cmdRes = await runQuery(`SELECT * FROM ${commandsTable}`);
         if (!cmdRes || !cmdRes.values) {
             return false;
         }
@@ -198,7 +198,7 @@ async function refreshTopBarFromApi() {
                 return cell?.value?.checkbox?.checked || false;
             }
 
-            if (getBool("Enable") && commandId) {
+            if (commandId) {
                 if (getBool("Top Bar") && label) newTopBars.push({ id: row.id, label, commandId, commandParam, requiresParams });
                 if (getBool("Inline Button") && label) newInlineBtns.push({ id: row.id, label, commandId, commandParam, requiresParams });
                 if (getBool("Command Palette") && label) newPaletteCmds.push({ id: row.id, label, commandId, commandParam, requiresParams });

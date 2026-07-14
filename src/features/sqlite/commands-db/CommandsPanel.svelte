@@ -134,8 +134,8 @@
             const colName = hasRequiresParams ? "Requires_Params" : "Command_Type";
 
             db.run(`
-                INSERT INTO ${commandsTable} (rowID, label, Command_ID, Param_Mapping, ${colName}, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette)
-                VALUES (?, ?, ?, ?, ?, ?, 1, 0, 0, 0)
+                INSERT INTO ${commandsTable} (rowID, label, Command_ID, Param_Mapping, ${colName}, Target_Scope, Top_Bar, Inline_Button, Command_Palette)
+                VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0)
             `, [
                 rowID,
                 cmd.name,
@@ -203,7 +203,6 @@
     $: cmdParamIdx = colIdx(commandCols, "Param_Mapping");
     $: cmdTypeIdx = colIdx(commandCols, "Requires_Params") !== -1 ? colIdx(commandCols, "Requires_Params") : colIdx(commandCols, "Command_Type");
     $: cmdScopeIdx = colIdx(commandCols, "Target_Scope");
-    $: cmdEnableIdx = colIdx(commandCols, "Enable");
     $: cmdTopBarIdx = colIdx(commandCols, "Top_Bar");
     $: cmdInlineIdx = colIdx(commandCols, "Inline_Button");
     $: cmdPaletteIdx = colIdx(commandCols, "Command_Palette");
@@ -211,7 +210,6 @@
     $: typeSupertagIdx = colIdx(typeCols, typeSupertagCol);
     $: typeBlockMenuIdx = colIdx(typeCols, "Block_Icon_Menu");
     $: typePageMenuIdx = colIdx(typeCols, "Current_Page_Menu");
-    $: typeEnableIdx = colIdx(typeCols, "Enable");
 
     // Filtered lists
     $: filteredCommands = commandRows.filter(row => {
@@ -293,8 +291,7 @@
                             <!-- svelte-ignore a11y-no-static-element-interactions -->
                             <div 
                                 class="cmd-item-card" 
-                                class:disabled={Number(row[cmdEnableIdx]) === 0}
-                                on:click={() => Number(row[cmdEnableIdx]) !== 0 && copyButtonLink(row[cmdIdIdx], row[cmdParamIdx], row[cmdLabelIdx])}
+                                on:click={() => copyButtonLink(row[cmdIdIdx], row[cmdParamIdx], row[cmdLabelIdx])}
                             >
                                 <div class="cmd-card-body" style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
                                     <span class="cmd-name-label" style="font-weight: 500; font-size: 12px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -337,16 +334,7 @@
         opacity: 0.9 !important;
         color: var(--b3-theme-on-primary);
     }
-    .cmd-item-card.disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-    }
-    .cmd-item-card.disabled:hover {
-        background: #1e1e22;
-        border-color: #2a2a2e;
-        transform: none;
-        box-shadow: none;
-    }
+
 
     /* ─── Modal styling ─── */
     .schema-overlay {

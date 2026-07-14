@@ -203,7 +203,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         }
 
         // 1. Load Commands (Layer 2)
-        const cmdRes = await runQuery(`SELECT rowID, "${commandLabelCol}", Command_ID, Param_Mapping FROM ${commandsTable} WHERE Enable = 1`);
+        const cmdRes = await runQuery(`SELECT rowID, "${commandLabelCol}", Command_ID, Param_Mapping FROM ${commandsTable}`);
         if (!cmdRes || !cmdRes.values) return false;
 
         COMMAND_REGISTRY = {};
@@ -242,9 +242,9 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         // 3. Load Type Bindings (Layer 3)
         let querySql = "";
         if (hasRelationCol) {
-            querySql = `SELECT "${typeSupertagCol}", "${typeRelationCol}" FROM ${typesTable} WHERE Enable = 1`;
+            querySql = `SELECT "${typeSupertagCol}", "${typeRelationCol}" FROM ${typesTable}`;
         } else {
-            querySql = `SELECT "${typeSupertagCol}", Block_Icon_Menu, Current_Page_Menu FROM ${typesTable} WHERE Enable = 1`;
+            querySql = `SELECT "${typeSupertagCol}", Block_Icon_Menu, Current_Page_Menu FROM ${typesTable}`;
         }
         const typeRes = await runQuery(querySql);
         if (!typeRes || !typeRes.values) return false;
@@ -411,18 +411,9 @@ async function refreshRegistryFromApi() {
             const pageMenuRaw = getCellText("Current Page Menu");
             const linkedRowIds = getRelationIds("绑定命令");
 
-            const enableColIdx = columns.findIndex((c: any) => c.name === "Enable" || c.keyName === "Enable");
-            let enableStatus = true;
-            if (enableColIdx >= 0) {
-                const cell = row.cells[enableColIdx];
-                if (cell && cell.value && cell.value.checkbox) {
-                    enableStatus = cell.value.checkbox.checked;
-                }
-            }
-
             const hasRelationCol = columns.some((c: any) => c.name === "绑定命令" || c.keyName === "绑定命令");
 
-            if (enableStatus && typeTagRaw) {
+            if (typeTagRaw) {
                 const cleanTag = typeTagRaw.replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
 
                 if (hasRelationCol) {

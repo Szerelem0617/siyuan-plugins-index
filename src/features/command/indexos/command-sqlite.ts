@@ -31,7 +31,6 @@ export async function initSystemTables() {
         Param_Mapping TEXT,
         Requires_Params INTEGER DEFAULT 0,
         Target_Scope TEXT,
-        Enable INTEGER DEFAULT 1,
         Top_Bar INTEGER DEFAULT 0,
         Inline_Button INTEGER DEFAULT 0,
         Command_Palette INTEGER DEFAULT 0
@@ -43,7 +42,6 @@ export async function initSystemTables() {
         supertag TEXT,
         Block_Icon_Menu TEXT,
         Current_Page_Menu TEXT,
-        Enable INTEGER DEFAULT 1,
         On_Create TEXT
     );`);
 
@@ -85,14 +83,13 @@ export async function initSystemTables() {
                     s.paramMapping || "",
                     s.requiresParams ? 1 : 0,
                     targetScope,
-                    s.enable !== undefined ? s.enable : 1,
                     s.topBar !== undefined ? s.topBar : 0,
                     s.inlineButton !== undefined ? s.inlineButton : 0,
                     s.commandPalette !== undefined ? s.commandPalette : 1
                 ]);
             }
         }
-        const stmt = db.prepare(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const stmt = db.prepare(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Top_Bar, Inline_Button, Command_Palette) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const cmd of defaultCmds) {
             stmt.run(cmd);
         }
@@ -106,9 +103,9 @@ export async function initSystemTables() {
                 const fireworksCmd = (commandsData as any).commands.find((c: any) => c.id === 'plugin-index.effect.fireworks');
                 if (fireworksCmd && fireworksCmd.seed) {
                     const s = fireworksCmd.seed;
-                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
-                            [s.rowID, s.label, fireworksCmd.id, s.paramMapping || "", s.requiresParams ? 1 : 0, "Self", s.enable || 1, s.topBar || 0, s.inlineButton || 1, s.commandPalette || 1]);
+                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Top_Bar, Inline_Button, Command_Palette) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+                            [s.rowID, s.label, fireworksCmd.id, s.paramMapping || "", s.requiresParams ? 1 : 0, "Self", s.topBar || 0, s.inlineButton || 1, s.commandPalette || 1]);
                 }
             }
         } catch (e) {
@@ -128,9 +125,9 @@ export async function initSystemTables() {
                 const toastCmd = (commandsData as any).commands.find((c: any) => c.id === 'siyuan.ui.toast');
                 if (toastCmd && toastCmd.seed) {
                     const s = toastCmd.seed;
-                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
-                            [s.rowID, s.label, toastCmd.id, s.paramMapping || "", s.requiresParams ? 1 : 0, "Self", s.enable || 1, s.topBar || 0, s.inlineButton || 1, s.commandPalette || 1]);
+                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Top_Bar, Inline_Button, Command_Palette) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+                            [s.rowID, s.label, toastCmd.id, s.paramMapping || "", s.requiresParams ? 1 : 0, "Self", s.topBar || 0, s.inlineButton || 1, s.commandPalette || 1]);
                 }
             }
         } catch (e) {
@@ -140,10 +137,10 @@ export async function initSystemTables() {
 
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
     if (typeCount === 0) {
-        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable, On_Create) VALUES (?, ?, ?, ?, ?, ?)`, 
-            ["20260526204605-7hun58a", "#Project", "🌐 全局关系图", "", 1, ""]);
-        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable, On_Create) VALUES (?, ?, ?, ?, ?, ?)`, 
-            ["20260526204605-v11e2ta", "#Person", "🎆 烟花, 💬 消息提示", "", 1, "🎆 烟花, 💬 消息提示"]);
+        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, On_Create) VALUES (?, ?, ?, ?, ?)`, 
+            ["20260526204605-7hun58a", "#Project", "🌐 全局关系图", "", ""]);
+        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, On_Create) VALUES (?, ?, ?, ?, ?)`, 
+            ["20260526204605-v11e2ta", "#Person", "🎆 烟花, 💬 消息提示", "", "🎆 烟花, 💬 消息提示"]);
     } else {
         try {
             db.run(`UPDATE ${TABLE_TYPES} SET On_Create = '🎆 烟花, 💬 消息提示' WHERE supertag = '#Person' AND (On_Create IS NULL OR On_Create = '')`);

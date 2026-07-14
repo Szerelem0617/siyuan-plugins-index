@@ -62,13 +62,12 @@ export async function constructCommandStorage() {
                 const requiresParamsKey = await addCol("Requires Params", "checkbox", "iconCheck", commandIdKey);
                 const paramMappingKey = await addCol("Param Mapping", "text", "iconList", requiresParamsKey);
                 const targetScopeKey = await addCol("Target Scope", "text", "iconFocus", paramMappingKey);
-                const enableKey = await addCol("Enable", "checkbox", "iconCheck", targetScopeKey);
-                const topBarKey = await addCol("Top Bar", "checkbox", "iconLayout", enableKey);
+                const topBarKey = await addCol("Top Bar", "checkbox", "iconLayout", targetScopeKey);
                 const buttonKey = await addCol("Inline Button", "checkbox", "iconPlay", topBarKey);
                 const paletteKey = await addCol("Command Palette", "checkbox", "iconSearch", buttonKey);
 
                 // Fetch seed data from SQLite sys_command_db
-                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette FROM sys_command_db`);
+                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Top_Bar, Inline_Button, Command_Palette FROM sys_command_db`);
 
                 // Insert seed items as detached rows
                 const addRows: any[] = [];
@@ -95,7 +94,7 @@ export async function constructCommandStorage() {
 
                 const populateOps: any[] = [];
                 for (const match of seedRes.values) {
-                    const [rowID, labelVal, commandID, paramMapping, requiresParams, targetScope, enable, topBar, inlineButton, commandPalette] = match;
+                    const [rowID, labelVal, commandID, paramMapping, requiresParams, targetScope, topBar, inlineButton, commandPalette] = match;
                     
                     if (primaryKeyId) {
                         populateOps.push({
@@ -109,7 +108,6 @@ export async function constructCommandStorage() {
                     populateOps.push({ keyID: paramMappingKey, itemID: rowID, value: { type: "text", text: { content: String(paramMapping || "") } } });
                     populateOps.push({ keyID: requiresParamsKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(requiresParams) === 1 || String(requiresParams) === "true" || String(requiresParams) === "是" } } });
                     populateOps.push({ keyID: targetScopeKey, itemID: rowID, value: { type: "text", text: { content: String(targetScope || "") } } });
-                    populateOps.push({ keyID: enableKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
                     populateOps.push({ keyID: topBarKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(topBar) === 1 } } });
                     populateOps.push({ keyID: buttonKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(inlineButton) === 1 } } });
                     populateOps.push({ keyID: paletteKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(commandPalette) === 1 } } });
@@ -146,10 +144,9 @@ export async function constructCommandStorage() {
                 const blockMenuKey = await addCol("Block Icon Menu", "text", "iconMenu", lastKeyID);
                 const pageMenuKey = await addCol("Current Page Menu", "text", "iconFile", blockMenuKey);
                 const onCreateKey = await addCol("On Create", "text", "iconPlay", pageMenuKey);
-                const enableKey = await addCol("Enable", "checkbox", "iconCheck", onCreateKey);
 
                 // Fetch seed data from SQLite sys_type_db
-                const seedRes = await runQuery(`SELECT rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Enable, On_Create FROM sys_type_db`);
+                const seedRes = await runQuery(`SELECT rowID, supertag, Block_Icon_Menu, Current_Page_Menu, On_Create FROM sys_type_db`);
 
                 // Insert seed items as detached rows
                 const addRows: any[] = [];
@@ -176,7 +173,7 @@ export async function constructCommandStorage() {
 
                 const populateOps: any[] = [];
                 for (const match of seedRes.values) {
-                    const [rowID, supertag, blockMenu, pageMenu, enable, onCreate] = match;
+                    const [rowID, supertag, blockMenu, pageMenu, onCreate] = match;
                     
                     if (primaryKeyId) {
                         populateOps.push({
@@ -189,7 +186,6 @@ export async function constructCommandStorage() {
                     populateOps.push({ keyID: blockMenuKey, itemID: rowID, value: { type: "text", text: { content: String(blockMenu || "") } } });
                     populateOps.push({ keyID: pageMenuKey, itemID: rowID, value: { type: "text", text: { content: String(pageMenu || "") } } });
                     populateOps.push({ keyID: onCreateKey, itemID: rowID, value: { type: "text", text: { content: String(onCreate || "") } } });
-                    populateOps.push({ keyID: enableKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(enable) === 1 } } });
                 }
 
                 if (populateOps.length > 0) {
