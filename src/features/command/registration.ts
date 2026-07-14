@@ -480,7 +480,7 @@ export function getInitSystemSlashCommand() {
 
     return [
         {
-            filter: ["init system db", "初始化体系", "cshi"],
+            filter: ["init system db", "实例化", "sxl"],
             html: `<div class="b3-list-item__first"><span class="b3-list-item__text">${i18n.initSystemDB}</span><span class="b3-list-item__meta">Legacy AV</span></div>`,
             id: "initSystemDB",
             async callback(protyle: Protyle) {
@@ -507,8 +507,8 @@ export function getInitSystemSlashCommand() {
             }
         },
         {
-            filter: ["reverse db list", "实例化命令数据库到本地", "sxlm"],
-            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">实例化命令数据库到本地</span><span class="b3-list-item__meta">Outline</span></div>`,
+            filter: ["reverse db list", "生成列表", "sxlm"],
+            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">生成列表</span><span class="b3-list-item__meta">Outline</span></div>`,
             id: "reverseDbList",
             async callback(protyle: Protyle) {
                 protyle.insert("");

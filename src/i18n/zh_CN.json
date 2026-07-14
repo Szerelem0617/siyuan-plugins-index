@@ -1,7 +1,7 @@
 {
   "insertIndex": "插入目录",
   "insertoutline": "插入大纲",
-  "initSystemDB": "初始化命令管理",
+  "initSystemDB": "实例化",
   "settings": "设置",
   "addTopBarIcon": "插入目录",
   "indexSettings": "目录",

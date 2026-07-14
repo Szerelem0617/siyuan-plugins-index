@@ -58,13 +58,13 @@
 
     async function handleInitSystem() {
         try {
-            showMessage("🗄️ 正在初始化系统存储库...");
+            showMessage("🗄️ 正在实例化系统存储库...");
             await constructCommandStorage();
             await refreshSupertagRegistry();
             await loadData();
         } catch (e: any) {
             console.error("Init system failed", e);
-            showMessage(`初始化失败: ${e.message}`, 5000, "error");
+            showMessage(`实例化失败: ${e.message}`, 5000, "error");
         }
     }
 
@@ -89,7 +89,7 @@
 
     async function handleGenerateOutline() {
         try {
-            showMessage("📑 正在实例化命令数据库到本地...");
+            showMessage("📑 正在生成列表...");
             const success = await reverseDbToList();
             if (success) {
                 await refreshSupertagRegistry();
@@ -97,7 +97,7 @@
             }
         } catch (e: any) {
             console.error("Generate outline failed", e);
-            showMessage(`实例化失败: ${e.message}`, 5000, "error");
+            showMessage(`生成列表失败: ${e.message}`, 5000, "error");
         }
     }
 
@@ -270,13 +270,13 @@
         <div class="fn__flex" style="align-items: center; gap: 8px; font-size: 11px; padding: 6px 12px; background: var(--b3-theme-surface); border-radius: 4px; border: 1px solid var(--b3-border-color);">
             <span style="font-weight: 600; color: var(--b3-theme-primary); margin-right: 4px;">⚙️ 系统管理:</span>
             <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleInitSystem}>
-                🗄️ 初始化系统存储库
+                🗄️ 实例化
             </button>
             <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleResetSqlite}>
                 ⟳ 重置内置 SQLite 数据库
             </button>
             <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleGenerateOutline} disabled={!isInitialized}>
-                📑 实例化命令数据库到本地
+                📑 生成列表
             </button>
             {#if canUseFeature("commands.pull")}
                 <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={openPullModal}>
