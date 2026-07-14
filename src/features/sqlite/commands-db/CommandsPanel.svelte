@@ -68,24 +68,7 @@
         }
     }
 
-    async function handleResetSqlite() {
-        try {
-            showMessage("⟳ 正在重置内置 SQLite 数据库...");
-            const { db } = await getSqliteEngine();
-            const { commands, types } = getSystemTableNames();
 
-            db.run(`DROP TABLE IF EXISTS ${commands}`);
-            db.run(`DROP TABLE IF EXISTS ${types}`);
-            await initSystemTables();
-            await saveDatabaseToDisk();
-            await refreshSupertagRegistry();
-            await loadData();
-            showMessage("内置 SQLite 数据库已重置并加载默认数据");
-        } catch (e: any) {
-            console.error("Reset SQLite failed", e);
-            showMessage(`重置失败: ${e.message}`, 5000, "error");
-        }
-    }
 
     async function handleGenerateOutline() {
         try {
@@ -271,9 +254,6 @@
             <span style="font-weight: 600; color: var(--b3-theme-primary); margin-right: 4px;">⚙️ 系统管理:</span>
             <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleInitSystem}>
                 🗄️ 实例化
-            </button>
-            <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleResetSqlite}>
-                ⟳ 重置内置 SQLite 数据库
             </button>
             <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleGenerateOutline} disabled={!isInitialized}>
                 📑 生成列表

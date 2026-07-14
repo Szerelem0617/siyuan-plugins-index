@@ -490,23 +490,6 @@ export function getInitSystemSlashCommand() {
             }
         },
         {
-            filter: ["reset sqlite", "重置数据库", "czsqlite"],
-            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">重置内置 SQLite 数据库</span><span class="b3-list-item__meta">Source of Truth</span></div>`,
-            id: "resetSqliteDB",
-            async callback(protyle: Protyle) {
-                protyle.insert("");
-                const { db } = await getSqliteEngine();
-                const { commands, types } = getSystemTableNames();
-
-                db.run(`DROP TABLE IF EXISTS ${commands}`);
-                db.run(`DROP TABLE IF EXISTS ${types}`);
-                await initSystemTables();
-                await saveDatabaseToDisk();
-                await refreshSupertagRegistry();
-                showMessage("内置 SQLite 数据库已重置并加载默认数据");
-            }
-        },
-        {
             filter: ["reverse db list", "生成列表", "sxlm"],
             html: `<div class="b3-list-item__first"><span class="b3-list-item__text">生成列表</span><span class="b3-list-item__meta">Outline</span></div>`,
             id: "reverseDbList",

@@ -22,6 +22,16 @@
                 "scope": "global",
                 "category": "navigation",
                 "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-bp28zp8",
+                "label": "🌐 全局关系图",
+                "paramMapping": "",
+                "requiresParams": false,
+                "enable": 1,
+                "topBar": 1,
+                "inlineButton": 1,
+                "commandPalette": 1
             }
         },
         {
@@ -88,6 +98,16 @@
                 "category": "edit",
                 "source": "builtin",
                 "apiEquivalent": "api.block.insert"
+            },
+            "seed": {
+                "rowID": "20260526204558-zxrigm8",
+                "label": "📑 复制当前块",
+                "paramMapping": "",
+                "requiresParams": false,
+                "enable": 1,
+                "topBar": 0,
+                "inlineButton": 0,
+                "commandPalette": 1
             }
         },
         {
@@ -203,6 +223,16 @@
                 "scope": "sibling",
                 "category": "edit",
                 "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260527120000-insert",
+                "label": "⚡ API 插入块测试",
+                "paramMapping": "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}",
+                "requiresParams": true,
+                "enable": 1,
+                "topBar": 0,
+                "inlineButton": 0,
+                "commandPalette": 1
             }
         },
         {
@@ -314,6 +344,16 @@
                 "category": "custom",
                 "source": "plugin",
                 "plugin": "index"
+            },
+            "seed": {
+                "rowID": "20260701100000-fireworks",
+                "label": "🎆 烟花",
+                "paramMapping": "",
+                "requiresParams": false,
+                "enable": 1,
+                "topBar": 0,
+                "inlineButton": 1,
+                "commandPalette": 1
             }
         },
         {
@@ -373,6 +413,16 @@
                 "category": "custom",
                 "source": "plugin",
                 "plugin": "index"
+            },
+            "seed": {
+                "rowID": "20260713120000-showmessage",
+                "label": "💬 消息提示",
+                "paramMapping": "",
+                "requiresParams": true,
+                "enable": 1,
+                "topBar": 0,
+                "inlineButton": 1,
+                "commandPalette": 1
             }
         }
     ],

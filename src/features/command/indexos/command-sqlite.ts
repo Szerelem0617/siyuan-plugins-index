@@ -68,14 +68,25 @@ export async function initSystemTables() {
     // 3. Check if empty and seed default data
     const cmdCount = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS}`)[0].values[0][0];
     if (cmdCount === 0) {
-        const defaultCmds = [
-            // rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette
-            ["20260526204558-bp28zp8", "🌐 全局关系图", "siyuan.view.graph", "", 0, "Global", 1, 1, 1, 1],
-            ["20260526204558-zxrigm8", "📑 复制当前块", "editor.block.duplicate", "", 0, "Sibling", 1, 0, 0, 1],
-            ["20260527120000-insert", "⚡ API 插入块测试", "api.block.insert", "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}", 1, "Global", 1, 0, 0, 1],
-            ["20260701100000-fireworks", "🎆 烟花", "plugin-index.effect.fireworks", "", 0, "Self", 1, 0, 1, 1],
-            ["20260713120000-showmessage", "💬 消息提示", "siyuan.ui.toast", "", 1, "Self", 1, 0, 1, 1]
-        ];
+        const defaultCmds: any[] = [];
+        for (const cmd of (commandsData as any).commands) {
+            if (cmd.seed) {
+                const s = cmd.seed;
+                const targetScope = cmd.meta?.scope ? (cmd.meta.scope.charAt(0).toUpperCase() + cmd.meta.scope.slice(1)) : "Global";
+                defaultCmds.push([
+                    s.rowID,
+                    s.label,
+                    cmd.id,
+                    s.paramMapping || "",
+                    s.requiresParams ? 1 : 0,
+                    targetScope,
+                    s.enable !== undefined ? s.enable : 1,
+                    s.topBar !== undefined ? s.topBar : 0,
+                    s.inlineButton !== undefined ? s.inlineButton : 0,
+                    s.commandPalette !== undefined ? s.commandPalette : 1
+                ]);
+            }
+        }
         const stmt = db.prepare(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const cmd of defaultCmds) {
             stmt.run(cmd);
@@ -87,9 +98,13 @@ export async function initSystemTables() {
             const checkExists = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS} WHERE Command_ID = 'plugin-index.effect.fireworks'`);
             const existsCount = checkExists?.[0]?.values?.[0]?.[0] || 0;
             if (Number(existsCount) === 0) {
-                db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
-                        ["20260701100000-fireworks", "🎆 烟花", "plugin-index.effect.fireworks", "", 0, "Self", 1, 0, 1, 1]);
+                const fireworksCmd = (commandsData as any).commands.find((c: any) => c.id === 'plugin-index.effect.fireworks');
+                if (fireworksCmd && fireworksCmd.seed) {
+                    const s = fireworksCmd.seed;
+                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+                            [s.rowID, s.label, fireworksCmd.id, s.paramMapping || "", s.requiresParams ? 1 : 0, "Self", s.enable || 1, s.topBar || 0, s.inlineButton || 1, s.commandPalette || 1]);
+                }
             }
         } catch (e) {
             console.error("[SQLite-Init] Failed to ensure plugin-index.effect.fireworks seeded:", e);
@@ -105,9 +120,13 @@ export async function initSystemTables() {
             const checkExists = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS} WHERE Command_ID = 'siyuan.ui.toast'`);
             const existsCount = checkExists?.[0]?.values?.[0]?.[0] || 0;
             if (Number(existsCount) === 0) {
-                db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
-                        ["20260713120000-showmessage", "💬 消息提示", "siyuan.ui.toast", "", 1, "Self", 1, 0, 1, 1]);
+                const toastCmd = (commandsData as any).commands.find((c: any) => c.id === 'siyuan.ui.toast');
+                if (toastCmd && toastCmd.seed) {
+                    const s = toastCmd.seed;
+                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Enable, Top_Bar, Inline_Button, Command_Palette) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+                            [s.rowID, s.label, toastCmd.id, s.paramMapping || "", s.requiresParams ? 1 : 0, "Self", s.enable || 1, s.topBar || 0, s.inlineButton || 1, s.commandPalette || 1]);
+                }
             }
         } catch (e) {
             console.error("[SQLite-Init] Failed to ensure siyuan.ui.toast seeded:", e);
