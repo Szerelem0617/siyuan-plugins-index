@@ -152,6 +152,46 @@ export function bindProtyleHintExtend(protyle: any) {
         };
     }
 
+    // Intercept '#' keydown to prevent Siyuan from skipping/collapsing double '#' (capturing phase)
+    if (protyle.wysiwyg && protyle.wysiwyg.element) {
+        protyle.wysiwyg.element.addEventListener("keydown", (event: KeyboardEvent) => {
+            if (event.key === "#") {
+                const selection = window.getSelection();
+                const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                if (range && range.startContainer.nodeType === 3) {
+                    const text = range.startContainer.textContent || "";
+                    const offset = range.startOffset;
+                    // Detect if the previous character is '#' (typing second '#')
+                    if (offset > 0 && text[offset - 1] === "#") {
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        // Manually insert '#' at cursor position
+                        const textNode = range.startContainer as Text;
+                        const originalText = textNode.textContent || "";
+                        textNode.textContent = originalText.substring(0, offset) + "#" + originalText.substring(offset);
+
+                        // Position cursor after the inserted '#'
+                        range.setStart(textNode, offset + 1);
+                        range.collapse(true);
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+
+                        // Trigger native-like input event to tell Siyuan editor model to parse
+                        const editEl = protyle.wysiwyg.element;
+                        const inputEvent = new InputEvent("input", {
+                            bubbles: true,
+                            cancelable: true,
+                            data: "#",
+                            inputType: "insertText"
+                        });
+                        editEl.dispatchEvent(inputEvent);
+                    }
+                }
+            }
+        }, true);
+    }
+
     // Intercept mouse clicks on hint menu items (capturing phase)
     if (protyle.hint && protyle.hint.element) {
         protyle.hint.element.addEventListener("click", async (event: MouseEvent) => {
