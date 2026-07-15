@@ -84,6 +84,7 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.on("loaded-protyle-static", (event: any) => {
             const protyle = event.detail.protyle;
             if (protyle) {
+                (window as any).activeProtyleInstance = protyle;
                 bindProtyleHintExtend(protyle);
                 SupertagRenderer.render(protyle);
             }
@@ -91,6 +92,7 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.on("loaded-protyle-dynamic", (event: any) => {
             const protyle = event.detail.protyle;
             if (protyle) {
+                (window as any).activeProtyleInstance = protyle;
                 bindProtyleHintExtend(protyle);
                 SupertagRenderer.render(protyle);
             }
@@ -123,7 +125,7 @@ export default class IndexPlugin extends Plugin {
             hotkey: "⌥T",
             customHotkey: "⌥t",
             callback: () => {
-                const activeProtyle = (window as any).siyuan?.ws?.protyle;
+                const activeProtyle = (window as any).activeProtyleInstance;
                 if (activeProtyle) {
                     const blockId = activeProtyle.block?.id || activeProtyle.blockId;
                     if (blockId) {
@@ -200,6 +202,7 @@ export default class IndexPlugin extends Plugin {
 
         // Update current
         if (detail && detail.protyle) {
+            (window as any).activeProtyleInstance = detail.protyle;
             if (detail.protyle.block) {
                 this.lastActiveDoc = {
                     rootId: detail.protyle.block.rootID,

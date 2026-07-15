@@ -265,7 +265,7 @@ export class SupertagMonitor {
             });
 
             // Trigger visual rendering with a slight delay to allow editor async DOM replacement to settle
-            const activeProtyle = (window as any).siyuan?.ws?.protyle;
+            const activeProtyle = (window as any).activeProtyleInstance;
             if (activeProtyle) {
                 setTimeout(() => {
                     const blockEl = activeProtyle.element.querySelector(`[data-node-id="${blockId}"]`);

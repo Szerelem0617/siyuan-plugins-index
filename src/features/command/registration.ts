@@ -513,7 +513,20 @@ export function addCommandTestMenuItem({ detail }: any) {
     const tagElements = targetEl.querySelectorAll('span[data-type="tag"]');
     const domTags = Array.from(tagElements).map(el => (el.textContent || "").replace(/#/g, "").trim().toLowerCase());
     const inlineTags = Array.from((targetEl.textContent || "").matchAll(/#([^\s#]+)/g)).map(m => m[1].toLowerCase());
-    const currentBlockTags = Array.from(new Set([...domTags, ...inlineTags]));
+    
+    // Extract custom supertags from block attribute
+    const rawCustom = targetEl.getAttribute("custom-supertags");
+    let customTags: string[] = [];
+    if (rawCustom) {
+        try {
+            const parsed = JSON.parse(rawCustom);
+            if (Array.isArray(parsed)) {
+                customTags = parsed.map(t => String(t).trim().toLowerCase());
+            }
+        } catch (_) {}
+    }
+    
+    const currentBlockTags = Array.from(new Set([...domTags, ...inlineTags, ...customTags]));
 
     const blockId = targetEl.getAttribute("data-node-id") || "";
 

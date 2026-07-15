@@ -9,6 +9,11 @@ export async function addSupertagMenuItems({ detail }: any) {
     const blocks = detail.blockElements as HTMLElement[];
     if (!blocks || blocks.length === 0) return;
 
+    // Track active protyle instance
+    if (detail.protyle) {
+        (window as any).activeProtyleInstance = detail.protyle;
+    }
+
     // Use the first selected block
     const blockEl = blocks[0];
     const blockId = blockEl.getAttribute("data-node-id");
@@ -55,7 +60,7 @@ export async function openSupertagManagerDialog(blockId: string, blockEl: HTMLEl
                 blockEl,
                 onSaveComplete: () => {
                     // Instantly trigger re-render on the active editor
-                    const activeProtyle = (window as any).siyuan?.ws?.protyle;
+                    const activeProtyle = (window as any).activeProtyleInstance;
                     if (activeProtyle) {
                         SupertagRenderer.render(activeProtyle);
                     }
