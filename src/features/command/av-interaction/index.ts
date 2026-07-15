@@ -6,6 +6,7 @@ import { updateCellValue } from "../../data/attribute-view/special/special-handl
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import ParamConfigDialog from "./ParamConfigDialog.svelte";
 import OnCreateSelectorDialog from "./OnCreateSelectorDialog.svelte";
+import UIEntriesSelectorDialog from "./UIEntriesSelectorDialog.svelte";
 import { parseAVClickEvent } from "../../../shared/utils";
 
 /**
@@ -127,6 +128,59 @@ async function handleAvAltClick(event: MouseEvent) {
                 showMessage("复制链接失败", 2000, "error");
             });
         } else {
+            // Check if they clicked the UI entries / UI 入口 column
+            let clickedKeyName = "";
+            try {
+                const { db } = await getSqliteEngine();
+                const colQuery = db.exec(`SELECT key_name FROM _av_schema WHERE av_id = ? AND col_name = ?`, [avId, colId]);
+                if (colQuery.length > 0 && colQuery[0].values.length > 0) {
+                    clickedKeyName = String(colQuery[0].values[0][0]);
+                }
+            } catch (e) {
+                console.error("[AltClick] Failed to resolve column key name:", e);
+            }
+
+            if (clickedKeyName === "UI 入口" || clickedKeyName === "UI Entries" || clickedKeyName === "注册位置") {
+                event.preventDefault();
+                event.stopPropagation();
+
+                let currentUiEntriesVal = "";
+                try {
+                    const { db } = await getSqliteEngine();
+                    const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+                    const valRes = db.exec(`SELECT "${colId}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+                    if (valRes.length > 0 && valRes[0].values.length > 0 && valRes[0].values[0][0]) {
+                        currentUiEntriesVal = String(valRes[0].values[0][0]);
+                    }
+                } catch (e) {
+                    const uiCell = rowEl.querySelector(`.av__cell[data-col-id="${colId}"]`) as HTMLElement;
+                    currentUiEntriesVal = uiCell?.textContent?.trim() || "";
+                }
+
+                console.log("[UIEntriesConfig] Dialog opened. currentValue:", currentUiEntriesVal);
+                const dialog = new Dialog({
+                    title: `配置注册位置`,
+                    content: `<div id="ui-entries-config-dialog" style="height: 100%;"></div>`,
+                    width: "360px",
+                    height: "300px"
+                });
+
+                new UIEntriesSelectorDialog({
+                    target: document.getElementById("ui-entries-config-dialog")!,
+                    props: {
+                        dialog,
+                        commandName: cleanLabel,
+                        currentValue: currentUiEntriesVal,
+                        onSave: async (updatedValue: string) => {
+                            console.log("[UIEntriesConfig] Saving new entries:", updatedValue);
+                            await updateCellValue(avId, rowId, colId, updatedValue);
+                            showMessage("✓ 注册位置更新成功，已刷新后台注册。");
+                        }
+                    }
+                });
+                return;
+            }
+
             // --- 行为 2: 弹窗可视化配置参数 ---
             event.preventDefault();
             event.stopPropagation();

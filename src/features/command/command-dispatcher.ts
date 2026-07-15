@@ -64,12 +64,11 @@ export async function dispatchCommand(
     }
 
     // 2. 约束检查
-    if (def.constraints.uiOnly) {
-        // uiOnly 的命令只能在 UI 上下文（用户点击触发）中执行，
-        // 定时任务调用时应检查 schedulable 标志并给出明确警告。
-        // 这里仅打印提示，不阻断——当前调用都来自 UI 点击。
+    if (def.constraints.environment === "ui") {
+        // 前端 (ui) 专属命令必须在 UI 上下文（用户点击触发）中执行，
+        // 定时任务等后台环境调用时给出警告。
         if (!context.blockEl) {
-            console.warn(`[Dispatcher] Command "${commandId}" is uiOnly but no blockEl provided.`);
+            console.warn(`[Dispatcher] Command "${commandId}" is ui-only (environment: ui) but no blockEl provided.`);
         }
     }
 

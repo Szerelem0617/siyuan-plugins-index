@@ -81,14 +81,14 @@ export interface DispatchConfig {
     ) => Promise<unknown>;
 }
 
+export type ExecutionEnvironment = "ui" | "kernel" | "universal";
+
 /** 命令执行的约束条件，Dispatcher 在执行前做前置检查 */
 export interface CommandConstraints {
     /** 是否必须先把编辑器焦点设置到目标块才能执行 */
     requiresFocus: boolean;
-    /** 是否只能在 UI 可见时执行（定时任务/后台任务不适用） */
-    uiOnly: boolean;
-    /** 是否可以被定时任务调度 */
-    schedulable: boolean;
+    /** 执行环境：前端 (ui)、后端 (kernel)、双端通用 (universal) */
+    environment: ExecutionEnvironment;
     /** 补充说明，供开发者阅读 */
     comment?: string;
 }
@@ -179,13 +179,28 @@ class CommandRegistry {
 
                 try {
                     const existing = this.store.get(id);
+                    let constraintsObj = constraintsRaw ? JSON.parse(constraintsRaw) : {};
+                    if (!constraintsObj.environment) {
+                        if (constraintsObj.uiOnly) {
+                            constraintsObj.environment = "ui";
+                        } else if (constraintsObj.schedulable) {
+                            constraintsObj.environment = "kernel";
+                        } else {
+                            constraintsObj.environment = "universal";
+                        }
+                    }
+
                     const def: CommandDef = {
                         id,
                         name: name || "",
                         description: description || "",
                         dispatch: dispatchRaw ? JSON.parse(dispatchRaw) : { method: "custom" },
                         params: paramsRaw ? JSON.parse(paramsRaw) : [],
-                        constraints: constraintsRaw ? JSON.parse(constraintsRaw) : { requiresFocus: false, uiOnly: false, schedulable: false },
+                        constraints: {
+                            requiresFocus: constraintsObj.requiresFocus ?? false,
+                            environment: constraintsObj.environment,
+                            comment: constraintsObj.comment
+                        },
                         meta: metaRaw ? JSON.parse(metaRaw) : { scope: "global", category: "custom", source: "plugin" }
                     };
                     if (existing && existing.dispatch.executor) {
@@ -274,7 +289,7 @@ class CommandRegistry {
 
     /** 只返回可定时调度的命令（作为定时任务引擎的候选集） */
     getSchedulableCommands(): CommandDef[] {
-        return this.getAllCommands().filter(c => c.constraints.schedulable);
+        return this.getAllCommands().filter(c => c.constraints.environment === "kernel" || c.constraints.environment === "universal");
     }
 
     /**

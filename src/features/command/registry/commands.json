@@ -14,8 +14,7 @@
             "params": [],
             "constraints": {
                 "requiresFocus": false,
-                "uiOnly": true,
-                "schedulable": false,
+                "environment": "ui",
                 "comment": "依赖思源 UI 状态，无法定时触发"
             },
             "meta": {
@@ -27,11 +26,7 @@
                 "rowID": "20260526204558-bp28zp8",
                 "label": "🌐 全局关系图",
                 "paramMapping": "",
-                "requiresParams": false,
-                "enable": 1,
-                "topBar": 1,
-                "inlineButton": 1,
-                "commandPalette": 1
+                "uiEntries": ["topbar", "inline", "palette"]
             }
         },
         {
@@ -45,8 +40,7 @@
             "params": [],
             "constraints": {
                 "requiresFocus": false,
-                "uiOnly": true,
-                "schedulable": false
+                "environment": "ui"
             },
             "meta": {
                 "scope": "global",
@@ -65,8 +59,7 @@
             "params": [],
             "constraints": {
                 "requiresFocus": false,
-                "uiOnly": true,
-                "schedulable": false
+                "environment": "ui"
             },
             "meta": {
                 "scope": "global",
@@ -89,8 +82,7 @@
             "params": [],
             "constraints": {
                 "requiresFocus": true,
-                "uiOnly": true,
-                "schedulable": false,
+                "environment": "ui",
                 "comment": "快捷键实现，无法指定任意块ID；如需定时复制请改用 api.block.insertBlock"
             },
             "meta": {
@@ -103,11 +95,7 @@
                 "rowID": "20260526204558-zxrigm8",
                 "label": "📑 复制当前块",
                 "paramMapping": "",
-                "requiresParams": false,
-                "enable": 1,
-                "topBar": 0,
-                "inlineButton": 0,
-                "commandPalette": 1
+                "uiEntries": ["palette"]
             }
         },
         {
@@ -125,8 +113,7 @@
             "params": [],
             "constraints": {
                 "requiresFocus": true,
-                "uiOnly": true,
-                "schedulable": false
+                "environment": "ui"
             },
             "meta": {
                 "scope": "sibling",
@@ -150,8 +137,7 @@
             "params": [],
             "constraints": {
                 "requiresFocus": true,
-                "uiOnly": true,
-                "schedulable": false
+                "environment": "ui"
             },
             "meta": {
                 "scope": "self",
@@ -216,8 +202,7 @@
             ],
             "constraints": {
                 "requiresFocus": false,
-                "uiOnly": false,
-                "schedulable": true
+                "environment": "kernel"
             },
             "meta": {
                 "scope": "sibling",
@@ -228,11 +213,7 @@
                 "rowID": "20260527120000-insert",
                 "label": "⚡ API 插入块测试",
                 "paramMapping": "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}",
-                "requiresParams": true,
-                "enable": 1,
-                "topBar": 0,
-                "inlineButton": 0,
-                "commandPalette": 1
+                "uiEntries": ["palette"]
             }
         },
         {
@@ -280,8 +261,7 @@
             ],
             "constraints": {
                 "requiresFocus": false,
-                "uiOnly": false,
-                "schedulable": true
+                "environment": "kernel"
             },
             "meta": {
                 "scope": "self",
@@ -317,8 +297,7 @@
             ],
             "constraints": {
                 "requiresFocus": false,
-                "uiOnly": false,
-                "schedulable": true
+                "environment": "kernel"
             },
             "meta": {
                 "scope": "self",
@@ -336,8 +315,7 @@
             "params": [],
             "constraints": {
                 "requiresFocus": false,
-                "uiOnly": true,
-                "schedulable": false
+                "environment": "ui"
             },
             "meta": {
                 "scope": "self",
@@ -349,11 +327,7 @@
                 "rowID": "20260701100000-fireworks",
                 "label": "🎆 烟花",
                 "paramMapping": "",
-                "requiresParams": false,
-                "enable": 1,
-                "topBar": 0,
-                "inlineButton": 1,
-                "commandPalette": 1
+                "uiEntries": ["inline", "palette"]
             }
         },
         {
@@ -405,8 +379,7 @@
             ],
             "constraints": {
                 "requiresFocus": false,
-                "uiOnly": true,
-                "schedulable": true
+                "environment": "universal"
             },
             "meta": {
                 "scope": "self",
@@ -418,11 +391,7 @@
                 "rowID": "20260713120000-showmessage",
                 "label": "💬 消息提示",
                 "paramMapping": "",
-                "requiresParams": true,
-                "enable": 1,
-                "topBar": 0,
-                "inlineButton": 1,
-                "commandPalette": 1
+                "uiEntries": ["inline", "palette"]
             }
         },
         {
@@ -435,8 +404,7 @@
             "params": [],
             "constraints": {
                 "requiresFocus": false,
-                "uiOnly": false,
-                "schedulable": false
+                "environment": "universal"
             },
             "meta": {
                 "scope": "self",
@@ -448,11 +416,7 @@
                 "rowID": "20260714160000-turnintotask",
                 "label": "☑ 转换为任务",
                 "paramMapping": "",
-                "requiresParams": false,
-                "enable": 1,
-                "topBar": 0,
-                "inlineButton": 0,
-                "commandPalette": 1
+                "uiEntries": ["palette"]
             }
         }
     ],

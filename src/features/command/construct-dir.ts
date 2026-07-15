@@ -60,12 +60,10 @@ export async function constructCommandStorage() {
 
                 const commandIdKey = await addCol("Command ID", "text", "iconCode", lastKeyID);
                 const paramMappingKey = await addCol("Param Mapping", "text", "iconList", commandIdKey);
-                const topBarKey = await addCol("Top Bar", "checkbox", "iconLayout", paramMappingKey);
-                const buttonKey = await addCol("Inline Button", "checkbox", "iconPlay", topBarKey);
-                const paletteKey = await addCol("Command Palette", "checkbox", "iconSearch", buttonKey);
+                const uiEntriesKey = await addCol("UI 入口", "text", "iconLayout", paramMappingKey);
 
                 // Fetch seed data from SQLite sys_command_db
-                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, Top_Bar, Inline_Button, Command_Palette FROM sys_command_db`);
+                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, UI_Entries FROM sys_command_db`);
 
                 // Insert seed items as detached rows
                 const addRows: any[] = [];
@@ -92,7 +90,7 @@ export async function constructCommandStorage() {
 
                 const populateOps: any[] = [];
                 for (const match of seedRes.values) {
-                    const [rowID, labelVal, commandID, paramMapping, topBar, inlineButton, commandPalette] = match;
+                    const [rowID, labelVal, commandID, paramMapping, uiEntries] = match;
                     
                     if (primaryKeyId) {
                         populateOps.push({
@@ -104,9 +102,7 @@ export async function constructCommandStorage() {
 
                     populateOps.push({ keyID: commandIdKey, itemID: rowID, value: { type: "text", text: { content: String(commandID || "") } } });
                     populateOps.push({ keyID: paramMappingKey, itemID: rowID, value: { type: "text", text: { content: String(paramMapping || "") } } });
-                    populateOps.push({ keyID: topBarKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(topBar) === 1 } } });
-                    populateOps.push({ keyID: buttonKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(inlineButton) === 1 } } });
-                    populateOps.push({ keyID: paletteKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(commandPalette) === 1 } } });
+                    populateOps.push({ keyID: uiEntriesKey, itemID: rowID, value: { type: "text", text: { content: String(uiEntries || "") } } });
                 }
 
                 if (populateOps.length > 0) {

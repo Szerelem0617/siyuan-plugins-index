@@ -29,9 +29,7 @@ export async function initSystemTables() {
         label TEXT,
         Command_ID TEXT,
         Param_Mapping TEXT,
-        Top_Bar INTEGER DEFAULT 0,
-        Inline_Button INTEGER DEFAULT 0,
-        Command_Palette INTEGER DEFAULT 0
+        UI_Entries TEXT
     );`);
 
     // 2. Create Type Table aligned with sanitized AV Column names (Layer 3)
@@ -73,18 +71,22 @@ export async function initSystemTables() {
         for (const cmd of (commandsData as any).commands) {
             if (cmd.seed) {
                 const s = cmd.seed;
+                const mapped: string[] = [];
+                if (s.uiEntries) {
+                    if (s.uiEntries.includes("topbar")) mapped.push("顶栏");
+                    if (s.uiEntries.includes("inline")) mapped.push("行内按钮");
+                    if (s.uiEntries.includes("palette")) mapped.push("快捷命令");
+                }
                 defaultCmds.push([
                     s.rowID,
                     s.label,
                     cmd.id,
                     s.paramMapping || "",
-                    s.topBar !== undefined ? s.topBar : 0,
-                    s.inlineButton !== undefined ? s.inlineButton : 0,
-                    s.commandPalette !== undefined ? s.commandPalette : 1
+                    mapped.join(", ")
                 ]);
             }
         }
-        const stmt = db.prepare(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Top_Bar, Inline_Button, Command_Palette) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+        const stmt = db.prepare(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, UI_Entries) VALUES (?, ?, ?, ?, ?)`);
         for (const cmd of defaultCmds) {
             stmt.run(cmd);
         }
@@ -98,9 +100,15 @@ export async function initSystemTables() {
                 const fireworksCmd = (commandsData as any).commands.find((c: any) => c.id === 'plugin-index.effect.fireworks');
                 if (fireworksCmd && fireworksCmd.seed) {
                     const s = fireworksCmd.seed;
-                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Top_Bar, Inline_Button, Command_Palette) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-                            [s.rowID, s.label, fireworksCmd.id, s.paramMapping || "", s.topBar || 0, s.inlineButton || 1, s.commandPalette || 1]);
+                    const mapped: string[] = [];
+                    if (s.uiEntries) {
+                        if (s.uiEntries.includes("topbar")) mapped.push("顶栏");
+                        if (s.uiEntries.includes("inline")) mapped.push("行内按钮");
+                        if (s.uiEntries.includes("palette")) mapped.push("快捷命令");
+                    }
+                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, UI_Entries) 
+                            VALUES (?, ?, ?, ?, ?)`, 
+                            [s.rowID, s.label, fireworksCmd.id, s.paramMapping || "", mapped.join(", ")]);
                 }
             }
         } catch (e) {
@@ -120,9 +128,15 @@ export async function initSystemTables() {
                 const toastCmd = (commandsData as any).commands.find((c: any) => c.id === 'siyuan.ui.toast');
                 if (toastCmd && toastCmd.seed) {
                     const s = toastCmd.seed;
-                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, Top_Bar, Inline_Button, Command_Palette) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-                            [s.rowID, s.label, toastCmd.id, s.paramMapping || "", s.topBar || 0, s.inlineButton || 1, s.commandPalette || 1]);
+                    const mapped: string[] = [];
+                    if (s.uiEntries) {
+                        if (s.uiEntries.includes("topbar")) mapped.push("顶栏");
+                        if (s.uiEntries.includes("inline")) mapped.push("行内按钮");
+                        if (s.uiEntries.includes("palette")) mapped.push("快捷命令");
+                    }
+                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, UI_Entries) 
+                            VALUES (?, ?, ?, ?, ?)`, 
+                            [s.rowID, s.label, toastCmd.id, s.paramMapping || "", mapped.join(", ")]);
                 }
             }
         } catch (e) {

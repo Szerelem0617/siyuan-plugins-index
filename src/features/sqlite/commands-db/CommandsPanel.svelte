@@ -125,14 +125,25 @@
             const { db } = await getSqliteEngine();
             const { commands: commandsTable } = getSystemTableNames();
 
+            const defaultEntries: string[] = [];
+            if (cmd.seed && cmd.seed.uiEntries) {
+                if (cmd.seed.uiEntries.includes("topbar")) defaultEntries.push("顶栏");
+                if (cmd.seed.uiEntries.includes("inline")) defaultEntries.push("行内按钮");
+                if (cmd.seed.uiEntries.includes("palette")) defaultEntries.push("快捷命令");
+            } else {
+                defaultEntries.push("快捷命令");
+            }
+            const uiEntriesStr = defaultEntries.join(", ");
+
             db.run(`
-                INSERT INTO ${commandsTable} (rowID, label, Command_ID, Param_Mapping, Top_Bar, Inline_Button, Command_Palette)
-                VALUES (?, ?, ?, ?, 0, 0, 0)
+                INSERT INTO ${commandsTable} (rowID, label, Command_ID, Param_Mapping, UI_Entries)
+                VALUES (?, ?, ?, ?, ?)
             `, [
                 rowID,
                 cmd.name,
                 cmd.id,
-                ""
+                "",
+                uiEntriesStr
             ]);
 
             await saveDatabaseToDisk();
@@ -191,9 +202,7 @@
     $: cmdLabelIdx = colIdx(commandCols, commandLabelCol);
     $: cmdIdIdx = colIdx(commandCols, "Command_ID");
     $: cmdParamIdx = colIdx(commandCols, "Param_Mapping");
-    $: cmdTopBarIdx = colIdx(commandCols, "Top_Bar");
-    $: cmdInlineIdx = colIdx(commandCols, "Inline_Button");
-    $: cmdPaletteIdx = colIdx(commandCols, "Command_Palette");
+    $: cmdUiEntriesIdx = colIdx(commandCols, "UI_Entries");
 
     $: typeSupertagIdx = colIdx(typeCols, typeSupertagCol);
     $: typeBlockMenuIdx = colIdx(typeCols, "Block_Icon_Menu");

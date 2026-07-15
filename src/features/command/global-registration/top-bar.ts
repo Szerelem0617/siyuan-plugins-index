@@ -73,34 +73,30 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
         const labelIdx = colIdx(commandLabelCol);
         const cmdIdIdx = colIdx("Command_ID");
         const paramIdx = colIdx("Param_Mapping");
-        let typeIdx = colIdx("Requires_Params");
-        if (typeIdx === -1) {
-            typeIdx = colIdx("Command_Type");
-        }
-        const topBarIdx = colIdx("Top_Bar");
-        const ibIdx = colIdx("Inline_Button");
-        const paletteIdx = colIdx("Command_Palette");
+        const uiEntriesIdx = colIdx("UI_Entries");
 
         for (const row of cmdRes.values) {
             const id = String(row[idIdx]);
             const label = String(row[labelIdx] || "");
             const commandId = String(row[cmdIdIdx] || "");
             const commandParam = String(row[paramIdx] || "");
-            const requiresParams = Number(row[typeIdx]) === 1 ? "true" : "false";
             
-            // Critical check: SQLite INTEGER might be returned as number 1
-            const isTopBar = Number(row[topBarIdx]) === 1;
-            const isIB = Number(row[ibIdx]) === 1;
-            const isPalette = Number(row[paletteIdx]) === 1;
+            const cmdDef = commandRegistry.getCommand(commandId);
+            const requiresParams = (cmdDef && cmdDef.params && cmdDef.params.length > 0) ? "true" : "false";
+            
+            const uiEntries = uiEntriesIdx > -1 ? String(row[uiEntriesIdx] || "") : "";
+            const hasEntry = (type: string) => uiEntries.includes(type);
 
-            if (isTopBar && label && commandId) {
-                newTopBars.push({ id, label, commandId, commandParam, requiresParams });
-            }
-            if (isIB && label && commandId) {
-                newInlineBtns.push({ id, label, commandId, commandParam, requiresParams });
-            }
-            if (isPalette && label && commandId) {
-                newPaletteCmds.push({ id, label, commandId, commandParam, requiresParams });
+            if (commandId && label) {
+                if (hasEntry("顶栏")) {
+                    newTopBars.push({ id, label, commandId, commandParam, requiresParams });
+                }
+                if (hasEntry("行内按钮")) {
+                    newInlineBtns.push({ id, label, commandId, commandParam, requiresParams });
+                }
+                if (hasEntry("快捷命令")) {
+                    newPaletteCmds.push({ id, label, commandId, commandParam, requiresParams });
+                }
             }
         }
 
@@ -194,17 +190,13 @@ async function refreshTopBarFromApi() {
             const cmdDef = commandRegistry.getCommand(commandId);
             const requiresParams = (cmdDef && cmdDef.params && cmdDef.params.length > 0) ? "true" : "false";
             
-            const getBool = (name: string) => {
-                const idx = columns.findIndex((c: any) => c.name === name || c.keyName === name);
-                if (idx < 0) return false;
-                const cell = row.cells[idx];
-                return cell?.value?.checkbox?.checked || false;
-            }
+            const uiEntries = getCellText("UI 入口") || getCellText("UI Entries") || getCellText("注册位置") || "";
+            const hasEntry = (type: string) => uiEntries.includes(type);
 
             if (commandId) {
-                if (getBool("Top Bar") && label) newTopBars.push({ id: row.id, label, commandId, commandParam, requiresParams });
-                if (getBool("Inline Button") && label) newInlineBtns.push({ id: row.id, label, commandId, commandParam, requiresParams });
-                if (getBool("Command Palette") && label) newPaletteCmds.push({ id: row.id, label, commandId, commandParam, requiresParams });
+                if (hasEntry("顶栏") && label) newTopBars.push({ id: row.id, label, commandId, commandParam, requiresParams });
+                if (hasEntry("行内按钮") && label) newInlineBtns.push({ id: row.id, label, commandId, commandParam, requiresParams });
+                if (hasEntry("快捷命令") && label) newPaletteCmds.push({ id: row.id, label, commandId, commandParam, requiresParams });
             }
         }
 
