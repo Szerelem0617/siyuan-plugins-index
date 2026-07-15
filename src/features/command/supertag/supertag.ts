@@ -140,17 +140,23 @@ export class SupertagMonitor {
                     // Compare with virtual cache
                     const cachedTags = this.tagCache.get(blockId) || new Set<string>();
                     const addedTags = Array.from(newTags).filter(t => !cachedTags.has(t));
+                    const removedTags = Array.from(cachedTags).filter(t => !newTags.has(t));
 
-                    if (addedTags.length > 0) {
+                    if (addedTags.length > 0 || removedTags.length > 0) {
                         // Update cache
                         this.tagCache.set(blockId, newTags);
 
                         // Trigger logic for each newly added tag
                         for (const tag of addedTags) {
-                            this.processNewTag(blockId, tag);
+                            await this.processNewTag(blockId, tag);
+                        }
+
+                        // Trigger logic for each removed tag
+                        for (const tag of removedTags) {
+                            await this.processRemovedTag(blockId, tag);
                         }
                     } else {
-                        // All tags are already in cache or it's a removal
+                        // All tags are already in cache
                         this.tagCache.set(blockId, newTags);
                     }
                 }
@@ -159,98 +165,66 @@ export class SupertagMonitor {
     }
 
     private extractTagsFromPayload(payload: any, action?: string, opId?: string): Set<string> | null {
-        const tags = new Set<string>();
-        if (!payload) return tags;
+        if (!payload) return new Set<string>();
 
-        // Condition 0: payload is an object (common in updateAttrs)
-        if (typeof payload === "object") {
-            const hasTagsProp = 
-                (payload.new && (payload.new.tags !== undefined || payload.new.tag !== undefined)) || 
-                payload.tags !== undefined || 
-                payload.tag !== undefined;
-            if (!hasTagsProp) return null; // Authority: No tag info here, don't clear cache
-
-            const rawTags = payload.new?.tags !== undefined ? payload.new.tags :
-                            (payload.new?.tag !== undefined ? payload.new.tag :
-                            (payload.tags !== undefined ? payload.tags : payload.tag));
-            if (typeof rawTags === "string") {
-                // Determine separator: updateAttrs uses comma, setAttrs/DOM uses space
-                const sep = rawTags.includes(',') ? ',' : ' ';
-                rawTags.split(sep).forEach((t: string) => {
-                    const clean = t.trim().replace(/#/g, '');
-                    if (clean) tags.add(clean);
-                });
+        // 1. Try extracting from HTML DOM payload (actions: update, insert)
+        if (typeof payload === "string" && payload.includes("<") && payload.includes(">")) {
+            const match = payload.match(/custom-supertags="([^"]+)"/);
+            if (match) {
+                const decoded = match[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+                const tags = new Set<string>();
+                try {
+                    const parsed = JSON.parse(decoded);
+                    if (Array.isArray(parsed)) {
+                        parsed.forEach((t: any) => {
+                            const clean = String(t || "").trim();
+                            if (clean) tags.add(clean);
+                        });
+                    }
+                } catch (_) {}
+                return tags;
             }
-            return tags;
+            // If DOM doesn't have custom-supertags attribute, we treat it as empty set of tags
+            return new Set<string>();
         }
 
-        if (typeof payload !== "string") return tags;
-
-        // Condition 1: payload is a JSON string of attributes (action === "setAttrs")
-        if (payload.trim().startsWith("{") && payload.trim().endsWith("}")) {
+        // 2. Try extracting from JSON object or string (actions: setAttrs, updateAttrs)
+        let attrs: any = null;
+        if (typeof payload === "object") {
+            attrs = payload.new || payload;
+        } else if (typeof payload === "string" && payload.trim().startsWith("{")) {
             try {
-                const attrs = JSON.parse(payload);
-                // Check if this JSON actually contains attribute data
-                const hasTagsProp = 
-                    (attrs.new && (attrs.new.tags !== undefined || attrs.new.tag !== undefined)) || 
-                    attrs.tags !== undefined || 
-                    attrs.tag !== undefined;
-                if (!hasTagsProp && action === "updateAttrs") return null;
+                attrs = JSON.parse(payload);
+                if (attrs.new) attrs = attrs.new;
+            } catch (_) {}
+        }
 
-                const rawTags = attrs.new?.tags !== undefined ? attrs.new.tags :
-                                (attrs.new?.tag !== undefined ? attrs.new.tag :
-                                (attrs.tags !== undefined ? attrs.tags : attrs.tag));
-                if (typeof rawTags === "string") {
-                    const sep = rawTags.includes(',') ? ',' : ' ';
-                    rawTags.split(sep).forEach((t: string) => {
+        if (attrs && attrs["custom-supertags"] !== undefined) {
+            const rawVal = attrs["custom-supertags"];
+            const tags = new Set<string>();
+            if (rawVal) {
+                try {
+                    const parsed = JSON.parse(rawVal);
+                    if (Array.isArray(parsed)) {
+                        parsed.forEach((t: any) => {
+                            const clean = String(t || "").trim();
+                            if (clean) tags.add(clean);
+                        });
+                    }
+                } catch (_) {
+                    // Fallback
+                    const sep = rawVal.includes(',') ? ',' : ' ';
+                    rawVal.split(sep).forEach((t: string) => {
                         const clean = t.trim().replace(/#/g, '');
                         if (clean) tags.add(clean);
                     });
                 }
-                if (hasTagsProp) return tags; // If we found (or explicitly didn't find) tags via JSON, return it
-            } catch (e) { } // Ignore passive failures
-        }
-
-        // Condition 2: payload is DOM HTML (action === "update" | "insert")
-        // We only proceed here if it's NOT a recognized JSON but looks like HTML
-        if (payload.includes("<") && payload.includes(">")) {
-            const tempDiv = document.createElement("div");
-            tempDiv.innerHTML = payload;
-
-            // Find all tag elements
-            const tagEls = tempDiv.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
-            tagEls.forEach((el: any) => {
-                // Check if this tag is inside a nested block (descendant element with data-node-id different from opId)
-                let isNested = false;
-                let parent = el.parentElement;
-                while (parent && parent !== tempDiv) {
-                    const nodeId = parent.getAttribute("data-node-id");
-                    if (nodeId && nodeId !== opId) {
-                        isNested = true;
-                        break;
-                    }
-                    parent = parent.parentElement;
-                }
-
-                if (!isNested) {
-                    let tagText = "";
-                    if (el.getAttribute("data-type") === "NodeTag") {
-                        tagText = el.textContent || "";
-                    } else {
-                        tagText = el.textContent || el.getAttribute("data-content") || "";
-                    }
-                    const clean = tagText.replace(/#/g, '').trim();
-                    if (clean) {
-                        tags.add(clean);
-                    }
-                }
-            });
-
+            }
             return tags;
         }
 
-        // If it's a string but doesn't look like HTML and doesn't have tag info, return null to avoid clearing cache blindly
-        return (action === "updateAttrs" || action === "setAttrs") ? null : tags;
+        // Also check legacy "tags" or "tag" in case we want to support fallback (optional, let's keep only custom-supertags for clean take over)
+        return null; // Signifies "no custom-supertags updates in this transaction"
     }
 
     private async processNewTag(blockId: string, tag: string) {
@@ -261,18 +235,6 @@ export class SupertagMonitor {
             }
 
             const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
-
-            if (SUPERTAG_REGISTRY.length < 10) {
-                // Logic routing implementation
-            }
-
-            // --- Path A: Logic Routing (Layer 3) ---
-            const logicMatches = SUPERTAG_REGISTRY.filter(c => c.typeTag === cleanTag);
-            if (logicMatches.length > 0) {
-                // Logic routing implementation (not strictly syncing to DB, just running commands)
-                // In a future step, we might trigger the actual command bus here.
-                // For now, logic is mainly represented by its presence in the registry.
-            }
 
             // --- Path B: Data Component Persistence (Layer 4) ---
             const dataMatches = this.dataRegistry.filter(c =>
@@ -291,17 +253,27 @@ export class SupertagMonitor {
                 }
 
                 await this.applySupertag(blockId, cleanTag, targetConfig);
-            } else {
             }
 
-            // --- Path C: Execute On Create Commands (Layer 3 trigger) ---
-            await this.triggerOnCreateCommands(blockId, cleanTag);
+            // --- Path C: Execute Trigger Commands (Layer 3 trigger) ---
+            await this.triggerConditionalCommands(blockId, cleanTag, "tag_created");
         } catch (e) {
             console.error("[Supertag] Failed to process new tag:", blockId, e);
         }
     }
 
-    private async triggerOnCreateCommands(blockId: string, cleanTag: string) {
+    private async processRemovedTag(blockId: string, tag: string) {
+        try {
+            const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
+            
+            // Trigger tag_removed commands
+            await this.triggerConditionalCommands(blockId, cleanTag, "tag_removed");
+        } catch (e) {
+            console.error("[Supertag] Failed to process removed tag:", blockId, e);
+        }
+    }
+
+    private async triggerConditionalCommands(blockId: string, cleanTag: string, eventName: "tag_created" | "tag_removed") {
         const typeAvId = getTypeAvId();
         if (!typeAvId) return;
 
@@ -329,25 +301,25 @@ export class SupertagMonitor {
                 const conditionalVal = typeDbRes[0].values[0][0];
                 if (conditionalVal) {
                     const rules = parseConditionalString(String(conditionalVal));
-                    const onCreateRule = rules.find(r => r.event === "tag_created");
+                    const targetRule = rules.find(r => r.event === eventName);
 
-                    if (onCreateRule && onCreateRule.commands.length > 0) {
+                    if (targetRule && targetRule.commands.length > 0) {
                         let conditionMet = true;
-                        if (onCreateRule.condition) {
-                            console.log(`[Supertag-OnCreate] Evaluating condition: ${onCreateRule.condition}`);
+                        if (targetRule.condition) {
+                            console.log(`[Supertag-Trigger] Evaluating condition: ${targetRule.condition}`);
                             // Extensible condition checks go here
                         }
 
                         if (conditionMet) {
-                            console.log(`[Supertag-OnCreate] Condition met. Executing commands for tag #${cleanTag}:`, onCreateRule.commands);
+                            console.log(`[Supertag-Trigger] Condition met. Executing commands for tag #${cleanTag} on event ${eventName}:`, targetRule.commands);
 
-                            // Execute sequentially in order (有顺序的)
-                            for (const cmdLabel of onCreateRule.commands) {
+                            // Execute sequentially in order
+                            for (const cmdLabel of targetRule.commands) {
                                 const cmdInfo = COMMAND_REGISTRY[cmdLabel];
                                 const commandRef = cmdInfo?.commandRef || cmdLabel;
                                 const paramMapping = cmdInfo?.paramMapping || "";
 
-                                console.log(`[Supertag-OnCreate] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId}`);
+                                console.log(`[Supertag-Trigger] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId}`);
 
                                 const doc = document;
                                 const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
@@ -366,7 +338,7 @@ export class SupertagMonitor {
                                 try {
                                     await dispatchCommand(commandRef, paramMapping, context);
                                 } catch (cmdErr) {
-                                    console.error(`[Supertag-OnCreate] Failed to dispatch command: ${cmdLabel}`, cmdErr);
+                                    console.error(`[Supertag-Trigger] Failed to dispatch command: ${cmdLabel}`, cmdErr);
                                 }
                             }
                         }
@@ -374,7 +346,7 @@ export class SupertagMonitor {
                 }
             }
         } catch (e) {
-            console.error("[Supertag-OnCreate] Error triggering On Create commands:", e);
+            console.error(`[Supertag-Trigger] Error triggering ${eventName} commands:`, e);
         }
     }
 
