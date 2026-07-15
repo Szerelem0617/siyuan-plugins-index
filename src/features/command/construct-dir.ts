@@ -41,7 +41,7 @@ export async function constructCommandStorage() {
             targetNotebookId,
             "命令管理",
             "custom-index-command-db",
-            `# 命令管理\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 2，用于编排复合指令和参数流转。\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
+            `该页面由 IndexOS 自动生成。这里是系统的 Layer 2，用于编排复合指令和参数流转。\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
             "Command ID",
             async (avId) => {
                 const addCol = async (name: string, type: string, icon: string, prevKey: string) => {
@@ -120,7 +120,7 @@ export async function constructCommandStorage() {
             targetNotebookId,
             "超级标签管理",
             "custom-index-type-db",
-            `# 超级标签管理\n\n该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
+            `该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
             "Block Icon Menu",
             async (avId) => {
                 const addCol = async (name: string, type: string, icon: string, prevKey: string) => {
@@ -547,7 +547,37 @@ async function initDbDoc(
                 const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
                 const isAlreadyInitialized = currentKeys.some((k: any) => k.name === expectedColName);
 
-                if (!isAlreadyInitialized) {
+                 if (!isAlreadyInitialized) {
+                    // 1. Remove Siyuan's default select column
+                    const defaultSelectKey = currentKeys.find((k: any) => k.type === "select");
+                    if (defaultSelectKey) {
+                        console.log(`[IndexOS] Removing default select column in ${docName} AV ${avId}...`);
+                        await post("/api/av/removeAttributeViewKey", {
+                            avID: avId,
+                            keyID: defaultSelectKey.id
+                        });
+                        await sleep(500);
+                    }
+
+                    // 2. Set database name (Command-db / Type-db)
+                    const dbTitle = attrName === "custom-index-command-db" ? "Command-db" : "Type-db";
+                    console.log(`[IndexOS] Naming database: ${avId} to ${dbTitle}...`);
+                    await post("/api/transactions", {
+                        app: "plugin-index",
+                        reqId: Date.now() + 200,
+                        transactions: [{
+                            doOperations: [
+                                {
+                                    action: "setAttrViewName",
+                                    id: avId,
+                                    data: dbTitle
+                                }
+                            ]
+                        }]
+                    });
+                    await sleep(500);
+
+                    // 3. Initialize columns and seed rows
                     await initColsCallback(avId);
                     console.log(`[IndexOS] DB columns and detached rows initialized for ${docName}.`);
                 }

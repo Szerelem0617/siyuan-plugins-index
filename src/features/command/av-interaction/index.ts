@@ -582,14 +582,25 @@ async function handleAvMouseOver(event: MouseEvent) {
         const requiresParams = cmdDef.params && cmdDef.params.length > 0;
         const scopeLabel = cmdDef.meta?.scope ? (cmdDef.meta.scope.charAt(0).toUpperCase() + cmdDef.meta.scope.slice(1)) : "Global";
 
+        const uiOnly = cmdDef.constraints?.uiOnly ?? false;
+        const schedulable = cmdDef.constraints?.schedulable ?? false;
+
+        let envLabel = "双端 (Universal)";
+        if (uiOnly) {
+            envLabel = "前端 (UI)";
+        } else if (schedulable && !uiOnly) {
+            envLabel = "后端 (Kernel)";
+        }
+
         const content = `
             <div style="font-weight: 600; font-size: 12px; color: var(--b3-theme-primary); margin-bottom: 2px;">${cmdDef.name}</div>
             <div style="font-family: monospace; font-size: 10px; color: var(--b3-theme-on-surface-mute); word-break: break-all; margin-bottom: 6px;">${cmdDef.id}</div>
             <div style="font-size: 11px; margin-bottom: 6px; line-height: 1.4; color: var(--b3-theme-on-background); border-top: 1px solid var(--b3-border-color); padding-top: 6px;">
                 ${cmdDef.description || "无描述"}
             </div>
-            <div style="font-size: 10px; display: flex; gap: 8px; color: var(--b3-theme-on-surface-mute); border-top: 1px dashed var(--b3-border-color); padding-top: 4px;">
+            <div style="font-size: 10px; display: flex; gap: 8px; color: var(--b3-theme-on-surface-mute); border-top: 1px dashed var(--b3-border-color); padding-top: 4px; flex-wrap: wrap;">
                 <span>范围: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${scopeLabel}</code></span>
+                <span>环境: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${envLabel}</code></span>
                 <span>参数: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${requiresParams ? "是" : "否"}</code></span>
             </div>
         `;
