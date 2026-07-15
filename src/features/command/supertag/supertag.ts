@@ -7,6 +7,7 @@ import { formatDate } from "../../../shared/utils";
 import { getColIDMap } from "../../../shared/utils/av-utils";
 import { tableSyncTimes, instantiateAV, getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { dispatchCommand } from "../command-dispatcher";
+import { SupertagRenderer } from "./SupertagRenderer";
 
 export interface TriggerRule {
     event: string;
@@ -133,6 +134,11 @@ export class SupertagMonitor {
                     const blockId = op.id;
                     if (!blockId || !op.data) continue;
 
+                    // If it is a DOM update/insert, intercept and migrate native tags
+                    if (op.action === "update" || op.action === "insert") {
+                        await this.detectAndMigrateNativeTags(blockId, op.data);
+                    }
+
                     // Extract all tags currently embedded in the operation payload
                     const newTags = this.extractTagsFromPayload(op.data, op.action, blockId);
                     if (newTags === null) continue; // Skip if this operation doesn't carry definitive tag information
@@ -161,6 +167,90 @@ export class SupertagMonitor {
                     }
                 }
             }
+        }
+    }
+
+    private async detectAndMigrateNativeTags(blockId: string, payload: any) {
+        if (!payload || typeof payload !== "string") return;
+        if (!payload.includes('data-type="tag"') && !payload.includes('data-type="NodeTag"')) return;
+
+        try {
+            // Query all registered supertags from SQLite sys_type_db
+            const { db } = await getSqliteEngine();
+            const res = db.exec(`SELECT supertag FROM sys_type_db`);
+            if (res.length === 0 || res[0].values.length === 0) return;
+
+            const supertags = new Set(
+                res[0].values.map((row: any) => String(row[0]).replace(/#/g, "").trim().toLowerCase()).filter(Boolean)
+            );
+
+            // Parse HTML to find matching tags
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = payload;
+            const tagEls = tempDiv.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
+            
+            const tagsToMigrate: string[] = [];
+            tagEls.forEach((el: any) => {
+                const tagText = (el.textContent || el.getAttribute("data-content") || "").replace(/#/g, '').trim().toLowerCase();
+                if (supertags.has(tagText)) {
+                    tagsToMigrate.push(tagText);
+                    el.remove();
+                }
+            });
+
+            if (tagsToMigrate.length === 0) return;
+
+            console.log(`[Supertag-Migration] Intercepted native tags to migrate on block ${blockId}:`, tagsToMigrate);
+
+            // Get current custom-supertags
+            const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+            const attrs = attrsRes || {};
+            const rawTags = attrs["custom-supertags"];
+            let currentCustom: string[] = [];
+            if (rawTags) {
+                try {
+                    const parsed = JSON.parse(rawTags);
+                    if (Array.isArray(parsed)) currentCustom = parsed;
+                } catch (_) {}
+            }
+
+            // Add newly migrated tags
+            const updatedCustom = Array.from(new Set([...currentCustom, ...tagsToMigrate]));
+
+            // Update block attributes first
+            await post("/api/attr/setBlockAttrs", {
+                id: blockId,
+                attrs: {
+                    "custom-supertags": JSON.stringify(updatedCustom)
+                }
+            });
+
+            // Update block content to strip the text tags
+            const cleanDOM = tempDiv.innerHTML.trim();
+            await post("/api/block/updateBlock", {
+                id: blockId,
+                dataType: "dom",
+                data: cleanDOM
+            });
+
+            // Trigger visual rendering
+            const activeProtyle = (window as any).siyuan?.ws?.protyle;
+            if (activeProtyle) {
+                // Update local attribute on the active DOM block so Renderer finds it
+                const blockEl = activeProtyle.element.querySelector(`[data-node-id="${blockId}"]`);
+                if (blockEl) {
+                    blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
+                    // Remove the text tags from editor DOM visually
+                    const editorTagEls = blockEl.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
+                    editorTagEls.forEach((el: any) => {
+                        const text = (el.textContent || "").replace(/#/g, '').trim().toLowerCase();
+                        if (supertags.has(text)) el.remove();
+                    });
+                }
+                SupertagRenderer.render(activeProtyle);
+            }
+        } catch (err) {
+            console.error("[Supertag-Migration] Error during native tag auto migration:", err);
         }
     }
 
