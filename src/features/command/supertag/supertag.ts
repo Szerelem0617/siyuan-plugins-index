@@ -242,6 +242,12 @@ export class SupertagMonitor {
             // Add newly migrated tags
             const updatedCustom = Array.from(new Set([...currentCustom, ...tagsToMigrate]));
 
+            // Set the custom-supertags attribute directly on the DOM wrapper div inside tempDiv
+            const blockDiv = tempDiv.firstElementChild as HTMLElement;
+            if (blockDiv) {
+                blockDiv.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
+            }
+
             // Update block attributes first
             await post("/api/attr/setBlockAttrs", {
                 id: blockId,
@@ -258,21 +264,22 @@ export class SupertagMonitor {
                 data: cleanDOM
             });
 
-            // Trigger visual rendering
+            // Trigger visual rendering with a slight delay to allow editor async DOM replacement to settle
             const activeProtyle = (window as any).siyuan?.ws?.protyle;
             if (activeProtyle) {
-                // Update local attribute on the active DOM block so Renderer finds it
-                const blockEl = activeProtyle.element.querySelector(`[data-node-id="${blockId}"]`);
-                if (blockEl) {
-                    blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
-                    // Remove the text tags from editor DOM visually
-                    const editorTagEls = blockEl.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
-                    editorTagEls.forEach((el: any) => {
-                        const text = (el.textContent || "").replace(/#/g, '').trim().toLowerCase();
-                        if (supertags.has(text)) el.remove();
-                    });
-                }
-                SupertagRenderer.render(activeProtyle);
+                setTimeout(() => {
+                    const blockEl = activeProtyle.element.querySelector(`[data-node-id="${blockId}"]`);
+                    if (blockEl) {
+                        blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
+                        // Remove the text tags from editor DOM visually
+                        const editorTagEls = blockEl.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
+                        editorTagEls.forEach((el: any) => {
+                            const text = (el.textContent || "").replace(/#/g, '').trim().toLowerCase();
+                            if (supertags.has(text)) el.remove();
+                        });
+                    }
+                    SupertagRenderer.render(activeProtyle);
+                }, 80);
             }
         } catch (err) {
             console.error("[Supertag-Migration] Error during native tag auto migration:", err);
