@@ -519,64 +519,77 @@ async function initDbDoc(
         });
 
         // 3. Locate the Attribute View block directly
-        console.log(`[IndexOS] Waiting for indexing on ${docId} for ${docName}...`);
-        await sleep(2000);
-        
-        const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
-        const avRes = await post("/api/query/sql", { stmt: avSql });
+        try {
+            const docDomRes = await client.getBlockDOM({ id: docId });
+            const docHtml = docDomRes.data?.dom || "";
+            const match = docHtml.match(/data-av-id="([^"]+)"/);
+            if (match) {
+                avId = match[1];
+                console.log(`[IndexOS] Successfully found AV ID ${avId} in ${docName} via direct DOM parsing.`);
+            }
+        } catch (domErr) {
+            console.warn(`[IndexOS] Direct DOM parsing failed for ${docName}, falling back to SQL:`, domErr);
+        }
 
-        if (avRes && avRes.length > 0) {
-            const avBlockId = avRes[0].id;
-            const domRes = await client.getBlockDOM({ id: avBlockId });
-            const html = domRes.data?.dom || "";
-            const match = html.match(/data-av-id="([^"]+)"/);
-            avId = match ? match[1] : avBlockId;
+        if (!avId) {
+            console.log(`[IndexOS] Waiting for indexing on ${docId} for ${docName}...`);
+            await sleep(2000);
+            
+            const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
+            const avRes = await post("/api/query/sql", { stmt: avSql });
 
-            if (avId) {
-                // Pre-render to force Siyuan to instantiate the default view in its database engine
-                console.log(`[IndexOS] Pre-rendering AV ${avId} to initialize view...`);
-                await post("/api/av/renderAttributeView", { id: avId });
-                await sleep(500);
+            if (avRes && avRes.length > 0) {
+                const avBlockId = avRes[0].id;
+                const domRes = await client.getBlockDOM({ id: avBlockId });
+                const html = domRes.data?.dom || "";
+                const match = html.match(/data-av-id="([^"]+)"/);
+                avId = match ? match[1] : avBlockId;
+            }
+        }     
+        if (avId) {
+            // Pre-render to force Siyuan to instantiate the default view in its database engine
+            console.log(`[IndexOS] Pre-rendering AV ${avId} to initialize view...`);
+            await post("/api/av/renderAttributeView", { id: avId });
+            await sleep(500);
 
-                // Check if it is already initialized by checking if the expected custom column exists
-                const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
-                const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
-                const isAlreadyInitialized = currentKeys.some((k: any) => k.name === expectedColName);
+            // Check if it is already initialized by checking if the expected custom column exists
+            const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
+            const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
+            const isAlreadyInitialized = currentKeys.some((k: any) => k.name === expectedColName);
 
-                 if (!isAlreadyInitialized) {
-                    // 1. Remove Siyuan's default select column
-                    const defaultSelectKey = currentKeys.find((k: any) => k.type === "select");
-                    if (defaultSelectKey) {
-                        console.log(`[IndexOS] Removing default select column in ${docName} AV ${avId}...`);
-                        await post("/api/av/removeAttributeViewKey", {
-                            avID: avId,
-                            keyID: defaultSelectKey.id
-                        });
-                        await sleep(500);
-                    }
-
-                    // 2. Set database name (Command-db / Type-db)
-                    const dbTitle = attrName === "custom-index-command-db" ? "Command-db" : "Type-db";
-                    console.log(`[IndexOS] Naming database: ${avId} to ${dbTitle}...`);
-                    await post("/api/transactions", {
-                        app: "plugin-index",
-                        reqId: Date.now() + 200,
-                        transactions: [{
-                            doOperations: [
-                                {
-                                    action: "setAttrViewName",
-                                    id: avId,
-                                    data: dbTitle
-                                }
-                            ]
-                        }]
+            if (!isAlreadyInitialized) {
+                // 1. Remove Siyuan's default select column
+                const defaultSelectKey = currentKeys.find((k: any) => k.type === "select");
+                if (defaultSelectKey) {
+                    console.log(`[IndexOS] Removing default select column in ${docName} AV ${avId}...`);
+                    await post("/api/av/removeAttributeViewKey", {
+                        avID: avId,
+                        keyID: defaultSelectKey.id
                     });
                     await sleep(500);
-
-                    // 3. Initialize columns and seed rows
-                    await initColsCallback(avId);
-                    console.log(`[IndexOS] DB columns and detached rows initialized for ${docName}.`);
                 }
+
+                // 2. Set database name (Command-db / Type-db)
+                const dbTitle = attrName === "custom-index-command-db" ? "Command-db" : "Type-db";
+                console.log(`[IndexOS] Naming database: ${avId} to ${dbTitle}...`);
+                await post("/api/transactions", {
+                    app: "plugin-index",
+                    reqId: Date.now() + 200,
+                    transactions: [{
+                        doOperations: [
+                            {
+                                action: "setAttrViewName",
+                                id: avId,
+                                data: dbTitle
+                            }
+                        ]
+                    }]
+                });
+                await sleep(500);
+
+                // 3. Initialize columns and seed rows
+                await initColsCallback(avId);
+                console.log(`[IndexOS] DB columns and detached rows initialized for ${docName}.`);
             }
         } else {
             console.warn(`[IndexOS] Failed to find the AV block in ${docName}.`);
