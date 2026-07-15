@@ -279,35 +279,45 @@ function _extractSelectOptions(kv: any): string | null {
 
 export async function instantiateAV(avID: string, force: boolean = false): Promise<SyncResult> {
     const { db } = await getSqliteEngine();
-    const res = await post("/api/av/getAttributeView", { id: avID });
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // Check if the response is actually valid
-    if (!res || (res.code && res.code !== 0)) {
-        console.error(`[SQLiteManager] API Error for ${avID}:`, res);
-        return { success: false, message: `API Error: ${res?.msg || "Unknown"}` };
-    }
+    let res: any;
+    let av: any;
+    let keyValues: any[] = [];
 
-    const av = res.av || res;
-    if (av.name && av.name !== "Unnamed" && av.name !== "Unnamed Database") {
-        registerFriendlyTableName(av.name, avID);
-    }
-    let keyValues = av.keyValues || [];
-    
-    if (keyValues.length === 0) {
-        console.warn(`[SQLiteManager] instantiateAV: keyValues empty for ${avID}, attempting fallback via getAttributeViewKeysByAvID...`);
-        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avID });
-        const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
-        if (currentKeys.length > 0) {
-            keyValues = currentKeys.map((k: any) => ({
-                key: k,
-                values: []
-            }));
-            console.log(`[SQLiteManager] Successfully loaded ${keyValues.length} columns using getAttributeViewKeysByAvID for ${avID}`);
+    for (let attempt = 1; attempt <= 6; attempt++) {
+        res = await post("/api/av/getAttributeView", { id: avID });
+        if (res && (!res.code || res.code === 0)) {
+            av = res.av || res;
+            if (av && av.name && av.name !== "Unnamed" && av.name !== "Unnamed Database") {
+                registerFriendlyTableName(av.name, avID);
+            }
+            keyValues = av?.keyValues || [];
+            
+            if (keyValues.length === 0) {
+                const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avID });
+                const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
+                if (currentKeys.length > 0) {
+                    keyValues = currentKeys.map((k: any) => ({
+                        key: k,
+                        values: []
+                    }));
+                }
+            }
+        }
+
+        if (keyValues.length > 0) {
+            break;
+        }
+
+        if (attempt < 6) {
+            console.warn(`[SQLiteManager] instantiateAV: keyValues empty for ${avID} (attempt ${attempt}/6), retrying in 800ms...`);
+            await sleep(800);
         }
     }
-    
+
     if (keyValues.length === 0) {
-        console.warn(`[SQLiteManager] instantiateAV warning: No columns/keyValues for ${avID} even after fallback. Res:`, JSON.stringify(res));
+        console.warn(`[SQLiteManager] instantiateAV warning: No columns/keyValues for ${avID} after 6 attempts. Res:`, JSON.stringify(res));
         return { success: false, message: "Empty/No columns" };
     }
 
