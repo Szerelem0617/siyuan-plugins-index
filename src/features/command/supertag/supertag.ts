@@ -245,20 +245,28 @@ export class SupertagMonitor {
                 if (blockEl) {
                     blockInActiveEditor = true;
                     
-                    // Update attribute in active DOM directly
-                    blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
+                    const oldHTML = blockEl.outerHTML;
                     
-                    // Remove the text tags from editor DOM visually
-                    const editorTagEls = blockEl.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
-                    editorTagEls.forEach((el: any) => {
-                        const text = (el.textContent || "").replace(/#/g, '').trim().toLowerCase();
-                        if (supertags.has(text)) el.remove();
-                    });
-                    
-                    // Trigger input event to let Siyuan's editor save the clean content natively
-                    const editEl = blockEl.querySelector('[contenteditable="true"]');
-                    if (editEl) {
-                        editEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    // Create clean DOM replica
+                    const temp = document.createElement("div");
+                    temp.innerHTML = oldHTML;
+                    const innerBlock = temp.firstElementChild as HTMLElement;
+                    if (innerBlock) {
+                        innerBlock.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
+                        const tagEls = innerBlock.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
+                        tagEls.forEach((el: any) => {
+                            const text = (el.textContent || "").replace(/#/g, '').trim().toLowerCase();
+                            if (supertags.has(text)) el.remove();
+                        });
+                    }
+                    const cleanHTML = temp.innerHTML.trim();
+
+                    // Natively tell Siyuan to execute a transaction update on the editor model
+                    try {
+                        activeProtyle.updateTransaction(blockId, cleanHTML, oldHTML);
+                    } catch (e) {
+                        console.error("[Supertag] Native updateTransaction failed, falling back:", e);
+                        blockInActiveEditor = false;
                     }
 
                     // Render capsule pill
