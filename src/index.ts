@@ -27,6 +27,7 @@ import { triggerShowMessage } from "./features/command/effect/show-message";
 import { triggerTurnIntoTask } from "./features/command/effect/turn-into-task";
 import { addSupertagMenuItems, openSupertagManagerDialog } from "./features/command/supertag/SupertagMenu";
 import { SupertagRenderer } from "./features/command/supertag/SupertagRenderer";
+import { initTagMenuInterceptor } from "./features/command/supertag/tag-menu-interceptor";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -110,6 +111,7 @@ export default class IndexPlugin extends Plugin {
         supertagMonitor.init(this);
         supertagManager.init();
         await initTagSuggestion(this);
+        initTagMenuInterceptor();
         if (DEV_ENABLE_INIT_SYS) {
             initInlineButtonListener();
             initCommandPalette();
