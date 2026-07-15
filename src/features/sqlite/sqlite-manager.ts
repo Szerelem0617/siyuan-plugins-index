@@ -311,7 +311,8 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
         }
 
         if (attempt < 6) {
-            console.warn(`[SQLiteManager] instantiateAV: keyValues empty for ${avID} (attempt ${attempt}/6), retrying in 800ms...`);
+            console.warn(`[SQLiteManager] instantiateAV: keyValues empty/inactive for ${avID} (attempt ${attempt}/6). Waking up view via renderAttributeView and retrying in 800ms...`);
+            await post("/api/av/renderAttributeView", { id: avID });
             await sleep(800);
         }
     }

@@ -175,7 +175,7 @@ async function handleAvAltClick(event: MouseEvent) {
                         currentValue: currentUiEntriesVal,
                         onSave: async (updatedValue: string) => {
                             console.log("[UIEntriesConfig] Saving new entries:", updatedValue);
-                            await updateCellValue(avId, rowId, colId, updatedValue);
+                            await updateCellValue(null, avId, rowId, colId, updatedValue);
                             showMessage("✓ 注册位置更新成功，已刷新后台注册。");
                         }
                     }
