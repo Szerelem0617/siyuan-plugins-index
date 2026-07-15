@@ -55,10 +55,6 @@
         console.log("[TriggerDialog-Debug] selectedList is now:", selectedList);
     }
 
-    function getSelectedIndex(label: string): number {
-        return selectedList.indexOf(label);
-    }
-
     async function handleSave() {
         if (selectedList.length === 0) {
             await onSave("");
@@ -124,7 +120,7 @@
                 选择并排序动作命令 (Actions)：
             </div>
             {#each boundCommands as cmd}
-                {@const selIndex = getSelectedIndex(cmd.label)}
+                {@const selIndex = selectedList.indexOf(cmd.label)}
                 <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <!-- svelte-ignore a11y-no-static-element-interactions -->
                 <div 
