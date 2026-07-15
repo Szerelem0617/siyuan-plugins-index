@@ -12,14 +12,11 @@ export const tagSuggestionState = {
 let cachedNativeTags: string[] = [];
 let lastNativeFetch = 0;
 
-// The trigger character for supertags. We use "@" (double "@@") because:
-// 1. "#" is impossible — Siyuan's Lute engine runs SpinBlockDOM on every input
-//    event, which strips "##" as an empty/invalid tag. No plugin-level fix exists.
-// 2. "@" has zero special handling in Siyuan's Lute, input.ts, or keydown.ts.
-// 3. We must manually set protyle.hint.enableExtend = true on "@" input,
-//    since Siyuan only auto-enables it for "#", "/", "(", etc.
-const SUPERTAG_TRIGGER = "@@";
-const TRIGGER_CHAR = "@";
+// Single "@" trigger — safe because "@" has zero special meaning in Siyuan's
+// Lute markdown engine, input.ts, or keydown.ts. We just need to manually
+// set protyle.hint.enableExtend = true when "@" is typed, since Siyuan only
+// auto-enables it for "#", "/", "(", etc (hardcoded list in wysiwyg/index.ts:2765).
+const SUPERTAG_TRIGGER = "@";
 
 export async function refreshNativeTagsCache() {
     if (Date.now() - lastNativeFetch < 2000) return;
@@ -60,10 +57,20 @@ export async function initTagSuggestion(plugin: Plugin) {
 
 async function handleSupertagSelection(tag: string, protyle: any) {
     const blockId = protyle.block?.id || protyle.blockId;
-    if (!blockId) return;
+    if (!blockId) {
+        console.error("[Supertag] No blockId found");
+        return;
+    }
 
-    const blockEl = protyle.element.querySelector(`[data-node-id="${blockId}"]`);
-    if (!blockEl) return;
+    // Find block element — search all protyle editors on the page
+    let blockEl = protyle.wysiwyg?.element?.querySelector(`[data-node-id="${blockId}"]`);
+    if (!blockEl) {
+        blockEl = document.querySelector(`[data-node-id="${blockId}"]`);
+    }
+    if (!blockEl) {
+        console.error("[Supertag] Block element not found for id:", blockId);
+        return;
+    }
 
     console.log("[Supertag] Selection intercepted — tag:", tag, "block:", blockId);
 
@@ -72,19 +79,22 @@ async function handleSupertagSelection(tag: string, protyle: any) {
         protyle.hint.element.classList.add("fn__none");
     }
 
-    // 2. Remove the typed trigger prefix (e.g. "@@per") from editor DOM
+    // 2. Capture old HTML BEFORE any DOM changes
+    const oldHTML = blockEl.outerHTML;
+
+    // 3. Remove the typed trigger prefix (e.g. "@per") from editor DOM
     const selection = window.getSelection();
-    const range = protyle.toolbar.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
+    const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
     if (protyle.hint && protyle.hint.lastIndex > -1 && range) {
         try {
             range.setStart(range.startContainer, protyle.hint.lastIndex);
             range.deleteContents();
         } catch (e) {
-            console.error("[Supertag] Failed to delete prefix range text:", e);
+            console.error("[Supertag] Failed to delete trigger prefix:", e);
         }
     }
 
-    // 3. Prepare the new supertags array
+    // 4. Prepare the new supertags array
     let currentCustom: string[] = [];
     const raw = blockEl.getAttribute("custom-supertags");
     if (raw) {
@@ -94,41 +104,54 @@ async function handleSupertagSelection(tag: string, protyle: any) {
         } catch (_) {}
     }
     const updatedCustom = Array.from(new Set([...currentCustom, tag]));
+    const updatedCustomJSON = JSON.stringify(updatedCustom);
 
-    // 4. Update block via setBlockAttrs API (most reliable, bypasses DOM race conditions)
+    // 5. Set the attribute on the live DOM element FIRST
+    //    This is critical — if Siyuan's native input handler fires next,
+    //    it will serialize this element's outerHTML (which now includes the attr).
+    blockEl.setAttribute("custom-supertags", updatedCustomJSON);
+
+    // 6. Persist the attribute via setBlockAttrs API (most reliable method)
     try {
         await post("/api/attr/setBlockAttrs", {
             id: blockId,
             attrs: {
-                "custom-supertags": JSON.stringify(updatedCustom)
+                "custom-supertags": updatedCustomJSON
             }
         });
+        console.log("[Supertag] setBlockAttrs succeeded for block:", blockId);
     } catch (e) {
         console.error("[Supertag] setBlockAttrs API failed:", e);
     }
 
-    // 5. Update editor DOM via updateTransaction to persist content changes
-    const oldHTML = blockEl.outerHTML;
-    const temp = document.createElement("div");
-    temp.innerHTML = blockEl.outerHTML;
-    const inner = temp.firstElementChild as HTMLElement;
-    if (inner) {
-        inner.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
-    }
-    const cleanHTML = temp.innerHTML.trim();
-
-    try {
-        if (typeof protyle.updateTransaction === "function") {
-            protyle.updateTransaction(blockId, cleanHTML, oldHTML);
+    // 7. Also persist the content change (trigger prefix removal) via transactions API
+    //    Note: updateTransaction and transaction are standalone functions in Siyuan,
+    //    NOT methods on the protyle object. We must call the API directly.
+    const newHTML = blockEl.outerHTML;
+    if (newHTML !== oldHTML) {
+        try {
+            await post("/api/transactions", {
+                session: window.siyuan?.ws?.app?.appId || "",
+                app: window.siyuan?.ws?.app?.appId || "",
+                transactions: [{
+                    doOperations: [{
+                        action: "update",
+                        id: blockId,
+                        data: newHTML
+                    }],
+                    undoOperations: [{
+                        action: "update",
+                        id: blockId,
+                        data: oldHTML
+                    }]
+                }]
+            });
+        } catch (e) {
+            console.error("[Supertag] transactions API failed:", e);
         }
-    } catch (e) {
-        console.error("[Supertag] updateTransaction failed:", e);
     }
 
-    // Also update live DOM so visual render matches immediately
-    blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
-
-    // 6. Trigger commands and render capsule pill
+    // 8. Trigger supertag commands and render capsule pill
     await supertagMonitor.processNewTag(blockId, tag);
     SupertagRenderer.render(protyle);
 }
@@ -143,19 +166,23 @@ export function bindProtyleHintExtend(protyle: any) {
     const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === SUPERTAG_TRIGGER);
     if (hasRegistered) return;
 
-    // --- Critical: enable hint.enableExtend when "@" is typed ---
-    // Siyuan only sets enableExtend=true for a hardcoded list of chars ("#", "/", "(", etc).
-    // "@" is not in that list, so the hint system silently ignores our extend.
-    // We fix this by listening for "@" input and flipping the flag ourselves.
+    // --- Critical fix: enable hint extend system when "@" is typed ---
+    // Siyuan only sets enableExtend=true for a hardcoded list of chars:
+    //   [":", "(", "【", "（", "[", "{", "「", "『", "#", "/", "、"]
+    // (see wysiwyg/index.ts:2765)
+    // Without enableExtend=true, the hint system bails out at hint/index.ts:137
+    // and never calls getKey() or our hint() callback.
     if (protyle.wysiwyg && protyle.wysiwyg.element) {
         protyle.wysiwyg.element.addEventListener("input", (event: InputEvent) => {
-            if (event.data === TRIGGER_CHAR && protyle.hint) {
+            if (event.data === SUPERTAG_TRIGGER && protyle.hint) {
                 protyle.hint.enableExtend = true;
             }
         }, true);
     }
 
     // Intercept mouse clicks on hint menu items (capturing phase)
+    // This fires BEFORE Siyuan's bubble-phase handler at hint/index.ts:67,
+    // preventing Siyuan's fill() from running for our supertag items.
     if (protyle.hint && protyle.hint.element) {
         protyle.hint.element.addEventListener("click", async (event: MouseEvent) => {
             const btn = (event.target as HTMLElement).closest(".b3-list-item");
@@ -171,7 +198,7 @@ export function bindProtyleHintExtend(protyle: any) {
         }, true);
     }
 
-    // Intercept Enter keypress on WYSIWYG editor (capturing phase)
+    // Intercept Enter keypress (capturing phase)
     if (protyle.wysiwyg && protyle.wysiwyg.element) {
         protyle.wysiwyg.element.addEventListener("keydown", async (event: KeyboardEvent) => {
             if (event.key === "Enter" && protyle.hint && protyle.hint.element && !protyle.hint.element.classList.contains("fn__none")) {
@@ -189,7 +216,7 @@ export function bindProtyleHintExtend(protyle: any) {
         }, true);
     }
 
-    // Register the "@@" extend trigger
+    // Register the "@" extend trigger
     protyle.options.hint.extend.push({
         key: SUPERTAG_TRIGGER,
         isIndexOS: true,
@@ -204,7 +231,6 @@ export function bindProtyleHintExtend(protyle: any) {
 
             const supertags = new Set<string>();
 
-            // 1. Get database supertags
             const dbConfigs = supertagMonitor.getDataRegistry();
             if (dbConfigs) {
                 dbConfigs.forEach(c => {
@@ -214,7 +240,6 @@ export function bindProtyleHintExtend(protyle: any) {
                 });
             }
 
-            // 2. Get registered command supertags
             if (SUPERTAG_REGISTRY) {
                 SUPERTAG_REGISTRY.forEach(l => {
                     if (l.typeTag) {
@@ -230,21 +255,21 @@ export function bindProtyleHintExtend(protyle: any) {
 
             const superItems = matchedSuper.map(tag => {
                 return {
-                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@@${tag}</span><span class="b3-list-item__meta" style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
+                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@${tag}</span><span class="b3-list-item__meta" style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
                     value: `indexos-supertag:${tag}`,
-                    filter: [tag, `@${tag}`, `@@${tag}`]
+                    filter: [tag, `@${tag}`]
                 };
             });
 
-            // Also show matching native tags so users can apply them as supertags
+            // Also show native tags as potential supertag candidates
             const matchedNative = cachedNativeTags
                 .filter(t => t.toLowerCase().includes(query) && !supertags.has(t.toLowerCase()));
 
             const nativeAsSuper = matchedNative.map(tag => {
                 return {
-                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@@${tag}</span></div>`,
+                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@${tag}</span></div>`,
                     value: `indexos-supertag:${tag}`,
-                    filter: [tag, `@${tag}`, `@@${tag}`]
+                    filter: [tag, `@${tag}`]
                 };
             });
 
