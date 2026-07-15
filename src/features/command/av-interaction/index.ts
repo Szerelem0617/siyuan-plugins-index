@@ -130,14 +130,16 @@ async function handleAvAltClick(event: MouseEvent) {
         } else {
             // Check if they clicked the UI entries / UI 入口 column
             let clickedKeyName = "";
+            let clickedColName = "";
             try {
                 const { db } = await getSqliteEngine();
-                const colQuery = db.exec(`SELECT key_name FROM _av_schema WHERE av_id = ? AND col_name = ?`, [avId, colId]);
+                const colQuery = db.exec(`SELECT key_name, col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
                 if (colQuery.length > 0 && colQuery[0].values.length > 0) {
                     clickedKeyName = String(colQuery[0].values[0][0]);
+                    clickedColName = String(colQuery[0].values[0][1]);
                 }
             } catch (e) {
-                console.error("[AltClick] Failed to resolve column key name:", e);
+                console.error("[AltClick] Failed to resolve column schema details:", e);
             }
 
             if (clickedKeyName === "UI 入口" || clickedKeyName === "UI Entries" || clickedKeyName === "注册位置") {
@@ -148,7 +150,7 @@ async function handleAvAltClick(event: MouseEvent) {
                 try {
                     const { db } = await getSqliteEngine();
                     const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-                    const valRes = db.exec(`SELECT "${colId}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+                    const valRes = db.exec(`SELECT "${clickedColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
                     if (valRes.length > 0 && valRes[0].values.length > 0 && valRes[0].values[0][0]) {
                         currentUiEntriesVal = String(valRes[0].values[0][0]);
                     }
@@ -181,76 +183,73 @@ async function handleAvAltClick(event: MouseEvent) {
                 return;
             }
 
-            // --- 行为 2: 弹窗可视化配置参数 ---
-            event.preventDefault();
-            event.stopPropagation();
+            if (clickedKeyName === "Param Mapping" || clickedKeyName === "参数映射") {
+                // --- 行为 2: 弹窗可视化配置参数 ---
+                event.preventDefault();
+                event.stopPropagation();
 
-            const cmdDef = commandRegistry.findByNameOrId(cleanLabel) || commandRegistry.getCommand(resolvedCommand);
-            if (!cmdDef) {
-                showMessage("此命令尚未在系统注册，无法配置参数");
-                return;
-            }
-
-            const paramsSchema = cmdDef.params || [];
-
-            if (paramsSchema.length === 0) {
-                showMessage(`命令 "${cmdDef.name || cleanLabel}" 不支持参数配置`);
-                return;
-            }
-
-            const paramColKeyId = await getParamColKeyId(avId);
-            if (!paramColKeyId) {
-                showMessage("未能在表中找到 'Param Mapping' 参数映射列", 3000, "error");
-                return;
-            }
-
-            // 获取当前单元格的参数 JSON 字符串
-            let currentValStr = "{}";
-            try {
-                const { db } = await getSqliteEngine();
-                const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-                const schemaParamCol = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Param Mapping' OR key_name = '参数映射')`, [avId]);
-                let paramColName = "Param_Mapping";
-                if (schemaParamCol.length > 0 && schemaParamCol[0].values.length > 0) {
-                    paramColName = String(schemaParamCol[0].values[0][0]);
+                const cmdDef = commandRegistry.findByNameOrId(cleanLabel) || commandRegistry.getCommand(resolvedCommand);
+                if (!cmdDef) {
+                    showMessage("此命令尚未在系统注册，无法配置参数");
+                    return;
                 }
-                const valRes = db.exec(`SELECT "${paramColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
-                if (valRes.length > 0 && valRes[0].values.length > 0 && valRes[0].values[0][0]) {
-                    currentValStr = String(valRes[0].values[0][0]);
+
+                const paramsSchema = cmdDef.params || [];
+
+                if (paramsSchema.length === 0) {
+                    showMessage(`命令 "${cmdDef.name || cleanLabel}" 不支持参数配置`);
+                    return;
                 }
-            } catch (e) {
-                const paramCell = rowEl.querySelector(`.av__cell[data-col-id="${paramColKeyId}"]`) as HTMLElement;
-                currentValStr = paramCell?.textContent?.trim() || "{}";
-            }
 
-            let currentParams = {};
-            try {
-                currentParams = JSON.parse(currentValStr);
-            } catch (_) {
-                currentParams = {};
-            }
+                const paramColKeyId = await getParamColKeyId(avId);
+                if (!paramColKeyId) {
+                    showMessage("未能在表中找到 'Param Mapping' 参数映射列", 3000, "error");
+                    return;
+                }
 
-            console.log("[ParamConfig] Dialog opened. paramsSchema:", paramsSchema);
-            const dialog = new Dialog({
-                title: "配置命令参数",
-                content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-                width: "480px",
-                height: "500px"
-            });
-
-            new ParamConfigDialog({
-                target: dialog.element.querySelector("#param-config-container")!,
-                props: {
-                    dialog,
-                    commandName: cmdDef.name || cleanLabel,
-                    commandId: resolvedCommand,
-                    paramsSchema,
-                    currentParams,
-                    onSave: async (updated: Record<string, any>) => {
-                        await updateCellValue(null, avId, rowId, paramColKeyId, JSON.stringify(updated, null, 2));
+                // 获取当前单元格的参数 JSON 字符串
+                let currentValStr = "{}";
+                try {
+                    const { db } = await getSqliteEngine();
+                    const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+                    const valRes = db.exec(`SELECT "${clickedColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+                    if (valRes.length > 0 && valRes[0].values.length > 0 && valRes[0].values[0][0]) {
+                        currentValStr = String(valRes[0].values[0][0]);
                     }
+                } catch (e) {
+                    const paramCell = rowEl.querySelector(`.av__cell[data-col-id="${paramColKeyId}"]`) as HTMLElement;
+                    currentValStr = paramCell?.textContent?.trim() || "{}";
                 }
-            });
+
+                let currentParams = {};
+                try {
+                    currentParams = JSON.parse(currentValStr);
+                } catch (_) {
+                    currentParams = {};
+                }
+
+                console.log("[ParamConfig] Dialog opened. paramsSchema:", paramsSchema);
+                const dialog = new Dialog({
+                    title: "配置命令参数",
+                    content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
+                    width: "480px",
+                    height: "500px"
+                });
+
+                new ParamConfigDialog({
+                    target: dialog.element.querySelector("#param-config-container")!,
+                    props: {
+                        dialog,
+                        commandName: cmdDef.name || cleanLabel,
+                        commandId: resolvedCommand,
+                        paramsSchema,
+                        currentParams,
+                        onSave: async (updated: Record<string, any>) => {
+                            await updateCellValue(null, avId, rowId, paramColKeyId, JSON.stringify(updated, null, 2));
+                        }
+                    }
+                });
+            }
         }
     }
 
@@ -266,7 +265,7 @@ async function handleAvAltClick(event: MouseEvent) {
         // Check if the clicked column name in Siyuan matches "On Create" or "创建时"
         let isOnCreateCol = false;
         try {
-            const checkColRes = db.exec(`SELECT key_name FROM _av_schema WHERE av_id = ? AND col_name = ?`, [avId, colId]);
+            const checkColRes = db.exec(`SELECT key_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
             if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
                 const keyName = checkColRes[0].values[0][0];
                 if (keyName === "On Create" || keyName === "创建时") {
