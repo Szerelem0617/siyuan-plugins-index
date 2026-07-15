@@ -217,6 +217,8 @@ export function bindProtyleHintExtend(protyle: any) {
         isIndexOS: true,
         hint(value: string, protyleInstance: any, source: string) {
             refreshNativeTagsCache().catch(() => {});
+            // Also trigger background registry refresh so list stays strictly in sync with supertag manager
+            supertagMonitor.refreshRegistry().catch(() => {});
 
             const query = value.trim().toLowerCase();
 
@@ -224,41 +226,54 @@ export function bindProtyleHintExtend(protyle: any) {
                 return [];
             }
 
-            const supertags = new Set<string>();
+            const dbConfigs = supertagMonitor.getDataRegistry() || [];
+            const logicConfigs = SUPERTAG_REGISTRY || [];
 
-            const dbConfigs = supertagMonitor.getDataRegistry();
-            if (dbConfigs) {
-                dbConfigs.forEach(c => {
-                    if (c.typeName) {
-                        supertags.add(c.typeName.trim().toLowerCase());
-                    }
-                });
-            }
+            const dataNames = new Set(dbConfigs.map(c => c.typeName.trim().toLowerCase()));
+            const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
 
-            if (SUPERTAG_REGISTRY) {
-                SUPERTAG_REGISTRY.forEach(l => {
-                    if (l.typeTag) {
-                        supertags.add(l.typeTag.trim().toLowerCase());
-                    }
-                });
-            }
+            const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
+            const matchedSuper = allSupertags.filter(t => t.includes(query));
 
-            const matchedSuper = Array.from(supertags).filter(t => t.includes(query));
+            const classItems: any[] = [];
+            const dataItems: any[] = [];
+            const toolItems: any[] = [];
 
-            const isZh = window.siyuan?.config?.lang === "zh_CN";
-            const badge = isZh ? "🐬 超级标签" : "🐬 Supertag";
+            matchedSuper.forEach(tag => {
+                const isData = dataNames.has(tag);
+                const isLogic = logicNames.has(tag);
+                
+                let badge = "";
+                let color = "var(--b3-theme-primary)";
+                let itemGroup: any[] = [];
 
-            const superItems = matchedSuper.map(tag => {
-                return {
-                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@${tag}</span><span class="b3-list-item__meta" style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
+                if (isData && isLogic) {
+                    badge = "🐬 类";
+                    color = "var(--b3-theme-primary)";
+                    itemGroup = classItems;
+                } else if (isData) {
+                    badge = "🐬 数据组件";
+                    color = "#4caf50";
+                    itemGroup = dataItems;
+                } else {
+                    badge = "🐬 工具组件";
+                    color = "#ff9800";
+                    itemGroup = toolItems;
+                }
+
+                itemGroup.push({
+                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@${tag}</span><span class="b3-list-item__meta" style="color: ${color}; font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
                     value: `indexos-supertag:${tag}`,
                     filter: [tag, `@${tag}`]
-                };
+                });
             });
 
-            // Also show native tags as potential supertag candidates
+            // Group them: Classes first, then Data Components, then Tool Components
+            const superItems = [...classItems, ...dataItems, ...toolItems];
+
+            // Also show matching native tags as potential supertag candidates
             const matchedNative = cachedNativeTags
-                .filter(t => t.toLowerCase().includes(query) && !supertags.has(t.toLowerCase()));
+                .filter(t => t.toLowerCase().includes(query) && !dataNames.has(t.toLowerCase()) && !logicNames.has(t.toLowerCase()));
 
             const nativeAsSuper = matchedNative.map(tag => {
                 return {

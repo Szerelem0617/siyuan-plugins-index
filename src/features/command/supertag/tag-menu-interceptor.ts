@@ -3,9 +3,8 @@ import { supertagMonitor } from "./supertag";
 import { SUPERTAG_REGISTRY } from "../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
 
-// Visual indicator/badge text to identify supertags in the list
-const BADGE_TEXT = "🐬 超级标签";
-const BADGE_HTML = `<span style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px; display: inline-flex; align-items: center; gap: 2px;">🐬 <span style="opacity: 0.8;">超级标签</span></span>`;
+// Visual indicator/badge texts to identify supertags in the list
+const BADGE_MARKER = "🐬";
 
 async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
     // 1. Close Siyuan's menu popover
@@ -52,39 +51,50 @@ export function initTagMenuInterceptor() {
             try {
                 const json = await clone.json();
                 if (json && json.data && Array.isArray(json.data.tags)) {
-                    // Gather all registered supertags
-                    const supertags = new Set<string>();
-                    
-                    const dbConfigs = supertagMonitor.getDataRegistry();
-                    if (dbConfigs) {
-                        dbConfigs.forEach(c => {
-                            if (c.typeName) supertags.add(c.typeName.trim().toLowerCase());
-                        });
-                    }
+                    // Gather all registered supertags and classify them
+                    const dbConfigs = supertagMonitor.getDataRegistry() || [];
+                    const logicConfigs = SUPERTAG_REGISTRY || [];
 
-                    if (SUPERTAG_REGISTRY) {
-                        SUPERTAG_REGISTRY.forEach(l => {
-                            if (l.typeTag) supertags.add(l.typeTag.trim().toLowerCase());
-                        });
-                    }
+                    const dataNames = new Set(dbConfigs.map(c => c.typeName.trim().toLowerCase()));
+                    const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
 
+                    const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
                     const searchKey = (json.data.k || "").trim().toLowerCase();
-                    const matchedSupertags = Array.from(supertags).filter(t => t.includes(searchKey));
+                    const matchedSupertags = allSupertags.filter(t => t.includes(searchKey));
 
-                    // Format supertags with the custom badge
-                    const supertagItems = matchedSupertags.map(tag => {
+                    const classItems: string[] = [];
+                    const dataItems: string[] = [];
+                    const toolItems: string[] = [];
+
+                    matchedSupertags.forEach(tag => {
+                        const isData = dataNames.has(tag);
+                        const isLogic = logicNames.has(tag);
+                        
+                        let badgeHtml = "";
+                        let itemGroup: string[] = [];
+                        if (isData && isLogic) {
+                            badgeHtml = `<span style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">🐬 类</span>`;
+                            itemGroup = classItems;
+                        } else if (isData) {
+                            badgeHtml = `<span style="color: #4caf50; font-weight: bold; margin-left: auto; font-size: 10px;">🐬 数据组件</span>`;
+                            itemGroup = dataItems;
+                        } else {
+                            badgeHtml = `<span style="color: #ff9800; font-weight: bold; margin-left: auto; font-size: 10px;">🐬 工具组件</span>`;
+                            itemGroup = toolItems;
+                        }
+
                         // Siyuan uses HTML directly for list item texts in searchTag lists
-                        return `${tag}${BADGE_HTML}`;
+                        itemGroup.push(`${tag}<span style="display: flex; align-items: center; width: 100%;">${badgeHtml}</span>`);
                     });
 
                     // Remove native tag duplicates that are already covered by supertags
                     const nativeItems = json.data.tags.filter((t: string) => {
                         const cleanT = t.replace(/<mark>/g, "").replace(/<\/mark>/g, "").toLowerCase();
-                        return !supertags.has(cleanT);
+                        return !dataNames.has(cleanT) && !logicNames.has(cleanT);
                     });
 
-                    // Prepend supertags to Siyuan's native recommendations
-                    json.data.tags = [...supertagItems, ...nativeItems];
+                    // Prepend supertags grouped by category, followed by native tags
+                    json.data.tags = [...classItems, ...dataItems, ...toolItems, ...nativeItems];
 
                     // Return mock Response containing the merged list
                     return new Response(JSON.stringify(json), {
@@ -107,12 +117,15 @@ export function initTagMenuInterceptor() {
         const listItem = (event.target as HTMLElement).closest(".b3-list-item");
         if (listItem) {
             const text = listItem.textContent.trim();
-            if (text.endsWith(BADGE_TEXT)) {
+            if (text.includes(BADGE_MARKER)) {
                 // Intercept supertag clicks in the document tag menu
                 event.stopPropagation();
                 event.preventDefault();
 
-                const tag = text.substring(0, text.length - BADGE_TEXT.length).trim();
+                // Extract the tag name by cutting off at the badge emoji "🐬"
+                const emojiIdx = text.indexOf(BADGE_MARKER);
+                const tag = emojiIdx > -1 ? text.substring(0, emojiIdx).trim() : text;
+
                 const protyle = (window as any).activeProtyleInstance;
                 if (protyle) {
                     const docId = protyle.block?.id || protyle.blockId;
@@ -134,11 +147,14 @@ export function initTagMenuInterceptor() {
                     const focusEl = menu.querySelector(".b3-list-item--focus");
                     if (focusEl) {
                         const text = focusEl.textContent.trim();
-                        if (text.endsWith(BADGE_TEXT)) {
+                        if (text.includes(BADGE_MARKER)) {
                             event.stopPropagation();
                             event.preventDefault();
 
-                            const tag = text.substring(0, text.length - BADGE_TEXT.length).trim();
+                            // Extract the tag name by cutting off at the badge emoji "🐬"
+                            const emojiIdx = text.indexOf(BADGE_MARKER);
+                            const tag = emojiIdx > -1 ? text.substring(0, emojiIdx).trim() : text;
+
                             const protyle = (window as any).activeProtyleInstance;
                             if (protyle) {
                                 const docId = protyle.block?.id || protyle.blockId;
