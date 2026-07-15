@@ -1,5 +1,6 @@
 import { post } from "../../../shared/api-client/request";
 import { showMessage } from "siyuan";
+import { supertagMonitor } from "./supertag";
 
 export class SupertagRenderer {
     private static renderedMap = new Map<string, string[]>();
@@ -240,6 +241,9 @@ export class SupertagRenderer {
                     "custom-supertags": updatedTags.length > 0 ? JSON.stringify(updatedTags) : ""
                 }
             });
+
+            // Trigger tag_removed commands explicitly
+            await supertagMonitor.processRemovedTag(blockId, tagToRemove);
 
             // Re-render visually instantly
             if (type === "page") {

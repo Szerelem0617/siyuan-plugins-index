@@ -145,28 +145,8 @@ export class SupertagMonitor {
                     const newTags = this.extractTagsFromPayload(op.data, op.action, blockId);
                     if (newTags === null) continue; // Skip if this operation doesn't carry definitive tag information
 
-                    // Compare with virtual cache
-                    const cachedTags = this.tagCache.get(blockId) || new Set<string>();
-                    const addedTags = Array.from(newTags).filter(t => !cachedTags.has(t));
-                    const removedTags = Array.from(cachedTags).filter(t => !newTags.has(t));
-
-                    if (addedTags.length > 0 || removedTags.length > 0) {
-                        // Update cache
-                        this.tagCache.set(blockId, newTags);
-
-                        // Trigger logic for each newly added tag
-                        for (const tag of addedTags) {
-                            await this.processNewTag(blockId, tag);
-                        }
-
-                        // Trigger logic for each removed tag
-                        for (const tag of removedTags) {
-                            await this.processRemovedTag(blockId, tag);
-                        }
-                    } else {
-                        // All tags are already in cache
-                        this.tagCache.set(blockId, newTags);
-                    }
+                    // Update local cache but do not trigger commands here
+                    this.tagCache.set(blockId, newTags);
                 }
             }
         }
@@ -295,6 +275,11 @@ export class SupertagMonitor {
                     data: cleanDOM
                 });
             }
+
+            // Explicitly trigger processNewTag for the newly migrated tags!
+            for (const tag of tagsToMigrate) {
+                await this.processNewTag(blockId, tag);
+            }
         } catch (err) {
             console.error("[Supertag-Migration] Error during native tag auto migration:", err);
         }
@@ -364,7 +349,7 @@ export class SupertagMonitor {
         return null; // Signifies "no custom-supertags updates in this transaction"
     }
 
-    private async processNewTag(blockId: string, tag: string) {
+    public async processNewTag(blockId: string, tag: string) {
         try {
             // Refresh registry if empty or periodically
             if (SUPERTAG_REGISTRY.length === 0 || Date.now() - this.lastUpdate > 5 * 60 * 1000) {
@@ -399,7 +384,7 @@ export class SupertagMonitor {
         }
     }
 
-    private async processRemovedTag(blockId: string, tag: string) {
+    public async processRemovedTag(blockId: string, tag: string) {
         try {
             const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
             

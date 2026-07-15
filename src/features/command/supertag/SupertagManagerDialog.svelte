@@ -2,6 +2,7 @@
     import { onMount } from "svelte";
     import { post } from "../../../shared/api-client/request";
     import { showMessage } from "siyuan";
+    import { supertagMonitor } from "./supertag";
 
     export let dialog: any;
     export let blockId: string;
@@ -10,6 +11,7 @@
     export let onSaveComplete: () => void;
 
     let selectedTags: string[] = [];
+    let originalTags: string[] = [];
     let isSaving = false;
 
     onMount(async () => {
@@ -27,6 +29,8 @@
                     selectedTags = rawTags.split(/[, ]/).map((s: string) => s.trim()).filter(Boolean);
                 }
             }
+            // Keep a copy of original tags for comparison on save
+            originalTags = [...selectedTags];
         } catch (e) {
             console.error("Failed to load block supertags:", e);
         }
@@ -45,6 +49,17 @@
             // Update HTML attribute so instant rendering picks it up
             if (blockEl) {
                 blockEl.setAttribute("custom-supertags", selectedTags.length > 0 ? JSON.stringify(selectedTags) : "");
+            }
+
+            // Explicitly trigger actions for added/removed tags
+            const added = selectedTags.filter(t => !originalTags.includes(t));
+            const removed = originalTags.filter(t => !selectedTags.includes(t));
+
+            for (const tag of added) {
+                await supertagMonitor.processNewTag(blockId, tag);
+            }
+            for (const tag of removed) {
+                await supertagMonitor.processRemovedTag(blockId, tag);
             }
 
             showMessage("超级标签保存成功");
