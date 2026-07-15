@@ -173,34 +173,51 @@ export class SupertagMonitor {
     }
 
     private async detectAndMigrateNativeTags(blockId: string, payload: any) {
-        if (!payload || typeof payload !== "string") return;
-        if (!payload.includes('data-type="tag"') && !payload.includes('data-type="NodeTag"')) return;
+        console.log("[Supertag-Migration-Debug] Entered detectAndMigrateNativeTags for block:", blockId);
+        if (!payload || typeof payload !== "string") {
+            console.log("[Supertag-Migration-Debug] Exit: payload is empty or not string");
+            return;
+        }
+        if (!payload.includes('data-type="tag"') && !payload.includes('data-type="NodeTag"')) {
+            console.log("[Supertag-Migration-Debug] Exit: payload does not contain tag markup");
+            return;
+        }
 
         try {
             // Query all registered supertags from SQLite sys_type_db
             const { db } = await getSqliteEngine();
             const res = db.exec(`SELECT supertag FROM sys_type_db`);
-            if (res.length === 0 || res[0].values.length === 0) return;
+            console.log("[Supertag-Migration-Debug] sys_type_db query result:", JSON.stringify(res));
+            if (res.length === 0 || res[0].values.length === 0) {
+                console.log("[Supertag-Migration-Debug] Exit: no supertags found in sys_type_db");
+                return;
+            }
 
             const supertags = new Set(
                 res[0].values.map((row: any) => String(row[0]).replace(/#/g, "").trim().toLowerCase()).filter(Boolean)
             );
+            console.log("[Supertag-Migration-Debug] Active supertags set:", Array.from(supertags));
 
             // Parse HTML to find matching tags
             const tempDiv = document.createElement("div");
             tempDiv.innerHTML = payload;
             const tagEls = tempDiv.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
+            console.log("[Supertag-Migration-Debug] Found tag elements count:", tagEls.length);
             
             const tagsToMigrate: string[] = [];
             tagEls.forEach((el: any) => {
                 const tagText = (el.textContent || el.getAttribute("data-content") || "").replace(/#/g, '').trim().toLowerCase();
+                console.log("[Supertag-Migration-Debug] Checking tag text content:", tagText);
                 if (supertags.has(tagText)) {
                     tagsToMigrate.push(tagText);
                     el.remove();
                 }
             });
 
-            if (tagsToMigrate.length === 0) return;
+            if (tagsToMigrate.length === 0) {
+                console.log("[Supertag-Migration-Debug] Exit: none of the tags are registered supertags");
+                return;
+            }
 
             console.log(`[Supertag-Migration] Intercepted native tags to migrate on block ${blockId}:`, tagsToMigrate);
 
