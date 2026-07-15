@@ -56,22 +56,34 @@ export async function initTagSuggestion(plugin: Plugin) {
 }
 
 async function handleSupertagSelection(tag: string, protyle: any) {
-    const blockId = protyle.block?.id || protyle.blockId;
-    if (!blockId) {
-        console.error("[Supertag] No blockId found");
+    // Get the ACTUAL editing block from cursor position, NOT protyle.block.id (which is the document root)
+    const selection = window.getSelection();
+    const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
+    if (!range) {
+        console.error("[Supertag] No range found");
         return;
     }
 
-    // Find block element — search all protyle editors on the page
-    let blockEl = protyle.wysiwyg?.element?.querySelector(`[data-node-id="${blockId}"]`);
-    if (!blockEl) {
-        blockEl = document.querySelector(`[data-node-id="${blockId}"]`);
+    // Walk up from cursor to find the closest block element with data-node-id
+    let blockEl: HTMLElement | null = null;
+    let node: Node | null = range.startContainer;
+    while (node && node !== protyle.wysiwyg?.element) {
+        if (node.nodeType === 1) {
+            const el = node as HTMLElement;
+            if (el.getAttribute("data-node-id") && el.getAttribute("data-type")) {
+                blockEl = el;
+                break;
+            }
+        }
+        node = node.parentNode;
     }
+
     if (!blockEl) {
-        console.error("[Supertag] Block element not found for id:", blockId);
+        console.error("[Supertag] Could not find block element from cursor position");
         return;
     }
 
+    const blockId = blockEl.getAttribute("data-node-id")!;
     console.log("[Supertag] Selection intercepted — tag:", tag, "block:", blockId);
 
     // 1. Hide the hint popover immediately
@@ -83,8 +95,6 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     const oldHTML = blockEl.outerHTML;
 
     // 3. Remove the typed trigger prefix (e.g. "@per") from editor DOM
-    const selection = window.getSelection();
-    const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
     if (protyle.hint && protyle.hint.lastIndex > -1 && range) {
         try {
             range.setStart(range.startContainer, protyle.hint.lastIndex);
@@ -107,8 +117,6 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     const updatedCustomJSON = JSON.stringify(updatedCustom);
 
     // 5. Set the attribute on the live DOM element FIRST
-    //    This is critical — if Siyuan's native input handler fires next,
-    //    it will serialize this element's outerHTML (which now includes the attr).
     blockEl.setAttribute("custom-supertags", updatedCustomJSON);
 
     // 6. Persist the attribute via setBlockAttrs API (most reliable method)
@@ -124,30 +132,17 @@ async function handleSupertagSelection(tag: string, protyle: any) {
         console.error("[Supertag] setBlockAttrs API failed:", e);
     }
 
-    // 7. Also persist the content change (trigger prefix removal) via transactions API
-    //    Note: updateTransaction and transaction are standalone functions in Siyuan,
-    //    NOT methods on the protyle object. We must call the API directly.
+    // 7. Persist the content change (trigger prefix removal) via updateBlock API
     const newHTML = blockEl.outerHTML;
     if (newHTML !== oldHTML) {
         try {
-            await post("/api/transactions", {
-                session: window.siyuan?.ws?.app?.appId || "",
-                app: window.siyuan?.ws?.app?.appId || "",
-                transactions: [{
-                    doOperations: [{
-                        action: "update",
-                        id: blockId,
-                        data: newHTML
-                    }],
-                    undoOperations: [{
-                        action: "update",
-                        id: blockId,
-                        data: oldHTML
-                    }]
-                }]
+            await post("/api/block/updateBlock", {
+                dataType: "dom",
+                data: newHTML,
+                id: blockId
             });
         } catch (e) {
-            console.error("[Supertag] transactions API failed:", e);
+            console.error("[Supertag] updateBlock API failed:", e);
         }
     }
 
