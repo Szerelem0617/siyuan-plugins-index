@@ -92,8 +92,17 @@ export class SupertagRenderer {
                 }
             }
 
-            // Find or create tags container inside the block
-            let container = block.querySelector(".index-block-supertags") as HTMLElement;
+            // Find or create Siyuan's native attribute container inside the block
+            let attrEl = block.querySelector(".protyle-attr") as HTMLElement;
+            if (!attrEl) {
+                attrEl = document.createElement("div");
+                attrEl.className = "protyle-attr";
+                attrEl.setAttribute("contenteditable", "false");
+                block.appendChild(attrEl);
+            }
+
+            // Find or create our supertags container inside Siyuan's native attribute bar
+            let container = attrEl.querySelector(".index-block-supertags") as HTMLElement;
             
             if (tags.length === 0) {
                 if (container) container.remove();
@@ -105,21 +114,20 @@ export class SupertagRenderer {
             } else {
                 container = document.createElement("div");
                 container.className = "index-block-supertags";
-                container.setAttribute("contenteditable", "false");
-                container.style.cssText = "display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; font-size: 11px; user-select: none; pointer-events: auto; align-items: center;";
+                container.style.cssText = "display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle;";
                 
-                // Insert container at the top of the block content (before first child)
-                if (block.firstChild) {
-                    block.insertBefore(container, block.firstChild);
+                // Insert container at the front of Siyuan's attribute bar
+                if (attrEl.firstChild) {
+                    attrEl.insertBefore(container, attrEl.firstChild);
                 } else {
-                    block.appendChild(container);
+                    attrEl.appendChild(container);
                 }
             }
 
             tags.forEach(tag => {
                 const pill = this.createTagPill(tag, async () => {
                     await this.removeTagFromBlock(blockId, tag, "block", editorEl);
-                });
+                }, true);
                 container.appendChild(pill);
             });
         });
@@ -128,26 +136,47 @@ export class SupertagRenderer {
     /**
      * Create a styled capsule tag pill DOM node.
      */
-    private static createTagPill(tagName: string, onRemove: () => Promise<void>): HTMLElement {
+    private static createTagPill(tagName: string, onRemove: () => Promise<void>, isSmall: boolean = false): HTMLElement {
         const pill = document.createElement("div");
         pill.className = "index-supertag-pill";
-        pill.style.cssText = `
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
-            border-radius: 12px;
-            background-color: var(--b3-theme-background-hover);
-            border: 1px solid var(--b3-theme-primary-light);
-            color: var(--b3-theme-primary);
-            font-weight: 500;
-            font-size: 11px;
-            line-height: 1.2;
-            cursor: default;
-            transition: all 0.15s ease-in-out;
-            margin-right: 4px;
-            user-select: none;
-        `;
+        
+        if (isSmall) {
+            pill.style.cssText = `
+                display: inline-flex;
+                align-items: center;
+                gap: 2px;
+                padding: 0px 6px;
+                border-radius: 4px;
+                background-color: var(--b3-theme-primary-light);
+                color: var(--b3-theme-primary);
+                font-weight: 500;
+                font-size: 10px;
+                height: 16px;
+                line-height: 16px;
+                cursor: default;
+                transition: all 0.15s ease-in-out;
+                user-select: none;
+                vertical-align: middle;
+            `;
+        } else {
+            pill.style.cssText = `
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 2px 8px;
+                border-radius: 12px;
+                background-color: var(--b3-theme-background-hover);
+                border: 1px solid var(--b3-theme-primary-light);
+                color: var(--b3-theme-primary);
+                font-weight: 500;
+                font-size: 11px;
+                line-height: 1.2;
+                cursor: default;
+                transition: all 0.15s ease-in-out;
+                margin-right: 4px;
+                user-select: none;
+            `;
+        }
 
         const nameSpan = document.createElement("span");
         nameSpan.innerText = tagName;
