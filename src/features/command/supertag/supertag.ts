@@ -306,8 +306,9 @@ export class SupertagMonitor {
                 } catch (_) {}
                 return tags;
             }
-            // If DOM doesn't have custom-supertags attribute, we treat it as empty set of tags
-            return new Set<string>();
+            // If DOM doesn't have custom-supertags attribute, it means this content update
+            // does not carry attribute changes. We return null to preserve current cached tags.
+            return null;
         }
 
         // 2. Try extracting from JSON object or string (actions: setAttrs, updateAttrs)
