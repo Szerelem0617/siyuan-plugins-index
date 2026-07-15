@@ -63,7 +63,7 @@ async function handleSupertagSelection(tag: string, protyle: any) {
         protyle.hint.element.classList.add("fn__none");
     }
 
-    // 2. Remove the typed search prefix (e.g. "#per") from editor DOM
+    // 2. Remove the typed search prefix (e.g. "##per") from editor DOM
     const selection = window.getSelection();
     const range = protyle.toolbar.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
     if (protyle.hint && protyle.hint.lastIndex > -1 && range) {
@@ -86,18 +86,10 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     }
     const updatedCustom = Array.from(new Set([...currentCustom, tag]));
 
-    // 4. Update the block attributes via API
-    await post("/api/attr/setBlockAttrs", {
-        id: blockId,
-        attrs: {
-            "custom-supertags": JSON.stringify(updatedCustom)
-        }
-    });
-
-    // 5. Update Siyuan's editor model via transaction
+    // 4. Update Siyuan's editor model and attributes simultaneously in ONE atomic transaction
     const oldHTML = blockEl.outerHTML;
     
-    // We clone the current state of blockEl (since we already deleted the range text from it)
+    // Clone and prepare new DOM representation containing the attribute
     const temp = document.createElement("div");
     temp.innerHTML = blockEl.outerHTML;
     const inner = temp.firstElementChild as HTMLElement;
@@ -107,12 +99,26 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     const cleanHTML = temp.innerHTML.trim();
 
     try {
-        protyle.updateTransaction(blockId, cleanHTML, oldHTML);
+        protyle.transaction([
+            {
+                action: "update",
+                id: blockId,
+                data: cleanHTML
+            },
+            {
+                action: "setAttrs",
+                id: blockId,
+                data: JSON.stringify({ "custom-supertags": JSON.stringify(updatedCustom) })
+            }
+        ]);
+        
+        // Also update HTML attribute in live DOM instantly so visual render matches
+        blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
     } catch (e) {
-        console.error("[Supertag] updateTransaction failed during selection:", e);
+        console.error("[Supertag] Atomic transaction failed during selection:", e);
     }
 
-    // 6. Trigger commands and render capsule pill
+    // 5. Trigger commands and render capsule pill
     await supertagMonitor.processNewTag(blockId, tag);
     SupertagRenderer.render(protyle);
 }
@@ -124,8 +130,27 @@ export function bindProtyleHintExtend(protyle: any) {
     protyle.options.hint.extend = protyle.options.hint.extend || [];
 
     // Avoid duplicate registration on the same instance
-    const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === "#");
+    const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === "##");
     if (hasRegistered) return;
+
+    // Override Siyuan's getKey to support "##" trigger parsing
+    if (protyle.hint && !protyle.hint.isGetKeyOverridden) {
+        protyle.hint.isGetKeyOverridden = true;
+        const originalGetKey = protyle.hint.getKey;
+        protyle.hint.getKey = function (currentLineValue: string, extend: any[]) {
+            const doubleHashIndex = currentLineValue.lastIndexOf("##");
+            if (doubleHashIndex > -1) {
+                const lineArray = currentLineValue.split("##");
+                const lastItem = lineArray[lineArray.length - 1];
+                if (lineArray.length > 1 && lastItem.trimStart() === lastItem && lastItem.length < 32) {
+                    this.splitChar = "##";
+                    this.lastIndex = doubleHashIndex;
+                    return lastItem;
+                }
+            }
+            return originalGetKey.call(this, currentLineValue, extend);
+        };
+    }
 
     // Intercept mouse clicks on hint menu items (capturing phase)
     if (protyle.hint && protyle.hint.element) {
@@ -162,7 +187,7 @@ export function bindProtyleHintExtend(protyle: any) {
     }
 
     protyle.options.hint.extend.push({
-        key: "#",
+        key: "##",
         isIndexOS: true, // Marker to avoid duplicates
         hint(value: string, protyleInstance: any, source: string) {
             // Trigger asynchronous background refresh for future keystrokes
