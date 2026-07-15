@@ -256,30 +256,44 @@ export class SupertagMonitor {
                 }
             });
 
-            // Update block content to strip the text tags
-            const cleanDOM = tempDiv.innerHTML.trim();
-            await post("/api/block/updateBlock", {
-                id: blockId,
-                dataType: "dom",
-                data: cleanDOM
-            });
-
-            // Trigger visual rendering with a slight delay to allow editor async DOM replacement to settle
+            // Check if the block is currently in the active editor DOM
             const activeProtyle = (window as any).activeProtyleInstance;
+            let blockInActiveEditor = false;
+
             if (activeProtyle) {
-                setTimeout(() => {
-                    const blockEl = activeProtyle.element.querySelector(`[data-node-id="${blockId}"]`);
-                    if (blockEl) {
-                        blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
-                        // Remove the text tags from editor DOM visually
-                        const editorTagEls = blockEl.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
-                        editorTagEls.forEach((el: any) => {
-                            const text = (el.textContent || "").replace(/#/g, '').trim().toLowerCase();
-                            if (supertags.has(text)) el.remove();
-                        });
+                const blockEl = activeProtyle.element.querySelector(`[data-node-id="${blockId}"]`);
+                if (blockEl) {
+                    blockInActiveEditor = true;
+                    
+                    // Update attribute in active DOM directly
+                    blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
+                    
+                    // Remove the text tags from editor DOM visually
+                    const editorTagEls = blockEl.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
+                    editorTagEls.forEach((el: any) => {
+                        const text = (el.textContent || "").replace(/#/g, '').trim().toLowerCase();
+                        if (supertags.has(text)) el.remove();
+                    });
+                    
+                    // Trigger input event to let Siyuan's editor save the clean content natively
+                    const editEl = blockEl.querySelector('[contenteditable="true"]');
+                    if (editEl) {
+                        editEl.dispatchEvent(new Event('input', { bubbles: true }));
                     }
+
+                    // Render capsule pill
                     SupertagRenderer.render(activeProtyle);
-                }, 80);
+                }
+            }
+
+            // If not in the active editor, safely update block content via API
+            if (!blockInActiveEditor) {
+                const cleanDOM = tempDiv.innerHTML.trim();
+                await post("/api/block/updateBlock", {
+                    id: blockId,
+                    dataType: "dom",
+                    data: cleanDOM
+                });
             }
         } catch (err) {
             console.error("[Supertag-Migration] Error during native tag auto migration:", err);
