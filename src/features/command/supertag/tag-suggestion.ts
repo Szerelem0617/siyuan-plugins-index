@@ -12,6 +12,15 @@ export const tagSuggestionState = {
 let cachedNativeTags: string[] = [];
 let lastNativeFetch = 0;
 
+// The trigger character for supertags. We use "@" (double "@@") because:
+// 1. "#" is impossible — Siyuan's Lute engine runs SpinBlockDOM on every input
+//    event, which strips "##" as an empty/invalid tag. No plugin-level fix exists.
+// 2. "@" has zero special handling in Siyuan's Lute, input.ts, or keydown.ts.
+// 3. We must manually set protyle.hint.enableExtend = true on "@" input,
+//    since Siyuan only auto-enables it for "#", "/", "(", etc.
+const SUPERTAG_TRIGGER = "@@";
+const TRIGGER_CHAR = "@";
+
 export async function refreshNativeTagsCache() {
     if (Date.now() - lastNativeFetch < 2000) return;
     lastNativeFetch = Date.now();
@@ -56,14 +65,14 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     const blockEl = protyle.element.querySelector(`[data-node-id="${blockId}"]`);
     if (!blockEl) return;
 
-    console.log("[Supertag-Selection-Debug] Intercepted supertag selection! Tag:", tag, "BlockId:", blockId);
+    console.log("[Supertag] Selection intercepted — tag:", tag, "block:", blockId);
 
     // 1. Hide the hint popover immediately
     if (protyle.hint && protyle.hint.element) {
         protyle.hint.element.classList.add("fn__none");
     }
 
-    // 2. Remove the typed search prefix (e.g. "@@per", ",,per", ";;per") from editor DOM
+    // 2. Remove the typed trigger prefix (e.g. "@@per") from editor DOM
     const selection = window.getSelection();
     const range = protyle.toolbar.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
     if (protyle.hint && protyle.hint.lastIndex > -1 && range) {
@@ -86,9 +95,20 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     }
     const updatedCustom = Array.from(new Set([...currentCustom, tag]));
 
-    // 4. Update Siyuan's editor model and attributes simultaneously in ONE atomic transaction
+    // 4. Update block via setBlockAttrs API (most reliable, bypasses DOM race conditions)
+    try {
+        await post("/api/attr/setBlockAttrs", {
+            id: blockId,
+            attrs: {
+                "custom-supertags": JSON.stringify(updatedCustom)
+            }
+        });
+    } catch (e) {
+        console.error("[Supertag] setBlockAttrs API failed:", e);
+    }
+
+    // 5. Update editor DOM via updateTransaction to persist content changes
     const oldHTML = blockEl.outerHTML;
-    
     const temp = document.createElement("div");
     temp.innerHTML = blockEl.outerHTML;
     const inner = temp.firstElementChild as HTMLElement;
@@ -98,26 +118,17 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     const cleanHTML = temp.innerHTML.trim();
 
     try {
-        protyle.transaction([
-            {
-                action: "update",
-                id: blockId,
-                data: cleanHTML
-            },
-            {
-                action: "setAttrs",
-                id: blockId,
-                data: JSON.stringify({ "custom-supertags": JSON.stringify(updatedCustom) })
-            }
-        ]);
-        
-        // Also update HTML attribute in live DOM instantly so visual render matches
-        blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
+        if (typeof protyle.updateTransaction === "function") {
+            protyle.updateTransaction(blockId, cleanHTML, oldHTML);
+        }
     } catch (e) {
-        console.error("[Supertag] Atomic transaction failed during selection:", e);
+        console.error("[Supertag] updateTransaction failed:", e);
     }
 
-    // 5. Trigger commands and render capsule pill
+    // Also update live DOM so visual render matches immediately
+    blockEl.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
+
+    // 6. Trigger commands and render capsule pill
     await supertagMonitor.processNewTag(blockId, tag);
     SupertagRenderer.render(protyle);
 }
@@ -128,29 +139,20 @@ export function bindProtyleHintExtend(protyle: any) {
     protyle.options.hint = protyle.options.hint || {};
     protyle.options.hint.extend = protyle.options.hint.extend || [];
 
-    // Avoid duplicate registration on the same instance (using "@@" as representative marker)
-    const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === "@@");
+    // Avoid duplicate registration
+    const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === SUPERTAG_TRIGGER);
     if (hasRegistered) return;
 
-    // Override Siyuan's getKey to support "@@", ",,", and ";;" trigger parsing
-    if (protyle.hint && !protyle.hint.isGetKeyOverridden) {
-        protyle.hint.isGetKeyOverridden = true;
-        const originalGetKey = protyle.hint.getKey;
-        protyle.hint.getKey = function (currentLineValue: string, extend: any[]) {
-            for (const trigger of ["@@", ",,", ";;"]) {
-                const idx = currentLineValue.lastIndexOf(trigger);
-                if (idx > -1) {
-                    const lineArray = currentLineValue.split(trigger);
-                    const lastItem = lineArray[lineArray.length - 1];
-                    if (lineArray.length > 1 && lastItem.trimStart() === lastItem && lastItem.length < 32) {
-                        this.splitChar = trigger;
-                        this.lastIndex = idx;
-                        return lastItem;
-                    }
-                }
+    // --- Critical: enable hint.enableExtend when "@" is typed ---
+    // Siyuan only sets enableExtend=true for a hardcoded list of chars ("#", "/", "(", etc).
+    // "@" is not in that list, so the hint system silently ignores our extend.
+    // We fix this by listening for "@" input and flipping the flag ourselves.
+    if (protyle.wysiwyg && protyle.wysiwyg.element) {
+        protyle.wysiwyg.element.addEventListener("input", (event: InputEvent) => {
+            if (event.data === TRIGGER_CHAR && protyle.hint) {
+                protyle.hint.enableExtend = true;
             }
-            return originalGetKey.call(this, currentLineValue, extend);
-        };
+        }, true);
     }
 
     // Intercept mouse clicks on hint menu items (capturing phase)
@@ -187,73 +189,68 @@ export function bindProtyleHintExtend(protyle: any) {
         }, true);
     }
 
-    // Register extends for all three custom triggers
-    for (const key of ["@@", ",,", ";;"]) {
-        protyle.options.hint.extend.push({
-            key,
-            isIndexOS: true, // Marker to avoid duplicates
-            hint(value: string, protyleInstance: any, source: string) {
-                refreshNativeTagsCache().catch(() => {});
+    // Register the "@@" extend trigger
+    protyle.options.hint.extend.push({
+        key: SUPERTAG_TRIGGER,
+        isIndexOS: true,
+        hint(value: string, protyleInstance: any, source: string) {
+            refreshNativeTagsCache().catch(() => {});
 
-                const query = value.trim().toLowerCase();
-                const matchedNative = cachedNativeTags.filter(t => t.toLowerCase().includes(query));
+            const query = value.trim().toLowerCase();
 
-                if (!tagSuggestionState.enabled) {
-                    return matchedNative.map(tag => {
-                        return {
-                            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span></div>`,
-                            value: `#${tag}#`,
-                            filter: [tag, `#${tag}`, `#${tag}#`]
-                        };
-                    });
-                }
-
-                const supertags = new Set<string>();
-
-                const dbConfigs = supertagMonitor.getDataRegistry();
-                if (dbConfigs) {
-                    dbConfigs.forEach(c => {
-                        if (c.typeName) {
-                            supertags.add(c.typeName.trim().toLowerCase());
-                        }
-                    });
-                }
-
-                if (SUPERTAG_REGISTRY) {
-                    SUPERTAG_REGISTRY.forEach(l => {
-                        if (l.typeTag) {
-                            supertags.add(l.typeTag.trim().toLowerCase());
-                        }
-                    });
-                }
-
-                const matchedSuper = Array.from(supertags).filter(t => t.includes(query));
-
-                const isZh = window.siyuan?.config?.lang === "zh_CN";
-                const badge = isZh ? "🐬 超级标签" : "🐬 Supertag";
-
-                const superItems = matchedSuper.map(tag => {
-                    return {
-                        html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span><span class="b3-list-item__meta" style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
-                        value: `indexos-supertag:${tag}`,
-                        filter: [tag, `#${tag}`, `#${tag}#`]
-                    };
-                });
-
-                const nativeItems = matchedNative
-                    .filter(tag => !supertags.has(tag.toLowerCase()))
-                    .map(tag => {
-                        return {
-                            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span></div>`,
-                            value: `#${tag}#`,
-                            filter: [tag, `#${tag}`, `#${tag}#`]
-                        };
-                    });
-
-                return [...superItems, ...nativeItems];
+            if (!tagSuggestionState.enabled) {
+                return [];
             }
-        });
-    }
+
+            const supertags = new Set<string>();
+
+            // 1. Get database supertags
+            const dbConfigs = supertagMonitor.getDataRegistry();
+            if (dbConfigs) {
+                dbConfigs.forEach(c => {
+                    if (c.typeName) {
+                        supertags.add(c.typeName.trim().toLowerCase());
+                    }
+                });
+            }
+
+            // 2. Get registered command supertags
+            if (SUPERTAG_REGISTRY) {
+                SUPERTAG_REGISTRY.forEach(l => {
+                    if (l.typeTag) {
+                        supertags.add(l.typeTag.trim().toLowerCase());
+                    }
+                });
+            }
+
+            const matchedSuper = Array.from(supertags).filter(t => t.includes(query));
+
+            const isZh = window.siyuan?.config?.lang === "zh_CN";
+            const badge = isZh ? "🐬 超级标签" : "🐬 Supertag";
+
+            const superItems = matchedSuper.map(tag => {
+                return {
+                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@@${tag}</span><span class="b3-list-item__meta" style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
+                    value: `indexos-supertag:${tag}`,
+                    filter: [tag, `@${tag}`, `@@${tag}`]
+                };
+            });
+
+            // Also show matching native tags so users can apply them as supertags
+            const matchedNative = cachedNativeTags
+                .filter(t => t.toLowerCase().includes(query) && !supertags.has(t.toLowerCase()));
+
+            const nativeAsSuper = matchedNative.map(tag => {
+                return {
+                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@@${tag}</span></div>`,
+                    value: `indexos-supertag:${tag}`,
+                    filter: [tag, `@${tag}`, `@@${tag}`]
+                };
+            });
+
+            return [...superItems, ...nativeAsSuper];
+        }
+    });
 }
 
 export async function setTagSuggestionEnabled(enabled: boolean) {
