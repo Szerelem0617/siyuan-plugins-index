@@ -59,15 +59,13 @@ export async function constructCommandStorage() {
                 let lastKeyID = currentKeys.length > 0 ? currentKeys[currentKeys.length - 1].id : "";
 
                 const commandIdKey = await addCol("Command ID", "text", "iconCode", lastKeyID);
-                const requiresParamsKey = await addCol("Requires Params", "checkbox", "iconCheck", commandIdKey);
-                const paramMappingKey = await addCol("Param Mapping", "text", "iconList", requiresParamsKey);
-                const targetScopeKey = await addCol("Target Scope", "text", "iconFocus", paramMappingKey);
-                const topBarKey = await addCol("Top Bar", "checkbox", "iconLayout", targetScopeKey);
+                const paramMappingKey = await addCol("Param Mapping", "text", "iconList", commandIdKey);
+                const topBarKey = await addCol("Top Bar", "checkbox", "iconLayout", paramMappingKey);
                 const buttonKey = await addCol("Inline Button", "checkbox", "iconPlay", topBarKey);
                 const paletteKey = await addCol("Command Palette", "checkbox", "iconSearch", buttonKey);
 
                 // Fetch seed data from SQLite sys_command_db
-                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, Requires_Params, Target_Scope, Top_Bar, Inline_Button, Command_Palette FROM sys_command_db`);
+                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, Top_Bar, Inline_Button, Command_Palette FROM sys_command_db`);
 
                 // Insert seed items as detached rows
                 const addRows: any[] = [];
@@ -94,7 +92,7 @@ export async function constructCommandStorage() {
 
                 const populateOps: any[] = [];
                 for (const match of seedRes.values) {
-                    const [rowID, labelVal, commandID, paramMapping, requiresParams, targetScope, topBar, inlineButton, commandPalette] = match;
+                    const [rowID, labelVal, commandID, paramMapping, topBar, inlineButton, commandPalette] = match;
                     
                     if (primaryKeyId) {
                         populateOps.push({
@@ -106,8 +104,6 @@ export async function constructCommandStorage() {
 
                     populateOps.push({ keyID: commandIdKey, itemID: rowID, value: { type: "text", text: { content: String(commandID || "") } } });
                     populateOps.push({ keyID: paramMappingKey, itemID: rowID, value: { type: "text", text: { content: String(paramMapping || "") } } });
-                    populateOps.push({ keyID: requiresParamsKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(requiresParams) === 1 || String(requiresParams) === "true" || String(requiresParams) === "是" } } });
-                    populateOps.push({ keyID: targetScopeKey, itemID: rowID, value: { type: "text", text: { content: String(targetScope || "") } } });
                     populateOps.push({ keyID: topBarKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(topBar) === 1 } } });
                     populateOps.push({ keyID: buttonKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(inlineButton) === 1 } } });
                     populateOps.push({ keyID: paletteKey, itemID: rowID, value: { type: "checkbox", checkbox: { checked: Number(commandPalette) === 1 } } });

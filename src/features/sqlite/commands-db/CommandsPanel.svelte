@@ -122,27 +122,17 @@
             const randPart = Math.random().toString(36).slice(2, 9);
             const rowID = `${formatPart}-${randPart}`;
 
-            const requiresParams = (Array.isArray(cmd.params) && cmd.params.length > 0) ? 1 : 0;
-            const targetScope = cmd.meta?.scope ? (cmd.meta.scope.charAt(0).toUpperCase() + cmd.meta.scope.slice(1)) : "Global";
-
             const { db } = await getSqliteEngine();
             const { commands: commandsTable } = getSystemTableNames();
 
-            // Detect if table has Requires_Params column or Command_Type column
-            const columnsInfo = db.exec(`PRAGMA table_info(${commandsTable})`);
-            const hasRequiresParams = columnsInfo[0]?.values.some(v => v[1] === "Requires_Params");
-            const colName = hasRequiresParams ? "Requires_Params" : "Command_Type";
-
             db.run(`
-                INSERT INTO ${commandsTable} (rowID, label, Command_ID, Param_Mapping, ${colName}, Target_Scope, Top_Bar, Inline_Button, Command_Palette)
-                VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0)
+                INSERT INTO ${commandsTable} (rowID, label, Command_ID, Param_Mapping, Top_Bar, Inline_Button, Command_Palette)
+                VALUES (?, ?, ?, ?, 0, 0, 0)
             `, [
                 rowID,
                 cmd.name,
                 cmd.id,
-                "",
-                requiresParams,
-                targetScope
+                ""
             ]);
 
             await saveDatabaseToDisk();
@@ -201,8 +191,6 @@
     $: cmdLabelIdx = colIdx(commandCols, commandLabelCol);
     $: cmdIdIdx = colIdx(commandCols, "Command_ID");
     $: cmdParamIdx = colIdx(commandCols, "Param_Mapping");
-    $: cmdTypeIdx = colIdx(commandCols, "Requires_Params") !== -1 ? colIdx(commandCols, "Requires_Params") : colIdx(commandCols, "Command_Type");
-    $: cmdScopeIdx = colIdx(commandCols, "Target_Scope");
     $: cmdTopBarIdx = colIdx(commandCols, "Top_Bar");
     $: cmdInlineIdx = colIdx(commandCols, "Inline_Button");
     $: cmdPaletteIdx = colIdx(commandCols, "Command_Palette");

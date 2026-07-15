@@ -473,3 +473,174 @@ async function openOnCreateSelector(avId: string, rowId: string, colId: string) 
         showMessage(`读取配置失败: ${e.message}`, 3000, "error");
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hover Tooltip System for Command-DB Metadata (Requires Params, Target Scope, etc.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AVHoverContext {
+    cell: HTMLElement;
+    row: HTMLElement;
+    avContainer: HTMLElement;
+    avId: string;
+    rowId: string;
+    colId: string;
+    isPrimaryKeyCell: boolean;
+}
+
+function parseAVHoverEvent(event: MouseEvent): AVHoverContext | null {
+    const target = event.target as HTMLElement;
+    const cell = target.closest(".av__cell") as HTMLElement;
+    if (!cell) return null;
+
+    const row = (cell.closest(".av__row") || cell.closest(".av__gallery-item") || cell.closest(".av__kanban-item")) as HTMLElement;
+    const avContainer = cell.closest(".av") as HTMLElement;
+    if (!avContainer || !row) return null;
+
+    const avId = avContainer.getAttribute("data-av-id") || "";
+    const rowId = row.getAttribute("data-id") || "";
+    const colId = cell.getAttribute("data-col-id") || cell.getAttribute("data-field-id") || "";
+    const isHeader = !!cell.closest(".av__row--header") || cell.classList.contains("av__cell--header");
+    if (isHeader) return null;
+
+    const pkHeader = avContainer.querySelector('.av__row--header .av__cell[data-dtype="block"]');
+    const pkColId = pkHeader?.getAttribute("data-col-id");
+    const isPrimaryKeyCell = pkColId ? (colId === pkColId) : false;
+
+    return {
+        cell,
+        row,
+        avContainer,
+        avId,
+        rowId,
+        colId,
+        isPrimaryKeyCell
+    };
+}
+
+let activeHoverCell: HTMLElement | null = null;
+let hoverTooltipEl: HTMLElement | null = null;
+
+async function handleAvMouseOver(event: MouseEvent) {
+    const hoverCtx = parseAVHoverEvent(event);
+    if (!hoverCtx) {
+        hideTooltip();
+        return;
+    }
+
+    const { cell, avId, rowId, isPrimaryKeyCell } = hoverCtx;
+    const commandAvId = getCommandAvId();
+    
+    // Only target the primary key (label) cell in Command-DB
+    if (avId !== commandAvId || !isPrimaryKeyCell) {
+        hideTooltip();
+        return;
+    }
+
+    if (activeHoverCell === cell) {
+        return; // Already showing tooltip for this cell
+    }
+
+    activeHoverCell = cell;
+    
+    // Add mouseleave listener to the cell to hide tooltip when leaving
+    cell.addEventListener("mouseleave", hideTooltip, { once: true });
+
+    try {
+        const { db } = await getSqliteEngine();
+        const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        
+        // Find Command ID column name
+        const schemaCmdIdCol = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Command ID' OR key_name = '命令ID')`, [avId]);
+        let cmdIdCol = "Command_ID";
+        if (schemaCmdIdCol.length > 0 && schemaCmdIdCol[0].values.length > 0) {
+            cmdIdCol = String(schemaCmdIdCol[0].values[0][0]);
+        }
+
+        // Query Command ID for the hovered row
+        const rowQuery = db.exec(`SELECT "${cmdIdCol}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+        if (rowQuery.length === 0 || rowQuery[0].values.length === 0) {
+            hideTooltip();
+            return;
+        }
+
+        const commandId = String(rowQuery[0].values[0][0] || "").trim();
+        if (!commandId) {
+            hideTooltip();
+            return;
+        }
+
+        const cmdDef = commandRegistry.getCommand(commandId);
+        if (!cmdDef) {
+            showTooltip(cell, `
+                <div style="font-family: monospace; font-size: 11px; font-weight: bold; color: var(--b3-theme-error); margin-bottom: 2px;">${commandId}</div>
+                <div style="color: var(--b3-theme-on-surface-mute); font-size: 10px;">未注册的命令 ID</div>
+            `);
+            return;
+        }
+
+        const requiresParams = cmdDef.params && cmdDef.params.length > 0;
+        const scopeLabel = cmdDef.meta?.scope ? (cmdDef.meta.scope.charAt(0).toUpperCase() + cmdDef.meta.scope.slice(1)) : "Global";
+
+        const content = `
+            <div style="font-weight: 600; font-size: 12px; color: var(--b3-theme-primary); margin-bottom: 2px;">${cmdDef.name}</div>
+            <div style="font-family: monospace; font-size: 10px; color: var(--b3-theme-on-surface-mute); word-break: break-all; margin-bottom: 6px;">${cmdDef.id}</div>
+            <div style="font-size: 11px; margin-bottom: 6px; line-height: 1.4; color: var(--b3-theme-on-background); border-top: 1px solid var(--b3-border-color); padding-top: 6px;">
+                ${cmdDef.description || "无描述"}
+            </div>
+            <div style="font-size: 10px; display: flex; gap: 8px; color: var(--b3-theme-on-surface-mute); border-top: 1px dashed var(--b3-border-color); padding-top: 4px;">
+                <span>范围: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${scopeLabel}</code></span>
+                <span>参数: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${requiresParams ? "是" : "否"}</code></span>
+            </div>
+        `;
+        showTooltip(cell, content);
+    } catch (err) {
+        console.error("[HoverTooltip] Error:", err);
+    }
+}
+
+function showTooltip(cell: HTMLElement, htmlContent: string) {
+    if (!hoverTooltipEl) {
+        hoverTooltipEl = document.createElement("div");
+        hoverTooltipEl.style.position = "absolute";
+        hoverTooltipEl.style.zIndex = "99999";
+        hoverTooltipEl.style.pointerEvents = "none";
+        hoverTooltipEl.style.padding = "8px 12px";
+        hoverTooltipEl.style.borderRadius = "4px";
+        hoverTooltipEl.style.backgroundColor = "var(--b3-theme-background)";
+        hoverTooltipEl.style.color = "var(--b3-theme-on-background)";
+        hoverTooltipEl.style.border = "1px solid var(--b3-border-color)";
+        hoverTooltipEl.style.boxShadow = "var(--b3-dialog-shadow)";
+        hoverTooltipEl.style.fontSize = "11px";
+        hoverTooltipEl.style.maxWidth = "280px";
+        document.body.appendChild(hoverTooltipEl);
+    }
+
+    hoverTooltipEl.innerHTML = htmlContent;
+    
+    // Position near the cell
+    const rect = cell.getBoundingClientRect();
+    hoverTooltipEl.style.left = `${rect.left + window.scrollX}px`;
+    hoverTooltipEl.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    hoverTooltipEl.style.display = "block";
+}
+
+function hideTooltip() {
+    activeHoverCell = null;
+    if (hoverTooltipEl) {
+        hoverTooltipEl.style.display = "none";
+    }
+}
+
+export function initHoverTooltipListener() {
+    window.addEventListener("mouseover", handleAvMouseOver, true);
+}
+
+export function destroyHoverTooltipListener() {
+    window.removeEventListener("mouseover", handleAvMouseOver, true);
+    hideTooltip();
+    if (hoverTooltipEl) {
+        hoverTooltipEl.remove();
+        hoverTooltipEl = null;
+    }
+}

@@ -1,3 +1,4 @@
+import { commandRegistry } from "../registry/command-registry";
 import { plugin } from "../../../shared/utils";
 import { post } from "../../../shared/api-client/request";
 import { client } from "../../../shared/api-client";
@@ -189,7 +190,9 @@ async function refreshTopBarFromApi() {
             label = label.replace(/#/g, "").split("|")[0].split("(")[0].trim();
             const commandId = getCellText("Command ID");
             const commandParam = getCellText("Command Param") || getCellText("Param Mapping");
-            const requiresParams = (getBool("Requires Params") || getCellText("Command Type") === "是" || getCellText("Command Type") === "true") ? "true" : "false";
+            
+            const cmdDef = commandRegistry.getCommand(commandId);
+            const requiresParams = (cmdDef && cmdDef.params && cmdDef.params.length > 0) ? "true" : "false";
             
             const getBool = (name: string) => {
                 const idx = columns.findIndex((c: any) => c.name === name || c.keyName === name);
