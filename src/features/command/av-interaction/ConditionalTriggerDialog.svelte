@@ -153,15 +153,6 @@
         {/if}
     </div>
 
-    <!-- Debug Area (temporary for diagnosing) -->
-    <div style="margin-top: 8px; padding: 6px; border-radius: 4px; border: 1px dashed red; font-family: monospace; font-size: 10px; background: #fff5f5; color: #c00; overflow-x: auto; flex-shrink: 0; user-select: text;">
-        <strong>DEBUG CONSOLE:</strong><br/>
-        raw val: "{currentValue}"<br/>
-        parsed event: "{eventType}"<br/>
-        parsed cond: "{condition}"<br/>
-        selectedList: {JSON.stringify(selectedList)}
-    </div>
-
     <!-- Dialog Footer -->
     <div style="margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0;">
         <button class="b3-button b3-button--cancel" style="padding: 4px 12px; font-size: 12px;" on:click={() => dialog.destroy()}>
