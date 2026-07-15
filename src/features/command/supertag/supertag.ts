@@ -194,7 +194,9 @@ export class SupertagMonitor {
             }
 
             const supertags = new Set(
-                res[0].values.map((row: any) => String(row[0]).replace(/#/g, "").trim().toLowerCase()).filter(Boolean)
+                res[0].values.map((row: any) => 
+                    String(row[0]).replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase()
+                ).filter(Boolean)
             );
             console.log("[Supertag-Migration-Debug] Active supertags set:", Array.from(supertags));
 
@@ -206,7 +208,11 @@ export class SupertagMonitor {
             
             const tagsToMigrate: string[] = [];
             tagEls.forEach((el: any) => {
-                const tagText = (el.textContent || el.getAttribute("data-content") || "").replace(/#/g, '').trim().toLowerCase();
+                const tagText = (el.textContent || el.getAttribute("data-content") || "")
+                    .replace(/#/g, '')
+                    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+                    .trim()
+                    .toLowerCase();
                 console.log("[Supertag-Migration-Debug] Checking tag text content:", tagText);
                 if (supertags.has(tagText)) {
                     tagsToMigrate.push(tagText);
