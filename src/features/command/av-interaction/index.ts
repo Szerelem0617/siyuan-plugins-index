@@ -460,7 +460,15 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
             supertagCol = supertagColRes[0].values[0][0];
         }
 
-        const supertagQuery = db.exec(`SELECT "${supertagCol}", "${typeRelationCol}", "${colId}" FROM ${typeTableName} WHERE _itemID = ?`, [rowId]);
+        // Get SQLite column name for the clicked colId (which is Siyuan key ID)
+        const colNameRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
+        if (colNameRes.length === 0 || colNameRes[0].values.length === 0) {
+            showMessage("未能在超级标签管理表中找到该列的 Schema 映射", 3000, "error");
+            return;
+        }
+        const colName = colNameRes[0].values[0][0];
+
+        const supertagQuery = db.exec(`SELECT "${supertagCol}", "${typeRelationCol}", "${colName}" FROM ${typeTableName} WHERE _itemID = ?`, [rowId]);
         if (supertagQuery.length === 0 || supertagQuery[0].values.length === 0) {
             showMessage("未找到该超级标签的行记录", 3000, "error");
             return;
