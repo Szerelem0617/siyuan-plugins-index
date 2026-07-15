@@ -124,13 +124,11 @@ export class SupertagMonitor {
     }
 
     private async handleWsMessage({ detail }: any) {
-        console.log("[Supertag-Debug] ws-main raw detail:", detail?.cmd, JSON.stringify(detail?.data || {}));
         if (detail.cmd !== "transactions") return;
 
         const transactions = detail.data;
         for (const trans of transactions) {
             for (const op of trans.doOperations) {
-                console.log("[Supertag-Debug] doOperation:", op.action, op.id, typeof op.data);
                 // Focus on operations that carry tag info: update (DOM), insert (DOM), setAttrs (JSON string), updateAttrs (Object/JSON)
                 if (op.action === "update" || op.action === "insert" || op.action === "setAttrs" || op.action === "updateAttrs") {
                     const blockId = op.id;

@@ -30,8 +30,6 @@ export async function refreshNativeTagsCache() {
             if (typeof t === "string") return t;
             return t?.tag || t?.name || "";
         }).filter(Boolean);
-        
-        console.log("[TagSuggestion-Debug] Refreshed native tags cache:", cachedNativeTags);
     } catch (e) {
         console.error("[TagSuggestion] Failed to refresh native tags cache:", e);
     }
@@ -58,12 +56,14 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     const blockEl = protyle.element.querySelector(`[data-node-id="${blockId}"]`);
     if (!blockEl) return;
 
+    console.log("[Supertag-Selection-Debug] Intercepted supertag selection! Tag:", tag, "BlockId:", blockId);
+
     // 1. Hide the hint popover immediately
     if (protyle.hint && protyle.hint.element) {
         protyle.hint.element.classList.add("fn__none");
     }
 
-    // 2. Remove the typed search prefix (e.g. "##per") from editor DOM
+    // 2. Remove the typed search prefix (e.g. "@@per", ",,per", ";;per") from editor DOM
     const selection = window.getSelection();
     const range = protyle.toolbar.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
     if (protyle.hint && protyle.hint.lastIndex > -1 && range) {
@@ -89,7 +89,6 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     // 4. Update Siyuan's editor model and attributes simultaneously in ONE atomic transaction
     const oldHTML = blockEl.outerHTML;
     
-    // Clone and prepare new DOM representation containing the attribute
     const temp = document.createElement("div");
     temp.innerHTML = blockEl.outerHTML;
     const inner = temp.firstElementChild as HTMLElement;
@@ -129,67 +128,29 @@ export function bindProtyleHintExtend(protyle: any) {
     protyle.options.hint = protyle.options.hint || {};
     protyle.options.hint.extend = protyle.options.hint.extend || [];
 
-    // Avoid duplicate registration on the same instance
-    const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === "##");
+    // Avoid duplicate registration on the same instance (using "@@" as representative marker)
+    const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === "@@");
     if (hasRegistered) return;
 
-    // Override Siyuan's getKey to support "##" trigger parsing
+    // Override Siyuan's getKey to support "@@", ",,", and ";;" trigger parsing
     if (protyle.hint && !protyle.hint.isGetKeyOverridden) {
         protyle.hint.isGetKeyOverridden = true;
         const originalGetKey = protyle.hint.getKey;
         protyle.hint.getKey = function (currentLineValue: string, extend: any[]) {
-            const doubleHashIndex = currentLineValue.lastIndexOf("##");
-            if (doubleHashIndex > -1) {
-                const lineArray = currentLineValue.split("##");
-                const lastItem = lineArray[lineArray.length - 1];
-                if (lineArray.length > 1 && lastItem.trimStart() === lastItem && lastItem.length < 32) {
-                    this.splitChar = "##";
-                    this.lastIndex = doubleHashIndex;
-                    return lastItem;
+            for (const trigger of ["@@", ",,", ";;"]) {
+                const idx = currentLineValue.lastIndexOf(trigger);
+                if (idx > -1) {
+                    const lineArray = currentLineValue.split(trigger);
+                    const lastItem = lineArray[lineArray.length - 1];
+                    if (lineArray.length > 1 && lastItem.trimStart() === lastItem && lastItem.length < 32) {
+                        this.splitChar = trigger;
+                        this.lastIndex = idx;
+                        return lastItem;
+                    }
                 }
             }
             return originalGetKey.call(this, currentLineValue, extend);
         };
-    }
-
-    // Intercept '#' keydown to prevent Siyuan from skipping/collapsing double '#' (capturing phase)
-    if (protyle.wysiwyg && protyle.wysiwyg.element) {
-        protyle.wysiwyg.element.addEventListener("keydown", (event: KeyboardEvent) => {
-            if (event.key === "#") {
-                const selection = window.getSelection();
-                const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-                if (range && range.startContainer.nodeType === 3) {
-                    const text = range.startContainer.textContent || "";
-                    const offset = range.startOffset;
-                    // Detect if the previous character is '#' (typing second '#')
-                    if (offset > 0 && text[offset - 1] === "#") {
-                        event.preventDefault();
-                        event.stopPropagation();
-
-                        // Manually insert '#' at cursor position
-                        const textNode = range.startContainer as Text;
-                        const originalText = textNode.textContent || "";
-                        textNode.textContent = originalText.substring(0, offset) + "#" + originalText.substring(offset);
-
-                        // Position cursor after the inserted '#'
-                        range.setStart(textNode, offset + 1);
-                        range.collapse(true);
-                        selection.removeAllRanges();
-                        selection.addRange(range);
-
-                        // Trigger native-like input event to tell Siyuan editor model to parse
-                        const editEl = protyle.wysiwyg.element;
-                        const inputEvent = new InputEvent("input", {
-                            bubbles: true,
-                            cancelable: true,
-                            data: "#",
-                            inputType: "insertText"
-                        });
-                        editEl.dispatchEvent(inputEvent);
-                    }
-                }
-            }
-        }, true);
     }
 
     // Intercept mouse clicks on hint menu items (capturing phase)
@@ -226,79 +187,73 @@ export function bindProtyleHintExtend(protyle: any) {
         }, true);
     }
 
-    protyle.options.hint.extend.push({
-        key: "##",
-        isIndexOS: true, // Marker to avoid duplicates
-        hint(value: string, protyleInstance: any, source: string) {
-            // Trigger asynchronous background refresh for future keystrokes
-            refreshNativeTagsCache().catch(() => {});
+    // Register extends for all three custom triggers
+    for (const key of ["@@", ",,", ";;"]) {
+        protyle.options.hint.extend.push({
+            key,
+            isIndexOS: true, // Marker to avoid duplicates
+            hint(value: string, protyleInstance: any, source: string) {
+                refreshNativeTagsCache().catch(() => {});
 
-            const query = value.trim().toLowerCase();
-            const matchedNative = cachedNativeTags.filter(t => t.toLowerCase().includes(query));
+                const query = value.trim().toLowerCase();
+                const matchedNative = cachedNativeTags.filter(t => t.toLowerCase().includes(query));
 
-            if (!tagSuggestionState.enabled) {
-                // If disabled, only return native tags formatted as standard Siyuan tag items
-                return matchedNative.map(tag => {
+                if (!tagSuggestionState.enabled) {
+                    return matchedNative.map(tag => {
+                        return {
+                            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span></div>`,
+                            value: `#${tag}#`,
+                            filter: [tag, `#${tag}`, `#${tag}#`]
+                        };
+                    });
+                }
+
+                const supertags = new Set<string>();
+
+                const dbConfigs = supertagMonitor.getDataRegistry();
+                if (dbConfigs) {
+                    dbConfigs.forEach(c => {
+                        if (c.typeName) {
+                            supertags.add(c.typeName.trim().toLowerCase());
+                        }
+                    });
+                }
+
+                if (SUPERTAG_REGISTRY) {
+                    SUPERTAG_REGISTRY.forEach(l => {
+                        if (l.typeTag) {
+                            supertags.add(l.typeTag.trim().toLowerCase());
+                        }
+                    });
+                }
+
+                const matchedSuper = Array.from(supertags).filter(t => t.includes(query));
+
+                const isZh = window.siyuan?.config?.lang === "zh_CN";
+                const badge = isZh ? "🐬 超级标签" : "🐬 Supertag";
+
+                const superItems = matchedSuper.map(tag => {
                     return {
-                        html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span></div>`,
-                        value: `#${tag}#`,
-                        filter: [tag, `#${tag}`, `#${tag}#`]
-                    };
-                });
-            }
-
-            // If enabled, also add supertags
-            const supertags = new Set<string>();
-
-            // 1. Get database supertags
-            const dbConfigs = supertagMonitor.getDataRegistry();
-            if (dbConfigs) {
-                dbConfigs.forEach(c => {
-                    if (c.typeName) {
-                        supertags.add(c.typeName.trim().toLowerCase());
-                    }
-                });
-            }
-
-            // 2. Get registered command supertags
-            if (SUPERTAG_REGISTRY) {
-                SUPERTAG_REGISTRY.forEach(l => {
-                    if (l.typeTag) {
-                        supertags.add(l.typeTag.trim().toLowerCase());
-                    }
-                });
-            }
-
-            // Filter supertags
-            const matchedSuper = Array.from(supertags).filter(t => t.includes(query));
-
-            // Map supertags to HintData (distinguished with badge)
-            const isZh = window.siyuan?.config?.lang === "zh_CN";
-            const badge = isZh ? "🐬 超级标签" : "🐬 Supertag";
-
-            const superItems = matchedSuper.map(tag => {
-                return {
-                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span><span class="b3-list-item__meta" style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
-                    value: `indexos-supertag:${tag}`,
-                    filter: [tag, `#${tag}`, `#${tag}#`]
-                };
-            });
-
-            // Map native tags to HintData, excluding tags that are already covered by supertags to avoid duplicates
-            const nativeItems = matchedNative
-                .filter(tag => !supertags.has(tag.toLowerCase()))
-                .map(tag => {
-                    return {
-                        html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span></div>`,
-                        value: `#${tag}#`,
+                        html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span><span class="b3-list-item__meta" style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
+                        value: `indexos-supertag:${tag}`,
                         filter: [tag, `#${tag}`, `#${tag}#`]
                     };
                 });
 
-            // Combine both: Supertags first, then native tags
-            return [...superItems, ...nativeItems];
-        }
-    });
+                const nativeItems = matchedNative
+                    .filter(tag => !supertags.has(tag.toLowerCase()))
+                    .map(tag => {
+                        return {
+                            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span></div>`,
+                            value: `#${tag}#`,
+                            filter: [tag, `#${tag}`, `#${tag}#`]
+                        };
+                    });
+
+                return [...superItems, ...nativeItems];
+            }
+        });
+    }
 }
 
 export async function setTagSuggestionEnabled(enabled: boolean) {
