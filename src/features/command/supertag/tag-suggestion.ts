@@ -267,23 +267,7 @@ export function bindProtyleHintExtend(protyle: any) {
                     filter: [tag, `@${tag}`]
                 });
             });
-
-            // Group them: Classes first, then Data Components, then Tool Components
-            const superItems = [...classItems, ...dataItems, ...toolItems];
-
-            // Also show matching native tags as potential supertag candidates
-            const matchedNative = cachedNativeTags
-                .filter(t => t.toLowerCase().includes(query) && !dataNames.has(t.toLowerCase()) && !logicNames.has(t.toLowerCase()));
-
-            const nativeAsSuper = matchedNative.map(tag => {
-                return {
-                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@${tag}</span></div>`,
-                    value: `indexos-supertag:${tag}`,
-                    filter: [tag, `@${tag}`]
-                };
-            });
-
-            return [...superItems, ...nativeAsSuper];
+            return [...classItems, ...dataItems, ...toolItems];
         }
     });
 }

@@ -3,9 +3,6 @@ import { supertagMonitor } from "./supertag";
 import { SUPERTAG_REGISTRY } from "../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
 
-// Visual indicator/badge texts to identify supertags in the list
-const BADGE_MARKER = "🐬";
-
 async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
     // 1. Close Siyuan's menu popover
     window.siyuan.menus.menu?.remove();
@@ -38,134 +35,143 @@ async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
     SupertagRenderer.render(protyle);
 }
 
-export function initTagMenuInterceptor() {
-    // --- 1. Network Level Interception ---
-    // Monkey-patch window.fetch to inject our supertags into Siyuan's searchTag API responses
-    const originalFetch = window.fetch;
-    window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
-        const url = typeof input === "string" ? input : (input as any).url || "";
-        
-        if (url.includes("/api/search/searchTag")) {
-            const response = await originalFetch.call(this, input, init);
-            const clone = response.clone();
-            try {
-                const json = await clone.json();
-                if (json && json.data && Array.isArray(json.data.tags)) {
-                    // Gather all registered supertags and classify them
-                    const dbConfigs = supertagMonitor.getDataRegistry() || [];
-                    const logicConfigs = SUPERTAG_REGISTRY || [];
+function renderSupertagsInPanel(panel: HTMLElement, query: string) {
+    panel.innerHTML = "";
 
-                    const dataNames = new Set(dbConfigs.map(c => c.typeName.trim().toLowerCase()));
-                    const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
+    const dbConfigs = supertagMonitor.getDataRegistry() || [];
+    const logicConfigs = SUPERTAG_REGISTRY || [];
 
-                    const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
-                    const searchKey = (json.data.k || "").trim().toLowerCase();
-                    const matchedSupertags = allSupertags.filter(t => t.includes(searchKey));
+    const dataNames = new Set(dbConfigs.map(c => c.typeName.trim().toLowerCase()));
+    const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
 
-                    const classItems: string[] = [];
-                    const dataItems: string[] = [];
-                    const toolItems: string[] = [];
+    const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
+    const matched = allSupertags.filter(t => t.includes(query));
 
-                    matchedSupertags.forEach(tag => {
-                        const isData = dataNames.has(tag);
-                        const isLogic = logicNames.has(tag);
-                        
-                        let badgeHtml = "";
-                        let itemGroup: string[] = [];
-                        if (isData && isLogic) {
-                            badgeHtml = `<span style="color: var(--b3-theme-primary); font-weight: bold; margin-left: auto; font-size: 10px;">🐬 类</span>`;
-                            itemGroup = classItems;
-                        } else if (isData) {
-                            badgeHtml = `<span style="color: #4caf50; font-weight: bold; margin-left: auto; font-size: 10px;">🐬 数据组件</span>`;
-                            itemGroup = dataItems;
-                        } else {
-                            badgeHtml = `<span style="color: #ff9800; font-weight: bold; margin-left: auto; font-size: 10px;">🐬 工具组件</span>`;
-                            itemGroup = toolItems;
-                        }
+    const classes: string[] = [];
+    const dataComps: string[] = [];
+    const toolComps: string[] = [];
 
-                        // Siyuan uses HTML directly for list item texts in searchTag lists
-                        itemGroup.push(`${tag}<span style="display: flex; align-items: center; width: 100%;">${badgeHtml}</span>`);
-                    });
-
-                    // Remove native tag duplicates that are already covered by supertags
-                    const nativeItems = json.data.tags.filter((t: string) => {
-                        const cleanT = t.replace(/<mark>/g, "").replace(/<\/mark>/g, "").toLowerCase();
-                        return !dataNames.has(cleanT) && !logicNames.has(cleanT);
-                    });
-
-                    // Prepend supertags grouped by category, followed by native tags
-                    json.data.tags = [...classItems, ...dataItems, ...toolItems, ...nativeItems];
-
-                    // Return mock Response containing the merged list
-                    return new Response(JSON.stringify(json), {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: response.headers
-                    });
-                }
-            } catch (e) {
-                console.error("[TagMenuInterceptor] Interception failed:", e);
-            }
-            return response;
+    matched.forEach(tag => {
+        const isData = dataNames.has(tag);
+        const isLogic = logicNames.has(tag);
+        if (isData && isLogic) {
+            classes.push(tag);
+        } else if (isData) {
+            dataComps.push(tag);
+        } else {
+            toolComps.push(tag);
         }
+    });
 
-        return originalFetch.call(this, input, init);
+    const createSection = (title: string, tags: string[], color: string) => {
+        const section = document.createElement("div");
+        section.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
+
+        const header = document.createElement("div");
+        header.style.cssText = `font-size: 11px; font-weight: bold; color: ${color}; border-bottom: 1px solid var(--b3-border-color); padding-bottom: 2px; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;`;
+        header.innerHTML = `<span>${title}</span><span style="opacity: 0.6; font-size: 9px; background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 4px;">${tags.length}</span>`;
+        section.appendChild(header);
+
+        if (tags.length === 0) {
+            const empty = document.createElement("div");
+            empty.style.cssText = "font-size: 10px; opacity: 0.4; padding: 4px 8px; font-style: italic;";
+            empty.innerText = "无匹配项";
+            section.appendChild(empty);
+        } else {
+            const list = document.createElement("div");
+            list.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+            tags.forEach(tag => {
+                const item = document.createElement("div");
+                item.className = "b3-list-item b3-list-item--narrow";
+                item.style.cssText = "display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.15s ease-in-out;";
+                item.innerHTML = `<svg class="b3-list-item__graphic" style="width: 12px; height: 12px; color: ${color}; margin-right: 8px;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="font-weight: 500; color: var(--b3-theme-on-background);">${tag}</span>`;
+                
+                item.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    
+                    const protyle = (window as any).activeProtyleInstance;
+                    if (protyle) {
+                        const docId = protyle.block?.id || protyle.blockId;
+                        if (docId) {
+                            await addDocumentSupertag(docId, tag, protyle);
+                        }
+                    }
+                });
+                
+                list.appendChild(item);
+            });
+            section.appendChild(list);
+        }
+        return section;
     };
 
-    // --- 2. Selection Interception (Click) ---
-    document.body.addEventListener("click", async (event: MouseEvent) => {
-        const listItem = (event.target as HTMLElement).closest(".b3-list-item");
-        if (listItem) {
-            const text = listItem.textContent.trim();
-            if (text.includes(BADGE_MARKER)) {
-                // Intercept supertag clicks in the document tag menu
-                event.stopPropagation();
-                event.preventDefault();
+    panel.appendChild(createSection("类 (Class)", classes.sort(), "var(--b3-theme-primary)"));
+    panel.appendChild(createSection("数据组件", dataComps.sort(), "#4caf50"));
+    panel.appendChild(createSection("工具组件", toolComps.sort(), "#ff9800"));
+}
 
-                // Extract the tag name by cutting off at the badge emoji "🐬"
-                const emojiIdx = text.indexOf(BADGE_MARKER);
-                const tag = emojiIdx > -1 ? text.substring(0, emojiIdx).trim() : text;
+function transformTagMenu(menuFilter: HTMLElement, inputEl: HTMLInputElement) {
+    // Avoid double transformation
+    if (menuFilter.classList.contains("indexos-transformed")) return;
+    menuFilter.classList.add("indexos-transformed");
 
-                const protyle = (window as any).activeProtyleInstance;
-                if (protyle) {
-                    const docId = protyle.block?.id || protyle.blockId;
-                    if (docId) {
-                        await addDocumentSupertag(docId, tag, protyle);
-                    }
-                }
-            }
-        }
-    }, true); // Capturing phase to run before Siyuan's event handlers
+    // 1. Expand the Siyuan menu popover width to fit two columns side-by-side
+    const menuEl = menuFilter.closest(".b3-menu") as HTMLElement;
+    if (menuEl) {
+        menuEl.style.width = "540px";
+        menuEl.style.maxWidth = "95vw";
+    }
 
-    // --- 3. Selection Interception (Enter Key) ---
-    document.body.addEventListener("keydown", async (event: KeyboardEvent) => {
-        if (event.key === "Enter") {
-            const target = event.target as HTMLInputElement;
-            if (target && target.classList.contains("b3-text-field") && target.placeholder === window.siyuan.languages.tag) {
-                const menu = target.closest(".b3-menu");
-                if (menu) {
-                    const focusEl = menu.querySelector(".b3-list-item--focus");
-                    if (focusEl) {
-                        const text = focusEl.textContent.trim();
-                        if (text.includes(BADGE_MARKER)) {
-                            event.stopPropagation();
-                            event.preventDefault();
+    // 2. Locate native tag list container
+    const nativeList = menuFilter.querySelector(".b3-list--background") as HTMLElement;
+    if (!nativeList) return;
 
-                            // Extract the tag name by cutting off at the badge emoji "🐬"
-                            const emojiIdx = text.indexOf(BADGE_MARKER);
-                            const tag = emojiIdx > -1 ? text.substring(0, emojiIdx).trim() : text;
+    // 3. Create a flex row wrapper container
+    const rowContainer = document.createElement("div");
+    rowContainer.style.cssText = "display: flex; flex-direction: row; height: 320px; overflow: hidden; border-top: 1px solid var(--b3-border-color);";
 
-                            const protyle = (window as any).activeProtyleInstance;
-                            if (protyle) {
-                                const docId = protyle.block?.id || protyle.blockId;
-                                if (docId) {
-                                    await addDocumentSupertag(docId, tag, protyle);
-                                }
-                            }
+    // Re-style native tag list to occupy the left column
+    nativeList.style.cssText = "flex: 1; overflow-y: auto; height: 100%; border-right: 1px solid var(--b3-border-color); margin: 0; padding: 4px; box-sizing: border-box;";
+    
+    // Insert rowContainer before nativeList and put nativeList inside
+    nativeList.parentNode?.insertBefore(rowContainer, nativeList);
+    rowContainer.appendChild(nativeList);
+
+    // 4. Create the Right Column: Supertags panel
+    const supertagPanel = document.createElement("div");
+    supertagPanel.className = "indexos-supertags-panel";
+    supertagPanel.style.cssText = "flex: 1; overflow-y: auto; height: 100%; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); box-sizing: border-box;";
+    rowContainer.appendChild(supertagPanel);
+
+    // 5. Initial render of supertags (no filter query)
+    renderSupertagsInPanel(supertagPanel, "");
+
+    // 6. Listen to search inputs to dynamically filter supertags
+    inputEl.addEventListener("input", () => {
+        const query = inputEl.value.trim().toLowerCase();
+        renderSupertagsInPanel(supertagPanel, query);
+    });
+}
+
+export function initTagMenuInterceptor() {
+    // Observe DOM additions to catch when Siyuan's Tag dialog is opened
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType === 1) {
+                    const el = node as HTMLElement;
+                    const menuFilter = el.querySelector(".b3-menu__filter") || (el.classList.contains("b3-menu__filter") ? el : null);
+                    if (menuFilter) {
+                        const input = menuFilter.querySelector("input");
+                        if (input && input.placeholder === window.siyuan.languages.tag) {
+                            transformTagMenu(menuFilter as HTMLElement, input);
                         }
                     }
                 }
             }
         }
-    }, true); // Capturing phase
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
 }
