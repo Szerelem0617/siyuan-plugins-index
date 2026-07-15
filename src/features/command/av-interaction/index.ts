@@ -5,7 +5,7 @@ import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../data/attribute-view/special/special-handlers";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import ParamConfigDialog from "./ParamConfigDialog.svelte";
-import OnCreateSelectorDialog from "./OnCreateSelectorDialog.svelte";
+import ConditionalTriggerDialog from "./ConditionalTriggerDialog.svelte";
 import UIEntriesSelectorDialog from "./UIEntriesSelectorDialog.svelte";
 import { parseAVClickEvent } from "../../../shared/utils";
 
@@ -262,22 +262,22 @@ async function handleAvAltClick(event: MouseEvent) {
 
         const { db } = await getSqliteEngine();
 
-        // Check if the clicked column name in Siyuan matches "On Create" or "创建时"
-        let isOnCreateCol = false;
+        // Check if the clicked column name in Siyuan matches "Conditional" or "触发器" (with fallback "On Create" or "创建时")
+        let isConditionalCol = false;
         try {
             const checkColRes = db.exec(`SELECT key_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
             if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
                 const keyName = checkColRes[0].values[0][0];
-                if (keyName === "On Create" || keyName === "创建时") {
-                    isOnCreateCol = true;
+                if (keyName === "Conditional" || keyName === "触发器" || keyName === "On Create" || keyName === "创建时") {
+                    isConditionalCol = true;
                 }
             }
         } catch (e) {
             console.error("[AltClick-TypeDB] Schema check failed:", e);
         }
 
-        if (isOnCreateCol) {
-            await openOnCreateSelector(avId, rowId, colId);
+        if (isConditionalCol) {
+            await openConditionalSelector(avId, rowId, colId);
             return;
         }
 
@@ -434,7 +434,7 @@ async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
     }
 }
 
-async function openOnCreateSelector(avId: string, rowId: string, colId: string) {
+async function openConditionalSelector(avId: string, rowId: string, colId: string) {
     const commandAvId = getCommandAvId();
     if (!commandAvId) {
         showMessage("无法获取命令管理数据库 (Command-DB)", 3000, "error");
@@ -468,7 +468,7 @@ async function openOnCreateSelector(avId: string, rowId: string, colId: string) 
 
         const supertagLabel = String(supertagQuery[0].values[0][0] || "").trim();
         const relationRaw = String(supertagQuery[0].values[0][1] || "");
-        const currentOnCreateVal = String(supertagQuery[0].values[0][2] || "").trim();
+        const currentConditionalVal = String(supertagQuery[0].values[0][2] || "").trim();
 
         // 3. Resolve linked rowIDs
         let linkedRowIds: string[] = [];
@@ -502,19 +502,19 @@ async function openOnCreateSelector(avId: string, rowId: string, colId: string) 
 
         // 5. Open dialog and mount Svelte component
         const dialog = new Dialog({
-            title: "配置 On Create 命令",
-            content: `<div class="b3-dialog__content" id="on-create-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-            width: "400px",
-            height: "480px"
+            title: "配置条件触发器 (Conditional Triggers)",
+            content: `<div class="b3-dialog__content" id="conditional-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
+            width: "420px",
+            height: "520px"
         });
 
-        new OnCreateSelectorDialog({
-            target: dialog.element.querySelector("#on-create-config-container")!,
+        new ConditionalTriggerDialog({
+            target: dialog.element.querySelector("#conditional-config-container")!,
             props: {
                 dialog,
                 supertag: supertagLabel,
                 boundCommands,
-                currentValue: currentOnCreateVal,
+                currentValue: currentConditionalVal,
                 onSave: async (updatedVal: string) => {
                     await updateCellValue(null, avId, rowId, colId, updatedVal);
                 }
@@ -522,7 +522,7 @@ async function openOnCreateSelector(avId: string, rowId: string, colId: string) 
         });
 
     } catch (e: any) {
-        console.error("Open On Create Config error:", e);
+        console.error("Open Conditional Config error:", e);
         showMessage(`读取配置失败: ${e.message}`, 3000, "error");
     }
 }

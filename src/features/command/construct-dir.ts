@@ -135,10 +135,10 @@ export async function constructCommandStorage() {
 
                 const blockMenuKey = await addCol("Block Icon Menu", "text", "iconMenu", lastKeyID);
                 const pageMenuKey = await addCol("Current Page Menu", "text", "iconFile", blockMenuKey);
-                const onCreateKey = await addCol("On Create", "text", "iconPlay", pageMenuKey);
+                const conditionalKey = await addCol("Conditional", "text", "iconPlay", pageMenuKey);
 
                 // Fetch seed data from SQLite sys_type_db
-                const seedRes = await runQuery(`SELECT rowID, supertag, Block_Icon_Menu, Current_Page_Menu, On_Create FROM sys_type_db`);
+                const seedRes = await runQuery(`SELECT rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Conditional FROM sys_type_db`);
 
                 // Insert seed items as detached rows
                 const addRows: any[] = [];
@@ -165,7 +165,7 @@ export async function constructCommandStorage() {
 
                 const populateOps: any[] = [];
                 for (const match of seedRes.values) {
-                    const [rowID, supertag, blockMenu, pageMenu, onCreate] = match;
+                    const [rowID, supertag, blockMenu, pageMenu, conditional] = match;
                     
                     if (primaryKeyId) {
                         populateOps.push({
@@ -177,7 +177,7 @@ export async function constructCommandStorage() {
 
                     populateOps.push({ keyID: blockMenuKey, itemID: rowID, value: { type: "text", text: { content: String(blockMenu || "") } } });
                     populateOps.push({ keyID: pageMenuKey, itemID: rowID, value: { type: "text", text: { content: String(pageMenu || "") } } });
-                    populateOps.push({ keyID: onCreateKey, itemID: rowID, value: { type: "text", text: { content: String(onCreate || "") } } });
+                    populateOps.push({ keyID: conditionalKey, itemID: rowID, value: { type: "text", text: { content: String(conditional || "") } } });
                 }
 
                 if (populateOps.length > 0) {

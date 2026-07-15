@@ -8,6 +8,53 @@ import { getColIDMap } from "../../../shared/utils/av-utils";
 import { tableSyncTimes, instantiateAV, getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { dispatchCommand } from "../command-dispatcher";
 
+export interface TriggerRule {
+    event: string;
+    condition: string;
+    commands: string[];
+}
+
+export function parseConditionalString(text: string): TriggerRule[] {
+    const rules: TriggerRule[] = [];
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    
+    for (const line of lines) {
+        const match = line.match(/^\[([^\]]+)\](?:\(([^\)]+)\))?\s*->\s*(.+)$/);
+        if (match) {
+            const rawEvent = match[1].trim();
+            const condition = match[2] ? match[2].trim() : "";
+            const cmdsText = match[3].trim();
+            
+            let event = "tag_created";
+            if (rawEvent === "打上标签时" || rawEvent === "tag_created") {
+                event = "tag_created";
+            } else if (rawEvent === "移除标签时" || rawEvent === "tag_removed") {
+                event = "tag_removed";
+            } else if (rawEvent === "内容变动时" || rawEvent === "block_content_changed") {
+                event = "block_content_changed";
+            } else if (rawEvent === "属性变动时" || rawEvent === "block_attribute_changed") {
+                event = "block_attribute_changed";
+            } else {
+                event = rawEvent;
+            }
+            
+            const commands = cmdsText.split(/[,，]/).map(c => c.trim()).filter(Boolean);
+            rules.push({ event, condition, commands });
+        } else {
+            // Fallback for legacy comma-separated lists
+            const commands = line.split(/[,，]/).map(c => c.trim()).filter(Boolean);
+            if (commands.length > 0) {
+                rules.push({
+                    event: "tag_created",
+                    condition: "",
+                    commands
+                });
+            }
+        }
+    }
+    return rules;
+}
+
 export class SupertagMonitor {
     private dataRegistry: TypeConfig[] = [];
     private lastUpdate = 0;
@@ -269,51 +316,59 @@ export class SupertagMonitor {
                 supertagColName = String(schemaCols[0].values[0][0]);
             }
 
-            // Find On Create column name
-            const schemaOnCreate = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'On Create' OR key_name = '创建时')`, [typeAvId]);
-            let onCreateColName = "On_Create";
-            if (schemaOnCreate.length > 0 && schemaOnCreate[0].values.length > 0) {
-                onCreateColName = String(schemaOnCreate[0].values[0][0]);
+            // Find Conditional trigger column name
+            const schemaConditional = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Conditional' OR key_name = '触发器' OR key_name = 'On Create' OR key_name = '创建时')`, [typeAvId]);
+            let conditionalColName = "Conditional";
+            if (schemaConditional.length > 0 && schemaConditional[0].values.length > 0) {
+                conditionalColName = String(schemaConditional[0].values[0][0]);
             }
 
-            const typeDbRes = db.exec(`SELECT "${onCreateColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag}' OR LOWER("${supertagColName}") = '${cleanTag}'`);
+            const typeDbRes = db.exec(`SELECT "${conditionalColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag}' OR LOWER("${supertagColName}") = '${cleanTag}'`);
 
             if (typeDbRes && typeDbRes.length > 0 && typeDbRes[0].values.length > 0) {
-                const onCreateVal = typeDbRes[0].values[0][0];
-                if (onCreateVal) {
-                    const onCreateCmds = String(onCreateVal)
-                        .split(/[,，]/)
-                        .map(s => s.trim())
-                        .filter(Boolean);
+                const conditionalVal = typeDbRes[0].values[0][0];
+                if (conditionalVal) {
+                    const rules = parseConditionalString(String(conditionalVal));
+                    const onCreateRule = rules.find(r => r.event === "tag_created");
 
-                    console.log(`[Supertag-OnCreate] Found On_Create commands for tag #${cleanTag}:`, onCreateCmds);
-
-                    // Execute sequentially in order (有顺序的)
-                    for (const cmdLabel of onCreateCmds) {
-                        const cmdInfo = COMMAND_REGISTRY[cmdLabel];
-                        const commandRef = cmdInfo?.commandRef || cmdLabel;
-                        const paramMapping = cmdInfo?.paramMapping || "";
-
-                        console.log(`[Supertag-OnCreate] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId}`);
-
-                        const doc = document;
-                        const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
-                        if (blockEl && !blockEl.getAttribute("data-node-id")) {
-                            blockEl.setAttribute("data-node-id", blockId);
+                    if (onCreateRule && onCreateRule.commands.length > 0) {
+                        let conditionMet = true;
+                        if (onCreateRule.condition) {
+                            console.log(`[Supertag-OnCreate] Evaluating condition: ${onCreateRule.condition}`);
+                            // Extensible condition checks go here
                         }
 
-                        const protyle = (window as any).siyuan?.ws?.protyle || null;
-                        const context = {
-                            blockEl,
-                            protyleEl: protyle?.element || null,
-                            protyle,
-                            supertag: cleanTag
-                        };
+                        if (conditionMet) {
+                            console.log(`[Supertag-OnCreate] Condition met. Executing commands for tag #${cleanTag}:`, onCreateRule.commands);
 
-                        try {
-                            await dispatchCommand(commandRef, paramMapping, context);
-                        } catch (cmdErr) {
-                            console.error(`[Supertag-OnCreate] Failed to dispatch command: ${cmdLabel}`, cmdErr);
+                            // Execute sequentially in order (有顺序的)
+                            for (const cmdLabel of onCreateRule.commands) {
+                                const cmdInfo = COMMAND_REGISTRY[cmdLabel];
+                                const commandRef = cmdInfo?.commandRef || cmdLabel;
+                                const paramMapping = cmdInfo?.paramMapping || "";
+
+                                console.log(`[Supertag-OnCreate] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId}`);
+
+                                const doc = document;
+                                const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
+                                if (blockEl && !blockEl.getAttribute("data-node-id")) {
+                                    blockEl.setAttribute("data-node-id", blockId);
+                                }
+
+                                const protyle = (window as any).siyuan?.ws?.protyle || null;
+                                const context = {
+                                    blockEl,
+                                    protyleEl: protyle?.element || null,
+                                    protyle,
+                                    supertag: cleanTag
+                                };
+
+                                try {
+                                    await dispatchCommand(commandRef, paramMapping, context);
+                                } catch (cmdErr) {
+                                    console.error(`[Supertag-OnCreate] Failed to dispatch command: ${cmdLabel}`, cmdErr);
+                                }
+                            }
                         }
                     }
                 }
