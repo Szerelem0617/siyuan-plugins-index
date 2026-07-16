@@ -17,7 +17,6 @@ let lastNativeFetch = 0;
 const SUPERTAG_TRIGGER = "#";
 
 let blockSupertagsPanel: HTMLDivElement | null = null;
-let currentObserver: MutationObserver | null = null;
 
 export async function refreshNativeTagsCache() {
     if (Date.now() - lastNativeFetch < 2000) return;
@@ -189,6 +188,9 @@ function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle:
     });
 
     const createSection = (title: string, tags: string[], color: string) => {
+        // If there are no items in this category, don't render it at all
+        if (tags.length === 0) return null;
+
         const section = document.createElement("div");
         section.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
 
@@ -197,36 +199,42 @@ function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle:
         header.innerHTML = `<span>${title}</span><span style="opacity: 0.6; font-size: 9px; background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 4px;">${tags.length}</span>`;
         section.appendChild(header);
 
-        if (tags.length === 0) {
-            const empty = document.createElement("div");
-            empty.style.cssText = "font-size: 10px; opacity: 0.4; padding: 4px 8px; font-style: italic;";
-            empty.innerText = "无匹配项";
-            section.appendChild(empty);
-        } else {
-            const list = document.createElement("div");
-            list.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
-            tags.forEach(tag => {
-                const item = document.createElement("div");
-                item.className = "b3-list-item b3-list-item--narrow";
-                item.style.cssText = "display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;";
-                item.innerHTML = `<svg class="b3-list-item__graphic" style="width: 12px; height: 12px; color: ${color}; margin-right: 8px;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="font-weight: 500; color: var(--b3-theme-on-background);">${tag}</span>`;
-                
-                item.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    handleBlockSupertagClick(tag, protyle);
-                });
-                
-                list.appendChild(item);
+        const list = document.createElement("div");
+        list.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+        tags.forEach(tag => {
+            const item = document.createElement("div");
+            item.className = "b3-list-item b3-list-item--narrow";
+            item.style.cssText = "display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;";
+            item.innerHTML = `<svg class="b3-list-item__graphic" style="width: 12px; height: 12px; color: ${color}; margin-right: 8px;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="font-weight: 500; color: var(--b3-theme-on-background);">${tag}</span>`;
+            
+            item.addEventListener("click", (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleBlockSupertagClick(tag, protyle);
             });
-            section.appendChild(list);
-        }
+            
+            list.appendChild(item);
+        });
+        section.appendChild(list);
+
         return section;
     };
 
-    panel.appendChild(createSection("类 (Class)", classes.sort(), "var(--b3-theme-primary)"));
-    panel.appendChild(createSection("数据组件", dataComps.sort(), "#4caf50"));
-    panel.appendChild(createSection("工具组件", toolComps.sort(), "#ff9800"));
+    const classSec = createSection("类 (Class)", classes.sort(), "var(--b3-theme-primary)");
+    const dataSec = createSection("数据组件", dataComps.sort(), "#4caf50");
+    const toolSec = createSection("工具组件", toolComps.sort(), "#ff9800");
+
+    if (classSec) panel.appendChild(classSec);
+    if (dataSec) panel.appendChild(dataSec);
+    if (toolSec) panel.appendChild(toolSec);
+
+    // If no supertags match at all, show empty indicator
+    if (!classSec && !dataSec && !toolSec) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size: 11px; opacity: 0.5; text-align: center; padding: 20px 0; font-style: italic; color: var(--b3-theme-on-surface-light);";
+        empty.innerText = "无匹配的超级标签";
+        panel.appendChild(empty);
+    }
 }
 
 function showBlockSupertagsPanel(protyle: any, query: string) {
@@ -234,6 +242,14 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
 
     const hintEl = protyle.hint?.element as HTMLElement;
     if (!hintEl) return;
+
+    // Force Siyuan's native tag suggestion popover to show in a single column
+    // to prevent it from displaying tags in multiple wrap rows/columns.
+    hintEl.style.setProperty("display", "flex", "important");
+    hintEl.style.setProperty("flex-direction", "column", "important");
+    hintEl.style.setProperty("flex-wrap", "nowrap", "important");
+    hintEl.style.setProperty("min-width", "220px", "important");
+    hintEl.style.setProperty("width", "260px", "important");
 
     if (!blockSupertagsPanel) {
         blockSupertagsPanel = document.createElement("div");
@@ -249,6 +265,7 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
     const rect = hintEl.getBoundingClientRect();
     blockSupertagsPanel.style.left = `${rect.right + 6}px`;
     blockSupertagsPanel.style.top = `${rect.top}px`;
+    blockSupertagsPanel.style.height = `${rect.height}px`;
     blockSupertagsPanel.style.display = "flex";
 
     renderSupertagsInBlockPanel(blockSupertagsPanel, query, protyle);

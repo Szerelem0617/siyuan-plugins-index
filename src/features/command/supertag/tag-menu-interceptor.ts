@@ -3,6 +3,9 @@ import { supertagMonitor } from "./supertag";
 import { SUPERTAG_REGISTRY } from "../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
 
+// Visual indicator/badge texts to identify supertags in the list
+const BADGE_MARKER = "🐬";
+
 async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
     // 1. Close Siyuan's menu popover
     window.siyuan.menus.menu?.remove();
@@ -64,6 +67,9 @@ function renderSupertagsInPanel(panel: HTMLElement, query: string) {
     });
 
     const createSection = (title: string, tags: string[], color: string) => {
+        // If there are no items in this category, don't render it at all
+        if (tags.length === 0) return null;
+
         const section = document.createElement("div");
         section.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
 
@@ -72,43 +78,49 @@ function renderSupertagsInPanel(panel: HTMLElement, query: string) {
         header.innerHTML = `<span>${title}</span><span style="opacity: 0.6; font-size: 9px; background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 4px;">${tags.length}</span>`;
         section.appendChild(header);
 
-        if (tags.length === 0) {
-            const empty = document.createElement("div");
-            empty.style.cssText = "font-size: 10px; opacity: 0.4; padding: 4px 8px; font-style: italic;";
-            empty.innerText = "无匹配项";
-            section.appendChild(empty);
-        } else {
-            const list = document.createElement("div");
-            list.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
-            tags.forEach(tag => {
-                const item = document.createElement("div");
-                item.className = "b3-list-item b3-list-item--narrow";
-                item.style.cssText = "display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.15s ease-in-out;";
-                item.innerHTML = `<svg class="b3-list-item__graphic" style="width: 12px; height: 12px; color: ${color}; margin-right: 8px;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="font-weight: 500; color: var(--b3-theme-on-background);">${tag}</span>`;
+        const list = document.createElement("div");
+        list.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+        tags.forEach(tag => {
+            const item = document.createElement("div");
+            item.className = "b3-list-item b3-list-item--narrow";
+            item.style.cssText = "display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.15s ease-in-out;";
+            item.innerHTML = `<svg class="b3-list-item__graphic" style="width: 12px; height: 12px; color: ${color}; margin-right: 8px;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="font-weight: 500; color: var(--b3-theme-on-background);">${tag}</span>`;
+            
+            item.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                e.preventDefault();
                 
-                item.addEventListener("click", async (e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    
-                    const protyle = (window as any).activeProtyleInstance;
-                    if (protyle) {
-                        const docId = protyle.block?.id || protyle.blockId;
-                        if (docId) {
-                            await addDocumentSupertag(docId, tag, protyle);
-                        }
+                const protyle = (window as any).activeProtyleInstance;
+                if (protyle) {
+                    const docId = protyle.block?.id || protyle.blockId;
+                    if (docId) {
+                        await addDocumentSupertag(docId, tag, protyle);
                     }
-                });
-                
-                list.appendChild(item);
+                }
             });
-            section.appendChild(list);
-        }
+            
+            list.appendChild(item);
+        });
+        section.appendChild(list);
+
         return section;
     };
 
-    panel.appendChild(createSection("类 (Class)", classes.sort(), "var(--b3-theme-primary)"));
-    panel.appendChild(createSection("数据组件", dataComps.sort(), "#4caf50"));
-    panel.appendChild(createSection("工具组件", toolComps.sort(), "#ff9800"));
+    const classSec = createSection("类 (Class)", classes.sort(), "var(--b3-theme-primary)");
+    const dataSec = createSection("数据组件", dataComps.sort(), "#4caf50");
+    const toolSec = createSection("工具组件", toolComps.sort(), "#ff9800");
+
+    if (classSec) panel.appendChild(classSec);
+    if (dataSec) panel.appendChild(dataSec);
+    if (toolSec) panel.appendChild(toolSec);
+
+    // If no supertags match at all, show empty indicator
+    if (!classSec && !dataSec && !toolSec) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size: 11px; opacity: 0.5; text-align: center; padding: 20px 0; font-style: italic; color: var(--b3-theme-on-surface-light);";
+        empty.innerText = "无匹配的超级标签";
+        panel.appendChild(empty);
+    }
 }
 
 function transformTagMenu(menuFilter: HTMLElement, inputEl: HTMLInputElement) {
@@ -127,12 +139,17 @@ function transformTagMenu(menuFilter: HTMLElement, inputEl: HTMLInputElement) {
     const nativeList = menuFilter.querySelector(".b3-list--background") as HTMLElement;
     if (!nativeList) return;
 
+    // Force native tag list to display in a single column (vertical stack layout)
+    nativeList.style.setProperty("display", "flex", "important");
+    nativeList.style.setProperty("flex-direction", "column", "important");
+    nativeList.style.setProperty("flex-wrap", "nowrap", "important");
+
     // 3. Create a flex row wrapper container
     const rowContainer = document.createElement("div");
     rowContainer.style.cssText = "display: flex; flex-direction: row; height: 320px; overflow: hidden; border-top: 1px solid var(--b3-border-color);";
 
     // Re-style native tag list to occupy the left column
-    nativeList.style.cssText = "flex: 1; overflow-y: auto; height: 100%; border-right: 1px solid var(--b3-border-color); margin: 0; padding: 4px; box-sizing: border-box;";
+    nativeList.style.cssText = "flex: 1; overflow-y: auto; height: 100%; border-right: 1px solid var(--b3-border-color); margin: 0; padding: 4px; box-sizing: border-box; display: flex !important; flex-direction: column !important; flex-wrap: nowrap !important;";
     
     // Insert rowContainer before nativeList and put nativeList inside
     nativeList.parentNode?.insertBefore(rowContainer, nativeList);
