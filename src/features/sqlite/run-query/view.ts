@@ -170,3 +170,88 @@ export async function executeCreateView(processedSql: string, db: any, options?:
         message: `View '${viewName}' (${layoutType} layout) created successfully on table '${tableName}'${filtersData.length > 0 ? " with filters applied" : ""}.` 
     };
 }
+
+export async function executeAlterView(processedSql: string, db: any, options?: any): Promise<any> {
+    // Pattern: ALTER VIEW [viewName] ON [tableName] SET COLUMN [colName] HIDDEN [0|1|true|false]
+    const alterMatch = processedSql.match(/^\s*ALTER\s+VIEW\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+ON\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+SET\s+COLUMN\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+HIDDEN\s+([0-1]|true|false)\s*;?\s*$/is);
+    if (!alterMatch) {
+        return null;
+    }
+
+    const viewName = (alterMatch[1] || alterMatch[2] || "").trim();
+    const tableName = (alterMatch[3] || alterMatch[4] || "").trim();
+    const colName = (alterMatch[5] || alterMatch[6] || "").trim();
+    const hiddenRaw = alterMatch[7].trim().toLowerCase();
+    const isHidden = hiddenRaw === "1" || hiddenRaw === "true";
+
+    console.log(`[SQLiteManager] executeAlterView: Setting column '${colName}' in view '${viewName}' of table '${tableName}' to hidden=${isHidden}`);
+
+    // 1. Resolve avID for the table
+    const avID = resolveTableAvId(tableName);
+    if (!avID) {
+        throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+    }
+
+    // 2. Locate Siyuan AV Block ID
+    const sqlFindBlock = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%')`;
+    const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
+    if (!resFind || resFind.length === 0) {
+        throw new Error(`No Attribute View block found in Siyuan documents for table '${tableName}'.`);
+    }
+    const avBlockID = resFind[0].id;
+
+    // 3. Fetch live AV views to find the view ID by name
+    const avData = await post("/api/av/renderAttributeView", { id: avID });
+    const viewsList = avData.views || avData.view?.views || [];
+    const targetView = viewsList.find((v: any) => v.name === viewName || v.id === viewName);
+    if (!targetView) {
+        throw new Error(`View '${viewName}' not found in table '${tableName}'.`);
+    }
+    const viewID = targetView.id;
+
+    // 4. Find the column key ID by column name
+    const schemaCols = db.exec(`SELECT key_id FROM _av_schema WHERE av_id = ? AND (col_name = ? OR key_name = ?)`, [avID, colName, colName]);
+    if (schemaCols.length === 0 || schemaCols[0].values.length === 0) {
+        throw new Error(`Column '${colName}' not found in table '${tableName}'.`);
+    }
+    const colKeyId = String(schemaCols[0].values[0][0]);
+
+    // 5. Post Siyuan transaction to:
+    //    a) Set the block's active view to viewID
+    //    b) Hide/show the column in this active view
+    const txRes = await post("/api/transactions", {
+        reqId: Date.now(),
+        app: "plugin-index",
+        transactions: [{
+            doOperations: [
+                {
+                    action: "setAttrViewBlockView",
+                    avID: avID,
+                    id: viewID,
+                    blockID: avBlockID
+                },
+                {
+                    action: "setAttrViewColHidden",
+                    id: colKeyId,
+                    avID: avID,
+                    data: isHidden,
+                    blockID: avBlockID
+                }
+            ]
+        }]
+    });
+
+    if (txRes && txRes.code && txRes.code !== 0) {
+        throw new Error(`Failed to alter column hidden status in Siyuan: ${txRes.msg || "Unknown error"}`);
+    }
+
+    // 6. Invalidate cache and trigger re-render
+    tableSyncTimes.delete(avID);
+    await instantiateAV(avID, true);
+    await triggerAvBlockRender(avID);
+
+    return { 
+        success: true, 
+        message: `Column '${colName}' in view '${viewName}' updated successfully to hidden=${isHidden}.` 
+    };
+}

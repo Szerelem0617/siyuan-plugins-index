@@ -1,6 +1,6 @@
 import { post } from "../../../shared/api-client/request";
 import { client } from "../../../shared/api-client";
-import { executeCreateView } from "./view";
+import { executeCreateView, executeAlterView } from "./view";
 import { 
     resolveTableAvId, 
     avIdToTableName, 
@@ -84,10 +84,14 @@ export interface DDLOptions {
 }
 
 export async function executeDDL(processedSql: string, db: any, options?: DDLOptions): Promise<any> {
-    // ─── 0. CREATE VIEW Statement ───
+    // ─── 0. CREATE/ALTER VIEW Statement ───
     const viewRes = await executeCreateView(processedSql, db, options);
     if (viewRes !== null) {
         return viewRes;
+    }
+    const alterViewRes = await executeAlterView(processedSql, db, options);
+    if (alterViewRes !== null) {
+        return alterViewRes;
     }
 
     // ─── 1. CREATE TABLE Statement ───

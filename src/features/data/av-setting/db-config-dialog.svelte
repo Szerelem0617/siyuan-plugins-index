@@ -191,12 +191,23 @@
     });
     import { executeWritableSql, runQuery } from "../../sqlite/sqlite-manager";
     import { post } from "../../../shared/api-client/request";
+    import FieldsConfigDialog from "./FieldsConfigDialog.svelte";
+    import { Dialog } from "siyuan";
+
+    let creatingViews = new Set();
 
     async function handleCreateSubtagView(map: any) {
         if (!map.name) {
             showMessage("请输入子标签名后再创建视图", 3000, "info");
             return;
         }
+
+        if (creatingViews.has(map.value)) {
+            console.log("[DbConfig] View creation for this value is already in progress, ignoring click.");
+            return;
+        }
+        creatingViews.add(map.value);
+        creatingViews = creatingViews;
 
         try {
             // 1. Fetch live AV views to check if map.viewId still exists using SQL
@@ -278,7 +289,34 @@
         } catch (e: any) {
             console.error("[DbConfig] Failed to create/switch subtag view:", e);
             showMessage(`操作失败: ${e.message || e}`, 5000, "error");
+        } finally {
+            creatingViews.delete(map.value);
+            creatingViews = creatingViews;
         }
+    }
+
+    function handleConfigureFields(map: any) {
+        if (!map.viewId) {
+            showMessage("未创建视图，无法配置字段", 3000, "info");
+            return;
+        }
+
+        const subDialog = new Dialog({
+            title: `配置字段 - ${map.name}`,
+            content: `<div class="b3-dialog__content" id="fields-config-container"></div>`,
+            width: "400px",
+            height: "500px"
+        });
+
+        new FieldsConfigDialog({
+            target: document.getElementById("fields-config-container")!,
+            props: {
+                avId: avId,
+                viewId: map.viewId,
+                viewName: map.name,
+                dialog: subDialog
+            }
+        });
     }
 </script>
 
@@ -411,10 +449,19 @@
                                         class="b3-button b3-button--outline"
                                         style="font-size: 10px; padding: 4px 8px; flex-shrink: 0;"
                                         on:click={() => handleCreateSubtagView(map)}
-                                        disabled={!map.name}
+                                        disabled={!map.name || creatingViews.has(map.value)}
                                     >
                                         📊 创建视图
                                     </button>
+                                    {#if map.viewId}
+                                        <button
+                                            class="b3-button b3-button--outline"
+                                            style="font-size: 10px; padding: 4px 8px; flex-shrink: 0;"
+                                            on:click={() => handleConfigureFields(map)}
+                                        >
+                                            ⚙️ 配置字段
+                                        </button>
+                                    {/if}
                                 </div>
                             {/each}
 
