@@ -192,6 +192,9 @@ export async function executeAlterView(processedSql: string, db: any, options?: 
         throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
     }
 
+    // Ensure the table schema is fully instantiated in SQLite _av_schema
+    await instantiateAV(avID, true);
+
     // 2. Locate Siyuan AV Block ID
     const sqlFindBlock = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%')`;
     const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
