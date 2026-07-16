@@ -25,7 +25,7 @@ import { canUseFeature } from "./features/dev-mode/policy-guard";
 import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
 import { triggerTurnIntoTask } from "./features/command/effect/turn-into-task";
-import { openSupertagManagerDialog } from "./features/command/supertag/SupertagMenu";
+
 import { SupertagRenderer } from "./features/command/supertag/SupertagRenderer";
 import { initTagMenuInterceptor } from "./features/command/supertag/tag-menu-interceptor";
 
@@ -122,24 +122,7 @@ export default class IndexPlugin extends Plugin {
         // paste 钩子始终激活：只对 siyuan-btn:// 链接生效，与实验模式无关
         this.eventBus.on("paste", handleBtnPaste);
 
-        // Register global shortcut command for Alt + T to manage supertags
-        this.addCommand({
-            langKey: "manageSupertags",
-            hotkey: "⌥T",
-            customHotkey: "⌥t",
-            callback: () => {
-                const activeProtyle = (window as any).activeProtyleInstance;
-                if (activeProtyle) {
-                    const blockId = activeProtyle.block?.id || activeProtyle.blockId;
-                    if (blockId) {
-                        const blockEl = activeProtyle.element.querySelector(`[data-node-id="${blockId}"]`) || activeProtyle.element.querySelector(".protyle-title");
-                        if (blockEl) {
-                            openSupertagManagerDialog(blockId, blockEl);
-                        }
-                    }
-                }
-            }
-        });
+
 
         // SQLite Entry Point: Alt + Click on Native Search Button
         if (DEV_ENABLE_INIT_SYS) {
