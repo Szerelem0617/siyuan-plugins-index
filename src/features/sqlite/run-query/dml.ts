@@ -129,7 +129,7 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
     }
     
     // ─── 2. INSERT Statement ───
-    const insertMatch = processedSql.match(/^\s*INSERT\s+INTO\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*\((.+?)\)\s*VALUES\s*\((.+?)\)/is);
+    const insertMatch = processedSql.match(/^\s*INSERT\s+INTO\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*\((.+?)\)\s*VALUES\s*\((.+)\)\s*;?\s*$/is);
     if (insertMatch) {
         const tableName = insertMatch[1];
         const colsClause = insertMatch[2];

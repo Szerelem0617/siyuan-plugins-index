@@ -9,6 +9,7 @@ import ConditionalTriggerDialog from "./ConditionalTriggerDialog.svelte";
 import UIEntriesSelectorDialog from "./UIEntriesSelectorDialog.svelte";
 import RegistryCommandSelectorDialog from "./RegistryCommandSelectorDialog.svelte";
 import { parseAVClickEvent } from "../../../shared/utils";
+import { post } from "../../../shared/api-client/request";
 
 /**
  * 初始化按钮链接与参数配置快捷监听器
@@ -112,14 +113,29 @@ async function insertCommandIntoAv(avId: string, cmd: any) {
     try {
         const { db } = await getSqliteEngine();
         
-        // 1. 查询 Layer 2 (sys_command_db) 所有已存在的 Command_ID 检查重复
+        // 1. 查询 Siyuan Live AV 获取当前所有已存在的 Command ID，规避 SQLite 同步延迟
         let existingIds: string[] = [];
         try {
-            const existRes = db.exec(`SELECT Command_ID FROM sys_command_db`);
-            if (existRes.length > 0 && existRes[0].values.length > 0) {
-                existingIds = existRes[0].values.map(row => String(row[0] || ""));
+            const avData = await post("/api/av/renderAttributeView", { id: avId, pageSize: 1000 });
+            const rows = avData.view?.rows || avData.rows || [];
+            const columns = avData.view?.columns || avData.columns || [];
+            const cmdIdCol = columns.find((c: any) => c.name === "Command ID" || c.name === "Command_ID");
+            const cmdIdColIdx = columns.findIndex((c: any) => c.id === cmdIdCol?.id);
+            if (cmdIdColIdx !== -1) {
+                existingIds = rows.map((r: any) => {
+                    const cell = r.cells[cmdIdColIdx];
+                    return cell?.text?.content || "";
+                }).filter(Boolean);
             }
-        } catch (_) {}
+        } catch (e) {
+            console.error("[FooterClick] Live AV query failed, falling back to SQLite:", e);
+            try {
+                const existRes = db.exec(`SELECT Command_ID FROM sys_command_db`);
+                if (existRes.length > 0 && existRes[0].values.length > 0) {
+                    existingIds = existRes[0].values.map(row => String(row[0] || ""));
+                }
+            } catch (_) {}
+        }
 
         const baseId = cmd.id;
         const hasParams = Array.isArray(cmd.params) && cmd.params.length > 0;
