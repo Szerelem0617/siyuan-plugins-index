@@ -12,11 +12,12 @@ export const tagSuggestionState = {
 let cachedNativeTags: string[] = [];
 let lastNativeFetch = 0;
 
-// Single "@" trigger — safe because "@" has zero special meaning in Siyuan's
-// Lute markdown engine, input.ts, or keydown.ts. We just need to manually
-// set protyle.hint.enableExtend = true when "@" is typed, since Siyuan only
-// auto-enables it for "#", "/", "(", etc (hardcoded list in wysiwyg/index.ts:2765).
-const SUPERTAG_TRIGGER = "@";
+// The trigger character for inline blocks is "#". Siyuan handles this natively.
+// We attach our Supertags panel to the right side of Siyuan's native hint popover.
+const SUPERTAG_TRIGGER = "#";
+
+let blockSupertagsPanel: HTMLDivElement | null = null;
+let currentObserver: MutationObserver | null = null;
 
 export async function refreshNativeTagsCache() {
     if (Date.now() - lastNativeFetch < 2000) return;
@@ -55,16 +56,18 @@ export async function initTagSuggestion(plugin: Plugin) {
     refreshNativeTagsCache().catch(() => {});
 }
 
-async function handleSupertagSelection(tag: string, protyle: any) {
-    // Get the ACTUAL editing block from cursor position, NOT protyle.block.id (which is the document root)
+async function handleBlockSupertagClick(tag: string, protyle: any) {
+    // 1. Hide Siyuan's hint popup and our panel
+    if (protyle.hint && protyle.hint.element) {
+        protyle.hint.element.classList.add("fn__none");
+    }
+    hideBlockSupertagsPanel();
+
+    // 2. Find the actual editing block element from cursor
     const selection = window.getSelection();
     const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
-    if (!range) {
-        console.error("[Supertag] No range found");
-        return;
-    }
+    if (!range) return;
 
-    // Walk up from cursor to find the closest block element with data-node-id
     let blockEl: HTMLElement | null = null;
     let node: Node | null = range.startContainer;
     while (node && node !== protyle.wysiwyg?.element) {
@@ -77,34 +80,27 @@ async function handleSupertagSelection(tag: string, protyle: any) {
         }
         node = node.parentNode;
     }
-
     if (!blockEl) {
-        console.error("[Supertag] Could not find block element from cursor position");
+        console.error("[Supertag] Block element not found from cursor");
         return;
     }
-
     const blockId = blockEl.getAttribute("data-node-id")!;
-    console.log("[Supertag] Selection intercepted — tag:", tag, "block:", blockId);
 
-    // 1. Hide the hint popover immediately
-    if (protyle.hint && protyle.hint.element) {
-        protyle.hint.element.classList.add("fn__none");
-    }
-
-    // 2. Capture old HTML BEFORE any DOM changes
-    const oldHTML = blockEl.outerHTML;
-
-    // 3. Remove the typed trigger prefix (e.g. "@per") from editor DOM
-    if (protyle.hint && protyle.hint.lastIndex > -1 && range) {
+    // 3. Delete the "#query" prefix from editor DOM
+    const text = range.startContainer.textContent || "";
+    const offset = range.startOffset;
+    const beforeCursor = text.substring(0, offset);
+    const lastHash = beforeCursor.lastIndexOf("#");
+    if (lastHash > -1) {
         try {
-            range.setStart(range.startContainer, protyle.hint.lastIndex);
+            range.setStart(range.startContainer, lastHash);
             range.deleteContents();
         } catch (e) {
-            console.error("[Supertag] Failed to delete trigger prefix:", e);
+            console.error("[Supertag] Failed to delete block prefix:", e);
         }
     }
 
-    // 4. Prepare the new supertags array
+    // 4. Save custom-supertags attribute
     let currentCustom: string[] = [];
     const raw = blockEl.getAttribute("custom-supertags");
     if (raw) {
@@ -116,10 +112,8 @@ async function handleSupertagSelection(tag: string, protyle: any) {
     const updatedCustom = Array.from(new Set([...currentCustom, tag]));
     const updatedCustomJSON = JSON.stringify(updatedCustom);
 
-    // 5. Set the attribute on the live DOM element FIRST
     blockEl.setAttribute("custom-supertags", updatedCustomJSON);
 
-    // 6. Persist the attribute via setBlockAttrs API (most reliable method)
     try {
         await post("/api/attr/setBlockAttrs", {
             id: blockId,
@@ -127,147 +121,204 @@ async function handleSupertagSelection(tag: string, protyle: any) {
                 "custom-supertags": updatedCustomJSON
             }
         });
-        console.log("[Supertag] setBlockAttrs succeeded for block:", blockId);
     } catch (e) {
-        console.error("[Supertag] setBlockAttrs API failed:", e);
+        console.error("[Supertag] setBlockAttrs failed:", e);
     }
 
-    // 7. Persist the content change (trigger prefix removal) via updateBlock API
+    // 5. Persist content change via updateBlock
     const newHTML = blockEl.outerHTML;
-    if (newHTML !== oldHTML) {
-        try {
-            await post("/api/block/updateBlock", {
-                dataType: "dom",
-                data: newHTML,
-                id: blockId
-            });
-        } catch (e) {
-            console.error("[Supertag] updateBlock API failed:", e);
-        }
+    try {
+        await post("/api/block/updateBlock", {
+            dataType: "dom",
+            data: newHTML,
+            id: blockId
+        });
+    } catch (e) {
+        console.error("[Supertag] updateBlock failed:", e);
     }
 
-    // 8. Trigger supertag commands and render capsule pill
+    // 6. Trigger commands and render pill
     await supertagMonitor.processNewTag(blockId, tag);
     SupertagRenderer.render(protyle);
+}
+
+function getQueryText(protyle: any): string {
+    const selection = window.getSelection();
+    const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
+    if (!range) return "";
+    
+    const textNode = range.startContainer;
+    if (textNode.nodeType === 3) {
+        const text = textNode.textContent || "";
+        const offset = range.startOffset;
+        const beforeCursor = text.substring(0, offset);
+        const lastHash = beforeCursor.lastIndexOf("#");
+        if (lastHash > -1) {
+            return beforeCursor.substring(lastHash + 1).trim();
+        }
+    }
+    return "";
+}
+
+function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle: any) {
+    panel.innerHTML = "";
+
+    const dbConfigs = supertagMonitor.getDataRegistry() || [];
+    const logicConfigs = SUPERTAG_REGISTRY || [];
+
+    const dataNames = new Set(dbConfigs.map(c => c.typeName.trim().toLowerCase()));
+    const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
+
+    const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
+    const matched = allSupertags.filter(t => t.includes(query));
+
+    const classes: string[] = [];
+    const dataComps: string[] = [];
+    const toolComps: string[] = [];
+
+    matched.forEach(tag => {
+        const isData = dataNames.has(tag);
+        const isLogic = logicNames.has(tag);
+        if (isData && isLogic) {
+            classes.push(tag);
+        } else if (isData) {
+            dataComps.push(tag);
+        } else {
+            toolComps.push(tag);
+        }
+    });
+
+    const createSection = (title: string, tags: string[], color: string) => {
+        const section = document.createElement("div");
+        section.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
+
+        const header = document.createElement("div");
+        header.style.cssText = `font-size: 11px; font-weight: bold; color: ${color}; border-bottom: 1px solid var(--b3-border-color); padding-bottom: 2px; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;`;
+        header.innerHTML = `<span>${title}</span><span style="opacity: 0.6; font-size: 9px; background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 4px;">${tags.length}</span>`;
+        section.appendChild(header);
+
+        if (tags.length === 0) {
+            const empty = document.createElement("div");
+            empty.style.cssText = "font-size: 10px; opacity: 0.4; padding: 4px 8px; font-style: italic;";
+            empty.innerText = "无匹配项";
+            section.appendChild(empty);
+        } else {
+            const list = document.createElement("div");
+            list.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+            tags.forEach(tag => {
+                const item = document.createElement("div");
+                item.className = "b3-list-item b3-list-item--narrow";
+                item.style.cssText = "display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;";
+                item.innerHTML = `<svg class="b3-list-item__graphic" style="width: 12px; height: 12px; color: ${color}; margin-right: 8px;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="font-weight: 500; color: var(--b3-theme-on-background);">${tag}</span>`;
+                
+                item.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleBlockSupertagClick(tag, protyle);
+                });
+                
+                list.appendChild(item);
+            });
+            section.appendChild(list);
+        }
+        return section;
+    };
+
+    panel.appendChild(createSection("类 (Class)", classes.sort(), "var(--b3-theme-primary)"));
+    panel.appendChild(createSection("数据组件", dataComps.sort(), "#4caf50"));
+    panel.appendChild(createSection("工具组件", toolComps.sort(), "#ff9800"));
+}
+
+function showBlockSupertagsPanel(protyle: any, query: string) {
+    if (!tagSuggestionState.enabled) return;
+
+    const hintEl = protyle.hint?.element as HTMLElement;
+    if (!hintEl) return;
+
+    if (!blockSupertagsPanel) {
+        blockSupertagsPanel = document.createElement("div");
+        blockSupertagsPanel.className = "indexos-block-supertags-panel b3-list b3-list--background";
+        blockSupertagsPanel.style.cssText = "position: absolute; width: 240px; max-height: 360px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border: 1px solid var(--b3-border-color); border-radius: 6px; box-shadow: var(--b3-dialog-shadow); z-index: 9999; box-sizing: border-box;";
+        document.body.appendChild(blockSupertagsPanel);
+    }
+
+    // Refresh registry to keep it fresh
+    supertagMonitor.refreshRegistry().catch(() => {});
+
+    // Position panel to the right of Siyuan's native hint popover
+    const rect = hintEl.getBoundingClientRect();
+    blockSupertagsPanel.style.left = `${rect.right + 6}px`;
+    blockSupertagsPanel.style.top = `${rect.top}px`;
+    blockSupertagsPanel.style.display = "flex";
+
+    renderSupertagsInBlockPanel(blockSupertagsPanel, query, protyle);
+}
+
+function hideBlockSupertagsPanel() {
+    if (blockSupertagsPanel) {
+        blockSupertagsPanel.style.display = "none";
+    }
 }
 
 export function bindProtyleHintExtend(protyle: any) {
     if (!protyle || !protyle.options) return;
 
+    // Set up MutationObserver to sync our panel visibility with Siyuan's native hint popover
+    if (protyle.hint && protyle.hint.element && !protyle.hint.isObserverAttached) {
+        protyle.hint.isObserverAttached = true;
+        const observer = new MutationObserver(() => {
+            const isHidden = protyle.hint.element.classList.contains("fn__none");
+            if (isHidden) {
+                hideBlockSupertagsPanel();
+            } else {
+                // Wait briefly for editor layout selection stability
+                setTimeout(() => {
+                    const query = getQueryText(protyle);
+                    showBlockSupertagsPanel(protyle, query);
+                }, 30);
+            }
+        });
+        observer.observe(protyle.hint.element, { attributes: true, attributeFilter: ["class"] });
+    }
+
+    // Capture editor input changes to update search filtering in real time
+    if (protyle.wysiwyg && protyle.wysiwyg.element && !protyle.wysiwyg.isInputAttached) {
+        protyle.wysiwyg.isInputAttached = true;
+        protyle.wysiwyg.element.addEventListener("input", () => {
+            if (protyle.hint && !protyle.hint.element.classList.contains("fn__none")) {
+                const query = getQueryText(protyle);
+                if (blockSupertagsPanel && blockSupertagsPanel.style.display !== "none") {
+                    renderSupertagsInBlockPanel(blockSupertagsPanel, query, protyle);
+                }
+            }
+        });
+    }
+
     protyle.options.hint = protyle.options.hint || {};
     protyle.options.hint.extend = protyle.options.hint.extend || [];
 
-    // Avoid duplicate registration
+    // Avoid duplicate registration (using "#" as extend key)
     const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === SUPERTAG_TRIGGER);
     if (hasRegistered) return;
 
-    // --- Critical fix: enable hint extend system when "@" is typed ---
-    // Siyuan only sets enableExtend=true for a hardcoded list of chars:
-    //   [":", "(", "【", "（", "[", "{", "「", "『", "#", "/", "、"]
-    // (see wysiwyg/index.ts:2765)
-    // Without enableExtend=true, the hint system bails out at hint/index.ts:137
-    // and never calls getKey() or our hint() callback.
-    if (protyle.wysiwyg && protyle.wysiwyg.element) {
-        protyle.wysiwyg.element.addEventListener("input", (event: InputEvent) => {
-            if (event.data === SUPERTAG_TRIGGER && protyle.hint) {
-                protyle.hint.enableExtend = true;
-            }
-        }, true);
-    }
-
-    // Intercept mouse clicks on hint menu items (capturing phase)
-    // This fires BEFORE Siyuan's bubble-phase handler at hint/index.ts:67,
-    // preventing Siyuan's fill() from running for our supertag items.
-    if (protyle.hint && protyle.hint.element) {
-        protyle.hint.element.addEventListener("click", async (event: MouseEvent) => {
-            const btn = (event.target as HTMLElement).closest(".b3-list-item");
-            if (btn) {
-                const val = decodeURIComponent(btn.getAttribute("data-value") || "");
-                if (val.startsWith("indexos-supertag:")) {
-                    event.stopPropagation();
-                    event.preventDefault();
-                    const tag = val.substring("indexos-supertag:".length);
-                    await handleSupertagSelection(tag, protyle);
-                }
-            }
-        }, true);
-    }
-
-    // Intercept Enter keypress (capturing phase)
-    if (protyle.wysiwyg && protyle.wysiwyg.element) {
-        protyle.wysiwyg.element.addEventListener("keydown", async (event: KeyboardEvent) => {
-            if (event.key === "Enter" && protyle.hint && protyle.hint.element && !protyle.hint.element.classList.contains("fn__none")) {
-                const focusEl = protyle.hint.element.querySelector(".b3-list-item--focus");
-                if (focusEl) {
-                    const val = decodeURIComponent(focusEl.getAttribute("data-value") || "");
-                    if (val.startsWith("indexos-supertag:")) {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        const tag = val.substring("indexos-supertag:".length);
-                        await handleSupertagSelection(tag, protyle);
-                    }
-                }
-            }
-        }, true);
-    }
-
-    // Register the "@" extend trigger
     protyle.options.hint.extend.push({
         key: SUPERTAG_TRIGGER,
         isIndexOS: true,
         hint(value: string, protyleInstance: any, source: string) {
             refreshNativeTagsCache().catch(() => {});
-            // Also trigger background registry refresh so list stays strictly in sync with supertag manager
-            supertagMonitor.refreshRegistry().catch(() => {});
-
+            
+            // Return only Siyuan's native tags inside Siyuan's native list,
+            // keeping our supertags fully separated in our own right-hand panel.
             const query = value.trim().toLowerCase();
+            const matchedNative = cachedNativeTags.filter(t => t.toLowerCase().includes(query));
 
-            if (!tagSuggestionState.enabled) {
-                return [];
-            }
-
-            const dbConfigs = supertagMonitor.getDataRegistry() || [];
-            const logicConfigs = SUPERTAG_REGISTRY || [];
-
-            const dataNames = new Set(dbConfigs.map(c => c.typeName.trim().toLowerCase()));
-            const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
-
-            const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
-            const matchedSuper = allSupertags.filter(t => t.includes(query));
-
-            const classItems: any[] = [];
-            const dataItems: any[] = [];
-            const toolItems: any[] = [];
-
-            matchedSuper.forEach(tag => {
-                const isData = dataNames.has(tag);
-                const isLogic = logicNames.has(tag);
-                
-                let badge = "";
-                let color = "var(--b3-theme-primary)";
-                let itemGroup: any[] = [];
-
-                if (isData && isLogic) {
-                    badge = "🐬 类";
-                    color = "var(--b3-theme-primary)";
-                    itemGroup = classItems;
-                } else if (isData) {
-                    badge = "🐬 数据组件";
-                    color = "#4caf50";
-                    itemGroup = dataItems;
-                } else {
-                    badge = "🐬 工具组件";
-                    color = "#ff9800";
-                    itemGroup = toolItems;
-                }
-
-                itemGroup.push({
-                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">@${tag}</span><span class="b3-list-item__meta" style="color: ${color}; font-weight: bold; margin-left: auto; font-size: 10px;">${badge}</span></div>`,
-                    value: `indexos-supertag:${tag}`,
-                    filter: [tag, `@${tag}`]
-                });
+            return matchedNative.map(tag => {
+                return {
+                    html: `<div class="b3-list-item__first"><span class="b3-list-item__text">#${tag}</span></div>`,
+                    value: `#${tag}#`,
+                    filter: [tag, `#${tag}`, `#${tag}#`]
+                };
             });
-            return [...classItems, ...dataItems, ...toolItems];
         }
     });
 }
