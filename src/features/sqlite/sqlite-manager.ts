@@ -540,6 +540,44 @@ export function preprocessSql(sql: string): string {
 export async function runQuery(sql: string, params?: any[], options?: DDLOptions): Promise<{ columns: string[], values: any[][] }> {
     const processedSql = preprocessSql(sql);
 
+    // Intercept query to get views for an AV table
+    // Pattern: SELECT [fields] FROM _av_views WHERE av_id = 'xxxx'
+    const viewsSelectMatch = processedSql.match(/^\s*SELECT\s+(.+?)\s+FROM\s+["`']?_av_views["`']?\s+WHERE\s+(av_id|table_name)\s*=\s*['"`]?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)['"`]?\s*;?\s*$/i);
+    if (viewsSelectMatch) {
+        const fields = viewsSelectMatch[1].trim();
+        const whereCol = viewsSelectMatch[2].trim().toLowerCase();
+        let tableVal = viewsSelectMatch[3].trim();
+        
+        let avID = tableVal;
+        if (whereCol === "table_name") {
+            const resolved = resolveTableAvId(tableVal);
+            if (resolved) avID = resolved;
+        }
+        
+        console.log(`[SQLiteManager] Intercepted views query for avID: ${avID}`);
+        
+        try {
+            const avData = await post("/api/av/renderAttributeView", { id: avID });
+            const viewsList = avData.views || avData.view?.views || [];
+            
+            const rows = viewsList.map((v: any) => {
+                return {
+                    id: v.id || "",
+                    name: v.name || "",
+                    type: v.type || "",
+                    layout: v.layout || ""
+                };
+            });
+            
+            const columns = ["id", "name", "type", "layout"];
+            const values = rows.map((r: any) => [r.id, r.name, r.type, r.layout]);
+            
+            return { columns, values };
+        } catch (e: any) {
+            throw new Error(`Failed to fetch views for AV table: ${e.message || e}`);
+        }
+    }
+
     // 0. Auto-redirect write SQLs
     const isWrite = /^\s*(update|insert|delete|create|alter|drop|replace)\b/i.test(processedSql);
     if (isWrite) {

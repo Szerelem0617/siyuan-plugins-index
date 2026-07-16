@@ -188,7 +188,7 @@
         if (c.isSystem) return false;
         return true;
     });
-    import { executeWritableSql } from "../../sqlite/sqlite-manager";
+    import { executeWritableSql, runQuery } from "../../sqlite/sqlite-manager";
     import { post } from "../../../shared/api-client/request";
 
     async function handleCreateSubtagView(map: any) {
@@ -198,12 +198,18 @@
         }
 
         try {
-            // 1. Fetch live AV views to check if map.viewId still exists
+            // 1. Fetch live AV views to check if map.viewId still exists using SQL
             let viewExists = false;
             try {
-                const avData = await post("/api/av/renderAttributeView", { id: avId });
-                console.log("[DbConfig-Debug] renderAttributeView response:", avData);
-                const viewsList = avData.views || avData.view?.views || [];
+                const sqlQuery = `SELECT id, name FROM _av_views WHERE av_id = '${avId}'`;
+                console.log("[DbConfig-Debug] Querying views list with SQL:", sqlQuery);
+                const queryRes = await runQuery(sqlQuery);
+                console.log("[DbConfig-Debug] Query result:", queryRes);
+                
+                const idIdx = queryRes.columns.indexOf("id");
+                const viewsList = queryRes.values.map(row => ({
+                    id: row[idIdx]
+                }));
                 console.log("[DbConfig-Debug] Extracted views list:", viewsList);
                 console.log("[DbConfig-Debug] Target map.viewId:", map.viewId);
                 if (map.viewId && viewsList.some((v: any) => v.id === map.viewId)) {
@@ -211,7 +217,7 @@
                 }
                 console.log("[DbConfig-Debug] viewExists result:", viewExists);
             } catch (err) {
-                console.warn("[DbConfig] Failed to fetch live AV views:", err);
+                console.warn("[DbConfig] Failed to fetch live AV views via SQL:", err);
             }
 
             if (viewExists) {
@@ -411,14 +417,6 @@
                                 </div>
                             {/each}
 
-                            <div
-                                class="b3-label__text"
-                                style="margin-top: 12px; white-space: pre-wrap; font-size: 11px; opacity: 0.7; line-height: 1.4;"
-                            >
-                                💡 <b>映射规则：</b><br/>
-                                配置了子标签名（如 <code style="color: #4ec9b0;">male</code>）后，对应的 Supertag 将会是 <code style="color: #4ec9b0;">#{dbName.toLowerCase()}.male</code>。<br/>
-                                当给块打上 <code style="color: #4ec9b0;">#{dbName.toLowerCase()}.male</code> 标签时，块除了会自动被录入到本表中，其 <b>{selectedColumn?.name}</b> 列的值也会被自动设为 <b>"{typeMappings[0]?.value || '对应值'}"</b>。
-                            </div>
                         </div>
                     {/if}
                 {:else}
