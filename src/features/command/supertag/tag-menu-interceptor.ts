@@ -2,6 +2,7 @@ import { post } from "../../../shared/api-client/request";
 import { supertagMonitor } from "./supertag";
 import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
+import { parseSupertags, serializeSupertags } from "../utils/supertag-helper";
 
 // Visual indicator/badge texts to identify supertags in the list
 const BADGE_MARKER = "🐬";
@@ -15,15 +16,9 @@ async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
     const attrs = attrsRes || {};
     const rawTags = attrs["custom-supertags"];
     
-    let currentCustom: string[] = [];
-    if (rawTags) {
-        try {
-            const parsed = JSON.parse(rawTags);
-            if (Array.isArray(parsed)) currentCustom = parsed;
-        } catch (_) {}
-    }
+    const currentCustom = parseSupertags(rawTags);
     const updatedCustom = Array.from(new Set([...currentCustom, tag]));
-    const updatedCustomJSON = JSON.stringify(updatedCustom);
+    const updatedCustomJSON = serializeSupertags(updatedCustom);
 
     // 3. Save attributes
     await post("/api/attr/setBlockAttrs", {
@@ -32,7 +27,7 @@ async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
             "custom-supertags": updatedCustomJSON
         }
     });
-    globalSupertagsCache.set(docId, updatedCustom.map(t => t.trim().toLowerCase()));
+    globalSupertagsCache.set(docId, updatedCustom);
 
     // 4. Process trigger rules and render pills
     await supertagMonitor.processNewTag(docId, tag);

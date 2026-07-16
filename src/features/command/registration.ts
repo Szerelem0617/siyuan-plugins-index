@@ -8,6 +8,8 @@ import { getSqliteEngine, runQuery, saveDatabaseToDisk, checkTableExists, instan
 import { getSystemTableNames, initSystemTables } from "./indexos/command-sqlite";
 import { reverseDbToList } from "./hierarchy/db-reverse-list";
 import { isDevModeActive } from "../dev-mode";
+import { parseSupertags } from "./utils/supertag-helper";
+import { addSupertagMenuOption } from "./utils/menu-helper";
 
 export const DEV_ENABLE_INIT_SYS = true;
 
@@ -45,15 +47,7 @@ export async function syncGlobalSupertagsCache() {
                 const blockId = row.block_id;
                 const value = row.value;
                 if (blockId && value) {
-                    try {
-                        const parsed = JSON.parse(value);
-                        if (Array.isArray(parsed)) {
-                            globalSupertagsCache.set(blockId, parsed.map(t => String(t).trim().toLowerCase()));
-                        }
-                    } catch (_) {
-                        const tags = value.split(/[, ]/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-                        globalSupertagsCache.set(blockId, tags);
-                    }
+                    globalSupertagsCache.set(blockId, parseSupertags(value));
                 }
             }
         }
@@ -601,7 +595,7 @@ export function addCommandTestMenuItem({ detail }: any) {
             }
 
             for (const match of matches) {
-                menu.addItem({
+                addSupertagMenuOption(menu, {
                     icon: "iconPlay",
                     label: `⚡ (#${tag}) ${match.methodName}`,
                     click: async () => {
@@ -617,6 +611,7 @@ export function addCommandTestMenuItem({ detail }: any) {
                             try {
                                 focusBlockForDispatch(targetEl, protyleEl);
                                 // Force reload registry from Siyuan/SQLite to get the latest parameter mappings
+                                // @ts-ignore
                                 await refreshSupertagRegistry();
                                 const freshMatch = SUPERTAG_REGISTRY.find(item =>
                                     item.commandRef === match.commandRef && item.typeTag === match.typeTag
@@ -667,7 +662,7 @@ export function addDoctreeMenuItems({ detail }: any) {
 
             if (matches.length > 0) {
                 for (const match of matches) {
-                    menu.addItem({
+                    addSupertagMenuOption(menu, {
                         icon: "iconPlay",
                         label: `⚡ (#${tag}) ${match.methodName}`,
                         click: async () => {
@@ -726,7 +721,7 @@ export function addEditorTitleIconMenuItems({ detail }: any) {
 
             if (matches.length > 0) {
                 for (const match of matches) {
-                    menu.addItem({
+                    addSupertagMenuOption(menu, {
                         icon: "iconPlay",
                         label: `⚡ (#${tag}) ${match.methodName}`,
                         click: async () => {

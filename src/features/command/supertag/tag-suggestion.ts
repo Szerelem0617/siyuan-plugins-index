@@ -3,6 +3,7 @@ import { post } from "../../../shared/api-client/request";
 import { supertagMonitor } from "./supertag";
 import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
+import { parseSupertags, serializeSupertags, findActiveBlock } from "../utils/supertag-helper";
 
 export const tagSuggestionState = {
     enabled: true,
@@ -55,22 +56,7 @@ async function handleBlockSupertagClick(tag: string, protyle: any) {
     hideBlockSupertagsPanel();
 
     // 2. Find the actual editing block element from cursor
-    const selection = window.getSelection();
-    const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
-    if (!range) return;
-
-    let blockEl: HTMLElement | null = null;
-    let node: Node | null = range.startContainer;
-    while (node && node !== protyle.wysiwyg?.element) {
-        if (node.nodeType === 1) {
-            const el = node as HTMLElement;
-            if (el.getAttribute("data-node-id") && el.getAttribute("data-type")) {
-                blockEl = el;
-                break;
-            }
-        }
-        node = node.parentNode;
-    }
+    const blockEl = findActiveBlock(protyle);
     if (!blockEl) {
         console.error("[Supertag] Block element not found from cursor");
         return;
@@ -78,33 +64,31 @@ async function handleBlockSupertagClick(tag: string, protyle: any) {
     const blockId = blockEl.getAttribute("data-node-id")!;
 
     // 3. Delete the "#query" prefix from editor DOM
-    const text = range.startContainer.textContent || "";
-    const offset = range.startOffset;
-    const beforeCursor = text.substring(0, offset);
-    const lastHash = beforeCursor.lastIndexOf("#");
-    if (lastHash > -1) {
-        try {
-            range.setStart(range.startContainer, lastHash);
-            range.deleteContents();
-        } catch (e) {
-            console.error("[Supertag] Failed to delete block prefix:", e);
+    const selection = window.getSelection();
+    const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
+    if (range) {
+        const text = range.startContainer.textContent || "";
+        const offset = range.startOffset;
+        const beforeCursor = text.substring(0, offset);
+        const lastHash = beforeCursor.lastIndexOf("#");
+        if (lastHash > -1) {
+            try {
+                range.setStart(range.startContainer, lastHash);
+                range.deleteContents();
+            } catch (e) {
+                console.error("[Supertag] Failed to delete block prefix:", e);
+            }
         }
     }
 
     // 4. Save custom-supertags attribute
-    let currentCustom: string[] = [];
     const raw = blockEl.getAttribute("custom-supertags");
-    if (raw) {
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) currentCustom = parsed;
-        } catch (_) {}
-    }
+    const currentCustom = parseSupertags(raw);
     const updatedCustom = Array.from(new Set([...currentCustom, tag]));
-    const updatedCustomJSON = JSON.stringify(updatedCustom);
+    const updatedCustomJSON = serializeSupertags(updatedCustom);
 
     blockEl.setAttribute("custom-supertags", updatedCustomJSON);
-    globalSupertagsCache.set(blockId, updatedCustom.map(t => t.trim().toLowerCase()));
+    globalSupertagsCache.set(blockId, updatedCustom);
 
     try {
         await post("/api/attr/setBlockAttrs", {

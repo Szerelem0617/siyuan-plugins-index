@@ -2,6 +2,7 @@ import { post } from "../../../shared/api-client/request";
 import { showMessage } from "siyuan";
 import { supertagMonitor } from "./supertag";
 import { globalSupertagsCache } from "../registration";
+import { parseSupertags, serializeSupertags } from "../utils/supertag-helper";
 
 export class SupertagRenderer {
     private static renderedMap = new Map<string, string[]>();
@@ -34,16 +35,8 @@ export class SupertagRenderer {
             const attrs = attrsRes || {};
             const rawTags = attrs["custom-supertags"];
 
-            let tags: string[] = [];
-            if (rawTags) {
-                try {
-                    const parsed = JSON.parse(rawTags);
-                    if (Array.isArray(parsed)) tags = parsed;
-                } catch (_) {
-                    tags = rawTags.split(/[, ]/).map((s: string) => s.trim()).filter(Boolean);
-                }
-            }
-            globalSupertagsCache.set(docId, tags.map(t => t.trim().toLowerCase()));
+            const tags = parseSupertags(rawTags);
+            globalSupertagsCache.set(docId, tags);
 
             // Find or create document tags container
             let container = titleEl.querySelector(".index-doc-supertags") as HTMLElement;
@@ -85,15 +78,7 @@ export class SupertagRenderer {
             if (!blockId) return;
 
             const rawTags = block.getAttribute("custom-supertags");
-            let tags: string[] = [];
-            if (rawTags) {
-                try {
-                    const parsed = JSON.parse(rawTags);
-                    if (Array.isArray(parsed)) tags = parsed;
-                } catch (_) {
-                    tags = rawTags.split(/[, ]/).map((s: string) => s.trim()).filter(Boolean);
-                }
-            }
+            const tags = parseSupertags(rawTags);
 
             // Find or create Siyuan's native attribute container inside the block
             let attrEl = block.querySelector(".protyle-attr") as HTMLElement;
@@ -225,22 +210,16 @@ export class SupertagRenderer {
             const attrs = attrsRes || {};
             const rawTags = attrs["custom-supertags"];
 
-            let tags: string[] = [];
-            if (rawTags) {
-                try {
-                    const parsed = JSON.parse(rawTags);
-                    if (Array.isArray(parsed)) tags = parsed;
-                } catch (_) {}
-            }
+            const tags = parseSupertags(rawTags);
 
             const updatedTags = tags.filter(t => t !== tagToRemove);
-            globalSupertagsCache.set(blockId, updatedTags.map(t => t.trim().toLowerCase()));
+            globalSupertagsCache.set(blockId, updatedTags);
             
             // Write back
             await post("/api/attr/setBlockAttrs", {
                 id: blockId,
                 attrs: {
-                    "custom-supertags": updatedTags.length > 0 ? JSON.stringify(updatedTags) : ""
+                    "custom-supertags": serializeSupertags(updatedTags)
                 }
             });
 
