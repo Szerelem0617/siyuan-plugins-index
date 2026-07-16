@@ -246,7 +246,7 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
     if (!blockSupertagsPanel) {
         blockSupertagsPanel = document.createElement("div");
         blockSupertagsPanel.className = "indexos-block-supertags-panel b3-list b3-list--background";
-        blockSupertagsPanel.style.cssText = "position: absolute; width: 240px; max-height: 360px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border: 1px solid var(--b3-border-color); border-radius: 6px; box-shadow: var(--b3-dialog-shadow); z-index: 9999; box-sizing: border-box;";
+        blockSupertagsPanel.style.cssText = "position: absolute; width: 240px; max-height: 420px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border: 1px solid var(--b3-border-color); border-radius: 6px; box-shadow: var(--b3-dialog-shadow); z-index: 9999; box-sizing: border-box;";
         document.body.appendChild(blockSupertagsPanel);
     }
 
@@ -262,7 +262,7 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
     }
     blockSupertagsPanel.style.left = `${left}px`;
     blockSupertagsPanel.style.top = `${rect.top}px`;
-    blockSupertagsPanel.style.height = `${rect.height}px`;
+    blockSupertagsPanel.style.height = "auto";
     blockSupertagsPanel.style.display = "flex";
 
     renderSupertagsInBlockPanel(blockSupertagsPanel, query, protyle);
