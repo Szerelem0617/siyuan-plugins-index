@@ -25,7 +25,7 @@ import { canUseFeature } from "./features/dev-mode/policy-guard";
 import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
 import { triggerTurnIntoTask } from "./features/command/effect/turn-into-task";
-import { addSupertagMenuItems, openSupertagManagerDialog } from "./features/command/supertag/SupertagMenu";
+import { openSupertagManagerDialog } from "./features/command/supertag/SupertagMenu";
 import { SupertagRenderer } from "./features/command/supertag/SupertagRenderer";
 import { initTagMenuInterceptor } from "./features/command/supertag/tag-menu-interceptor";
 
@@ -75,7 +75,6 @@ export default class IndexPlugin extends Plugin {
         //监听块菜单事件
         this.eventBus.on("click-blockicon", buildDocNew);
         this.eventBus.on("click-blockicon", addDataMenuItems);
-        this.eventBus.on("click-blockicon", addSupertagMenuItems);
         if (DEV_ENABLE_INIT_SYS) {
             this.eventBus.on("click-blockicon", addCommandTestMenuItem);
             this.eventBus.on("open-menu-doctree", addDoctreeMenuItems);

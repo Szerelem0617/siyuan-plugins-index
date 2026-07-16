@@ -1,32 +1,7 @@
-import { Menu, Dialog } from "siyuan";
+import { Dialog } from "siyuan";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
-import { getTypeAvId } from "./supertag";
 import SupertagManagerDialog from "./SupertagManagerDialog.svelte";
 import { SupertagRenderer } from "./SupertagRenderer";
-
-export async function addSupertagMenuItems({ detail }: any) {
-    const menu = detail.menu as Menu;
-    const blocks = detail.blockElements as HTMLElement[];
-    if (!blocks || blocks.length === 0) return;
-
-    // Track active protyle instance
-    if (detail.protyle) {
-        (window as any).activeProtyleInstance = detail.protyle;
-    }
-
-    // Use the first selected block
-    const blockEl = blocks[0];
-    const blockId = blockEl.getAttribute("data-node-id");
-    if (!blockId) return;
-
-    menu.addItem({
-        icon: "iconTags",
-        label: "管理超级标签 (Supertags)",
-        click: async () => {
-            await openSupertagManagerDialog(blockId, blockEl);
-        }
-    });
-}
 
 export async function openSupertagManagerDialog(blockId: string, blockEl: HTMLElement) {
     try {
