@@ -522,16 +522,30 @@ export function addCommandTestMenuItem({ detail }: any) {
     const domTags = Array.from(tagElements).map(el => (el.textContent || "").replace(/#/g, "").trim().toLowerCase());
     const inlineTags = Array.from((targetEl.textContent || "").matchAll(/#([^\s#]+)/g)).map(m => m[1].toLowerCase());
     
-    // Extract custom supertags from block attribute
-    const rawCustom = targetEl.getAttribute("custom-supertags");
+    // Extract custom supertags from block attribute (or page DOM container if it's title block)
     let customTags: string[] = [];
-    if (rawCustom) {
-        try {
-            const parsed = JSON.parse(rawCustom);
-            if (Array.isArray(parsed)) {
-                customTags = parsed.map(t => String(t).trim().toLowerCase());
+    const isTitleBlock = targetEl.classList.contains("protyle-title") || targetEl.querySelector(".protyle-title");
+    if (isTitleBlock) {
+        const docPills = document.querySelectorAll(".index-doc-supertags .index-supertag-pill");
+        customTags = Array.from(docPills).map(pill => {
+            const text = pill.textContent || "";
+            // The pill ends with 'x' to remove it, clean that up
+            const cleanText = text.trim();
+            if (cleanText.endsWith("x")) {
+                return cleanText.substring(0, cleanText.length - 1).trim().toLowerCase();
             }
-        } catch (_) {}
+            return cleanText.toLowerCase();
+        }).filter(Boolean);
+    } else {
+        const rawCustom = targetEl.getAttribute("custom-supertags");
+        if (rawCustom) {
+            try {
+                const parsed = JSON.parse(rawCustom);
+                if (Array.isArray(parsed)) {
+                    customTags = parsed.map(t => String(t).trim().toLowerCase());
+                }
+            } catch (_) {}
+        }
     }
     
     const currentBlockTags = Array.from(new Set([...domTags, ...inlineTags, ...customTags]));
@@ -588,6 +602,69 @@ export function addCommandTestMenuItem({ detail }: any) {
                 });
             }
         }
+    }
+}
+
+/**
+ * Handle document sidebar tree item right click menu
+ */
+export async function addDoctreeMenuItems({ detail }: any) {
+    if (!DEV_ENABLE_INIT_SYS) return;
+    const menu = detail.menu;
+    if (!menu || !detail.elements || detail.elements.length === 0) return;
+
+    const el = detail.elements[0];
+    const docId = el.getAttribute("data-node-id");
+    if (!docId) return;
+
+    try {
+        const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });
+        const rawTags = attrsRes?.data?.["custom-supertags"] || attrsRes?.["custom-supertags"];
+        let tags: string[] = [];
+        if (rawTags) {
+            try {
+                const parsed = JSON.parse(rawTags);
+                if (Array.isArray(parsed)) {
+                    tags = parsed.map(t => String(t).trim().toLowerCase());
+                }
+            } catch (_) {}
+        }
+
+        if (tags.length === 0) return;
+
+        for (const tag of tags) {
+            const matches = SUPERTAG_REGISTRY.filter(item =>
+                (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
+                && (item.uiLocation === "IconMenu" || item.uiLocation === "BlockIconMenu" || item.uiLocation === "PageMenu")
+            );
+
+            if (matches.length > 0) {
+                for (const match of matches) {
+                    menu.addItem({
+                        icon: "iconPlay",
+                        label: `⚡ (#${tag}) ${match.methodName}`,
+                        click: async () => {
+                            const activeProtyle = (window as any).activeProtyleInstance;
+                            const protyleEl = activeProtyle?.element || null;
+                            const blockEl = protyleEl?.querySelector(`[data-node-id="${docId}"]`) || null;
+
+                            await refreshSupertagRegistry();
+                            const freshMatch = SUPERTAG_REGISTRY.find(item =>
+                                item.commandRef === match.commandRef && item.typeTag === match.typeTag
+                            ) || match;
+
+                            await dispatchCommand(freshMatch.commandRef, freshMatch.paramMapping, { 
+                                blockEl: blockEl || document.createElement("div"), 
+                                protyleEl, 
+                                supertag: tag 
+                            });
+                        }
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[IndexOS] Doctree Menu Add Failed:", e);
     }
 }
 

@@ -8,7 +8,7 @@ import { addAVMenuItems, avEventHandler } from "./features/data/attribute-view/e
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
-import { addCommandTestMenuItem, refreshSupertagRegistry, DEV_ENABLE_INIT_SYS } from "./features/command/registration";
+import { addCommandTestMenuItem, addDoctreeMenuItems, refreshSupertagRegistry, DEV_ENABLE_INIT_SYS } from "./features/command/registration";
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { supertagMonitor } from "./features/command/supertag/supertag";
 import { supertagManager } from "./features/command/supertag/supertag-manager";
@@ -78,6 +78,7 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.on("click-blockicon", addSupertagMenuItems);
         if (DEV_ENABLE_INIT_SYS) {
             this.eventBus.on("click-blockicon", addCommandTestMenuItem);
+            this.eventBus.on("open-menu-doctree", addDoctreeMenuItems);
         }
         this.eventBus.on("open-menu-av", addAVMenuItems);
         //监听文档载入事件
@@ -163,6 +164,7 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.off("click-blockicon", addDataMenuItems);
         if (DEV_ENABLE_INIT_SYS) {
             this.eventBus.off("click-blockicon", addCommandTestMenuItem);
+            this.eventBus.off("open-menu-doctree", addDoctreeMenuItems);
         }
         this.eventBus.off("open-menu-av", addAVMenuItems);
         this.eventBus.off("loaded-protyle-static", updateIndex);
