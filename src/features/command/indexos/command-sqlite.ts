@@ -36,13 +36,25 @@ export async function initSystemTables() {
     db.run(`CREATE TABLE IF NOT EXISTS ${TABLE_TYPES} (
         rowID TEXT PRIMARY KEY,
         supertag TEXT,
-        Block_Icon_Menu TEXT,
-        Current_Page_Menu TEXT,
+        Icon_Menu TEXT,
         Conditional TEXT
     );`);
 
     try {
+        db.run(`ALTER TABLE ${TABLE_TYPES} ADD COLUMN Icon_Menu TEXT;`);
+    } catch (_) { /* ignore */ }
+    try {
         db.run(`ALTER TABLE ${TABLE_TYPES} ADD COLUMN Conditional TEXT;`);
+    } catch (_) { /* ignore */ }
+    try {
+        db.run(`UPDATE ${TABLE_TYPES} SET Icon_Menu = 
+            CASE 
+                WHEN (Block_Icon_Menu IS NOT NULL AND Block_Icon_Menu != '') AND (Current_Page_Menu IS NOT NULL AND Current_Page_Menu != '') 
+                THEN Block_Icon_Menu || ', ' || Current_Page_Menu
+                WHEN Block_Icon_Menu IS NOT NULL AND Block_Icon_Menu != '' THEN Block_Icon_Menu
+                ELSE Current_Page_Menu 
+            END
+            WHERE Icon_Menu IS NULL OR Icon_Menu = ''`);
     } catch (_) { /* ignore */ }
 
     // 2.5 清理旧的内置命令数据并重新从 commands.json 载入以保证热更新生效
@@ -146,10 +158,10 @@ export async function initSystemTables() {
 
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
     if (typeCount === 0) {
-        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Conditional) VALUES (?, ?, ?, ?, ?)`, 
-            ["20260526204605-7hun58a", "#Project", "🌐 全局关系图", "", ""]);
-        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Conditional) VALUES (?, ?, ?, ?, ?)`, 
-            ["20260526204605-v11e2ta", "#Person", "🎆 烟花, 💬 消息提示", "", "[打上标签时] -> 🎆 烟花, 💬 消息提示"]);
+        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
+            ["20260526204605-7hun58a", "#Project", "🌐 全局关系图", ""]);
+        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
+            ["20260526204605-v11e2ta", "#Person", "🎆 烟花, 💬 消息提示", "[打上标签时] -> 🎆 烟花, 💬 消息提示"]);
     } else {
         try {
             db.run(`UPDATE ${TABLE_TYPES} SET Conditional = '[打上标签时] -> 🎆 烟花, 💬 消息提示' WHERE supertag = '#Person' AND (Conditional IS NULL OR Conditional = '')`);

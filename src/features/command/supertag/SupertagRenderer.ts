@@ -134,9 +134,6 @@ export class SupertagRenderer {
         });
     }
 
-    /**
-     * Create a styled capsule tag pill DOM node.
-     */
     private static createTagPill(tagName: string, onRemove: () => Promise<void>, isSmall: boolean = false): HTMLElement {
         const pill = document.createElement("div");
         pill.className = "index-supertag-pill";
@@ -148,16 +145,18 @@ export class SupertagRenderer {
                 gap: 2px;
                 padding: 0px 6px;
                 border-radius: 4px;
-                background-color: var(--b3-theme-primary-light);
+                background-color: var(--b3-theme-background-hover);
+                border: 1px solid var(--b3-theme-primary-light);
                 color: var(--b3-theme-primary);
                 font-weight: 500;
                 font-size: 10px;
                 height: 16px;
-                line-height: 16px;
+                line-height: 14px;
                 cursor: default;
                 transition: all 0.15s ease-in-out;
                 user-select: none;
                 vertical-align: middle;
+                box-sizing: border-box;
             `;
         } else {
             pill.style.cssText = `

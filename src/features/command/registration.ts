@@ -244,7 +244,16 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         if (hasRelationCol) {
             querySql = `SELECT "${typeSupertagCol}", "${typeRelationCol}" FROM ${typesTable}`;
         } else {
-            querySql = `SELECT "${typeSupertagCol}", Block_Icon_Menu, Current_Page_Menu FROM ${typesTable}`;
+            // Check if Icon_Menu exists in column names, if not fallback to Block_Icon_Menu
+            const checkCols = await runQuery(`PRAGMA table_info(${typesTable})`);
+            const colNames = checkCols?.values?.map((c: any) => c[1]) || [];
+            if (colNames.includes("Icon_Menu")) {
+                querySql = `SELECT "${typeSupertagCol}", Icon_Menu FROM ${typesTable}`;
+            } else if (colNames.includes("Block_Icon_Menu")) {
+                querySql = `SELECT "${typeSupertagCol}", Block_Icon_Menu, Current_Page_Menu FROM ${typesTable}`;
+            } else {
+                querySql = `SELECT "${typeSupertagCol}" FROM ${typesTable}`;
+            }
         }
         const typeRes = await runQuery(querySql);
         if (!typeRes || !typeRes.values) return false;
@@ -266,14 +275,14 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                                     const cmdInfo = cmdByRowId[cmdRowId];
                                     if (cmdInfo) {
                                         // Check if already bound to avoid duplicates in the same UI location
-                                        const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "BlockIconMenu");
+                                        const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
                                         if (!exists) {
                                             newRegistry.push({
                                                 typeTag: cleanTag,
                                                 methodName: cmdInfo.methodName,
                                                 commandRef: cmdInfo.commandRef,
                                                 paramMapping: cmdInfo.paramMapping,
-                                                uiLocation: "BlockIconMenu"
+                                                uiLocation: "IconMenu"
                                             });
                                         }
                                     }
@@ -283,10 +292,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                         }
                     }
                 } else {
-                    const blockMenuRaw = row[1];
-                    const pageMenuRaw = row[2];
-
-                    const processMenu = (raw: any, location: "BlockIconMenu" | "PageMenu") => {
+                    const processMenu = (raw: any, location: string) => {
                         if (!raw) return;
                         const mappedCmds = String(raw).split(/[,，]/).map(s => s.trim()).filter(Boolean);
                         for (const cmdName of mappedCmds) {
@@ -305,8 +311,12 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                         }
                     };
 
-                    processMenu(blockMenuRaw, "BlockIconMenu");
-                    processMenu(pageMenuRaw, "PageMenu");
+                    if (row.length === 2) {
+                        processMenu(row[1], "IconMenu");
+                    } else if (row.length === 3) {
+                        processMenu(row[1], "IconMenu");
+                        processMenu(row[2], "IconMenu");
+                    }
                 }
             }
         }
@@ -407,8 +417,7 @@ async function refreshRegistryFromApi() {
             };
 
             const typeTagRaw = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
-            const blockMenuRaw = getCellText("Block Icon Menu");
-            const pageMenuRaw = getCellText("Current Page Menu");
+            const iconMenuRaw = getCellText("Icon Menu") || getCellText("iconMenu") || getCellText("Block Icon Menu") || getCellText("Current Page Menu");
             const linkedRowIds = getRelationIds("绑定命令");
 
             const hasRelationCol = columns.some((c: any) => c.name === "绑定命令" || c.keyName === "绑定命令");
@@ -421,14 +430,14 @@ async function refreshRegistryFromApi() {
                     for (const cmdRowId of linkedRowIds) {
                         const cmdInfo = cmdByRowId[cmdRowId];
                         if (cmdInfo) {
-                            const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "BlockIconMenu");
+                            const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
                             if (!exists) {
                                 newRegistry.push({
                                     typeTag: cleanTag,
                                     methodName: cmdInfo.methodName,
                                     commandRef: cmdInfo.commandRef,
                                     paramMapping: cmdInfo.paramMapping,
-                                    uiLocation: "BlockIconMenu"
+                                    uiLocation: "IconMenu"
                                 });
                             }
                         }
@@ -453,8 +462,7 @@ async function refreshRegistryFromApi() {
                             }
                         }
                     };
-                    processMenu(blockMenuRaw, "BlockIconMenu");
-                    processMenu(pageMenuRaw, "PageMenu");
+                    processMenu(iconMenuRaw, "IconMenu");
                 }
             }
         }
@@ -538,7 +546,7 @@ export function addCommandTestMenuItem({ detail }: any) {
     for (const tag of currentBlockTags) {
         const matches = SUPERTAG_REGISTRY.filter(item =>
             (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
-            && item.uiLocation === "BlockIconMenu"
+            && (item.uiLocation === "IconMenu" || item.uiLocation === "BlockIconMenu" || item.uiLocation === "PageMenu")
         );
 
         if (matches.length > 0) {

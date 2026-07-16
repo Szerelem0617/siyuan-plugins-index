@@ -281,7 +281,7 @@ async function handleAvAltClick(event: MouseEvent) {
             return;
         }
 
-        // 提取所点单元格内的命令名（可以是 Block Icon Menu 的逗号分隔，也可以是关联字段的标签）
+        // 提取所点单元格内的命令名（可以是 Icon Menu 的逗号分隔，也可以是关联字段的标签）
         const cellText = cellEl.textContent || "";
         const tags = Array.from(cellEl.querySelectorAll(".av__cell--relation-tag, span")).map(el => el.textContent?.trim()).filter(Boolean);
         const tokens = cellText.split(/[,，\n;；]/).map(s => s.trim()).filter(Boolean);

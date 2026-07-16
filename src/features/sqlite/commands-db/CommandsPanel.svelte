@@ -205,8 +205,7 @@
     $: cmdUiEntriesIdx = colIdx(commandCols, "UI_Entries");
 
     $: typeSupertagIdx = colIdx(typeCols, typeSupertagCol);
-    $: typeBlockMenuIdx = colIdx(typeCols, "Block_Icon_Menu");
-    $: typePageMenuIdx = colIdx(typeCols, "Current_Page_Menu");
+    $: typeIconMenuIdx = colIdx(typeCols, "Icon_Menu");
 
     // Filtered lists
     $: filteredCommands = commandRows.filter(row => {

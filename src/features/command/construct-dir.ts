@@ -117,7 +117,7 @@ export async function constructCommandStorage() {
             "超级标签管理",
             "custom-index-type-db",
             `该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
-            "Block Icon Menu",
+            "Icon Menu",
             async (avId) => {
                 const addCol = async (name: string, type: string, icon: string, prevKey: string) => {
                     // @ts-ignore
@@ -133,12 +133,18 @@ export async function constructCommandStorage() {
                 const currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
                 let lastKeyID = currentKeys.length > 0 ? currentKeys[currentKeys.length - 1].id : "";
 
-                const blockMenuKey = await addCol("Block Icon Menu", "text", "iconMenu", lastKeyID);
-                const pageMenuKey = await addCol("Current Page Menu", "text", "iconFile", blockMenuKey);
-                const conditionalKey = await addCol("Conditional", "text", "iconPlay", pageMenuKey);
+                const iconMenuKey = await addCol("Icon Menu", "text", "iconMenu", lastKeyID);
+                const conditionalKey = await addCol("Conditional", "text", "iconPlay", iconMenuKey);
 
-                // Fetch seed data from SQLite sys_type_db
-                const seedRes = await runQuery(`SELECT rowID, supertag, Block_Icon_Menu, Current_Page_Menu, Conditional FROM sys_type_db`);
+                // Fetch seed data from SQLite sys_type_db (try Icon_Menu first, fallback if old schema)
+                const checkCols = await runQuery(`PRAGMA table_info(sys_type_db)`);
+                const colNames = checkCols?.values?.map((c: any) => c[1]) || [];
+                let seedRes;
+                if (colNames.includes("Icon_Menu")) {
+                    seedRes = await runQuery(`SELECT rowID, supertag, Icon_Menu, Conditional FROM sys_type_db`);
+                } else {
+                    seedRes = await runQuery(`SELECT rowID, supertag, Block_Icon_Menu, Conditional FROM sys_type_db`);
+                }
 
                 // Insert seed items as detached rows
                 const addRows: any[] = [];
@@ -165,7 +171,7 @@ export async function constructCommandStorage() {
 
                 const populateOps: any[] = [];
                 for (const match of seedRes.values) {
-                    const [rowID, supertag, blockMenu, pageMenu, conditional] = match;
+                    const [rowID, supertag, iconMenuVal, conditional] = match;
                     
                     if (primaryKeyId) {
                         populateOps.push({
@@ -175,8 +181,7 @@ export async function constructCommandStorage() {
                         });
                     }
 
-                    populateOps.push({ keyID: blockMenuKey, itemID: rowID, value: { type: "text", text: { content: String(blockMenu || "") } } });
-                    populateOps.push({ keyID: pageMenuKey, itemID: rowID, value: { type: "text", text: { content: String(pageMenu || "") } } });
+                    populateOps.push({ keyID: iconMenuKey, itemID: rowID, value: { type: "text", text: { content: String(iconMenuVal || "") } } });
                     populateOps.push({ keyID: conditionalKey, itemID: rowID, value: { type: "text", text: { content: String(conditional || "") } } });
                 }
 
