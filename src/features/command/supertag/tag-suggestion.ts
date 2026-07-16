@@ -5,7 +5,7 @@ import { SUPERTAG_REGISTRY } from "../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
 
 export const tagSuggestionState = {
-    enabled: false,
+    enabled: true,
     plugin: null as Plugin | null
 };
 
@@ -43,15 +43,7 @@ export async function refreshNativeTagsCache() {
 
 export async function initTagSuggestion(plugin: Plugin) {
     tagSuggestionState.plugin = plugin;
-    try {
-        const config = await plugin.loadData("tag-suggestion-config.json");
-        if (config && typeof config.enabled === "boolean") {
-            tagSuggestionState.enabled = config.enabled;
-        }
-    } catch (e) {
-        console.error("[TagSuggestion] Failed to load config:", e);
-    }
-
+    tagSuggestionState.enabled = true;
     refreshNativeTagsCache().catch(() => {});
 }
 

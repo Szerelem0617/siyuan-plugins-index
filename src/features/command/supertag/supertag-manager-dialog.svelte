@@ -8,18 +8,12 @@
         SUPERTAG_REGISTRY,
         type SupertagCommand,
     } from "../registration";
-    import { tagSuggestionState, setTagSuggestionEnabled } from "./tag-suggestion";
 
     export let dialog: any;
     export let supertagManager: any;
 
     let loading = true;
     let activeTab: "data" | "tool" | "class" = "class";
-    let tagSuggestionEnabled = tagSuggestionState.enabled;
-
-    function handleTagSuggestionToggle() {
-        setTagSuggestionEnabled(tagSuggestionEnabled);
-    }
 
     interface TagGroup {
         typeName: string;
@@ -167,17 +161,6 @@
                     style="margin-left: 4px; opacity: 0.6;">{classes.length}</span
                 >
             </div>
-        </div>
-
-        <!-- Tag Suggestion Toggle -->
-        <div class="fn__flex" style="align-items: center; gap: 8px; font-size: 11px; user-select: none; padding-right: 8px;">
-            <span style="opacity: 0.8; white-space: nowrap;">🐬 启用标签推荐 (#)</span>
-            <input
-                type="checkbox"
-                class="b3-switch"
-                bind:checked={tagSuggestionEnabled}
-                on:change={handleTagSuggestionToggle}
-            />
         </div>
     </div>
 
