@@ -117,15 +117,18 @@ async function insertCommandIntoAv(avId: string, cmd: any) {
         let existingIds: string[] = [];
         try {
             const avData = await post("/api/av/renderAttributeView", { id: avId, pageSize: 1000 });
-            const rows = avData.view?.rows || avData.rows || [];
-            const columns = avData.view?.columns || avData.columns || [];
-            const cmdIdCol = columns.find((c: any) => c.name === "Command ID" || c.name === "Command_ID");
-            const cmdIdColIdx = columns.findIndex((c: any) => c.id === cmdIdCol?.id);
+            const view = avData.view || avData;
+            const rows = view.rows || [];
+            const columns = view.columns || [];
+            const cmdIdColIdx = columns.findIndex((c: any) => c.name === "Command ID" || c.name === "Command_ID" || c.keyName === "Command ID" || c.keyName === "Command_ID");
+            console.log("[IndexOS-Duplicate-Debug] Columns found:", columns.map(c => ({ id: c.id, name: c.name, keyName: c.keyName })), "cmdIdColIdx:", cmdIdColIdx);
             if (cmdIdColIdx !== -1) {
                 existingIds = rows.map((r: any) => {
                     const cell = r.cells[cmdIdColIdx];
-                    return cell?.text?.content || "";
+                    const val = cell?.value?.text?.content || cell?.value?.mText?.content || cell?.value?.block?.content || "";
+                    return val;
                 }).filter(Boolean);
+                console.log("[IndexOS-Duplicate-Debug] Extracted existingIds from live AV:", existingIds);
             }
         } catch (e) {
             console.error("[FooterClick] Live AV query failed, falling back to SQLite:", e);
@@ -134,6 +137,7 @@ async function insertCommandIntoAv(avId: string, cmd: any) {
                 if (existRes.length > 0 && existRes[0].values.length > 0) {
                     existingIds = existRes[0].values.map(row => String(row[0] || ""));
                 }
+                console.log("[IndexOS-Duplicate-Debug] Fallback SQLite existingIds:", existingIds);
             } catch (_) {}
         }
 
@@ -141,6 +145,7 @@ async function insertCommandIntoAv(avId: string, cmd: any) {
         const hasParams = Array.isArray(cmd.params) && cmd.params.length > 0;
 
         const duplicateExists = existingIds.includes(baseId) || existingIds.some(id => id.startsWith(baseId + "-"));
+        console.log("[IndexOS-Duplicate-Debug] baseId:", baseId, "hasParams:", hasParams, "duplicateExists:", duplicateExists);
         let finalId = baseId;
         let finalName = cmd.name;
 
