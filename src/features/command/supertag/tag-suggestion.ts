@@ -13,7 +13,7 @@ let cachedNativeTags: string[] = [];
 let lastNativeFetch = 0;
 
 // The trigger character for inline blocks is "#". Siyuan handles this natively.
-// We attach our Supertags panel to the right side of Siyuan's native hint popover.
+// We attach our Supertags panel to the left side of Siyuan's native hint popover.
 const SUPERTAG_TRIGGER = "#";
 
 let blockSupertagsPanel: HTMLDivElement | null = null;
@@ -243,14 +243,6 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
     const hintEl = protyle.hint?.element as HTMLElement;
     if (!hintEl) return;
 
-    // Force Siyuan's native tag suggestion popover to show in a single column
-    // to prevent it from displaying tags in multiple wrap rows/columns.
-    hintEl.style.setProperty("display", "flex", "important");
-    hintEl.style.setProperty("flex-direction", "column", "important");
-    hintEl.style.setProperty("flex-wrap", "nowrap", "important");
-    hintEl.style.setProperty("min-width", "220px", "important");
-    hintEl.style.setProperty("width", "260px", "important");
-
     if (!blockSupertagsPanel) {
         blockSupertagsPanel = document.createElement("div");
         blockSupertagsPanel.className = "indexos-block-supertags-panel b3-list b3-list--background";
@@ -261,9 +253,14 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
     // Refresh registry to keep it fresh
     supertagMonitor.refreshRegistry().catch(() => {});
 
-    // Position panel to the right of Siyuan's native hint popover
+    // Position panel to the left of Siyuan's native hint popover
     const rect = hintEl.getBoundingClientRect();
-    blockSupertagsPanel.style.left = `${rect.right + 6}px`;
+    const panelWidth = 240;
+    let left = rect.left - panelWidth - 6;
+    if (left < 0) {
+        left = rect.right + 6;
+    }
+    blockSupertagsPanel.style.left = `${left}px`;
     blockSupertagsPanel.style.top = `${rect.top}px`;
     blockSupertagsPanel.style.height = `${rect.height}px`;
     blockSupertagsPanel.style.display = "flex";

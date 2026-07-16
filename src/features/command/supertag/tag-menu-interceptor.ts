@@ -128,7 +128,7 @@ function transformTagMenu(menuFilter: HTMLElement, inputEl: HTMLInputElement) {
     if (menuFilter.classList.contains("indexos-transformed")) return;
     menuFilter.classList.add("indexos-transformed");
 
-    // 1. Expand the Siyuan menu popover width to fit two columns side-by-side
+    // 1. Expand Siyuan's menu width to fit two columns
     const menuEl = menuFilter.closest(".b3-menu") as HTMLElement;
     if (menuEl) {
         menuEl.style.width = "540px";
@@ -139,27 +139,24 @@ function transformTagMenu(menuFilter: HTMLElement, inputEl: HTMLInputElement) {
     const nativeList = menuFilter.querySelector(".b3-list--background") as HTMLElement;
     if (!nativeList) return;
 
-    // Force native tag list to display in a single column (vertical stack layout)
-    nativeList.style.setProperty("display", "flex", "important");
-    nativeList.style.setProperty("flex-direction", "column", "important");
-    nativeList.style.setProperty("flex-wrap", "nowrap", "important");
-
     // 3. Create a flex row wrapper container
     const rowContainer = document.createElement("div");
     rowContainer.style.cssText = "display: flex; flex-direction: row; height: 320px; overflow: hidden; border-top: 1px solid var(--b3-border-color);";
 
-    // Re-style native tag list to occupy the left column
-    nativeList.style.cssText = "flex: 1; overflow-y: auto; height: 100%; border-right: 1px solid var(--b3-border-color); margin: 0; padding: 4px; box-sizing: border-box; display: flex !important; flex-direction: column !important; flex-wrap: nowrap !important;";
+    // Re-style native tag list to occupy the right column (let it retain its native scroll and columns styling)
+    nativeList.style.cssText = "flex: 1.1; overflow: auto; height: 100%; margin: 0; padding: 4px; box-sizing: border-box;";
     
-    // Insert rowContainer before nativeList and put nativeList inside
+    // Insert rowContainer before nativeList
     nativeList.parentNode?.insertBefore(rowContainer, nativeList);
-    rowContainer.appendChild(nativeList);
 
-    // 4. Create the Right Column: Supertags panel
+    // 4. Create the Left Column: Supertags panel
     const supertagPanel = document.createElement("div");
     supertagPanel.className = "indexos-supertags-panel";
-    supertagPanel.style.cssText = "flex: 1; overflow-y: auto; height: 100%; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); box-sizing: border-box;";
+    supertagPanel.style.cssText = "flex: 0.9; overflow-y: auto; height: 100%; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border-right: 1px solid var(--b3-border-color); box-sizing: border-box;";
+    
+    // Append Left Column first (Supertags), then Right Column (Native tag list)
     rowContainer.appendChild(supertagPanel);
+    rowContainer.appendChild(nativeList);
 
     // 5. Initial render of supertags (no filter query)
     renderSupertagsInPanel(supertagPanel, "");
