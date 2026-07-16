@@ -1,3 +1,4 @@
+// IndexOS Plugin Entry
 import { Plugin, Dialog } from "siyuan";
 import { setI18n, setPlugin } from "./shared/utils";
 import { createDialog, initTopbar } from "./ui/topbar";

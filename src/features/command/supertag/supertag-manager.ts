@@ -1,3 +1,4 @@
+// Supertag manager panel injection
 import { Dialog } from "siyuan";
 import SupertagManagerDialog from "./supertag-manager-dialog.svelte";
 import { i18n } from "../../../shared/utils";
