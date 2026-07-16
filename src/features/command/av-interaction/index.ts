@@ -46,7 +46,7 @@ async function handleAvFooterClick(event: MouseEvent) {
         console.log("[IndexOS-AV-Click] Click matched by closest av-add-bottom or av__row--util. Target:", target);
     }
 
-    const avContainer = target.closest(".av__container") || target.closest("[data-av-id]") || target.closest(".av");
+    const avContainer = target.closest("[data-av-id]") || target.closest('[data-type="NodeAttributeView"]') || target.closest(".av__container") || target.closest(".av");
     if (!avContainer) {
         console.warn("[IndexOS-AV-Click] Could not resolve avContainer for target.");
         return;
