@@ -18,8 +18,8 @@ function generateNodeId(): string {
 }
 
 export async function executeCreateView(processedSql: string, db: any, options?: any): Promise<any> {
-    // Pattern: CREATE [KANBAN|GALLERY|TABLE] VIEW [viewName] AS SELECT ... FROM [tableName] ...
-    const viewMatch = processedSql.match(/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:(KANBAN|GALLERY|TABLE)\s+)?VIEW\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+AS\s+SELECT\s+.*?\s+FROM\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))(?:\s*.*)?$/is);
+    // Pattern: CREATE [KANBAN|GALLERY|TABLE] VIEW [viewName] AS SELECT ... FROM [tableName] [WHERE ...]
+    const viewMatch = processedSql.match(/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:(KANBAN|GALLERY|TABLE)\s+)?VIEW\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+AS\s+SELECT\s+.*?\s+FROM\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))(?:\s+WHERE\s+(.+))?\s*;?\s*$/is);
     if (!viewMatch) {
         return null;
     }
@@ -27,6 +27,7 @@ export async function executeCreateView(processedSql: string, db: any, options?:
     const requestedLayout = viewMatch[1]; // KANBAN, GALLERY, TABLE or undefined
     const viewName = (viewMatch[2] || viewMatch[3] || "").trim();
     const tableName = (viewMatch[4] || viewMatch[5] || "").trim();
+    const whereClause = (viewMatch[6] || "").trim();
 
     // Map KANBAN/GALLERY/TABLE to Siyuan's layout type (lowercase)
     let layoutType = "table";
@@ -55,28 +56,95 @@ export async function executeCreateView(processedSql: string, db: any, options?:
 
     console.log(`[SQLiteManager] Creating view '${viewName}' (Type: ${layoutType}, ID: ${newViewID}) on table '${tableName}' (avID: ${avID}, BlockID: ${avBlockID})`);
 
-    // 3. Post Siyuan transaction to create the view and rename it
+    // Parse simple filter condition: ColumnName = 'Value' or similar
+    let filtersData: any[] = [];
+    if (whereClause) {
+        const condMatch = whereClause.match(/^\s*["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5\s]+)["`']?\s*(=|!=|LIKE|Contains)\s*['"`]?([^\n\r'"`]+)['"`]?\s*$/i);
+        if (condMatch) {
+            const colName = condMatch[1].trim();
+            const operatorRaw = condMatch[2].trim().toUpperCase();
+            const filterValue = condMatch[3].trim();
+
+            const schemaCols = db.exec(`SELECT key_id, key_type FROM _av_schema WHERE av_id = ? AND (col_name = ? OR key_name = ?)`, [avID, colName, colName]);
+            if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
+                const keyID = String(schemaCols[0].values[0][0]);
+                const keyType = String(schemaCols[0].values[0][1]);
+
+                let operator = "=";
+                if (operatorRaw === "!=") operator = "!=";
+                else if (operatorRaw === "LIKE" || operatorRaw === "CONTAINS") operator = "Contains";
+
+                let cellValue: any = null;
+                if (keyType === "checkbox") {
+                    cellValue = { type: "checkbox", checkbox: { checked: filterValue === "true" || filterValue === "1" } };
+                } else if (keyType === "number") {
+                    cellValue = { type: "number", number: { content: filterValue, isNotEmpty: true } };
+                } else {
+                    cellValue = { type: "text", text: { content: filterValue } };
+                }
+
+                filtersData = [
+                    {
+                        combination: "and",
+                        filters: [
+                            {
+                                column: keyID,
+                                operator: operator,
+                                value: cellValue
+                            }
+                        ]
+                    }
+                ];
+                console.log(`[SQLiteManager] Parsed filter conditions for view:`, JSON.stringify(filtersData));
+            } else {
+                console.warn(`[SQLiteManager] Column '${colName}' not found in _av_schema for table '${tableName}'. Filter will not be applied.`);
+            }
+        } else {
+            console.warn(`[SQLiteManager] WHERE clause '${whereClause}' is too complex or not supported. Filter will not be applied.`);
+        }
+    }
+
+    // 3. Post Siyuan transactions to:
+    //    a) Add the view
+    //    b) Rename the view
+    //    c) Activate the view on the block (so filters can apply to it)
+    //    d) Set the filters for the active view
+    const doOperations: any[] = [
+        {
+            action: "addAttrViewView",
+            avID: avID,
+            id: newViewID,
+            blockID: avBlockID,
+            layout: layoutType
+        },
+        {
+            action: "setAttrViewViewName",
+            avID: avID,
+            id: newViewID,
+            blockID: avBlockID,
+            data: viewName
+        },
+        {
+            action: "setAttrViewBlockView",
+            avID: avID,
+            id: newViewID,
+            blockID: avBlockID
+        }
+    ];
+
+    if (filtersData.length > 0) {
+        doOperations.push({
+            action: "setAttrViewFilters",
+            avID: avID,
+            data: filtersData,
+            blockID: avBlockID
+        });
+    }
+
     const txRes = await post("/api/transactions", {
         reqId: Date.now(),
         app: "plugin-index",
-        transactions: [{
-            doOperations: [
-                {
-                    action: "addAttrViewView",
-                    avID: avID,
-                    id: newViewID,
-                    blockID: avBlockID,
-                    layout: layoutType
-                },
-                {
-                    action: "setAttrViewViewName",
-                    avID: avID,
-                    id: newViewID,
-                    blockID: avBlockID,
-                    data: viewName
-                }
-            ]
-        }]
+        transactions: [{ doOperations }]
     });
 
     if (txRes && txRes.code && txRes.code !== 0) {
@@ -90,6 +158,6 @@ export async function executeCreateView(processedSql: string, db: any, options?:
 
     return { 
         success: true, 
-        message: `View '${viewName}' (${layoutType} layout) created successfully on table '${tableName}'.` 
+        message: `View '${viewName}' (${layoutType} layout) created successfully on table '${tableName}'${filtersData.length > 0 ? " with filters applied" : ""}.` 
     };
 }

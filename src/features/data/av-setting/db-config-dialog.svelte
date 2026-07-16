@@ -188,6 +188,37 @@
         if (c.isSystem) return false;
         return true;
     });
+    import { executeWritableSql } from "../../sqlite/sqlite-manager";
+
+    async function handleCreateSubtagView(map: any) {
+        if (!map.name) {
+            showMessage("请输入子标签名后再创建视图", 3000, "info");
+            return;
+        }
+
+        try {
+            const cleanAvId = avId.replace(/[^a-zA-Z0-9]/g, "_");
+            const tableName = `av_${cleanAvId}`;
+            const viewName = map.name;
+            const columnName = selectedColumn?.name || "";
+            const valueVal = map.value;
+
+            // Execute SQL: CREATE TABLE VIEW [viewName] AS SELECT * FROM [tableName] WHERE [columnName] = '[valueVal]'
+            const sql = `CREATE TABLE VIEW "${viewName}" AS SELECT * FROM "${tableName}" WHERE "${columnName}" = '${valueVal}'`;
+            console.log("[DbConfig] Creating subtag view with SQL:", sql);
+            
+            showMessage("⏳ 正在创建过滤视图...", 2000);
+            const res = await executeWritableSql(sql);
+            if (res && res.success) {
+                showMessage(`✓ 成功创建过滤视图: ${viewName}`);
+            } else {
+                showMessage(`创建视图失败: ${res?.message || "未知错误"}`);
+            }
+        } catch (e: any) {
+            console.error("[DbConfig] Failed to create subtag view:", e);
+            showMessage(`创建视图失败: ${e.message || e}`, 5000, "error");
+        }
+    }
 </script>
 
 <div
@@ -315,6 +346,14 @@
                                             bind:value={map.name}
                                         />
                                     </div>
+                                    <button
+                                        class="b3-button b3-button--outline"
+                                        style="font-size: 10px; padding: 4px 8px; flex-shrink: 0;"
+                                        on:click={() => handleCreateSubtagView(map)}
+                                        disabled={!map.name}
+                                    >
+                                        📊 创建视图
+                                    </button>
                                 </div>
                             {/each}
 
