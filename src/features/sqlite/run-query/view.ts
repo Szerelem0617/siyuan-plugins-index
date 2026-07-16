@@ -141,7 +141,7 @@ export async function executeCreateView(processedSql: string, db: any, options?:
 
     // Transaction 2: Set the filters for the active view (with a tiny timeout to ensure DB flush)
     if (filtersData.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 100));
         const txRes2 = await post("/api/transactions", {
             reqId: Date.now(),
             app: "plugin-index",

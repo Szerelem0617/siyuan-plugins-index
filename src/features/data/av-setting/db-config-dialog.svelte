@@ -202,11 +202,14 @@
             let viewExists = false;
             try {
                 const avData = await post("/api/av/renderAttributeView", { id: avId });
-                const viewData = avData.view || avData;
-                const viewsList = viewData.views || [];
+                console.log("[DbConfig-Debug] renderAttributeView response:", avData);
+                const viewsList = avData.views || avData.view?.views || [];
+                console.log("[DbConfig-Debug] Extracted views list:", viewsList);
+                console.log("[DbConfig-Debug] Target map.viewId:", map.viewId);
                 if (map.viewId && viewsList.some((v: any) => v.id === map.viewId)) {
                     viewExists = true;
                 }
+                console.log("[DbConfig-Debug] viewExists result:", viewExists);
             } catch (err) {
                 console.warn("[DbConfig] Failed to fetch live AV views:", err);
             }
