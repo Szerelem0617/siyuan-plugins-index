@@ -466,26 +466,22 @@ async function initDbDoc(
     }
 
     let avId = "";
+    let avBlockId = "";
 
     if (docId) {
-        await post("/api/attr/setBlockAttrs", {
-            id: docId,
-            attrs: { [config.attrName]: "true" }
-        });
-
-        // 3. Locate the Attribute View block directly
+        // 1. Locate the Attribute View block ID and AV ID
         try {
             const docDomRes = await client.getBlockDOM({ id: docId });
             const docHtml = docDomRes.data?.dom || "";
-            const match = docHtml.match(/data-av-id="([^"]+)"/);
-            if (match) {
-                avId = match[1];
-            }
+            const matchAvId = docHtml.match(/data-av-id="([^"]+)"/);
+            const matchBlockId = docHtml.match(/data-node-id="([^"]+)"[^>]*data-type="NodeAttributeView"/);
+            if (matchAvId) avId = matchAvId[1];
+            if (matchBlockId) avBlockId = matchBlockId[1];
         } catch (domErr) {
             console.warn(`[IndexOS] Direct DOM parsing failed, falling back to SQL:`, domErr);
         }
 
-        if (!avId) {
+        if (!avId || !avBlockId) {
             console.log(`[IndexOS] Waiting for indexing on ${docId}...`);
             await sleep(2000);
             
@@ -493,13 +489,20 @@ async function initDbDoc(
             const avRes = await post("/api/query/sql", { stmt: avSql });
 
             if (avRes && avRes.length > 0) {
-                const avBlockId = avRes[0].id;
+                avBlockId = avRes[0].id;
                 const domRes = await client.getBlockDOM({ id: avBlockId });
                 const html = domRes.data?.dom || "";
                 const match = html.match(/data-av-id="([^"]+)"/);
                 avId = match ? match[1] : avBlockId;
             }
-        }     
+        }
+
+        const targetId = avBlockId || docId;
+        console.log(`[IndexOS] Setting database identifying attribute ${config.attrName} on block ${targetId}`);
+        await post("/api/attr/setBlockAttrs", {
+            id: targetId,
+            attrs: { [config.attrName]: "true" }
+        });     
         if (avId) {
             console.log(`[IndexOS] Pre-rendering AV ${avId} to initialize view...`);
             await post("/api/av/renderAttributeView", { id: avId });

@@ -26,17 +26,40 @@ export function destroyButtonLinkListener() {
 
 async function handleAvFooterClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
-    const footerBtn = target.closest(".av__row--footer");
-    if (!footerBtn) return;
+    
+    // Add debug logging
+    const isAvElement = target.closest(".av") || target.closest(".av__container") || target.closest("[data-av-id]");
+    if (isAvElement) {
+        console.log("[IndexOS-AV-Click] Click inside AV detected. Target:", target, "tagName:", target.tagName, "className:", target.className);
+    }
 
-    const avContainer = target.closest(".av__container") || target.closest("[data-av-id]");
-    if (!avContainer) return;
+    const addBtn = target.closest('[data-type="av-add-bottom"]') || target.closest(".av__row--util");
+    if (!addBtn) {
+        // Double check if text content matches "添加条目"
+        const txt = target.textContent?.trim() || "";
+        if (txt === "添加条目" || txt.includes("添加条目") || txt === "+ 添加条目") {
+            console.log("[IndexOS-AV-Click] Click matched by text content '添加条目'. Target:", target);
+        } else {
+            return;
+        }
+    } else {
+        console.log("[IndexOS-AV-Click] Click matched by closest av-add-bottom or av__row--util. Target:", target);
+    }
+
+    const avContainer = target.closest(".av__container") || target.closest("[data-av-id]") || target.closest(".av");
+    if (!avContainer) {
+        console.warn("[IndexOS-AV-Click] Could not resolve avContainer for target.");
+        return;
+    }
 
     const avId = avContainer.getAttribute("data-av-id") || "";
     const commandAvId = getCommandAvId();
+    console.log("[IndexOS-AV-Click] Click resolved avId:", avId, "commandAvId:", commandAvId);
+
     if (avId !== commandAvId) return;
 
     // 拦截 command-db 的添加条目点击，防止默认生成空行
+    console.log("[IndexOS-AV-Click] Hijacking add item click on command-db!");
     event.preventDefault();
     event.stopPropagation();
 
