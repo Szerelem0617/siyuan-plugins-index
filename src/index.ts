@@ -9,7 +9,9 @@ import { addAVMenuItems, avEventHandler } from "./features/data/attribute-view/e
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
-import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems, refreshSupertagRegistry, syncGlobalSupertagsCache, DEV_ENABLE_INIT_SYS } from "./features/command/registration";
+import { DEV_ENABLE_INIT_SYS } from "./features/command/registration";
+import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems } from "./features/command/menu-hooks";
+import { refreshSupertagRegistry, syncGlobalSupertagsCache } from "./features/command/utils/sync-service";
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { supertagMonitor } from "./features/command/supertag/supertag";
 import { supertagManager } from "./features/command/supertag/supertag-manager";

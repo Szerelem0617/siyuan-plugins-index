@@ -1,5 +1,6 @@
 import { post } from "../../../shared/api-client/request";
-import { SUPERTAG_REGISTRY, refreshSupertagRegistry, COMMAND_REGISTRY, getTypeAvId } from "../registration";
+import { SUPERTAG_REGISTRY, COMMAND_REGISTRY, getTypeAvId } from "../registration";
+import { refreshSupertagRegistry } from "../utils/sync-service";
 import { getGlobalTypeConfigs } from "../../data/av-setting/db-config";
 import { type TypeConfig } from "../../data/av-setting/types";
 import { showMessage } from "siyuan";

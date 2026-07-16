@@ -17,8 +17,8 @@ import { plugin } from "../../shared/utils";
 import { post } from "../../shared/api-client/request";
 import { commandRegistry } from "./registry/command-registry";
 import type { CommandDef, ParamSchema } from "./registry/command-registry";
-import { runQuery, tableNameToAvId, checkTableExists, instantiateAV } from "../sqlite/sqlite-manager";
-import { getGlobalTypeConfigs } from "../data/av-setting/db-config";
+import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } from "./utils/context-extractor";
+import { renderTemplate, formatDate, formatTime } from "./utils/template-engine";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -317,251 +317,53 @@ async function buildParams(
  *   {{root_id}}      所在文档根块 ID
  *   {{attr:KEY}}     触发块的自定义属性值
  */
-/**
- * 从 SQLite (Layer 4 数据库) 中按优先级解析获取块的列属性键值对。
- * 优先级：
- *   1. 与 supertag 同名的数据库表中的列值。
- *   2. 其他包含该 blockId 的数据库表中的列值。
- */
-async function resolveLayer4Params(blockId: string, supertag?: string): Promise<Record<string, string>> {
-    const params: Record<string, string> = {};
-    if (!blockId) {
-        console.warn(`[Layer4Params-Debug] Aborted: blockId is empty!`);
-        return params;
-    }
-
-    const cleanTag = supertag ? supertag.replace(/^#/, "").trim().toLowerCase() : "";
-    console.log(`[Layer4Params-Debug] Starting Layer 4 resolution. blockId: "${blockId}", supertag: "${supertag}", cleanTag: "${cleanTag}"`);
-
-    const querySQLite = async (): Promise<Array<{ tableName: string; avId: string; name: string; rowData: Record<string, string> }>> => {
-        const tablesRes = await runQuery(`
-            SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'av_%'
-        `);
-        console.log(`[Layer4Params-Debug] SQLite Master av_ tables:`, JSON.stringify(tablesRes?.values || []));
-        if (!tablesRes || !tablesRes.values || tablesRes.values.length === 0) {
-            return [];
-        }
-
-        const matches: Array<{ tableName: string; avId: string; name: string; rowData: Record<string, string> }> = [];
-
-        for (const row of tablesRes.values) {
-            const tableName = row[0];
-            if (!tableName) continue;
-
-            try {
-                const existsRes = await runQuery(`SELECT count(*) FROM "${tableName}" WHERE rowID = ?`, [blockId]);
-                const existsCount = existsRes?.values?.[0]?.[0] || 0;
-                console.log(`[Layer4Params-Debug] Table "${tableName}" exists check for block "${blockId}": existsCount=${existsCount}`);
-                if (Number(existsCount) > 0) {
-                    const avId = tableNameToAvId(tableName);
-                    
-                    let dbRealName = "";
-                    try {
-                        const avConfig = await post("/api/av/getAttributeView", { id: avId });
-                        dbRealName = avConfig?.name || (avConfig?.av ? avConfig.av.name : "");
-                    } catch { /* ignore */ }
-
-                    const rowRes = await runQuery(`SELECT * FROM "${tableName}" WHERE rowID = ?`, [blockId]);
-                    if (rowRes && rowRes.columns && rowRes.values && rowRes.values.length > 0) {
-                        const cols = rowRes.columns;
-                        const vals = rowRes.values[0];
-                        const rowData: Record<string, string> = {};
-                        cols.forEach((colName, idx) => {
-                            rowData[colName] = vals[idx] !== null && vals[idx] !== undefined ? String(vals[idx]) : "";
-                        });
-                        console.log(`[Layer4Params-Debug] Match found in table "${tableName}" (${dbRealName}). RowData:`, JSON.stringify(rowData));
-                        matches.push({ tableName, avId, name: dbRealName, rowData });
-                    }
-                }
-            } catch (err) {
-                console.error(`[Layer4Params-Debug] Error querying table "${tableName}":`, err);
-            }
-        }
-        return matches;
-    };
-
-    try {
-        // 1. First, search SQLite directly (Read-only query, no HTTP API requests)
-        let matchedDbs = await querySQLite();
-
-        // 2. If not found in SQLite, trigger passive sync fallback
-        if (matchedDbs.length === 0) {
-            console.log(`[Layer4Params-Debug] Block "${blockId}" not found in SQLite cache. Pulling attributes from Siyuan...`);
-            const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
-            const avsAttr = attrsRes.data?.["custom-avs"] || "";
-            console.log(`[Layer4Params-Debug] Siyuan block custom-avs attribute value: "${avsAttr}"`);
-            const avIds = avsAttr.split(",").map((id: string) => id.trim()).filter(Boolean);
-            
-            let syncedAny = false;
-            for (const avId of avIds) {
-                try {
-                    console.log(`[Layer4Params-Debug] Instantiating block's containing AV: "${avId}"`);
-                    await instantiateAV(avId, true); // force sync
-                    syncedAny = true;
-                } catch (syncErr) {
-                    console.error(`[Layer4Params-Debug] Passive sync failed for ${avId}:`, syncErr);
-                }
-            }
-
-            if (avIds.length === 0 && cleanTag) {
-                console.log(`[Layer4Params-Debug] No containing AVs found. Fallback matching global database configurations for cleanTag: "${cleanTag}"`);
-                const configs = await getGlobalTypeConfigs();
-                const matchedConfigs = configs.filter(c => {
-                    const typeName = (c.typeName || "").trim().toLowerCase();
-                    return typeName === cleanTag || typeName.includes(cleanTag) || cleanTag.includes(typeName);
-                });
-                console.log(`[Layer4Params-Debug] Global matched configurations:`, JSON.stringify(matchedConfigs));
-                for (const config of matchedConfigs) {
-                    if (config.avId) {
-                        try {
-                            console.log(`[Layer4Params-Debug] Syncing matched database: "${config.avId}"`);
-                            await instantiateAV(config.avId, true); // force sync
-                            syncedAny = true;
-                        } catch (syncErr) { /* ignore */ }
-                    }
-                }
-            }
-
-            // Retry SQLite query if we successfully synced any databases
-            if (syncedAny) {
-                matchedDbs = await querySQLite();
-            }
-        }
-
-        if (matchedDbs.length === 0) {
-            console.warn(`[Layer4Params-Debug] No databases containing block "${blockId}" found after sync.`);
-            return params;
-        }
-
-        // 3. Priority match: exact database name matching supertag > others
-        let targetDb = matchedDbs[0];
-        if (cleanTag) {
-            const sameNameDb = matchedDbs.find(db => {
-                const dbName = db.name.trim().toLowerCase();
-                return dbName === cleanTag || dbName.includes(cleanTag) || cleanTag.includes(dbName);
-            });
-            if (sameNameDb) {
-                targetDb = sameNameDb;
-                console.log(`[Layer4Params-Debug] Priority match selected table: "${targetDb.tableName}" (${targetDb.name})`);
-            } else {
-                console.log(`[Layer4Params-Debug] No exact name match for tag "${cleanTag}". Selecting first available table: "${targetDb.tableName}" (${targetDb.name})`);
-            }
-        }
-
-        // 4. Resolve Schema columns and map to parameter keys
-        const schemaRes = await runQuery(`
-            SELECT col_name, key_name FROM _av_schema WHERE av_id = ?
-        `, [targetDb.avId]);
-
-        if (schemaRes && schemaRes.values) {
-            for (const schemaRow of schemaRes.values) {
-                const colName = schemaRow[0];
-                const keyName = schemaRow[1];
-                const cellValue = targetDb.rowData[colName] ?? "";
-
-                if (colName) params[colName] = cellValue;
-                if (keyName) params[keyName] = cellValue;
-            }
-        }
-        console.log(`[Layer4Params-Debug] Successfully resolved database parameters:`, JSON.stringify(params));
-    } catch (e) {
-        console.error("[Layer4Params-Debug] Error resolving Layer 4 params:", e);
-    }
-
-    return params;
-}
-
-/**
- * 替换字符串中的 {{占位符}}。
- * 优先级顺序：
- *   1. 与 supertag 同名的 Layer 4 本地表列值。
- *   2. 其他 Layer 4 本地表列值。
- *   3. 块自身的自定义属性 / 系统同步/API变量。
- */
 async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
     console.log(`[Dispatcher-Debug] resolveTemplate input: "${text}"`);
     if (!text.includes("{{")) return text;
 
-    const blockId = context.blockEl?.getAttribute("data-node-id") ?? "";
-    let result = text;
-
-    // Detect if we have Class Method Mode or Tool Component Mode
+    const blockId = getBlockId(context);
     let isClassMethodMode = false;
-    let layer4Params: Record<string, string> = {};
+    const variables: Record<string, string> = {
+        "date": formatDate(new Date()),
+        "time": formatTime(new Date()),
+        "block_id": blockId,
+    };
 
-    if (context.supertag) {
+    if (context.supertag && blockId) {
         console.log(`[Dispatcher-Debug] Resolving template with supertag: "${context.supertag}"`);
-        layer4Params = await resolveLayer4Params(blockId, context.supertag);
-        // If we found database columns matching, it's Class Method Mode
+        const layer4Params = await resolveLayer4Params(blockId, context.supertag);
         if (Object.keys(layer4Params).length > 0) {
             isClassMethodMode = true;
+            Object.assign(variables, layer4Params);
         }
     }
 
     if (isClassMethodMode) {
         console.log(`[Dispatcher] Executing in Class Method mode for supertag: ${context.supertag}`);
-        // 1. Resolve Layer 4 database columns (Priority 1 & 2)
-        for (const [key, value] of Object.entries(layer4Params)) {
-            result = result.replaceAll(`{{${key}}}`, value);
-            result = result.replaceAll(`{{attr:${key}}}`, value);
-        }
     } else {
         console.log(`[Dispatcher] Executing in Tool Component mode (no active Class/Database mapping). Database attributes mapping is disabled.`);
     }
 
-    // 2. Resolve basic system / sync variables (both modes support this)
-    const syncVars: Record<string, string> = {
-        "date": formatDate(new Date()),
-        "time": formatTime(new Date()),
-        "block_id": blockId,
-    };
-    for (const [key, value] of Object.entries(syncVars)) {
-        result = result.replaceAll(`{{${key}}}`, value);
+    if (text.includes("{{root_id}}") || text.includes("{{parent_id}}")) {
+        const { rootId, parentId } = await getParentIdAndRootId(blockId);
+        variables["root_id"] = rootId;
+        variables["parent_id"] = parentId;
     }
 
-    // 3. root_id / parent_id (both modes support this)
-    if (result.includes("{{root_id}}") || result.includes("{{parent_id}}")) {
-        try {
-            const res = await post("/api/block/getBlockBreadcrumb", { id: blockId });
-            const crumbs: any[] = res.data ?? [];
-            const rootId = crumbs[0]?.id ?? "";
-            const parentId = crumbs.length > 1 ? crumbs[crumbs.length - 2]?.id : rootId;
-            result = result.replaceAll("{{root_id}}", rootId);
-            result = result.replaceAll("{{parent_id}}", parentId);
-        } catch {
-            result = result.replaceAll("{{root_id}}", "");
-            result = result.replaceAll("{{parent_id}}", "");
-        }
-    }
-
-    // 4. Resolve custom attributes (Only Class Method Mode allows {{attr:KEY}} from custom block attributes)
-    const attrMatches = result.match(/\{\{attr:([^}]+)\}\}/g);
-    if (attrMatches && blockId) {
+    if (text.includes("{{attr:") && blockId) {
         if (isClassMethodMode) {
-            try {
-                const res = await post("/api/attr/getBlockAttrs", { id: blockId });
-                const attrs: Record<string, string> = res.data ?? {};
-                for (const match of attrMatches) {
-                    const attrKey = match.slice(7, -2);
-                    const val = attrs[attrKey] ?? "";
-                    console.log(`[Dispatcher-Debug] Resolving custom attribute {{attr:${attrKey}}} with value: "${val}"`);
-                    result = result.replaceAll(match, val);
-                }
-            } catch (err) {
-                console.error("[Dispatcher-Debug] Error resolving custom attributes:", err);
-            }
-        } else {
-            // For Tool Component mode, replace any residual {{attr:KEY}} with empty string to prevent exposure/errors
-            console.log(`[Dispatcher] Custom attribute mapping {{attr:...}} is disabled in Tool Component mode.`);
-            for (const match of attrMatches) {
-                result = result.replaceAll(match, "");
+            const attrs = await getBlockAttrs(blockId);
+            for (const [k, v] of Object.entries(attrs)) {
+                variables[`attr:${k}`] = v;
             }
         }
     }
 
+    const result = renderTemplate(text, variables, isClassMethodMode);
     console.log(`[Dispatcher-Debug] resolveTemplate final output: "${result}"`);
     return result;
 }
+
 
 
 
@@ -676,10 +478,3 @@ function hotkeyToKeyboardEvent(hotkey: string): KeyboardEvent | null {
     }
 }
 
-function formatDate(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function formatTime(d: Date): string {
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
-}

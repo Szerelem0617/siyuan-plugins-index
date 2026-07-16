@@ -95,7 +95,7 @@ export async function createDatabaseWithBlocks(sourceBlockIds: string[], silent:
 
     const lastBlockId = sourceBlockIds[sourceBlockIds.length - 1];
     try {
-        const sql = `SELECT root_id FROM attributes WHERE name IN ('custom-index-command-db', 'custom-index-type-db') AND root_id = (SELECT root_id FROM blocks WHERE id = '${lastBlockId}' LIMIT 1) LIMIT 1`;
+        const sql = `SELECT root_id FROM attributes WHERE name IN ('custom-index-command-db', 'custom-index-supertag-db') AND root_id = (SELECT root_id FROM blocks WHERE id = '${lastBlockId}' LIMIT 1) LIMIT 1`;
         const res = await post("/api/query/sql", { stmt: sql });
         if (res && res.length > 0) {
             skipTemplateCols = true;

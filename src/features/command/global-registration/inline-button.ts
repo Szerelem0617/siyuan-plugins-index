@@ -1,7 +1,8 @@
 import { dispatchCommand } from "../command-dispatcher";
 import { commandRegistry } from "../registry/command-registry";
 import { showMessage, Dialog } from "siyuan";
-import { DEV_ENABLE_INIT_SYS, refreshSupertagRegistry, SUPERTAG_REGISTRY, COMMAND_REGISTRY } from "../registration";
+import { DEV_ENABLE_INIT_SYS, SUPERTAG_REGISTRY, COMMAND_REGISTRY } from "../registration";
+import { refreshSupertagRegistry } from "../utils/sync-service";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Protocol helpers

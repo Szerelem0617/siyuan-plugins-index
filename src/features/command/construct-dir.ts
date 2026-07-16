@@ -521,7 +521,7 @@ async function initDbDoc(
                 }
 
                 // 2. Set database name
-                const dbTitle = config.attrName === "custom-index-command-db" ? "Command-db" : "Type-db";
+                const dbTitle = config.attrName === "custom-index-command-db" ? "command-db" : "supertag-db";
                 await post("/api/transactions", {
                     app: "plugin-index",
                     reqId: Date.now() + 200,

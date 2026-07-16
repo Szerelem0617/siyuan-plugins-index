@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { getTargetTablesInfo, refreshSupertagRegistry } from "../../command/registration";
+    import { getTargetTablesInfo, refreshSupertagRegistry } from "../../command/utils/sync-service";
     import { runQuery, getSqliteEngine, saveDatabaseToDisk, tableNameToAvId } from "../sqlite-manager";
     import { dispatchCommand } from "../../command/command-dispatcher";
     import { showMessage } from "siyuan";

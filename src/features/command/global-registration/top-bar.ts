@@ -6,7 +6,8 @@ import { dispatchCommand } from "../command-dispatcher";
 import { updateInlineButtonList, InlineButtonCmd } from "./inline-button";
 import { updateCommandPaletteList, PaletteCommand } from "./command-palette";
 import { getSqliteEngine, runQuery, instantiateAV, checkTableExists, tableNameToAvId, instantiatedAvIdsCache, tableSyncTimes } from "../../sqlite/sqlite-manager";
-import { getTargetTablesInfo, refreshSupertagRegistry, getCommandAvId, getTypeAvId, getCommandDocId, getTypeDocId } from "../registration";
+import { getCommandAvId, getTypeAvId, getCommandDocId, getTypeDocId } from "../registration";
+import { getTargetTablesInfo, refreshSupertagRegistry } from "../utils/sync-service";
 import { initSystemTables } from "../indexos/command-sqlite";
 import { isDevModeActive } from "../../dev-mode";
 

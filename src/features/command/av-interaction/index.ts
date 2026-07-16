@@ -7,6 +7,7 @@ import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import ParamConfigDialog from "./ParamConfigDialog.svelte";
 import ConditionalTriggerDialog from "./ConditionalTriggerDialog.svelte";
 import UIEntriesSelectorDialog from "./UIEntriesSelectorDialog.svelte";
+import RegistryCommandSelectorDialog from "./RegistryCommandSelectorDialog.svelte";
 import { parseAVClickEvent } from "../../../shared/utils";
 
 /**
@@ -177,6 +178,60 @@ async function handleAvAltClick(event: MouseEvent) {
                             console.log("[UIEntriesConfig] Saving new entries:", updatedValue);
                             await updateCellValue(null, avId, rowId, colId, updatedValue);
                             showMessage("✓ 注册位置更新成功，已刷新后台注册。");
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (clickedKeyName === "Command ID" || clickedKeyName === "命令ID") {
+                event.preventDefault();
+                event.stopPropagation();
+
+                let commands: any[] = [];
+                try {
+                    const { db } = await getSqliteEngine();
+                    const qRes = db.exec(`SELECT id, name, description FROM sys_registry_db`);
+                    if (qRes.length > 0 && qRes[0].values.length > 0) {
+                        commands = qRes[0].values.map(row => ({
+                            id: String(row[0] || ""),
+                            name: String(row[1] || ""),
+                            description: String(row[2] || "")
+                        }));
+                    }
+                } catch (e) {
+                    console.error("[AltClick] Failed to query registry commands:", e);
+                }
+
+                if (commands.length === 0) {
+                    showMessage("系统命令注册表为空或查询失败");
+                    return;
+                }
+
+                const dialog = new Dialog({
+                    title: `选择内置命令`,
+                    content: `<div id="registry-command-selector-dialog" style="height: 100%;"></div>`,
+                    width: "480px",
+                    height: "400px"
+                });
+
+                new RegistryCommandSelectorDialog({
+                    target: document.getElementById("registry-command-selector-dialog")!,
+                    props: {
+                        dialog,
+                        commands,
+                        onSelect: async (cmd: any) => {
+                            dialog.destroy();
+                            // 1. Update the Command ID cell
+                            await updateCellValue(null, avId, rowId, colId, cmd.id);
+
+                            // 2. Update the Primary Key (Label) cell if empty/clean
+                            const pkHeader = avContainer.querySelector('.av__row--header .av__cell[data-dtype="block"]');
+                            const pkColId = pkHeader?.getAttribute("data-col-id");
+                            if (pkColId) {
+                                await updateCellValue(null, avId, rowId, pkColId, cmd.name);
+                            }
+                            showMessage(`已添加命令 "${cmd.name}" 到当前行`);
                         }
                     }
                 });

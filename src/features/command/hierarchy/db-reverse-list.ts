@@ -2,7 +2,7 @@ import { post } from "../../../shared/api-client/request";
 import { client } from "../../../shared/api-client";
 import { showMessage } from "siyuan";
 import { sleep, formatDate } from "../../../shared/utils";
-import { getTargetTablesInfo } from "../registration";
+import { getTargetTablesInfo } from "../utils/sync-service";
 import {
     ATTR_LINKED_AV,
     ATTR_LINKED_AV_BLOCK,
@@ -49,10 +49,10 @@ export async function reverseDbToList(): Promise<boolean> {
         }
         const cmdDocId = cmdDocs[0].root_id;
 
-        const typeSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-type-db' LIMIT 1`;
+        const typeSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-supertag-db' LIMIT 1`;
         const typeDocs = await post("/api/query/sql", { stmt: typeSql });
         if (!typeDocs || typeDocs.length === 0) {
-            showMessage("未找到 超级标签管理 (Type-DB) 的系统属性", 4000, "error");
+            showMessage("未找到 supertag-db 的系统属性", 4000, "error");
             return false;
         }
         const typeDocId = typeDocs[0].root_id;
