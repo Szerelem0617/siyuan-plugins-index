@@ -473,10 +473,14 @@ async function initDbDoc(
         try {
             const docDomRes = await client.getBlockDOM({ id: docId });
             const docHtml = docDomRes.data?.dom || "";
-            const matchAvId = docHtml.match(/data-av-id="([^"]+)"/);
-            const matchBlockId = docHtml.match(/data-node-id="([^"]+)"[^>]*data-type="NodeAttributeView"/);
-            if (matchAvId) avId = matchAvId[1];
-            if (matchBlockId) avBlockId = matchBlockId[1];
+            const avTagMatch = docHtml.match(/<div[^>]+data-type="NodeAttributeView"[^>]*>/);
+            if (avTagMatch) {
+                const avTag = avTagMatch[0];
+                const matchAvId = avTag.match(/data-av-id="([^"]+)"/);
+                const matchBlockId = avTag.match(/data-node-id="([^"]+)"/);
+                if (matchAvId) avId = matchAvId[1];
+                if (matchBlockId) avBlockId = matchBlockId[1];
+            }
         } catch (domErr) {
             console.warn(`[IndexOS] Direct DOM parsing failed, falling back to SQL:`, domErr);
         }

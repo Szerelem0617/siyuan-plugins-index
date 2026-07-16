@@ -16,12 +16,12 @@ import { parseAVClickEvent } from "../../../shared/utils";
  */
 export function initButtonLinkListener() {
     window.addEventListener("click", handleAvAltClick, true);
-    window.addEventListener("click", handleAvFooterClick, true);
+    window.addEventListener("mousedown", handleAvFooterClick, true);
 }
 
 export function destroyButtonLinkListener() {
     window.removeEventListener("click", handleAvAltClick, true);
-    window.removeEventListener("click", handleAvFooterClick, true);
+    window.removeEventListener("mousedown", handleAvFooterClick, true);
 }
 
 async function handleAvFooterClick(event: MouseEvent) {
