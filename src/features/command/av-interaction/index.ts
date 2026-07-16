@@ -3,7 +3,7 @@ import { getCommandAvId, getTypeAvId, COMMAND_REGISTRY } from "../registration";
 import { encodeBtnHref } from "../global-registration/inline-button";
 import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../data/attribute-view/special/special-handlers";
-import { getSqliteEngine } from "../../sqlite/sqlite-manager";
+import { getSqliteEngine, executeWritableSql } from "../../sqlite/sqlite-manager";
 import ParamConfigDialog from "./ParamConfigDialog.svelte";
 import ConditionalTriggerDialog from "./ConditionalTriggerDialog.svelte";
 import UIEntriesSelectorDialog from "./UIEntriesSelectorDialog.svelte";
@@ -16,10 +16,134 @@ import { parseAVClickEvent } from "../../../shared/utils";
  */
 export function initButtonLinkListener() {
     window.addEventListener("click", handleAvAltClick, true);
+    window.addEventListener("click", handleAvFooterClick, true);
 }
 
 export function destroyButtonLinkListener() {
     window.removeEventListener("click", handleAvAltClick, true);
+    window.removeEventListener("click", handleAvFooterClick, true);
+}
+
+async function handleAvFooterClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    const footerBtn = target.closest(".av__row--footer");
+    if (!footerBtn) return;
+
+    const avContainer = target.closest(".av__container") || target.closest("[data-av-id]");
+    if (!avContainer) return;
+
+    const avId = avContainer.getAttribute("data-av-id") || "";
+    const commandAvId = getCommandAvId();
+    if (avId !== commandAvId) return;
+
+    // 拦截 command-db 的添加条目点击，防止默认生成空行
+    event.preventDefault();
+    event.stopPropagation();
+
+    await triggerRegistryCommandSelectorForInsert(avContainer, avId);
+}
+
+async function triggerRegistryCommandSelectorForInsert(avContainer: Element, avId: string) {
+    let commands: any[] = [];
+    try {
+        const { db } = await getSqliteEngine();
+        const qRes = db.exec(`SELECT id, name, description, params FROM sys_registry_db`);
+        if (qRes.length > 0 && qRes[0].values.length > 0) {
+            commands = qRes[0].values.map(row => ({
+                id: String(row[0] || ""),
+                name: String(row[1] || ""),
+                description: String(row[2] || ""),
+                params: JSON.parse(String(row[3] || "[]"))
+            }));
+        }
+    } catch (e) {
+        console.error("[FooterClick] Failed to query registry commands:", e);
+    }
+
+    if (commands.length === 0) {
+        showMessage("系统命令注册表为空或查询失败");
+        return;
+    }
+
+    const dialog = new Dialog({
+        title: `选择内置命令并添加`,
+        content: `<div id="registry-command-selector-dialog" style="height: 100%;"></div>`,
+        width: "480px",
+        height: "400px"
+    });
+
+    new RegistryCommandSelectorDialog({
+        target: document.getElementById("registry-command-selector-dialog")!,
+        props: {
+            dialog,
+            commands,
+            onSelect: async (cmd: any) => {
+                dialog.destroy();
+                await insertCommandIntoAv(avId, cmd);
+            }
+        }
+    });
+}
+
+async function insertCommandIntoAv(avId: string, cmd: any) {
+    try {
+        const { db } = await getSqliteEngine();
+        
+        // 1. 查询 Layer 2 (sys_command_db) 所有已存在的 Command_ID 检查重复
+        let existingIds: string[] = [];
+        try {
+            const existRes = db.exec(`SELECT Command_ID FROM sys_command_db`);
+            if (existRes.length > 0 && existRes[0].values.length > 0) {
+                existingIds = existRes[0].values.map(row => String(row[0] || ""));
+            }
+        } catch (_) {}
+
+        const baseId = cmd.id;
+        const hasParams = Array.isArray(cmd.params) && cmd.params.length > 0;
+
+        const duplicateExists = existingIds.includes(baseId) || existingIds.some(id => id.startsWith(baseId + "-"));
+        let finalId = baseId;
+        let finalName = cmd.name;
+
+        if (duplicateExists) {
+            if (!hasParams) {
+                showMessage("不允许重复添加无参命令", 3000, "error");
+                return;
+            } else {
+                // 生成下一个序号，形如 -1, -2
+                let maxSuffix = 0;
+                const pattern = new RegExp(`^${baseId.replace(/\./g, "\\.")}-(\\d+)$`);
+                for (const id of existingIds) {
+                    const match = id.match(pattern);
+                    if (match) {
+                        const num = parseInt(match[1], 10);
+                        if (num > maxSuffix) maxSuffix = num;
+                    }
+                }
+                const nextSuffixNum = maxSuffix + 1;
+                finalId = `${baseId}-${nextSuffixNum}`;
+                finalName = `${cmd.name}-${nextSuffixNum}`;
+            }
+        }
+
+        // 2. 获取 AV 主键列名（key_name）
+        const schemaCols = db.exec(`SELECT col_name, key_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [avId]);
+        let pkColName = "主键";
+        if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
+            pkColName = String(schemaCols[0].values[0][1] || "主键");
+        }
+
+        // 3. 执行 SQL 插入
+        const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        const insertSql = `INSERT INTO ${tableName} ("${pkColName}", "Command ID", "UI 入口") VALUES ('${finalName}', '${finalId}', '快捷命令')`;
+        
+        console.log("[av-interaction] Running hijacked INSERT sql:", insertSql);
+        await executeWritableSql(insertSql);
+        showMessage(`✓ 已成功添加命令: ${finalName}`);
+    } catch (e: any) {
+        console.error("[FooterClick] Failed to insert command:", e);
+        showMessage(`添加命令失败: ${e.message || e}`, 5000, "error");
+    }
 }
 
 async function getParamColKeyId(avId: string): Promise<string> {
@@ -184,59 +308,7 @@ async function handleAvAltClick(event: MouseEvent) {
                 return;
             }
 
-            if (clickedKeyName === "Command ID" || clickedKeyName === "命令ID") {
-                event.preventDefault();
-                event.stopPropagation();
 
-                let commands: any[] = [];
-                try {
-                    const { db } = await getSqliteEngine();
-                    const qRes = db.exec(`SELECT id, name, description FROM sys_registry_db`);
-                    if (qRes.length > 0 && qRes[0].values.length > 0) {
-                        commands = qRes[0].values.map(row => ({
-                            id: String(row[0] || ""),
-                            name: String(row[1] || ""),
-                            description: String(row[2] || "")
-                        }));
-                    }
-                } catch (e) {
-                    console.error("[AltClick] Failed to query registry commands:", e);
-                }
-
-                if (commands.length === 0) {
-                    showMessage("系统命令注册表为空或查询失败");
-                    return;
-                }
-
-                const dialog = new Dialog({
-                    title: `选择内置命令`,
-                    content: `<div id="registry-command-selector-dialog" style="height: 100%;"></div>`,
-                    width: "480px",
-                    height: "400px"
-                });
-
-                new RegistryCommandSelectorDialog({
-                    target: document.getElementById("registry-command-selector-dialog")!,
-                    props: {
-                        dialog,
-                        commands,
-                        onSelect: async (cmd: any) => {
-                            dialog.destroy();
-                            // 1. Update the Command ID cell
-                            await updateCellValue(null, avId, rowId, colId, cmd.id);
-
-                            // 2. Update the Primary Key (Label) cell if empty/clean
-                            const pkHeader = avContainer.querySelector('.av__row--header .av__cell[data-dtype="block"]');
-                            const pkColId = pkHeader?.getAttribute("data-col-id");
-                            if (pkColId) {
-                                await updateCellValue(null, avId, rowId, pkColId, cmd.name);
-                            }
-                            showMessage(`已添加命令 "${cmd.name}" 到当前行`);
-                        }
-                    }
-                });
-                return;
-            }
 
             if (clickedKeyName === "Param Mapping" || clickedKeyName === "参数映射") {
                 // --- 行为 2: 弹窗可视化配置参数 ---

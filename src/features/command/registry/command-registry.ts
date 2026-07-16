@@ -269,12 +269,14 @@ class CommandRegistry {
 
     /** 按 ID 查询命令定义。找不到时返回 undefined。 */
     getCommand(id: string): CommandDef | undefined {
-        return this.store.get(id);
+        const baseId = id.replace(/-\d+$/, "");
+        return this.store.get(baseId);
     }
 
     /** 检查某个命令 ID 是否存在于注册表中 */
     hasCommand(id: string): boolean {
-        return this.store.has(id);
+        const baseId = id.replace(/-\d+$/, "");
+        return this.store.has(baseId);
     }
 
     /** 获取所有已注册命令的副本（用于 UI 浏览和 command-db 渲染） */
@@ -297,11 +299,12 @@ class CommandRegistry {
      * 用于解析 siyuan-btn 链接中可能是 ID 也可能是中文名的标识符。
      */
     findByNameOrId(idOrName: string): CommandDef | undefined {
+        const cleanIdOrName = idOrName.replace(/-\d+$/, "");
         // 1. ID 精确匹配（最优先）
-        const byId = this.store.get(idOrName);
+        const byId = this.store.get(cleanIdOrName);
         if (byId) return byId;
         // 2. name 精确匹配
-        const lower = idOrName.toLowerCase();
+        const lower = cleanIdOrName.toLowerCase();
         for (const def of this.store.values()) {
             if (def.name.toLowerCase() === lower) return def;
         }
