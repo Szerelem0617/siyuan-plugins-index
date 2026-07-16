@@ -117,6 +117,7 @@
             newMappings.push({
                 value: val,
                 name: existing?.name || "",
+                viewId: existing?.viewId,
             });
         });
 
