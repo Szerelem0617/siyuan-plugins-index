@@ -611,15 +611,21 @@ export function addCommandTestMenuItem({ detail }: any) {
 export async function addDoctreeMenuItems({ detail }: any) {
     if (!DEV_ENABLE_INIT_SYS) return;
     const menu = detail.menu;
-    if (!menu || !detail.elements || detail.elements.length === 0) return;
+    console.log("[Supertag-Debug] addDoctreeMenuItems triggered. detail:", detail);
+    if (!menu || !detail.elements || detail.elements.length === 0) {
+        console.log("[Supertag-Debug] addDoctreeMenuItems missing menu or elements");
+        return;
+    }
 
     const el = detail.elements[0];
     const docId = el.getAttribute("data-node-id");
+    console.log("[Supertag-Debug] doctree el:", el, "docId:", docId);
     if (!docId) return;
 
     try {
         const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });
         const rawTags = attrsRes?.data?.["custom-supertags"] || attrsRes?.["custom-supertags"];
+        console.log("[Supertag-Debug] doctree rawTags:", rawTags);
         let tags: string[] = [];
         if (rawTags) {
             try {
@@ -637,6 +643,7 @@ export async function addDoctreeMenuItems({ detail }: any) {
                 (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
                 && (item.uiLocation === "IconMenu" || item.uiLocation === "BlockIconMenu" || item.uiLocation === "PageMenu")
             );
+            console.log("[Supertag-Debug] doctree matched commands:", matches);
 
             if (matches.length > 0) {
                 for (const match of matches) {
@@ -665,6 +672,75 @@ export async function addDoctreeMenuItems({ detail }: any) {
         }
     } catch (e) {
         console.error("[IndexOS] Doctree Menu Add Failed:", e);
+    }
+}
+
+/**
+ * Handle editor page title icon click menu
+ */
+export async function addEditorTitleIconMenuItems({ detail }: any) {
+    if (!DEV_ENABLE_INIT_SYS) return;
+    const menu = detail.menu;
+    const protyle = detail.protyle;
+    console.log("[Supertag-Debug] addEditorTitleIconMenuItems triggered. detail:", detail);
+    if (!menu || !protyle) {
+        console.log("[Supertag-Debug] addEditorTitleIconMenuItems missing menu or protyle");
+        return;
+    }
+
+    const docId = protyle.block?.rootID || protyle.blockId;
+    console.log("[Supertag-Debug] editor title docId:", docId);
+    if (!docId) return;
+
+    try {
+        const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });
+        const rawTags = attrsRes?.data?.["custom-supertags"] || attrsRes?.["custom-supertags"];
+        console.log("[Supertag-Debug] editor title rawTags:", rawTags);
+        let tags: string[] = [];
+        if (rawTags) {
+            try {
+                const parsed = JSON.parse(rawTags);
+                if (Array.isArray(parsed)) {
+                    tags = parsed.map(t => String(t).trim().toLowerCase());
+                }
+            } catch (_) {}
+        }
+
+        if (tags.length === 0) return;
+
+        for (const tag of tags) {
+            const matches = SUPERTAG_REGISTRY.filter(item =>
+                (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
+                && (item.uiLocation === "IconMenu" || item.uiLocation === "BlockIconMenu" || item.uiLocation === "PageMenu")
+            );
+            console.log("[Supertag-Debug] editor title matched commands:", matches);
+
+            if (matches.length > 0) {
+                for (const match of matches) {
+                    menu.addItem({
+                        icon: "iconPlay",
+                        label: `⚡ (#${tag}) ${match.methodName}`,
+                        click: async () => {
+                            const protyleEl = protyle.element || null;
+                            const blockEl = protyleEl?.querySelector(`[data-node-id="${docId}"]`) || null;
+
+                            await refreshSupertagRegistry();
+                            const freshMatch = SUPERTAG_REGISTRY.find(item =>
+                                item.commandRef === match.commandRef && item.typeTag === match.typeTag
+                            ) || match;
+
+                            await dispatchCommand(freshMatch.commandRef, freshMatch.paramMapping, { 
+                                blockEl: blockEl || document.createElement("div"), 
+                                protyleEl, 
+                                supertag: tag 
+                            });
+                        }
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[IndexOS] Title Icon Menu Add Failed:", e);
     }
 }
 
