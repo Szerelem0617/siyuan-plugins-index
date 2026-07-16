@@ -1,7 +1,7 @@
 import { Plugin } from "siyuan";
 import { post } from "../../../shared/api-client/request";
 import { supertagMonitor } from "./supertag";
-import { SUPERTAG_REGISTRY } from "../registration";
+import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
 
 export const tagSuggestionState = {
@@ -104,6 +104,7 @@ async function handleBlockSupertagClick(tag: string, protyle: any) {
     const updatedCustomJSON = JSON.stringify(updatedCustom);
 
     blockEl.setAttribute("custom-supertags", updatedCustomJSON);
+    globalSupertagsCache.set(blockId, updatedCustom.map(t => t.trim().toLowerCase()));
 
     try {
         await post("/api/attr/setBlockAttrs", {

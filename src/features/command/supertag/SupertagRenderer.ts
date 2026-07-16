@@ -1,6 +1,7 @@
 import { post } from "../../../shared/api-client/request";
 import { showMessage } from "siyuan";
 import { supertagMonitor } from "./supertag";
+import { globalSupertagsCache } from "../registration";
 
 export class SupertagRenderer {
     private static renderedMap = new Map<string, string[]>();
@@ -42,6 +43,7 @@ export class SupertagRenderer {
                     tags = rawTags.split(/[, ]/).map((s: string) => s.trim()).filter(Boolean);
                 }
             }
+            globalSupertagsCache.set(docId, tags.map(t => t.trim().toLowerCase()));
 
             // Find or create document tags container
             let container = titleEl.querySelector(".index-doc-supertags") as HTMLElement;
@@ -232,6 +234,7 @@ export class SupertagRenderer {
             }
 
             const updatedTags = tags.filter(t => t !== tagToRemove);
+            globalSupertagsCache.set(blockId, updatedTags.map(t => t.trim().toLowerCase()));
             
             // Write back
             await post("/api/attr/setBlockAttrs", {

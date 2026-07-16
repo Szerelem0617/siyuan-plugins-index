@@ -31,6 +31,37 @@ export interface SupertagCommand {
 }
 export let COMMAND_REGISTRY: Record<string, CommandDef> = {};
 export let SUPERTAG_REGISTRY: SupertagCommand[] = [];
+export const globalSupertagsCache = new Map<string, string[]>();
+
+export async function syncGlobalSupertagsCache() {
+    try {
+        const res = await post("/api/query", {
+            stmt: "SELECT block_id, value FROM attributes WHERE name = 'custom-supertags'"
+        });
+        const rows = res?.data || res || [];
+        globalSupertagsCache.clear();
+        if (Array.isArray(rows)) {
+            for (const row of rows) {
+                const blockId = row.block_id;
+                const value = row.value;
+                if (blockId && value) {
+                    try {
+                        const parsed = JSON.parse(value);
+                        if (Array.isArray(parsed)) {
+                            globalSupertagsCache.set(blockId, parsed.map(t => String(t).trim().toLowerCase()));
+                        }
+                    } catch (_) {
+                        const tags = value.split(/[, ]/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                        globalSupertagsCache.set(blockId, tags);
+                    }
+                }
+            }
+        }
+        console.log(`[Supertag-Cache] Preloaded ${globalSupertagsCache.size} supertags mappings into cache.`);
+    } catch (e) {
+        console.error("[Supertag-Cache] Failed to sync supertags cache:", e);
+    }
+}
 export let commandAvId: string = "";
 export let typeAvId: string = "";
 export let commandDocId: string = "";
@@ -608,10 +639,10 @@ export function addCommandTestMenuItem({ detail }: any) {
 /**
  * Handle document sidebar tree item right click menu
  */
-export async function addDoctreeMenuItems({ detail }: any) {
+export function addDoctreeMenuItems({ detail }: any) {
     if (!DEV_ENABLE_INIT_SYS) return;
     const menu = detail.menu;
-    console.log("[Supertag-Debug] addDoctreeMenuItems triggered. detail:", detail);
+    console.log("[Supertag-Debug] addDoctreeMenuItems triggered synchronously. detail:", detail);
     if (!menu || !detail.elements || detail.elements.length === 0) {
         console.log("[Supertag-Debug] addDoctreeMenuItems missing menu or elements");
         return;
@@ -623,19 +654,8 @@ export async function addDoctreeMenuItems({ detail }: any) {
     if (!docId) return;
 
     try {
-        const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });
-        const rawTags = attrsRes?.data?.["custom-supertags"] || attrsRes?.["custom-supertags"];
-        console.log("[Supertag-Debug] doctree rawTags:", rawTags);
-        let tags: string[] = [];
-        if (rawTags) {
-            try {
-                const parsed = JSON.parse(rawTags);
-                if (Array.isArray(parsed)) {
-                    tags = parsed.map(t => String(t).trim().toLowerCase());
-                }
-            } catch (_) {}
-        }
-
+        const tags = globalSupertagsCache.get(docId) || [];
+        console.log("[Supertag-Debug] doctree tags from cache:", tags);
         if (tags.length === 0) return;
 
         for (const tag of tags) {
@@ -678,11 +698,11 @@ export async function addDoctreeMenuItems({ detail }: any) {
 /**
  * Handle editor page title icon click menu
  */
-export async function addEditorTitleIconMenuItems({ detail }: any) {
+export function addEditorTitleIconMenuItems({ detail }: any) {
     if (!DEV_ENABLE_INIT_SYS) return;
     const menu = detail.menu;
     const protyle = detail.protyle;
-    console.log("[Supertag-Debug] addEditorTitleIconMenuItems triggered. detail:", detail);
+    console.log("[Supertag-Debug] addEditorTitleIconMenuItems triggered synchronously. detail:", detail);
     if (!menu || !protyle) {
         console.log("[Supertag-Debug] addEditorTitleIconMenuItems missing menu or protyle");
         return;
@@ -693,19 +713,8 @@ export async function addEditorTitleIconMenuItems({ detail }: any) {
     if (!docId) return;
 
     try {
-        const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });
-        const rawTags = attrsRes?.data?.["custom-supertags"] || attrsRes?.["custom-supertags"];
-        console.log("[Supertag-Debug] editor title rawTags:", rawTags);
-        let tags: string[] = [];
-        if (rawTags) {
-            try {
-                const parsed = JSON.parse(rawTags);
-                if (Array.isArray(parsed)) {
-                    tags = parsed.map(t => String(t).trim().toLowerCase());
-                }
-            } catch (_) {}
-        }
-
+        const tags = globalSupertagsCache.get(docId) || [];
+        console.log("[Supertag-Debug] editor title tags from cache:", tags);
         if (tags.length === 0) return;
 
         for (const tag of tags) {

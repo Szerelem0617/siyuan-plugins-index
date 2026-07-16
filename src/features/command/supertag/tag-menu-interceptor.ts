@@ -1,6 +1,6 @@
 import { post } from "../../../shared/api-client/request";
 import { supertagMonitor } from "./supertag";
-import { SUPERTAG_REGISTRY } from "../registration";
+import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
 
 // Visual indicator/badge texts to identify supertags in the list
@@ -32,6 +32,7 @@ async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
             "custom-supertags": updatedCustomJSON
         }
     });
+    globalSupertagsCache.set(docId, updatedCustom.map(t => t.trim().toLowerCase()));
 
     // 4. Process trigger rules and render pills
     await supertagMonitor.processNewTag(docId, tag);

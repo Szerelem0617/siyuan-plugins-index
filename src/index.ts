@@ -8,7 +8,7 @@ import { addAVMenuItems, avEventHandler } from "./features/data/attribute-view/e
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
-import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems, refreshSupertagRegistry, DEV_ENABLE_INIT_SYS } from "./features/command/registration";
+import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems, refreshSupertagRegistry, syncGlobalSupertagsCache, DEV_ENABLE_INIT_SYS } from "./features/command/registration";
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { supertagMonitor } from "./features/command/supertag/supertag";
 import { supertagManager } from "./features/command/supertag/supertag-manager";
@@ -152,6 +152,7 @@ export default class IndexPlugin extends Plugin {
                 // Refresh registrations once DB is ready
                 await refreshSupertagRegistry();
                 await refreshTopBarCommands();
+                await syncGlobalSupertagsCache();
             }).catch(e => console.error("[SQLite] Preload failed", e));
             this.registerSqliteEntry();
         }
