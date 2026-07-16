@@ -84,11 +84,14 @@
             const tableName = `av_${cleanAvId}`;
 
             // Run SQL ALTER VIEW commands sequentially
-            for (const col of columnsList) {
+            for (let i = 0; i < columnsList.length; i++) {
+                const col = columnsList[i];
                 const isHidden = col.hidden;
                 const sql = `ALTER VIEW "${viewName}" ON "${tableName}" SET COLUMN "${col.name}" HIDDEN ${isHidden ? 1 : 0}`;
                 console.log("[FieldsConfig] Running SQL:", sql);
-                const res = await executeWritableSql(sql);
+                
+                const isLast = i === columnsList.length - 1;
+                const res = await executeWritableSql(sql, { skipRender: !isLast } as any);
                 if (!res || !res.success) {
                     throw new Error(res?.message || `配置字段 '${col.name}' 失败`);
                 }

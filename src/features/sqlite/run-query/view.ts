@@ -251,7 +251,9 @@ export async function executeAlterView(processedSql: string, db: any, options?: 
     // 6. Invalidate cache and trigger re-render
     tableSyncTimes.delete(avID);
     await instantiateAV(avID, true);
-    await triggerAvBlockRender(avID);
+    if (!options?.skipRender) {
+        await triggerAvBlockRender(avID);
+    }
 
     return { 
         success: true, 
