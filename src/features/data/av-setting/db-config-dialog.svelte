@@ -189,6 +189,7 @@
         return true;
     });
     import { executeWritableSql } from "../../sqlite/sqlite-manager";
+    import { post } from "../../../shared/api-client/request";
 
     async function handleCreateSubtagView(map: any) {
         if (!map.name) {
@@ -197,6 +198,38 @@
         }
 
         try {
+            // 1. Fetch live AV views to check if map.viewId still exists
+            let viewExists = false;
+            try {
+                const avData = await post("/api/av/renderAttributeView", { id: avId });
+                const viewData = avData.view || avData;
+                const viewsList = viewData.views || [];
+                if (map.viewId && viewsList.some((v: any) => v.id === map.viewId)) {
+                    viewExists = true;
+                }
+            } catch (err) {
+                console.warn("[DbConfig] Failed to fetch live AV views:", err);
+            }
+
+            if (viewExists) {
+                // If it already exists, just switch to it
+                showMessage("⏳ 视图已存在，正在为您切换...", 2000);
+                await post("/api/transactions", {
+                    reqId: Date.now(),
+                    app: "plugin-index",
+                    transactions: [{
+                        doOperations: [{
+                            action: "setAttrViewBlockView",
+                            avID: avId,
+                            id: map.viewId,
+                            blockID: blockId
+                        }]
+                    }]
+                });
+                showMessage(`✓ 已切换至现有视图: ${map.name}`);
+                return;
+            }
+
             const cleanAvId = avId.replace(/[^a-zA-Z0-9]/g, "_");
             const tableName = `av_${cleanAvId}`;
             const viewName = map.name;
@@ -209,14 +242,32 @@
             
             showMessage("⏳ 正在创建过滤视图...", 2000);
             const res = await executeWritableSql(sql);
-            if (res && res.success) {
+            if (res && res.success && res.viewId) {
+                // Save view ID into mapping configuration
+                map.viewId = res.viewId;
+                
+                // Immediately persist the config changes to Siyuan
+                const activeMappings = typeMappings.filter((m) => m.name.trim() !== "");
+                const finalInheritanceRules = inheritanceList
+                    .filter((i) => i.mode !== "none")
+                    .map((i) => ({ colId: i.col.id, mode: i.mode }));
+
+                const config: DbConfig = {
+                    avId,
+                    enableSupertag,
+                    typeFieldId,
+                    typeMappings: activeMappings,
+                    inheritanceRules: finalInheritanceRules as any,
+                };
+                await saveDbConfig(blockId, config);
+
                 showMessage(`✓ 成功创建过滤视图: ${viewName}`);
             } else {
                 showMessage(`创建视图失败: ${res?.message || "未知错误"}`);
             }
         } catch (e: any) {
-            console.error("[DbConfig] Failed to create subtag view:", e);
-            showMessage(`创建视图失败: ${e.message || e}`, 5000, "error");
+            console.error("[DbConfig] Failed to create/switch subtag view:", e);
+            showMessage(`操作失败: ${e.message || e}`, 5000, "error");
         }
     }
 </script>

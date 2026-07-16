@@ -104,11 +104,8 @@ export async function executeCreateView(processedSql: string, db: any, options?:
         }
     }
 
-    // 3. Post Siyuan transactions to:
-    //    a) Add the view
-    //    b) Rename the view
-    //    c) Activate the view on the block (so filters can apply to it)
-    //    d) Set the filters for the active view
+    // 3. Post Siyuan transactions:
+    // Transaction 1: Add the view, rename the view, and set it as active on the block
     const doOperations: any[] = [
         {
             action: "addAttrViewView",
@@ -132,23 +129,34 @@ export async function executeCreateView(processedSql: string, db: any, options?:
         }
     ];
 
-    if (filtersData.length > 0) {
-        doOperations.push({
-            action: "setAttrViewFilters",
-            avID: avID,
-            data: filtersData,
-            blockID: avBlockID
-        });
-    }
-
-    const txRes = await post("/api/transactions", {
+    const txRes1 = await post("/api/transactions", {
         reqId: Date.now(),
         app: "plugin-index",
         transactions: [{ doOperations }]
     });
 
-    if (txRes && txRes.code && txRes.code !== 0) {
-        throw new Error(`Failed to create view in Siyuan: ${txRes.msg || "Unknown error"}`);
+    if (txRes1 && txRes1.code && txRes1.code !== 0) {
+        throw new Error(`Failed to create view in Siyuan: ${txRes1.msg || "Unknown error"}`);
+    }
+
+    // Transaction 2: Set the filters for the active view (with a tiny timeout to ensure DB flush)
+    if (filtersData.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const txRes2 = await post("/api/transactions", {
+            reqId: Date.now(),
+            app: "plugin-index",
+            transactions: [{
+                doOperations: [{
+                    action: "setAttrViewFilters",
+                    avID: avID,
+                    data: filtersData,
+                    blockID: avBlockID
+                }]
+            }]
+        });
+        if (txRes2 && txRes2.code && txRes2.code !== 0) {
+            console.error("[SQLiteManager] Failed to apply filters to view:", txRes2.msg);
+        }
     }
 
     // 4. Invalidate cache and trigger re-render
@@ -158,6 +166,7 @@ export async function executeCreateView(processedSql: string, db: any, options?:
 
     return { 
         success: true, 
+        viewId: newViewID,
         message: `View '${viewName}' (${layoutType} layout) created successfully on table '${tableName}'${filtersData.length > 0 ? " with filters applied" : ""}.` 
     };
 }
