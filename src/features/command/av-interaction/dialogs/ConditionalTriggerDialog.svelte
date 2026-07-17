@@ -7,68 +7,102 @@
     export let currentValue: string;
     export let onSave: (updatedValue: string) => Promise<void>;
 
-    // Target structure
-    let eventType: string = "tag_created";
-    let condition: string = "";
-    let selectedList: string[] = [];
+    interface EventConfig {
+        condition: string;
+        selectedList: string[];
+    }
 
-    // Helper parser
+    let eventConfigs: Record<string, EventConfig> = {
+        tag_created: { condition: "", selectedList: [] },
+        tag_removed: { condition: "", selectedList: [] },
+        block_content_changed: { condition: "", selectedList: [] },
+        block_attribute_changed: { condition: "", selectedList: [] }
+    };
+
+    let activeEvent: string = "tag_created";
+
+    const eventTypes = [
+        { id: "tag_created", label: "添加标签时" },
+        { id: "tag_removed", label: "移除标签时" },
+        { id: "block_content_changed", label: "内容变动时" },
+        { id: "block_attribute_changed", label: "属性变动时" }
+    ];
+
+    // Helper parser for multiline configurations
     function parseConditional(text: string) {
-        const textTrim = (text || "").trim();
-        if (!textTrim) return;
+        const lines = (text || "").split("\n").map(l => l.trim()).filter(Boolean);
+        for (const line of lines) {
+            const match = line.match(/^\[([^\]]+)\](?:\(([^\)]+)\))?\s*->\s*(.+)$/);
+            if (match) {
+                const rawEvent = match[1].trim();
+                const condition = match[2] ? match[2].trim() : "";
+                const cmdsText = match[3].trim();
+                const cmds = cmdsText.split(/[,，]/).map(s => s.trim()).filter(Boolean);
 
-        // Try matching the standard format: [event](condition) -> cmd1, cmd2
-        const match = textTrim.match(/^\[([^\]]+)\](?:\(([^\)]+)\))?\s*->\s*(.+)$/);
-        if (match) {
-            const rawEvent = match[1].trim();
-            condition = match[2] ? match[2].trim() : "";
-            const cmdsText = match[3].trim();
+                let eventType = "tag_created";
+                if (rawEvent === "打上标签时" || rawEvent === "tag_created") {
+                    eventType = "tag_created";
+                } else if (rawEvent === "移除标签时" || rawEvent === "tag_removed") {
+                    eventType = "tag_removed";
+                } else if (rawEvent === "内容变动时" || rawEvent === "block_content_changed") {
+                    eventType = "block_content_changed";
+                } else if (rawEvent === "属性变动时" || rawEvent === "block_attribute_changed") {
+                    eventType = "block_attribute_changed";
+                }
 
-            if (rawEvent === "打上标签时" || rawEvent === "tag_created") {
-                eventType = "tag_created";
+                if (eventConfigs[eventType]) {
+                    eventConfigs[eventType].condition = condition;
+                    eventConfigs[eventType].selectedList = cmds;
+                }
             } else {
-                eventType = rawEvent;
+                // Legacy format fallback: comma-separated command labels in tag_created
+                const cmds = line.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+                if (cmds.length > 0) {
+                    eventConfigs.tag_created.selectedList = [
+                        ...eventConfigs.tag_created.selectedList,
+                        ...cmds
+                    ];
+                }
             }
-            selectedList = cmdsText.split(/[,，]/).map(s => s.trim()).filter(Boolean);
-        } else {
-            // Legacy format fallback: comma-separated command labels
-            eventType = "tag_created";
-            condition = "";
-            selectedList = textTrim.split(/[,，]/).map(s => s.trim()).filter(Boolean);
         }
     }
 
     onMount(() => {
         console.log("[TriggerDialog-Debug] mounted with:", { supertag, boundCommands, currentValue });
         parseConditional(currentValue);
-        console.log("[TriggerDialog-Debug] parsed selectedList:", selectedList, "condition:", condition, "eventType:", eventType);
+        console.log("[TriggerDialog-Debug] parsed configs:", eventConfigs);
     });
 
     function toggleSelect(label: string) {
-        console.log("[TriggerDialog-Debug] toggleSelect clicked for label:", label);
-        const index = selectedList.indexOf(label);
+        const config = eventConfigs[activeEvent];
+        const index = config.selectedList.indexOf(label);
         if (index > -1) {
-            selectedList = selectedList.filter(item => item !== label);
+            config.selectedList = config.selectedList.filter(item => item !== label);
         } else {
-            selectedList = [...selectedList, label];
+            config.selectedList = [...config.selectedList, label];
         }
-        console.log("[TriggerDialog-Debug] selectedList is now:", selectedList);
+        eventConfigs = { ...eventConfigs };
     }
 
     async function handleSave() {
-        if (selectedList.length === 0) {
-            await onSave("");
-            dialog.destroy();
-            return;
+        const lines: string[] = [];
+        const eventLabels: Record<string, string> = {
+            tag_created: "打上标签时",
+            tag_removed: "移除标签时",
+            block_content_changed: "内容变动时",
+            block_attribute_changed: "属性变动时"
+        };
+
+        for (const [eventType, config] of Object.entries(eventConfigs)) {
+            if (config.selectedList.length > 0) {
+                const eventLabel = eventLabels[eventType] || eventType;
+                const condPart = config.condition.trim() ? `(${config.condition.trim()})` : "";
+                const cmdsPart = config.selectedList.join(", ");
+                lines.push(`[${eventLabel}]${condPart} -> ${cmdsPart}`);
+            }
         }
 
-        let eventLabel = "打上标签时";
-        if (eventType === "tag_created") eventLabel = "打上标签时";
-
-        const condPart = condition.trim() ? `(${condition.trim()})` : "";
-        const cmdsPart = selectedList.join(", ");
-        const serialized = `[${eventLabel}]${condPart} -> ${cmdsPart}`;
-
+        const serialized = lines.join("\n");
         await onSave(serialized);
         dialog.destroy();
     }
@@ -86,14 +120,21 @@
         </div>
     </div>
 
-    <!-- Trigger Event & Condition Settings -->
+    <!-- Event Switch Tabs Bar -->
+    <div class="layout-tab-bar" style="display: flex; border-bottom: 1px solid var(--b3-border-color); margin-bottom: 12px; flex-shrink: 0; gap: 2px;">
+        {#each eventTypes as ev}
+            <button 
+                class="b3-button {activeEvent === ev.id ? 'b3-button--primary' : 'b3-button--text'}" 
+                style="flex: 1; font-size: 11px; padding: 6px 2px; border-radius: 4px 4px 0 0; text-align: center; white-space: nowrap; height: auto;"
+                on:click={() => activeEvent = ev.id}
+            >
+                {ev.label}
+            </button>
+        {/each}
+    </div>
+
+    <!-- Active Tab Configuration Body -->
     <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; flex-shrink: 0; padding: 8px; border-radius: 4px; border: 1px solid var(--b3-border-color); background: var(--b3-theme-surface);">
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-            <label style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">触发事件 (Event)</label>
-            <select class="b3-select" style="font-size: 12px; padding: 4px;" bind:value={eventType}>
-                <option value="tag_created">打上标签时 (tag_created)</option>
-            </select>
-        </div>
         <div style="display: flex; flex-direction: column; gap: 4px;">
             <label style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">触发条件 (Condition) - 可选</label>
             <input 
@@ -101,7 +142,7 @@
                 class="b3-text-field" 
                 style="font-size: 12px; padding: 4px 8px;" 
                 placeholder="例如: is_task_completed，留空代表无条件执行" 
-                bind:value={condition} 
+                bind:value={eventConfigs[activeEvent].condition} 
             />
         </div>
     </div>
@@ -120,7 +161,7 @@
                 选择并排序动作命令 (Actions)：
             </div>
             {#each boundCommands as cmd}
-                {@const selIndex = selectedList.indexOf(cmd.label)}
+                {@const selIndex = eventConfigs[activeEvent].selectedList.indexOf(cmd.label)}
                 <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <!-- svelte-ignore a11y-no-static-element-interactions -->
                 <div 
@@ -169,3 +210,4 @@
         background-color: var(--b3-theme-background-hover) !important;
     }
 </style>
+

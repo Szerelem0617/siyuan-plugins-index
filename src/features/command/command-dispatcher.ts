@@ -238,7 +238,6 @@ async function dispatchApi(
     const result = await post(endpoint, body);
     return { success: true, method: "api", detail: `${endpoint} OK` };
 }
-
 async function dispatchCustom(
     def: CommandDef,
     params: Record<string, unknown>,
@@ -250,11 +249,13 @@ async function dispatchCustom(
         return { success: false, method: "custom", detail: `No executor registered for: ${def.id}` };
     }
     console.log(`[Dispatcher] Invoking executor for custom command: ${def.id}`);
-    await executor(params, context);
-    console.log(`[Dispatcher] Custom command executor finished successfully for: ${def.id}`);
-    return { success: true, method: "custom", detail: def.id };
+    const result = await executor(params, context);
+    console.log(`[Dispatcher] Custom command executor finished for: ${def.id}. Return value:`, result);
+    
+    // If executor explicitly returns false, treat it as failure/halt signal
+    const isSuccess = result !== false;
+    return { success: isSuccess, method: "custom", detail: def.id };
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Param resolution（静态参 / 注入参 / 模板参）
 // ─────────────────────────────────────────────────────────────────────────────

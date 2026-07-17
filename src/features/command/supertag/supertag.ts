@@ -159,7 +159,22 @@ export class SupertagMonitor {
 
                     // Extract all tags currently embedded in the operation payload
                     const newTags = this.extractTagsFromPayload(op.data, op.action, blockId);
-                    if (newTags === null) continue; // Skip if this operation doesn't carry definitive tag information
+                    if (newTags === null) {
+                        // Normal content update or attribute update (no custom-supertags changes)
+                        const currentTags = this.tagCache.get(blockId);
+                        if (currentTags) {
+                            if (op.action === "update") {
+                                for (const tag of currentTags) {
+                                    await this.triggerConditionalCommands(blockId, tag, "block_content_changed");
+                                }
+                            } else if (op.action === "setAttrs" || op.action === "updateAttrs") {
+                                for (const tag of currentTags) {
+                                    await this.triggerConditionalCommands(blockId, tag, "block_attribute_changed");
+                                }
+                            }
+                        }
+                        continue;
+                    }
 
                     // Update local cache but do not trigger commands here
                     this.tagCache.set(blockId, newTags);
@@ -419,7 +434,11 @@ export class SupertagMonitor {
         }
     }
 
-    private async triggerConditionalCommands(blockId: string, cleanTag: string, eventName: "tag_created" | "tag_removed") {
+    private async triggerConditionalCommands(
+        blockId: string, 
+        cleanTag: string, 
+        eventName: "tag_created" | "tag_removed" | "block_content_changed" | "block_attribute_changed"
+    ) {
         const typeAvId = getTypeAvId();
         if (!typeAvId) return;
 
@@ -459,7 +478,7 @@ export class SupertagMonitor {
                         if (conditionMet) {
                             console.log(`[Supertag-Trigger] Condition met. Executing commands for tag #${cleanTag} on event ${eventName}:`, targetRule.commands);
 
-                            // Execute sequentially in order
+                            // Execute sequentially in order as a pipeline
                             for (const cmdLabel of targetRule.commands) {
                                 const cmdInfo = COMMAND_REGISTRY[cmdLabel];
                                 const commandRef = cmdInfo?.commandRef || cmdLabel;
@@ -482,9 +501,14 @@ export class SupertagMonitor {
                                 };
 
                                 try {
-                                    await dispatchCommand(commandRef, paramMapping, context);
+                                    const dispatchRes = await dispatchCommand(commandRef, paramMapping, context);
+                                    if (!dispatchRes.success) {
+                                        console.log(`[Supertag-Trigger] Pipeline execution halted: Command "${cmdLabel}" failed or returned false.`);
+                                        break; // Halt the execution of subsequent commands!
+                                    }
                                 } catch (cmdErr) {
                                     console.error(`[Supertag-Trigger] Failed to dispatch command: ${cmdLabel}`, cmdErr);
+                                    break; // Halt the execution on error
                                 }
                             }
                         }
