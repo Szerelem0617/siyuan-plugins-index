@@ -525,8 +525,8 @@ export class SupertagMonitor {
 
                                 try {
                                     const dispatchRes = await dispatchCommand(commandRef, paramMapping, context);
-                                    if (!dispatchRes.success) {
-                                        console.log(`[Supertag-Trigger] Pipeline execution halted: Command "${cmdLabel}" failed or returned false.`);
+                                    if (!dispatchRes.success || dispatchRes.value === false) {
+                                        console.log(`[Supertag-Trigger] Pipeline execution halted: Command "${cmdLabel}" returned false or failed.`);
                                         break; // Halt the execution of subsequent commands!
                                     }
                                 } catch (cmdErr) {
