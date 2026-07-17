@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { i18n } from "../../../shared/utils";
+    import { i18n } from "../../../../shared/utils";
 
     export let dialog: any;
     export let commandName: string;

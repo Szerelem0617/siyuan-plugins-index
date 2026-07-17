@@ -1,7 +1,7 @@
 import { Dialog, showMessage } from "siyuan";
 import { commandRegistry } from "../registry/command-registry";
 import { decodeBtnHref, encodeBtnHref } from "./inline-button";
-import ParamConfigDialog from "../av-interaction/ParamConfigDialog.svelte";
+import ParamConfigDialog from "../av-interaction/dialogs/ParamConfigDialog.svelte";
 
 export function configureDetachedCommand(linkEl: HTMLElement) {
     const href = linkEl.getAttribute("data-href");
