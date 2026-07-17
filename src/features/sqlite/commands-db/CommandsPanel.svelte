@@ -4,8 +4,6 @@
     import { runQuery, getSqliteEngine, saveDatabaseToDisk, tableNameToAvId } from "../sqlite-manager";
     import { dispatchCommand } from "../../command/command-dispatcher";
     import { showMessage } from "siyuan";
-    import { constructCommandStorage } from "../../command/construct-dir";
-    import { reverseDbToList } from "../../command/hierarchy/db-reverse-list";
     import { getSystemTableNames, initSystemTables } from "../../command/indexos/command-sqlite";
     import { canUseFeature } from "../../dev-mode/policy-guard";
 
@@ -70,19 +68,7 @@
 
 
 
-    async function handleGenerateOutline() {
-        try {
-            showMessage("📑 正在生成列表...");
-            const success = await reverseDbToList();
-            if (success) {
-                await refreshSupertagRegistry();
-                await loadData();
-            }
-        } catch (e: any) {
-            console.error("Generate outline failed", e);
-            showMessage(`生成列表失败: ${e.message}`, 5000, "error");
-        }
-    }
+
 
     async function openPullModal() {
         pullLoading = true;
@@ -249,9 +235,7 @@
             <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleInitSystem}>
                 🗄️ 实例化
             </button>
-            <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleGenerateOutline} disabled={!isInitialized}>
-                📑 生成列表
-            </button>
+
             {#if canUseFeature("commands.pull")}
                 <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={openPullModal}>
                     📥 拉取内置命令

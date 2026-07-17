@@ -2,7 +2,6 @@ import { constructCommandStorage } from "./construct-dir";
 import { i18n } from "../../shared/utils";
 import { type Protyle } from "siyuan";
 import { registerFriendlyTableName } from "../sqlite/sqlite-manager";
-import { reverseDbToList } from "./hierarchy/db-reverse-list";
 import { isDevModeActive } from "../dev-mode";
 import { refreshSupertagRegistry } from "./utils/sync-service";
 
@@ -86,17 +85,6 @@ export function getInitSystemSlashCommand() {
                 await refreshSupertagRegistry();
             }
         },
-        {
-            filter: ["reverse db list", "生成列表", "sxlm"],
-            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">生成列表</span><span class="b3-list-item__meta">Outline</span></div>`,
-            id: "reverseDbList",
-            async callback(protyle: Protyle) {
-                protyle.insert("");
-                const success = await reverseDbToList();
-                if (success) {
-                    await refreshSupertagRegistry();
-                }
-            }
-        }
+
     ];
 }
