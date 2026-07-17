@@ -4,6 +4,8 @@ import { supertagMonitor } from "./supertag";
 import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
 import { parseSupertags, serializeSupertags, findActiveBlock } from "../utils/supertag-helper";
+import { commandRegistry } from "../registry/command-registry";
+import { getBlockType } from "../command-dispatcher";
 
 export const tagSuggestionState = {
     enabled: true,
@@ -148,6 +150,29 @@ function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle:
     const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
     const matched = allSupertags.filter(t => t.includes(query) && supertagMonitor.isTagEnabled(t));
 
+    // 获取当前块类型，用于 appliesTo 兼容性检查
+    const activeBlock = findActiveBlock(protyle);
+    const currentBlockType = activeBlock ? getBlockType(activeBlock) : null;
+
+    // 预计算每个 supertag 的 appliesTo 兼容性
+    const incompatibleTags = new Set<string>();
+    if (currentBlockType) {
+        for (const tag of matched) {
+            const tagLower = tag.toLowerCase();
+            // 查找该 supertag 绑定的所有命令
+            const boundCmds = logicConfigs.filter(l => l.typeTag.trim().toLowerCase() === tagLower);
+            for (const bound of boundCmds) {
+                const cmdDef = commandRegistry.getCommand(bound.commandRef);
+                if (cmdDef?.meta?.appliesTo && cmdDef.meta.appliesTo.length > 0 && !cmdDef.meta.appliesTo.includes("any")) {
+                    if (!cmdDef.meta.appliesTo.includes(currentBlockType as any)) {
+                        incompatibleTags.add(tag);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     const classes: string[] = [];
     const dataComps: string[] = [];
     const toolComps: string[] = [];
@@ -179,11 +204,22 @@ function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle:
         const list = document.createElement("div");
         list.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
         tags.forEach(tag => {
+            const isIncompat = incompatibleTags.has(tag);
             const item = document.createElement("div");
             item.className = "b3-list-item b3-list-item--narrow";
-            item.style.cssText = "display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;";
-            item.innerHTML = `<svg class="b3-list-item__graphic" style="width: 12px; height: 12px; color: ${color}; margin-right: 8px;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="font-weight: 500; color: var(--b3-theme-on-background);">${tag}</span>`;
+            item.style.cssText = `display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;${isIncompat ? " opacity: 0.4;" : ""}`;
+
+            const iconColor = isIncompat ? "var(--b3-theme-on-surface-light)" : color;
+            let labelHtml = `<svg class="b3-list-item__graphic" style="width: 12px; height: 12px; color: ${iconColor}; margin-right: 8px;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="font-weight: 500; color: var(--b3-theme-on-background);">${tag}</span>`;
+            if (isIncompat) {
+                labelHtml += `<span style="margin-left: auto; font-size: 9px; color: var(--b3-theme-on-surface-light); opacity: 0.8;">不推荐</span>`;
+            }
+            item.innerHTML = labelHtml;
             
+            if (isIncompat) {
+                item.title = "此标签绑定的命令不适用于当前块类型";
+            }
+
             item.addEventListener("click", (e) => {
                 e.stopPropagation();
                 e.preventDefault();

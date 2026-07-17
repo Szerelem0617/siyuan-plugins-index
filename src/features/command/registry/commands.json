@@ -414,7 +414,7 @@
                 "category": "edit",
                 "source": "plugin",
                 "plugin": "index",
-                "appliesTo": ["paragraph", "heading", "list"]
+                "appliesTo": ["paragraph", "list"]
             },
             "seed": {
                 "rowID": "20260714160000-turnintotask",
