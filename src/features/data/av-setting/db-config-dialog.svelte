@@ -350,126 +350,100 @@
     <div style="flex: 1; overflow-y: auto; overflow-x: hidden;">
         {#if activeTab === "type"}
             <div class="config-section" style="padding: 4px;">
-                <!-- Supertag Toggle Switch -->
-                <div
-                    class="fn__flex"
-                    style="margin-bottom: 16px; align-items: center; justify-content: space-between;"
-                >
-                    <span
-                        class="b3-label"
-                        style="margin: 0; font-weight: bold; font-size: 14px;"
-                    >
-                        启用 Supertag 功能
-                    </span>
-                    <label class="fn__flex" style="align-items: center; cursor: pointer;">
-                        <input
-                            type="checkbox"
-                            class="b3-switch"
-                            bind:checked={enableSupertag}
-                        />
-                    </label>
+                <div style="background: var(--b3-theme-surface); padding: 12px; border-radius: 6px; border: 1px solid var(--b3-border-color); margin-bottom: 16px;">
+                    <div style="font-weight: bold; font-size: 13px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                        🏷️ 超级标签名称为：
+                        <span class="b3-chip b3-chip--primary" style="font-family: monospace;">#{dbName.toLowerCase() || '表名'}</span>
+                    </div>
+                    <div class="b3-label__text" style="font-size: 12px; opacity: 0.8; line-height: 1.4;">
+                        当启用该 Supertag 后，向任意块添加标签 <code style="color: #4ec9b0;">#{dbName.toLowerCase() || '表名'}</code> 将会自动把该块作为行录入到本数据库中。您可以在「超级标签管理」面板中一键开启/关闭各 Supertag。
+                    </div>
                 </div>
 
-                {#if enableSupertag}
-                    <div style="background: var(--b3-theme-surface); padding: 12px; border-radius: 6px; border: 1px solid var(--b3-border-color); margin-bottom: 16px;">
-                        <div style="font-weight: bold; font-size: 13px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
-                            🏷️ 超级标签将注册为：
-                            <span class="b3-chip b3-chip--primary" style="font-family: monospace;">#{dbName.toLowerCase() || '表名'}</span>
-                        </div>
-                        <div class="b3-label__text" style="font-size: 12px; opacity: 0.8; line-height: 1.4;">
-                            开启后，向任意块添加标签 <code style="color: #4ec9b0;">#{dbName.toLowerCase() || '表名'}</code> 将会自动把该块作为行录入到本数据库中。
-                        </div>
+                <div class="fn__hr" style="margin-bottom: 16px;"></div>
+
+                <!-- Column selection for sub-type mappings -->
+                <label class="b3-label" style="font-weight: bold; margin-bottom: 8px; display: block;">
+                    配置细分类型映射 (可选)
+                    <div class="b3-form__icon" style="margin-top: 6px;">
+                        <select
+                            class="b3-select fn__block"
+                            bind:value={typeFieldId}
+                            on:change={() => {
+                                typeMappings = [];
+                                onTypeFieldChange();
+                            }}
+                        >
+                            <option value="">-- 选择用于细分类型的列 --</option>
+
+                            <optgroup label={i18n.dbConfig.systemProps}>
+                                {#each pinnedColumns as col}
+                                    <option value={col.id}>
+                                        📍 {col.name}
+                                    </option>
+                                    {/each}
+                            </optgroup>
+
+                            <optgroup label={i18n.dbConfig.columns}>
+                                {#each normalColumns as col}
+                                    <option value={col.id}>{col.name}</option>
+                                    {/each}
+                            </optgroup>
+                        </select>
                     </div>
+                </label>
 
-                    <div class="fn__hr" style="margin-bottom: 16px;"></div>
-
-                    <!-- Column selection for sub-type mappings -->
-                    <label class="b3-label" style="font-weight: bold; margin-bottom: 8px; display: block;">
-                        配置细分类型映射 (可选)
-                        <div class="b3-form__icon" style="margin-top: 6px;">
-                            <select
-                                class="b3-select fn__block"
-                                bind:value={typeFieldId}
-                                on:change={() => {
-                                    typeMappings = [];
-                                    onTypeFieldChange();
-                                }}
-                            >
-                                <option value="">-- 选择用于细分类型的列 --</option>
-
-                                <optgroup label={i18n.dbConfig.systemProps}>
-                                    {#each pinnedColumns as col}
-                                        <option value={col.id}>
-                                            📍 {col.name}
-                                        </option>
-                                    {/each}
-                                </optgroup>
-
-                                <optgroup label={i18n.dbConfig.columns}>
-                                    {#each normalColumns as col}
-                                        <option value={col.id}>{col.name}</option>
-                                    {/each}
-                                </optgroup>
-                            </select>
+                {#if typeFieldId}
+                    <div style="margin-top: 16px;">
+                        <div class="b3-label" style="font-weight: bold; margin-bottom: 8px;">
+                            细分值与 Sub-tag 映射配置
                         </div>
-                    </label>
-
-                    {#if typeFieldId}
-                        <div style="margin-top: 16px;">
-                            <div class="b3-label" style="font-weight: bold; margin-bottom: 8px;">
-                                细分值与 Sub-tag 映射配置
-                            </div>
-                            <div class="fn__hr" style="margin-bottom: 12px;"></div>
-                            
-                            {#each typeMappings as map}
+                        <div class="fn__hr" style="margin-bottom: 12px;"></div>
+                        
+                        {#each typeMappings as map}
+                            <div
+                                class="fn__flex"
+                                style="margin-bottom: 8px; align-items: center; gap: 8px;"
+                            >
                                 <div
-                                    class="fn__flex"
-                                    style="margin-bottom: 8px; align-items: center; gap: 8px;"
+                                    style="width: 180px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex-shrink: 0;"
+                                    title="{selectedColumn?.name}-{map.value}"
                                 >
-                                    <div
-                                        style="width: 180px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex-shrink: 0;"
-                                        title="{selectedColumn?.name}-{map.value}"
-                                    >
-                                        <span class="b3-chip b3-chip--secondary">
-                                            {selectedColumn?.name} = {map.value || "(空/未设置)"}
-                                        </span>
-                                    </div>
-                                    <span style="opacity: 0.5;">➔</span>
-                                    
-                                    <div class="fn__flex-1" style="display: flex; align-items: center; gap: 4px;">
-                                        <span style="opacity: 0.7; font-family: monospace; font-size: 12px;">#{dbName.toLowerCase()}.</span>
-                                        <input
-                                            class="b3-input fn__flex-1"
-                                            style="font-family: monospace;"
-                                            placeholder="自定义子标签名 (如 male)"
-                                            bind:value={map.name}
-                                        />
-                                    </div>
+                                    <span class="b3-chip b3-chip--secondary">
+                                        {selectedColumn?.name} = {map.value || "(空/未设置)"}
+                                    </span>
+                                </div>
+                                <span style="opacity: 0.5;">➔</span>
+                                
+                                <div class="fn__flex-1" style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="opacity: 0.7; font-family: monospace; font-size: 12px;">#{dbName.toLowerCase()}.</span>
+                                    <input
+                                        class="b3-input fn__flex-1"
+                                        style="font-family: monospace;"
+                                        placeholder="自定义子标签名 (如 male)"
+                                        bind:value={map.name}
+                                    />
+                                </div>
+                                <button
+                                    class="b3-button b3-button--outline"
+                                    style="font-size: 10px; padding: 4px 8px; flex-shrink: 0;"
+                                    on:click={() => handleCreateSubtagView(map)}
+                                    disabled={!map.name || creatingViews.has(map.value)}
+                                >
+                                    📊 创建视图
+                                </button>
+                                {#if map.viewId}
                                     <button
                                         class="b3-button b3-button--outline"
                                         style="font-size: 10px; padding: 4px 8px; flex-shrink: 0;"
-                                        on:click={() => handleCreateSubtagView(map)}
-                                        disabled={!map.name || creatingViews.has(map.value)}
+                                        on:click={() => handleConfigureFields(map)}
                                     >
-                                        📊 创建视图
+                                        ⚙️ 配置字段
                                     </button>
-                                    {#if map.viewId}
-                                        <button
-                                            class="b3-button b3-button--outline"
-                                            style="font-size: 10px; padding: 4px 8px; flex-shrink: 0;"
-                                            on:click={() => handleConfigureFields(map)}
-                                        >
-                                            ⚙️ 配置字段
-                                        </button>
-                                    {/if}
-                                </div>
-                            {/each}
+                                {/if}
+                            </div>
+                        {/each}
 
-                        </div>
-                    {/if}
-                {:else}
-                    <div style="text-align: center; padding: 40px 20px; opacity: 0.5; font-size: 13px;">
-                        ⚠️ Supertag 功能已关闭。该数据库不会自动对超级标签的块进行自动录入。
                     </div>
                 {/if}
             </div>

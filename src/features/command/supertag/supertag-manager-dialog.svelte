@@ -1,9 +1,10 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { getGlobalTypeConfigs } from "../../data/av-setting/db-config";
+    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig } from "../../data/av-setting/db-config";
     import { type TypeConfig } from "../../data/av-setting/types";
     import { i18n } from "../../../shared/utils";
     import { supertagMonitor } from "./supertag";
+    import { showMessage } from "siyuan";
     import {
         SUPERTAG_REGISTRY,
         type SupertagCommand,
@@ -89,6 +90,38 @@
 
     async function handlePrefChange(typeName: string, avId: string) {
         await supertagMonitor.setPreferredConfig(typeName, avId);
+    }
+
+    async function handleToggleEnable(group: TagGroup, checked: boolean) {
+        const activeConfig = group.dataConfigs.find(c => c.avId === group.selectedAvId) || group.dataConfigs[0];
+        if (!activeConfig) return;
+
+        try {
+            // 1. Load existing DbConfig
+            const config = await loadDbConfig(activeConfig.blockId);
+            
+            // 2. Set the new value
+            config.enableSupertag = checked;
+            
+            // 3. Save it back to block IAL
+            await saveDbConfig(activeConfig.blockId, config);
+
+            // 4. Update Svelte local state so UI updates
+            activeConfig.enableSupertag = checked;
+            
+            // Trigger Svelte arrays updates
+            classes = [...classes];
+            dataComponents = [...dataComponents];
+            toolComponents = [...toolComponents];
+
+            // 5. Refresh Monitor Registry in memory
+            await supertagMonitor.refreshRegistry();
+
+            showMessage(checked ? `✓ 超级标签 #${group.typeName} 已启用` : `✗ 超级标签 #${group.typeName} 已禁用`);
+        } catch (e: any) {
+            console.error("Failed to toggle supertag state:", e);
+            showMessage(`保存配置失败: ${e.message || e}`, 5000, "error");
+        }
     }
 
     async function handleConfigureTemplate(group: TagGroup) {
@@ -213,9 +246,16 @@
                         style="font-weight: bold; opacity: 0.6; flex: 3.5;"
                         >绑定详情 (Storage / Logic)</span
                     >
+                    <span
+                        class="b3-list-item__text"
+                        style="font-weight: bold; opacity: 0.6; flex: 1.0; text-align: right;"
+                        >启用状态</span
+                    >
                 </div>
 
                 {#each currentList as group}
+                    {@const activeConfig = group.dataConfigs.find(c => c.avId === group.selectedAvId) || group.dataConfigs[0]}
+                    {@const isEnabled = group.dataConfigs.length === 0 || (activeConfig ? activeConfig.enableSupertag !== false : true)}
                     <div class="b3-list-item">
                         <svg
                             class="b3-list-item__graphic"
@@ -305,6 +345,33 @@
                                         </span>
                                     {/each}
                                 </div>
+                            {/if}
+                        </div>
+
+                        <!-- Status Column -->
+                        <div
+                            class="b3-list-item__text fn__flex"
+                            style="flex: 1.0; justify-content: flex-end; align-items: center;"
+                        >
+                            {#if group.dataConfigs.length > 0}
+                                <label class="fn__flex" style="align-items: center; cursor: pointer;">
+                                    <input
+                                        type="checkbox"
+                                        class="b3-switch"
+                                        checked={isEnabled}
+                                        on:change={(e) => handleToggleEnable(group, e.target.checked)}
+                                    />
+                                </label>
+                            {:else}
+                                <span style="font-size: 11px; opacity: 0.5; margin-right: 4px;">内置逻辑</span>
+                                <label class="fn__flex" style="align-items: center; cursor: not-allowed; opacity: 0.6;">
+                                    <input
+                                        type="checkbox"
+                                        class="b3-switch"
+                                        checked={true}
+                                        disabled
+                                    />
+                                </label>
                             {/if}
                         </div>
                     </div>

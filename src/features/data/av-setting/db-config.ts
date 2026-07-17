@@ -233,13 +233,14 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                         const finalAvName = await resolveDBName();
                         const enableSupertag = config.enableSupertag !== false;
 
-                        if (enableSupertag && finalAvName) {
+                        if (finalAvName) {
                             // 1. Add base table-name supertag
                             configs.push({
                                 typeName: finalAvName.toLowerCase(),
                                 avId: targetAvId,
                                 blockId: row.id,
-                                avName: finalAvName
+                                avName: finalAvName,
+                                enableSupertag
                             });
 
                             // 2. Add sub-type supertags (TableName.CustomName) if configured
@@ -254,7 +255,8 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                                             blockId: row.id,
                                             typeFieldId: config.typeFieldId,
                                             mappedValue: m.value,
-                                            avName: finalAvName
+                                            avName: finalAvName,
+                                            enableSupertag
                                         });
                                     }
                                 }

@@ -17,6 +17,7 @@ export interface DbConfig {
     inheritanceRules?: InheritanceRule[];
     mode?: "single" | "multi"; // "single" is default: one table maps to one type
     singleClassName?: string; // Name of the single type
+    enableSupertag?: boolean;
 }
 
 export interface TypeConfig {
@@ -26,4 +27,5 @@ export interface TypeConfig {
     typeFieldId?: string;
     mappedValue?: string;
     avName?: string;
+    enableSupertag?: boolean;
 }

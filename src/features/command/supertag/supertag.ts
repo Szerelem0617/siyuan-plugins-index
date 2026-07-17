@@ -79,7 +79,7 @@ export class SupertagMonitor {
     }
 
     public getDataRegistry(): TypeConfig[] {
-        return this.dataRegistry;
+        return this.dataRegistry.filter(c => c.enableSupertag !== false);
     }
 
     private boundHandler = this.handleWsMessage.bind(this);
@@ -367,7 +367,7 @@ export class SupertagMonitor {
 
             // --- Path B: Data Component Persistence (Layer 4) ---
             const dataMatches = this.dataRegistry.filter(c =>
-                c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag
+                c.enableSupertag !== false && c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag
             );
 
             if (dataMatches.length > 0) {
