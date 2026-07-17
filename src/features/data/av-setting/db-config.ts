@@ -256,7 +256,7 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                                             typeFieldId: config.typeFieldId,
                                             mappedValue: m.value,
                                             avName: finalAvName,
-                                            enableSupertag
+                                            enableSupertag: m.enableSupertag !== false
                                         });
                                     }
                                 }

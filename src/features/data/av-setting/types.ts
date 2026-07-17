@@ -8,6 +8,7 @@ export interface IDBTypeMapping {
     name: string;
     isSupertag?: boolean;
     viewId?: string;
+    enableSupertag?: boolean;
 }
 
 export interface DbConfig {
