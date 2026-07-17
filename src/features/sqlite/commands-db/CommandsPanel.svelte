@@ -4,6 +4,7 @@
     import { runQuery, getSqliteEngine, saveDatabaseToDisk, tableNameToAvId } from "../sqlite-manager";
     import { dispatchCommand } from "../../command/command-dispatcher";
     import { showMessage } from "siyuan";
+    import { constructCommandStorage } from "../../command/construct-dir";
     import { getSystemTableNames, initSystemTables } from "../../command/indexos/command-sqlite";
     import { canUseFeature } from "../../dev-mode/policy-guard";
 
