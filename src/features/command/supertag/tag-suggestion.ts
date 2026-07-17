@@ -146,7 +146,7 @@ function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle:
     const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
 
     const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
-    const matched = allSupertags.filter(t => t.includes(query));
+    const matched = allSupertags.filter(t => t.includes(query) && supertagMonitor.isTagEnabled(t));
 
     const classes: string[] = [];
     const dataComps: string[] = [];

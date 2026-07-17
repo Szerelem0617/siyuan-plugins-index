@@ -79,9 +79,37 @@ export class SupertagMonitor {
     }
 
     public getDataRegistry(): TypeConfig[] {
-        return this.dataRegistry.filter(c => c.enableSupertag !== false);
+        return this.dataRegistry.filter(c => this.isTagEnabled(c.typeName));
+    }
+    public isTagEnabled(tagName: string): boolean {
+        // 1. Check if disabled in unified recommendation preferences
+        const disabledMap = (this.prefs as any).disabledRecommendationTags || {};
+        if (disabledMap[tagName.toLowerCase()] === true) {
+            return false;
+        }
+
+        // 2. Fallback to database-level enableSupertag state for Data Components
+        const matchingDb = this.dataRegistry.find(c => c.typeName.toLowerCase() === tagName.toLowerCase());
+        if (matchingDb && matchingDb.enableSupertag === false) {
+            return false;
+        }
+
+        return true;
     }
 
+    public async setTagEnabled(tagName: string, enabled: boolean) {
+        if (!(this.prefs as any).disabledRecommendationTags) {
+            (this.prefs as any).disabledRecommendationTags = {};
+        }
+        if (enabled) {
+            delete (this.prefs as any).disabledRecommendationTags[tagName.toLowerCase()];
+        } else {
+            (this.prefs as any).disabledRecommendationTags[tagName.toLowerCase()] = true;
+        }
+        if (this.pluginInstance) {
+            await this.pluginInstance.saveData("supertag-prefs.json", this.prefs);
+        }
+    }
     private boundHandler = this.handleWsMessage.bind(this);
     private pluginInstance: any = null;
 
@@ -367,7 +395,7 @@ export class SupertagMonitor {
 
             // --- Path B: Data Component Persistence (Layer 4) ---
             const dataMatches = this.dataRegistry.filter(c =>
-                c.enableSupertag !== false && c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag
+                this.isTagEnabled(c.typeName) && c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag
             );
 
             if (dataMatches.length > 0) {
