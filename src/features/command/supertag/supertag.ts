@@ -159,38 +159,67 @@ export class SupertagMonitor {
 
                     // Extract all tags currently embedded in the operation payload
                     const newTags = this.extractTagsFromPayload(op.data, op.action, blockId);
-                    if (newTags === null) {
-                        // Normal content update or attribute update (no custom-supertags changes)
-                        const currentTags = this.tagCache.get(blockId);
-                        if (currentTags) {
-                            if (op.action === "update") {
-                                for (const tag of currentTags) {
-                                    await this.triggerConditionalCommands(blockId, tag, "block_content_changed");
+                    
+                    // Fetch existing tags from cache or lazily from Siyuan API if cache is empty (e.g. document just loaded)
+                    let oldTags = this.tagCache.get(blockId);
+                    if (!oldTags) {
+                        try {
+                            const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+                            const rawVal = attrsRes ? attrsRes["custom-supertags"] : null;
+                            if (rawVal) {
+                                const parsed = JSON.parse(rawVal);
+                                if (Array.isArray(parsed)) {
+                                    oldTags = new Set(parsed.map(t => String(t).trim().toLowerCase()));
+                                    this.tagCache.set(blockId, oldTags);
                                 }
-                            } else if (op.action === "setAttrs" || op.action === "updateAttrs") {
-                                for (const tag of currentTags) {
-                                    await this.triggerConditionalCommands(blockId, tag, "block_attribute_changed");
+                            }
+                        } catch (_) {}
+                    }
+                    if (!oldTags) oldTags = new Set<string>();
+
+                    const activeTags = newTags !== null ? newTags : oldTags;
+
+                    if (newTags !== null) {
+                        this.tagCache.set(blockId, newTags);
+                    }
+
+                    // Detect if tags list was actually added/removed in this transaction
+                    let tagsChanged = false;
+                    if (newTags !== null) {
+                        if (newTags.size !== oldTags.size) {
+                            tagsChanged = true;
+                        } else {
+                            for (const t of newTags) {
+                                if (!oldTags.has(t)) {
+                                    tagsChanged = true;
+                                    break;
                                 }
                             }
                         }
-                        continue;
                     }
 
-                    // Update local cache but do not trigger commands here
-                    this.tagCache.set(blockId, newTags);
+                    // Trigger block changes if it is a normal edit (no tag modification in this transaction)
+                    if (!tagsChanged && activeTags.size > 0) {
+                        if (op.action === "update") {
+                            for (const tag of activeTags) {
+                                await this.triggerConditionalCommands(blockId, tag, "block_content_changed");
+                            }
+                        } else if (op.action === "setAttrs" || op.action === "updateAttrs") {
+                            for (const tag of activeTags) {
+                                await this.triggerConditionalCommands(blockId, tag, "block_attribute_changed");
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
     private async detectAndMigrateNativeTags(blockId: string, payload: any) {
-        console.log("[Supertag-Migration-Debug] Entered detectAndMigrateNativeTags for block:", blockId);
         if (!payload || typeof payload !== "string") {
-            console.log("[Supertag-Migration-Debug] Exit: payload is empty or not string");
             return;
         }
         if (!payload.includes('data-type="tag"') && !payload.includes('data-type="NodeTag"')) {
-            console.log("[Supertag-Migration-Debug] Exit: payload does not contain tag markup");
             return;
         }
 
@@ -198,9 +227,7 @@ export class SupertagMonitor {
             // Query all registered supertags from SQLite sys_type_db
             const { db } = await getSqliteEngine();
             const res = db.exec(`SELECT supertag FROM sys_type_db`);
-            console.log("[Supertag-Migration-Debug] sys_type_db query result:", JSON.stringify(res));
             if (res.length === 0 || res[0].values.length === 0) {
-                console.log("[Supertag-Migration-Debug] Exit: no supertags found in sys_type_db");
                 return;
             }
 
@@ -209,13 +236,11 @@ export class SupertagMonitor {
                     String(row[0]).replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase()
                 ).filter(Boolean)
             );
-            console.log("[Supertag-Migration-Debug] Active supertags set:", Array.from(supertags));
 
             // Parse HTML to find matching tags
             const tempDiv = document.createElement("div");
             tempDiv.innerHTML = payload;
             const tagEls = tempDiv.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
-            console.log("[Supertag-Migration-Debug] Found tag elements count:", tagEls.length);
             
             const tagsToMigrate: string[] = [];
             tagEls.forEach((el: any) => {
@@ -224,7 +249,6 @@ export class SupertagMonitor {
                     .replace(/[\u200B-\u200D\uFEFF]/g, '')
                     .trim()
                     .toLowerCase();
-                console.log("[Supertag-Migration-Debug] Checking tag text content:", tagText);
                 if (supertags.has(tagText)) {
                     tagsToMigrate.push(tagText);
                     el.remove();
@@ -232,7 +256,6 @@ export class SupertagMonitor {
             });
 
             if (tagsToMigrate.length === 0) {
-                console.log("[Supertag-Migration-Debug] Exit: none of the tags are registered supertags");
                 return;
             }
 
