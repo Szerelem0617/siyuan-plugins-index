@@ -592,6 +592,23 @@ async function handleAvMouseOver(event: MouseEvent) {
             envLabel = "后端 (Kernel)";
         }
 
+        // appliesTo 标签映射
+        const appliesToRaw = cmdDef.meta?.appliesTo;
+        let appliesToHtml = "";
+        if (appliesToRaw && appliesToRaw.length > 0 && !appliesToRaw.includes("any")) {
+            const labelMap: Record<string, string> = {
+                "document": "文档", "paragraph": "段落", "heading": "标题",
+                "list": "列表", "blockquote": "引述", "code": "代码块",
+                "table": "表格", "super": "超级块", "embed": "嵌入块", "widget": "挂件"
+            };
+            const tags = appliesToRaw.map(t => labelMap[t] || t).join(", ");
+            appliesToHtml = `
+                <div style="font-size: 10px; color: var(--b3-theme-on-surface-mute); border-top: 1px dashed var(--b3-border-color); padding-top: 4px; margin-top: 4px;">
+                    适用于: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${tags}</code>
+                </div>
+            `;
+        }
+
         const content = `
             <div style="font-weight: 600; font-size: 12px; color: var(--b3-theme-primary); margin-bottom: 2px;">${cmdDef.name}</div>
             <div style="font-family: monospace; font-size: 10px; color: var(--b3-theme-on-surface-mute); word-break: break-all; margin-bottom: 6px;">${cmdDef.id}</div>
@@ -603,6 +620,7 @@ async function handleAvMouseOver(event: MouseEvent) {
                 <span>环境: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${envLabel}</code></span>
                 <span>参数: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${requiresParams ? "是" : "否"}</code></span>
             </div>
+            ${appliesToHtml}
         `;
         showTooltip(cell, content);
     } catch (err) {

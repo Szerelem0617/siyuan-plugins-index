@@ -72,6 +72,15 @@ export async function dispatchCommand(
         }
     }
 
+    // 2b. appliesTo 建议性检查（仅 warn，不阻断执行）
+    const appliesTo = def.meta.appliesTo;
+    if (appliesTo && appliesTo.length > 0 && !appliesTo.includes("any") && context.blockEl) {
+        const blockType = getBlockType(context.blockEl);
+        if (blockType && !appliesTo.includes(blockType as any)) {
+            console.warn(`[Dispatcher] Command "${commandId}" declares appliesTo=${JSON.stringify(appliesTo)} but target block type is "${blockType}". Proceeding anyway (advisory only).`);
+        }
+    }
+
     // 3. 构建参数
     const resolvedParams = await buildParams(def, rawParam, context);
 
@@ -478,3 +487,40 @@ function hotkeyToKeyboardEvent(hotkey: string): KeyboardEvent | null {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Block type resolver（从 DOM 推断思源块类型）
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 从块的 DOM 元素推断思源块类型，映射到 BlockTarget。
+ * 读取 data-type 属性（如 "NodeParagraph"）并转换。
+ */
+function getBlockType(blockEl: HTMLElement): string | null {
+    const dataType = blockEl.getAttribute("data-type");
+    if (!dataType) return null;
+
+    const map: Record<string, string> = {
+        "NodeDocument": "document",
+        "NodeParagraph": "paragraph",
+        "NodeHeading": "heading",
+        "NodeList": "list",
+        "NodeListItem": "list",
+        "NodeBlockquote": "blockquote",
+        "NodeCodeBlock": "code",
+        "NodeTable": "table",
+        "NodeSuperBlock": "super",
+        "NodeBlockQueryEmbed": "embed",
+        "NodeWidget": "widget",
+        "NodeHTMLBlock": "widget",
+        "NodeMathBlock": "code",
+        "NodeThematicBreak": "paragraph",
+        "NodeAudio": "embed",
+        "NodeVideo": "embed",
+        "NodeIFrame": "embed",
+    };
+
+    return map[dataType] || null;
+}
+
+/** 导出供外部使用（如 tag-suggestion 过滤） */
+export { getBlockType };

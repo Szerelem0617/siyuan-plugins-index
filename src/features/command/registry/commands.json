@@ -89,7 +89,8 @@
                 "scope": "self",
                 "category": "edit",
                 "source": "builtin",
-                "apiEquivalent": "api.block.insert"
+                "apiEquivalent": "api.block.insert",
+                "appliesTo": ["paragraph", "heading", "list", "blockquote", "code", "table", "super"]
             },
             "seed": {
                 "rowID": "20260526204558-zxrigm8",
@@ -119,7 +120,8 @@
                 "scope": "sibling",
                 "category": "edit",
                 "source": "builtin",
-                "apiEquivalent": "api.block.insert"
+                "apiEquivalent": "api.block.insert",
+                "appliesTo": ["paragraph", "heading", "list", "blockquote", "code", "table", "super"]
             }
         },
         {
@@ -142,7 +144,8 @@
             "meta": {
                 "scope": "self",
                 "category": "clipboard",
-                "source": "builtin"
+                "source": "builtin",
+                "appliesTo": ["paragraph", "heading", "list", "blockquote", "code", "table", "super"]
             }
         },
         {
@@ -410,7 +413,8 @@
                 "scope": "self",
                 "category": "edit",
                 "source": "plugin",
-                "plugin": "index"
+                "plugin": "index",
+                "appliesTo": ["paragraph", "heading", "list"]
             },
             "seed": {
                 "rowID": "20260714160000-turnintotask",

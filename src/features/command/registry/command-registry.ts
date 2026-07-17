@@ -36,6 +36,20 @@ export type CommandCategory =
     | "navigation" | "view" | "edit"
     | "clipboard" | "attribute" | "custom";
 
+/** 命令可作用的思源块类型（建议性声明） */
+export type BlockTarget =
+    | "document"     // 文档根节点
+    | "paragraph"    // 段落
+    | "heading"      // 标题
+    | "list"         // 列表（含任务列表）
+    | "blockquote"   // 引述
+    | "code"         // 代码块
+    | "table"        // 表格
+    | "super"        // 超级块
+    | "embed"        // 嵌入块
+    | "widget"       // 挂件
+    | "any";         // 显式声明通用（等价于不填）
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 一个参数的 Schema 描述（对应 commands.json 中 params[] 的每一项） */
@@ -108,6 +122,12 @@ export interface CommandMeta {
      * 供用户切换到 schedulable 替代方案时参考。
      */
     apiEquivalent?: string;
+    /**
+     * 命令适用的思源块类型（建议性约束，Layer 1 只读配置）。
+     * 缺省或包含 "any" 表示不限制。
+     * Dispatcher 不匹配时仅 warn，不阻断执行。
+     */
+    appliesTo?: BlockTarget[];
 }
 
 /** 完整的命令定义（Registry 中的存储单元） */
