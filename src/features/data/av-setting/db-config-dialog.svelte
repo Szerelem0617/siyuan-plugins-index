@@ -16,7 +16,6 @@
     export let dbName = "";
 
     let activeTab = "type"; // type | inheritance
-    let enableSupertag = currentConfig.enableSupertag !== false;
     let typeFieldId = currentConfig.typeFieldId || "";
     let typeMappings: IDBTypeMapping[] = currentConfig.typeMappings || [];
     let inheritanceRules = currentConfig.inheritanceRules || [];
@@ -152,7 +151,6 @@
 
         const config: DbConfig = {
             avId,
-            enableSupertag,
             typeFieldId: typeFieldId,
             typeMappings: activeMappings,
             inheritanceRules: finalInheritanceRules as any,
@@ -275,7 +273,6 @@
 
                 const config: DbConfig = {
                     avId,
-                    enableSupertag,
                     typeFieldId,
                     typeMappings: activeMappings,
                     inheritanceRules: finalInheritanceRules as any,

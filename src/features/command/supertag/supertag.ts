@@ -82,19 +82,8 @@ export class SupertagMonitor {
         return this.dataRegistry.filter(c => this.isTagEnabled(c.typeName));
     }
     public isTagEnabled(tagName: string): boolean {
-        // 1. Check if disabled in unified recommendation preferences
         const disabledMap = (this.prefs as any).disabledRecommendationTags || {};
-        if (disabledMap[tagName.toLowerCase()] === true) {
-            return false;
-        }
-
-        // 2. Fallback to database-level enableSupertag state for Data Components
-        const matchingDb = this.dataRegistry.find(c => c.typeName.toLowerCase() === tagName.toLowerCase());
-        if (matchingDb && matchingDb.enableSupertag === false) {
-            return false;
-        }
-
-        return true;
+        return disabledMap[tagName.toLowerCase()] !== true;
     }
 
     public async setTagEnabled(tagName: string, enabled: boolean) {
