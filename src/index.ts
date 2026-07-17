@@ -28,6 +28,7 @@ import { canUseFeature } from "./features/dev-mode/policy-guard";
 import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
 import { triggerTurnIntoTask } from "./features/command/effect/turn-into-task";
+import { triggerCheckTaskCompleted } from "./features/command/effect/check-task-completed";
 
 import { SupertagRenderer } from "./features/command/supertag/SupertagRenderer";
 import { initTagMenuInterceptor } from "./features/command/supertag/tag-menu-interceptor";
@@ -65,6 +66,11 @@ export default class IndexPlugin extends Plugin {
         const turnIntoTaskCmd = commandRegistry.getCommand("plugin-index.command.turnIntoTask");
         if (turnIntoTaskCmd) {
             turnIntoTaskCmd.dispatch.executor = triggerTurnIntoTask;
+        }
+
+        const checkTaskCompletedCmd = commandRegistry.getCommand("plugin-index.command.checkTaskCompleted");
+        if (checkTaskCompletedCmd) {
+            checkTaskCompletedCmd.dispatch.executor = triggerCheckTaskCompleted;
         }
 
         if (DEV_ENABLE_INIT_SYS) {
