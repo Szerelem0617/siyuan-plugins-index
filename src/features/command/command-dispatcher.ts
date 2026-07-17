@@ -35,6 +35,7 @@ export interface DispatchResult {
     success: boolean;
     method: "keyboard" | "global" | "api" | "custom" | "unknown";
     detail: string;
+    value?: any;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,9 +253,7 @@ async function dispatchCustom(
     const result = await executor(params, context);
     console.log(`[Dispatcher] Custom command executor finished for: ${def.id}. Return value:`, result);
     
-    // If executor explicitly returns false, treat it as failure/halt signal
-    const isSuccess = result !== false;
-    return { success: isSuccess, method: "custom", detail: def.id };
+    return { success: true, method: "custom", detail: def.id, value: result };
 }
 // ─────────────────────────────────────────────────────────────────────────────
 // Param resolution（静态参 / 注入参 / 模板参）
