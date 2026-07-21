@@ -25,7 +25,7 @@ export class SupertagRenderer {
     /**
      * Query and render tags on the document level (just below the protyle-title).
      */
-    private static async renderDocumentTags(docId: string, editorEl: HTMLElement) {
+    public static async renderDocumentTags(docId: string, editorEl: HTMLElement) {
         try {
             const titleEl = editorEl.querySelector(".protyle-title");
             if (!titleEl) return;
@@ -34,6 +34,8 @@ export class SupertagRenderer {
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });
             const attrs = attrsRes || {};
             const rawTags = attrs["custom-supertags"];
+            const taskStatus = attrs["custom-index-task"];
+            const isTask = Boolean(taskStatus);
 
             const tags = parseSupertags(rawTags);
             globalSupertagsCache.set(docId, tags);
@@ -50,12 +52,18 @@ export class SupertagRenderer {
                 titleEl.appendChild(container);
             }
 
-            if (tags.length === 0) {
+            if (tags.length === 0 && !isTask) {
                 container.style.display = "none";
                 return;
             }
 
             container.style.display = "flex";
+
+            if (isTask) {
+                const checkboxPill = this.createCheckboxPill(docId, taskStatus, editorEl);
+                container.appendChild(checkboxPill);
+            }
+
             tags.forEach(tag => {
                 const pill = this.createTagPill(tag, async () => {
                     await this.removeTagFromBlock(docId, tag, "page", editorEl);
@@ -175,12 +183,14 @@ export class SupertagRenderer {
                     }
                 });
                 
-                // Update local DOM attributes immediately
-                const blockEl = (document.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement) || editorEl.querySelector(`[data-node-id="${blockId}"]`);
-                if (blockEl) {
-                    blockEl.setAttribute("custom-index-task", newStatus);
-                    this.renderSingleBlockElement(blockEl);
+                // Re-render visually for both document page tags and block tags instantly
+                const targetBlockEl = (document.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement) || editorEl.querySelector(`[data-node-id="${blockId}"]`);
+                if (targetBlockEl) {
+                    targetBlockEl.setAttribute("custom-index-task", newStatus);
+                    this.renderSingleBlockElement(targetBlockEl);
                 }
+                await this.renderDocumentTags(blockId, editorEl);
+                this.renderBlockTags(editorEl);
                 
                 // Trigger event content change or task completed to run pipeline
                 console.log(`[Supertag-Trigger] Virtual task status changed to: ${newStatus} for block: ${blockId}`);
@@ -189,9 +199,6 @@ export class SupertagRenderer {
                 } else {
                     await supertagMonitor.processBlockContentChanged(blockId);
                 }
-                
-                // Re-render visually
-                this.renderBlockTags(editorEl);
                 
                 showMessage(`任务状态更新为: ${newStatus === "completed" ? "已完成" : "待办"}`);
             } catch (err) {

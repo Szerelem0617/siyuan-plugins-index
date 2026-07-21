@@ -49,7 +49,7 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
         commandLabels: ["全局关系图"]
     },
     {
-        typeLabel: "person",
-        commandLabels: ["烟花", "消息提示", "转换为任务"]
+        typeLabel: "task",
+        commandLabels: ["☑ 转换为任务", "转换为任务", "🎆 烟花", "烟花"]
     }
 ];

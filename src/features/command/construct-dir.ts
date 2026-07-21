@@ -398,7 +398,7 @@ async function establishDbRelation(commandAvId: string, typeAvId: string) {
 }
 
 async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
-    console.log("[IndexOS] Binding default relation values dynamically...");
+    console.log("[IndexOS-Debug] Binding default relation values dynamically...");
     
     const commandRender = await post("/api/av/renderAttributeView", { id: commandAvId });
     const commandRows = commandRender?.view?.rows || commandRender?.rows || [];
@@ -414,12 +414,33 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
         commandMap[label.trim()] = row.id;
     }
 
+    const primaryKeyId = await getAvPrimaryKeyColId(typeAvId);
     const typeMap: Record<string, string> = {};
     for (const row of typeRows) {
         const firstCell = row.cells[0];
-        const label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
-        typeMap[label.trim()] = row.id;
+        const label = (firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "").trim();
+        const cleanLabel = label.replace(/^#/, "").toLowerCase();
+
+        // 自动迁移旧版的 'person' / '#Person' 行到纯净版 'task'
+        if (cleanLabel === "person" || cleanLabel === "task") {
+            if (label !== "task" && primaryKeyId) {
+                console.log(`[IndexOS-Debug] Auto-migrating legacy supertag row '${label}' -> 'task' in Type-DB...`);
+                await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                    avID: typeAvId,
+                    values: [{
+                        keyID: primaryKeyId,
+                        itemID: row.id,
+                        value: { type: "block", block: { content: "task" } }
+                    }]
+                });
+            }
+            typeMap["task"] = row.id;
+        } else {
+            typeMap[cleanLabel] = row.id;
+        }
     }
+
+    console.log("[IndexOS-Debug] commandMap:", commandMap, "typeMap:", typeMap);
 
     const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
     const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
@@ -435,23 +456,27 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
 
     // Populate relation batch values from rules
     for (const binding of DEFAULT_RELATION_BINDINGS) {
-        const typeRowId = typeMap[binding.typeLabel];
+        const cleanBindingType = binding.typeLabel.replace(/^#/, "").toLowerCase();
+        const typeRowId = typeMap[cleanBindingType];
         if (!typeRowId) {
-            console.warn(`[IndexOS] Could not find row ID for Supertag: ${binding.typeLabel}`);
+            console.warn(`[IndexOS-Debug] Could not find row ID for Supertag: ${binding.typeLabel} (clean: ${cleanBindingType})`);
             continue;
         }
 
         const commandRowIds: string[] = [];
         for (const cmdLabel of binding.commandLabels) {
-            // Find command ID whose label matches (partial match supported)
-            const matchedKey = Object.keys(commandMap).find(k => k.includes(cmdLabel));
+            const cleanCmdLabel = cmdLabel.replace(/^☑\s*/, "").trim();
+            // Find command ID whose label matches (partial or exact)
+            const matchedKey = Object.keys(commandMap).find(k => k === cmdLabel || k.includes(cmdLabel) || k.includes(cleanCmdLabel));
             if (matchedKey && commandMap[matchedKey]) {
-                commandRowIds.push(commandMap[matchedKey]);
+                if (!commandRowIds.includes(commandMap[matchedKey])) {
+                    commandRowIds.push(commandMap[matchedKey]);
+                }
             }
         }
 
         if (commandRowIds.length > 0) {
-            console.log(`[IndexOS] Binding ${binding.typeLabel} to Commands: ${binding.commandLabels.join(", ")}`);
+            console.log(`[IndexOS-Debug] Binding ${cleanBindingType} (rowID: ${typeRowId}) to Command Row IDs:`, commandRowIds);
             batchValues.push({
                 keyID: typeRelKeyId,
                 itemID: typeRowId,
@@ -470,7 +495,7 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
             avID: typeAvId,
             values: batchValues
         });
-        console.log("[IndexOS] Default relation bindings updated successfully!");
+        console.log("[IndexOS-Debug] Default relation bindings updated successfully!");
     }
 }
 

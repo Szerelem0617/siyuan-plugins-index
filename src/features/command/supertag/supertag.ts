@@ -319,19 +319,27 @@ export class SupertagMonitor {
             } catch (_) {}
         }
         if (!tags) tags = new Set<string>();
+        // Ensure "task" supertag is always present so task_completed triggers default task rules
+        tags.add("task");
         
-        if (tags.size > 0) {
-            for (const tag of tags) {
-                await this.triggerConditionalCommands(blockId, tag, "task_completed");
-            }
+        for (const tag of tags) {
+            await this.triggerConditionalCommands(blockId, tag, "task_completed");
         }
     }
 
     destroy() {
+        window.removeEventListener("index-plugin-refresh-supertags", this.refreshBoundHandler);
         if (this.pluginInstance && this.pluginInstance.eventBus) {
             this.pluginInstance.eventBus.off("ws-main", this.boundHandler);
         }
-        window.removeEventListener("index-plugin-refresh-supertags", this.refreshBoundHandler);
+    }
+
+    private async triggerConditionalCommands(
+        blockId: string, 
+        cleanTag: string, 
+        eventName: "tag_created" | "tag_removed" | "block_content_changed" | "block_attribute_changed" | "task_completed"
+    ) {
+        // ... existing logic ...
     }
 
     private async handleWsMessage({ detail }: any) {
@@ -653,7 +661,7 @@ export class SupertagMonitor {
     private async triggerConditionalCommands(
         blockId: string, 
         cleanTag: string, 
-        eventName: "tag_created" | "tag_removed" | "block_content_changed" | "block_attribute_changed"
+        eventName: "tag_created" | "tag_removed" | "block_content_changed" | "block_attribute_changed" | "task_completed"
     ) {
         const typeAvId = getTypeAvId();
         if (!typeAvId) return;

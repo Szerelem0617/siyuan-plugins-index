@@ -147,6 +147,8 @@ function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle:
     const dataNames = new Set(dbConfigs.map(c => c.typeName.trim().toLowerCase()));
     const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
 
+    console.log(`[TagSuggestion-Debug] query: "${query}", dataNames:`, Array.from(dataNames), "logicNames:", Array.from(logicNames), "SUPERTAG_REGISTRY:", logicConfigs);
+
     const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
     const matched = allSupertags.filter(t => t.includes(query) && supertagMonitor.isTagEnabled(t));
 

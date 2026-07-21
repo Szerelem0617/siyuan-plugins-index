@@ -393,18 +393,28 @@
             "seed": {
                 "rowID": "20260713120000-showmessage",
                 "label": "💬 消息提示",
-                "paramMapping": "",
+                "paramMapping": "{}",
                 "uiEntries": ["inline", "palette"]
             }
         },
         {
             "id": "plugin-index.command.turnIntoTask",
             "name": "转换为任务",
-            "description": "将选中的普通段落、标题或整个列表转换为任务列表。",
+            "description": "将选中的普通段落、标题、列表或页面转换为虚拟任务。",
             "dispatch": {
                 "method": "custom"
             },
-            "params": [],
+            "params": [
+                {
+                    "key": "id",
+                    "label": "目标块或页面 ID",
+                    "type": "blockid",
+                    "required": false,
+                    "paramMode": "template",
+                    "default": "{{block_id}}",
+                    "description": "目标块或页面的 ID (默认注入当前上下文的 block_id)"
+                }
+            ],
             "constraints": {
                 "requiresFocus": false,
                 "environment": "universal"
@@ -419,7 +429,7 @@
             "seed": {
                 "rowID": "20260714160000-turnintotask",
                 "label": "☑ 转换为任务",
-                "paramMapping": "",
+                "paramMapping": "{}",
                 "uiEntries": ["inline", "palette"]
             }
         }

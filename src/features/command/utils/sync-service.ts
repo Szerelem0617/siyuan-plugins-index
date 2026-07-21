@@ -329,10 +329,21 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
 
                     if (row.length === 2) {
                         processMenu(row[1], "IconMenu");
-                    } else if (row.length === 3) {
+                    } else if (row.length >= 3) {
                         processMenu(row[1], "IconMenu");
-                        processMenu(row[2], "IconMenu");
+                        processMenu(row[2], "CurrentPageMenu");
                     }
+                }
+
+                // 确保每一个定义在 supertag-db 中的标签都能作为合法 Supertag 注册并出现在工具组件列表中
+                if (cleanTag && !newRegistry.some(r => r.typeTag === cleanTag)) {
+                    newRegistry.push({
+                        typeTag: cleanTag,
+                        methodName: "",
+                        commandRef: "",
+                        paramMapping: "",
+                        uiLocation: "IconMenu"
+                    });
                 }
             }
         }
