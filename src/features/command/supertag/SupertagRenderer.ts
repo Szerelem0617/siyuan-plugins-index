@@ -293,6 +293,8 @@ export class SupertagRenderer {
      */
     private static async removeTagFromBlock(blockId: string, tagToRemove: string, type: "page" | "block", editorEl: HTMLElement) {
         try {
+            console.log(`[Tag-Remove] Removing tag "${tagToRemove}" from ${type} "${blockId}"...`);
+
             // Get current attributes
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
             const attrs = attrsRes || {};
@@ -303,31 +305,45 @@ export class SupertagRenderer {
             const updatedTags = tags.filter(t => t !== tagToRemove);
             globalSupertagsCache.set(blockId, updatedTags);
             
-            // Write back
+            // Prepare attributes update
+            const updateAttrs: Record<string, string> = {
+                "custom-supertags": serializeSupertags(updatedTags)
+            };
+
+            const isTaskTag = tagToRemove.toLowerCase() === "task";
+            if (isTaskTag) {
+                console.log(`[Tag-Remove] Task supertag removed. Clearing custom-index-task attribute on ${blockId}`);
+                updateAttrs["custom-index-task"] = "";
+            }
+
+            // Write back to Siyuan
             await post("/api/attr/setBlockAttrs", {
                 id: blockId,
-                attrs: {
-                    "custom-supertags": serializeSupertags(updatedTags)
-                }
+                attrs: updateAttrs
             });
 
             // Trigger tag_removed commands explicitly
+            console.log(`[Tag-Remove] Processing tag_removed event for tag "${tagToRemove}" on ${blockId}...`);
             await supertagMonitor.processRemovedTag(blockId, tagToRemove);
 
             // Re-render visually instantly
             if (type === "page") {
                 await this.renderDocumentTags(blockId, editorEl);
             } else {
-                const blockEl = editorEl.querySelector(`[data-node-id="${blockId}"]`);
-                if (blockEl) {
-                    blockEl.setAttribute("custom-supertags", updatedTags.length > 0 ? JSON.stringify(updatedTags) : "");
-                    this.renderBlockTags(editorEl);
+                const targetBlockEl = editorEl.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement;
+                if (targetBlockEl) {
+                    if (isTaskTag) {
+                        targetBlockEl.removeAttribute("custom-index-task");
+                    }
+                    targetBlockEl.setAttribute("custom-supertags", updatedTags.length > 0 ? JSON.stringify(updatedTags) : "");
+                    this.renderSingleBlockElement(targetBlockEl);
                 }
+                this.renderBlockTags(editorEl);
             }
 
             showMessage(`已移除超级标签: #${tagToRemove}`);
         } catch (e) {
-            console.error("[SupertagRenderer] Failed to remove tag:", tagToRemove, e);
+            console.error("[Tag-Remove] Failed to remove tag:", tagToRemove, e);
             showMessage("移除标签失败", 3000, "error");
         }
     }

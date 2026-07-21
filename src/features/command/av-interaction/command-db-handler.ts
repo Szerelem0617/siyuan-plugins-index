@@ -19,20 +19,19 @@ export async function handleAvFooterClick(event: MouseEvent) {
         console.log("[IndexOS-AV-Click] Click inside AV detected. Target:", target, "tagName:", target.tagName, "className:", target.className);
     }
 
+    const avContainer = target.closest("[data-av-id]") || target.closest('[data-type="NodeAttributeView"]') || target.closest(".av__container") || target.closest(".av");
+    if (!avContainer) {
+        return;
+    }
+
     const addBtn = target.closest('[data-type="av-add-bottom"]') || target.closest(".av__row--util");
     if (!addBtn) {
         // Double check if text content matches "添加条目"
         const txt = target.textContent?.trim() || "";
-        if (txt === "添加条目" || txt.includes("添加条目") || txt === "+ 添加条目") {
-            console.log("[IndexOS-AV-Click] Click matched by text content '添加条目'. Target:", target);
-        } else {
+        if (!txt.includes("添加条目")) {
             return;
         }
-    } else {
-        console.log("[IndexOS-AV-Click] Click matched by closest av-add-bottom or av__row--util. Target:", target);
     }
-
-    const avContainer = target.closest("[data-av-id]") || target.closest('[data-type="NodeAttributeView"]') || target.closest(".av__container") || target.closest(".av");
     if (!avContainer) {
         console.warn("[IndexOS-AV-Click] Could not resolve avContainer for target.");
         return;
