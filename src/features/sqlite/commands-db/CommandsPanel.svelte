@@ -163,11 +163,12 @@
         }
     }
 
+    import { encodeBtnHref } from "../../command/global-registration/inline-button";
+
     function copyButtonLink(cmdId: string, paramStr: string, label: string) {
         if (!cmdId) return;
         try {
-            const cmdPart = encodeURIComponent(cmdId);
-            const href = `siyuan-btn://exec/${cmdPart}`;
+            const href = encodeBtnHref({ command: cmdId, param: paramStr || undefined, label });
 
             navigator.clipboard.writeText(href).then(() => {
                 showMessage(`📋 已复制命令按钮链接: ${label || cmdId}`);
@@ -258,7 +259,7 @@
                     />
                 </div>
                 <div style="font-size: 11px; opacity: 0.8; color: var(--b3-theme-primary); font-weight: 500;">
-                    💡 点击任意指令卡片，即可快速复制对应的“按钮链接 (siyuan-btn://)”到剪贴板。
+                    💡 点击任意指令卡片，即可快速复制对应的“按钮链接”到剪贴板。
                 </div>
             </div>
 

@@ -415,54 +415,74 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
     }
 
     const primaryKeyId = await getAvPrimaryKeyColId(typeAvId);
-    const typeMap: Record<string, string> = {};
+    
+    const SEED_ROW_ID_MAP: Record<string, string> = {
+        "20260526204605-7hun58a": "project",
+        "20260526204605-v11e2ta": "task",
+        "20260721140000-pipeline": "pipeline",
+        "20260721140000-permanent": "permanent"
+    };
+
+    // 1. 按照 supertag 名称将行进行分组
+    const supertagRowGroups: Record<string, any[]> = {};
     for (const row of typeRows) {
         const firstCell = row.cells[0];
         const label = (firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "").trim();
-        const cleanLabel = label.replace(/^#/, "").toLowerCase();
+        let cleanLabel = label.replace(/^#/, "").toLowerCase();
+        if (!cleanLabel && SEED_ROW_ID_MAP[row.id]) {
+            cleanLabel = SEED_ROW_ID_MAP[row.id];
+        }
+        if (cleanLabel === "person") cleanLabel = "task";
 
-        // 自动迁移旧版的 'person' / '#Person' 行到纯净版 'task'
-        if (cleanLabel === "person" || cleanLabel === "task") {
-            if (label !== "task" && primaryKeyId) {
-                console.log(`[IndexOS-Debug] Auto-migrating legacy supertag row '${label}' -> 'task' in Type-DB...`);
-                await post("/api/av/batchSetAttributeViewBlockAttrs", {
-                    avID: typeAvId,
-                    values: [{
-                        keyID: primaryKeyId,
-                        itemID: row.id,
-                        value: { type: "block", block: { content: "task" } }
-                    }]
-                });
-            }
-            typeMap["task"] = row.id;
-        } else {
-            typeMap[cleanLabel] = row.id;
+        if (cleanLabel) {
+            if (!supertagRowGroups[cleanLabel]) supertagRowGroups[cleanLabel] = [];
+            supertagRowGroups[cleanLabel].push(row);
         }
     }
 
-    // Ensure all supertags in DEFAULT_RELATION_BINDINGS exist as rows in Type-DB AV
-    if (primaryKeyId) {
-        for (const binding of DEFAULT_RELATION_BINDINGS) {
-            const clean = binding.typeLabel.replace(/^#/, "").toLowerCase();
-            if (!typeMap[clean]) {
-                console.log(`[IndexOS-Debug] Adding missing supertag row '${clean}' to Type-DB AV...`);
-                // @ts-ignore
-                const newRowId = window.Lute ? window.Lute.NewNodeID() : `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-                await post("/api/av/addAttributeViewBlocks", {
-                    avID: typeAvId,
-                    srcs: [{ itemID: newRowId, id: "", isDetached: true }]
-                });
-                await post("/api/av/batchSetAttributeViewBlockAttrs", {
-                    avID: typeAvId,
-                    values: [{
-                        keyID: primaryKeyId,
-                        itemID: newRowId,
-                        value: { type: "block", block: { content: clean } }
-                    }]
-                });
-                typeMap[clean] = newRowId;
+    const typeMap: Record<string, string> = {};
+    const duplicateRowIdsToRemove: string[] = [];
+
+    // 2. 为每个 supertag 选择唯一的为主种子行，并标记多余重复行进行清理
+    for (const [tag, rows] of Object.entries(supertagRowGroups)) {
+        // 优先保留 ID 与 seed 对应，或有 Icon_Menu / Conditional 内容的行
+        let primaryRow = rows.find(r => SEED_ROW_ID_MAP[r.id] === tag);
+        if (!primaryRow) {
+            primaryRow = rows.find(r => r.cells.some((c: any) => c?.value?.text?.content || c?.value?.mText?.content)) || rows[0];
+        }
+
+        typeMap[tag] = primaryRow.id;
+
+        // 如果主键文本未正确填充，进行补全
+        const primaryLabel = (primaryRow.cells[0]?.value?.block?.content || primaryRow.cells[0]?.value?.mText?.content || primaryRow.cells[0]?.value?.text?.content || "").trim();
+        if (primaryLabel !== tag && primaryKeyId) {
+            console.log(`[IndexOS-Debug] Setting primary key content '${tag}' on row ${primaryRow.id}...`);
+            await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                avID: typeAvId,
+                values: [{
+                    keyID: primaryKeyId,
+                    itemID: primaryRow.id,
+                    value: { type: "block", block: { content: tag } }
+                }]
+            });
+        }
+
+        // 收集多余的重复行 ID
+        for (const row of rows) {
+            if (row.id !== primaryRow.id) {
+                duplicateRowIdsToRemove.push(row.id);
             }
         }
+    }
+
+    // 3. 从 AV 视图中彻底彻底删除重复的散乱行
+    if (duplicateRowIdsToRemove.length > 0) {
+        console.log(`[IndexOS-Debug] Removing ${duplicateRowIdsToRemove.length} duplicate supertag rows from Type-DB AV:`, duplicateRowIdsToRemove);
+        await post("/api/av/removeAttributeViewBlocks", {
+            avID: typeAvId,
+            srcs: duplicateRowIdsToRemove.map(id => ({ itemID: id }))
+        });
+        await sleep(500);
     }
 
     console.log("[IndexOS-Debug] commandMap:", commandMap, "typeMap:", typeMap);

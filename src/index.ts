@@ -127,6 +127,26 @@ export default class IndexPlugin extends Plugin {
         // paste 钩子始终激活：只对 siyuan-btn:// 链接生效，与实验模式无关
         this.eventBus.on("paste", handleBtnPaste);
 
+        // 思源 3.7.3 官方 siyuan://plugins/siyuan-plugins-index/ 协议监听处理
+        this.openUrlPluginHandler = (event: any) => {
+            const url = event?.detail?.url || event?.url;
+            if (url) {
+                console.log("[IndexOS] Received open-siyuan-url-plugin event:", url);
+                const payload = decodeBtnHref(url);
+                if (payload && payload.command) {
+                    const commandRef = COMMAND_REGISTRY[payload.command]?.commandRef || payload.command;
+                    const activeProtyle = (window as any).activeProtyleInstance;
+                    const blockEl = activeProtyle?.element?.querySelector(".protyle-wysiwyg--select") || document.activeElement;
+                    const context: CommandContext = {
+                        blockEl: blockEl as HTMLElement,
+                        protyleEl: activeProtyle?.element || null
+                    };
+                    dispatchCommand(commandRef, payload.param, context);
+                }
+            }
+        };
+        this.eventBus.on("open-siyuan-url-plugin", this.openUrlPluginHandler);
+
 
 
         // SQLite Entry Point: Alt + Click on Native Search Button
@@ -175,6 +195,9 @@ export default class IndexPlugin extends Plugin {
             destroyTopBarCommands();
         }
         this.eventBus.off("paste", handleBtnPaste);
+        if (this.openUrlPluginHandler) {
+            this.eventBus.off("open-siyuan-url-plugin", this.openUrlPluginHandler);
+        }
 
         // Remove Search bar event listener to prevent hot reload leakage
         const btn = document.querySelector("#barSearch");

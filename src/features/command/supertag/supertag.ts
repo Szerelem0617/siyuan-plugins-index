@@ -26,7 +26,14 @@ export async function executeTsScript(scriptText: string, context: CommandContex
 
         const dispatch = async (commandId: string, params?: any) => {
             console.log(`[Supertag-TS-Dispatch] Executing dispatch("${commandId}") on event "${eventName}"`);
-            return await dispatchCommand(commandId, params, context);
+            const res = await dispatchCommand(commandId, params, context);
+            if (res && res.id) {
+                if (!context.vars) context.vars = {};
+                context.vars.createdblock = res.id;
+                context.vars.last_id = res.id;
+                context.vars.id = res.id;
+            }
+            return res;
         };
 
         const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;

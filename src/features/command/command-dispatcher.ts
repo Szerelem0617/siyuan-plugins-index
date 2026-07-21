@@ -243,8 +243,33 @@ async function dispatchApi(
         body.id = context.blockEl.getAttribute("data-node-id") ?? undefined;
     }
 
-    const result = await post(endpoint, body);
-    return { success: true, method: "api", detail: `${endpoint} OK` };
+    const apiRes = await post(endpoint, body);
+
+    // 自动从思源 API 响应结果中提取生成/修改的 Block ID
+    let extractedId: string | undefined = undefined;
+    if (apiRes && Array.isArray(apiRes)) {
+        extractedId = apiRes[0]?.doOperations?.[0]?.id;
+    } else if (apiRes && typeof apiRes === "object") {
+        extractedId = (apiRes as any).data?.[0]?.doOperations?.[0]?.id || (apiRes as any).id;
+    }
+
+    const resObj: DispatchResult = {
+        success: true,
+        method: "api",
+        detail: `${endpoint} OK`,
+        value: apiRes,
+        data: apiRes,
+        id: extractedId
+    };
+
+    if (extractedId) {
+        if (!context.vars) context.vars = {};
+        context.vars.id = extractedId;
+        context.vars.last_id = extractedId;
+        context.vars.createdblock = extractedId;
+    }
+
+    return resObj;
 }
 async function dispatchCustom(
     def: CommandDef,
@@ -353,7 +378,10 @@ async function buildParams(
  */
 async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
     console.log(`[Dispatcher-Debug] resolveTemplate input: "${text}"`);
-    if (!text.includes("{{")) return text;
+    if (!text.includes("{{") && !text.includes("${")) return text;
+
+    // 自动兼容并归一化 ${xxx} 占位符为标准 {{xxx}} 格式
+    let normalizedText = text.replace(/\$\{([a-zA-Z0-9_.:-]+)\}/g, "{{$1}}");
 
     const blockId = getBlockId(context);
     let isClassMethodMode = false;
@@ -388,13 +416,13 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
         console.log(`[Dispatcher] Executing in Tool Component mode (no active Class/Database mapping). Database attributes mapping is disabled.`);
     }
 
-    if (text.includes("{{root_id}}") || text.includes("{{parent_id}}")) {
+    if (normalizedText.includes("{{root_id}}") || normalizedText.includes("{{parent_id}}")) {
         const { rootId, parentId } = await getParentIdAndRootId(blockId);
         variables["root_id"] = rootId;
         variables["parent_id"] = parentId;
     }
 
-    if (text.includes("{{attr:") && blockId) {
+    if (normalizedText.includes("{{attr:") && blockId) {
         if (isClassMethodMode) {
             const attrs = await getBlockAttrs(blockId);
             for (const [k, v] of Object.entries(attrs)) {
@@ -403,7 +431,7 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
         }
     }
 
-    const result = renderTemplate(text, variables, isClassMethodMode);
+    const result = renderTemplate(normalizedText, variables, isClassMethodMode);
     console.log(`[Dispatcher-Debug] resolveTemplate final output: "${result}"`);
     return result;
 }

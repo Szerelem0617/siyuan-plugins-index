@@ -199,8 +199,11 @@ export async function initSystemTables() {
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        await dispatch("api.block.insert", { dataType: "markdown", data: "[Pipeline Step 1] Time: \${time}", previousID: "\${block_id}" });
-        await dispatch("api.block.update", { id: "\${block_id}", dataType: "markdown", data: "[Pipeline Step 2] Updated at \${time}" });
+        const step1 = await dispatch("api.block.insert", { dataType: "markdown", data: "[Pipeline Step 1] Time: {{time}}", previousID: "{{block_id}}" });
+        const createdId = step1?.id || state.vars?.createdblock;
+        if (createdId) {
+            await dispatch("api.block.update", { id: createdId, dataType: "markdown", data: "[Pipeline Step 2] Updated newly created block at {{time}}" });
+        }
     }
 }`;
 
@@ -208,7 +211,7 @@ async ({ dispatch, state, eventName }) => {
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        await dispatch("api.block.insert", { dataType: "markdown", data: "[Permanent Init] Inserted at \${time}", previousID: "\${block_id}" });
+        await dispatch("api.block.insert", { dataType: "markdown", data: "[Permanent Init] Inserted at {{time}}", previousID: "{{block_id}}" });
     }
 }`;
 

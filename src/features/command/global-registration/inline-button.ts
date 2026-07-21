@@ -9,12 +9,10 @@ import { refreshSupertagRegistry } from "../utils/sync-service";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * 新协议格式（可读、可含中文）：
- *   siyuan-btn://exec/{commandIdOrName}?p={encodedParam}
- *
- * 旧格式（Base64 JSON）兼容保留，识别标志是路径段不含 exec/ 且整段是 Base64。
+ * 思源 3.7.3 官方标准 Plugin Protocol 格式：
+ *   siyuan://plugins/siyuan-plugins-index/exec/{commandIdOrName}?p={encodedParam}
  */
-const PROTOCOL = "siyuan-btn://";
+const PROTOCOL = "siyuan://plugins/siyuan-plugins-index/";
 
 export interface BtnPayload {
     /** 命令 ID 或中文名 */
@@ -25,7 +23,7 @@ export interface BtnPayload {
     label?: string;
 }
 
-/** 将 payload 序列化为 siyuan-btn:// URL */
+/** 将 payload 序列化为思源 3.7.3 规范的 siyuan://plugins/siyuan-plugins-index/ URL */
 export function encodeBtnHref(payload: BtnPayload): string {
     const cmdPart = encodeURIComponent(payload.command);
     const params = new URLSearchParams();
@@ -34,12 +32,14 @@ export function encodeBtnHref(payload: BtnPayload): string {
     return `${PROTOCOL}exec/${cmdPart}${query ? "?" + query : ""}`;
 }
 
-/** 从 siyuan-btn:// URL 解析 payload；自动兼容旧格式 */
+/** 从 siyuan:// URL 解析 payload */
 export function decodeBtnHref(href: string): BtnPayload | null {
-    if (!href.startsWith(PROTOCOL)) return null;
-    const rest = href.slice(PROTOCOL.length);
+    if (!href.includes("siyuan-plugins-index") && !href.startsWith(PROTOCOL) && !href.startsWith("siyuan-btn://")) return null;
+    let rest = href;
+    if (href.startsWith(PROTOCOL)) rest = href.slice(PROTOCOL.length);
+    else if (href.includes("siyuan-plugins-index/")) rest = href.slice(href.indexOf("siyuan-plugins-index/") + "siyuan-plugins-index/".length);
+    else if (href.startsWith("siyuan-btn://")) rest = href.slice("siyuan-btn://".length);
 
-    // ── 新格式：exec/{command}?p=... ──────────────────────────────────────
     if (rest.startsWith("exec/")) {
         try {
             const withoutExec = rest.slice("exec/".length);
@@ -52,7 +52,6 @@ export function decodeBtnHref(href: string): BtnPayload | null {
         }
     }
 
-    // ── 旧格式（Base64 JSON）向后兼容 ─────────────────────────────────────
     try {
         const json = JSON.parse(decodeURIComponent(atob(rest)));
         return { command: json.commandId || "", param: json.param || undefined };
@@ -70,6 +69,7 @@ function injectButtonCSS() {
     const style = document.createElement("style");
     style.id = "siyuan-plugin-btn-css";
     style.innerHTML = `
+        span[data-type~="a"][data-href*="siyuan-plugins-index"],
         span[data-type~="a"][data-href^="siyuan-btn://"] {
             display: inline-flex;
             align-items: center;
@@ -89,16 +89,19 @@ function injectButtonCSS() {
             user-select: none;
             text-decoration: none;
         }
+        span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
         span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
             background-color: var(--b3-theme-hover, #f3f4f6);
             border-color: var(--b3-border-color-hover, #9ca3af);
         }
         /* Detached commands styling (contains parameters) */
+        span[data-type~="a"][data-href*="siyuan-plugins-index"][data-href*="?p="],
         span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="] {
             border-color: var(--b3-theme-secondary, #9065f4);
             color: var(--b3-theme-secondary, #9065f4);
             background-color: var(--b3-theme-background-light, #f5f3ff);
         }
+        span[data-type~="a"][data-href*="siyuan-plugins-index"][data-href*="?p="]:hover,
         span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="]:hover {
             background-color: var(--b3-theme-hover, #ede9fe);
             border-color: var(--b3-theme-secondary, #7c3aed);
