@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onMount } from "svelte";
     import { COMMAND_REGISTRY } from "../../registration";
 
     export let dialog: any;
