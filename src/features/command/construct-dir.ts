@@ -131,6 +131,11 @@ export async function constructCommandStorage() {
             targetNotebookId,
             TYPE_DB_CONFIG,
             async (avId) => {
+                // 必须在创建 Icon Menu 与 Conditional 列前先建立关联列 '绑定命令'，这样 '绑定命令' 才会自然位于主键右侧（第二列）
+                if (commandDb?.avId) {
+                    await establishDbRelation(commandDb.avId, avId);
+                }
+
                 const keyMap = await createAvColumns(avId, TYPE_DB_CONFIG.columns);
 
                 // Fetch seed data from SQLite sys_type_db
@@ -161,12 +166,14 @@ export async function constructCommandStorage() {
                 const populateOps: any[] = [];
                 for (const match of seedRes.values) {
                     const [rowID, supertag, iconMenuVal, conditional] = match;
+                    // 主键标签统一剥离 # 并且不转大写，全小写 (无 backwards capability)
+                    const cleanSupertag = String(supertag || "").replace(/^#/, "").trim().toLowerCase();
                     
                     if (primaryKeyId) {
                         populateOps.push({
                             keyID: primaryKeyId,
                             itemID: rowID,
-                            value: { type: "block", block: { content: String(supertag || "") } }
+                            value: { type: "block", block: { content: cleanSupertag } }
                         });
                     }
 
@@ -331,6 +338,60 @@ async function establishDbRelation(commandAvId: string, typeAvId: string) {
         }
     } else {
         console.log("[IndexOS] Bidirectional relation '绑定类' <-> '绑定命令' is already set up and linked.");
+    }
+
+    // 1. 默认隐藏 Command-DB 中的 Command ID 列，防止用户误改
+    try {
+        const cmdKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: commandAvId });
+        const cmdKeys = Array.isArray(cmdKeysRes) ? cmdKeysRes : (cmdKeysRes.keys || []);
+        const cmdIdKey = cmdKeys.find((k: any) => k.name === "Command ID" || k.name === "Command_ID");
+        if (cmdIdKey) {
+            console.log(`[IndexOS] Hiding 'Command ID' column (id: ${cmdIdKey.id}) in Command-DB (${commandAvId})...`);
+            await post("/api/transactions", {
+                app: "plugin-index",
+                reqId: Date.now(),
+                transactions: [{
+                    doOperations: [{
+                        action: "setAttrViewColHidden",
+                        avID: commandAvId,
+                        blockID: commandAvId,
+                        id: cmdIdKey.id,
+                        data: true
+                    }]
+                }]
+            });
+        }
+    } catch (cmdHideErr) {
+        console.warn("[IndexOS] Error hiding Command ID column:", cmdHideErr);
+    }
+
+    // 2. 将 Supertag-DB 中的 '绑定命令' 列排在主键（第一列）右侧，更符合逻辑流向
+    try {
+        const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
+        const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
+        const primaryKeyCol = typeKeys.find((k: any) => k.type === "block" || k.name === "主键" || k.name === "Primary Key") || typeKeys[0];
+        const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
+
+        if (primaryKeyCol && typeRelKey) {
+            console.log(`[IndexOS] Moving '绑定命令' column right next to Primary Key in Type-DB...`);
+            await post("/api/transactions", {
+                app: "plugin-index",
+                reqId: Date.now(),
+                transactions: [{
+                    doOperations: [{
+                        action: "updateAttrViewCol",
+                        avID: typeAvId,
+                        keyID: typeRelKey.id,
+                        id: typeRelKey.id,
+                        name: "绑定命令",
+                        type: "relation",
+                        previousKeyID: primaryKeyCol.id
+                    }]
+                }]
+            });
+        }
+    } catch (orderErr) {
+        console.warn("[IndexOS] Error reordering 绑定命令 column:", orderErr);
     }
 
     await bindDefaultRelation(commandAvId, typeAvId);

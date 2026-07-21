@@ -22,14 +22,44 @@
     };
 
     let activeEvent: string = "tag_created";
+    let activeEventIds: string[] = ["tag_created"];
+    let isAddDropdownOpen: boolean = false;
 
-    const eventTypes = [
+    const ALL_EVENT_TYPES = [
         { id: "tag_created", label: "添加标签时" },
         { id: "tag_removed", label: "移除标签时" },
         { id: "block_content_changed", label: "内容变动时" },
         { id: "block_attribute_changed", label: "属性变动时" },
         { id: "task_completed", label: "任务完成时" }
     ];
+
+    $: activeEventTypes = ALL_EVENT_TYPES.filter(ev => activeEventIds.includes(ev.id));
+    $: remainingEventTypes = ALL_EVENT_TYPES.filter(ev => !activeEventIds.includes(ev.id));
+
+    function activateEvent(eventType: string) {
+        if (!activeEventIds.includes(eventType)) {
+            activeEventIds = [...activeEventIds, eventType];
+        }
+    }
+
+    function addEvent(id: string) {
+        activateEvent(id);
+        activeEvent = id;
+        isAddDropdownOpen = false;
+    }
+
+    function removeEvent(id: string, e: MouseEvent) {
+        e.stopPropagation();
+        if (id === "tag_created") return;
+        activeEventIds = activeEventIds.filter(i => i !== id);
+        if (eventConfigs[id]) {
+            eventConfigs[id].selectedList = [];
+            eventConfigs[id].condition = "";
+        }
+        if (activeEvent === id) {
+            activeEvent = "tag_created";
+        }
+    }
 
     function splitCommands(text: string): string[] {
         const result: string[] = [];
@@ -86,13 +116,16 @@
     // Helper parser for multiline configurations & TS dynamic scripts
     function parseConditional(text: string) {
         text = (text || "").trim();
-        if (!text) return;
+        activeEventIds = ["tag_created"];
+        activeEvent = "tag_created";
 
         // Reset eventConfigs to ensure fresh parsing without duplicates
         for (const key of Object.keys(eventConfigs)) {
             eventConfigs[key].selectedList = [];
             eventConfigs[key].condition = "";
         }
+
+        if (!text) return;
 
         // 1. 如果包含 TS 脚本或者带有 // 注释
         if (text.includes("async") || text.includes("dispatch(") || text.includes("//")) {
@@ -119,6 +152,7 @@
                 if (eventConfigs[eventType]) {
                     eventConfigs[eventType].condition = condition;
                     eventConfigs[eventType].selectedList = cmds;
+                    activateEvent(eventType);
                 }
             }
 
@@ -149,6 +183,7 @@
                 }
                 if (eventConfigs[eventType]) {
                     eventConfigs[eventType].selectedList = cmds;
+                    activateEvent(eventType);
                 }
             }
             return;
@@ -175,6 +210,7 @@
                 if (eventConfigs[eventType]) {
                     eventConfigs[eventType].condition = condition;
                     eventConfigs[eventType].selectedList = cmds;
+                    activateEvent(eventType);
                 }
             }
         }
@@ -183,7 +219,7 @@
     onMount(() => {
         console.log("[TriggerDialog-Debug] mounted with:", { supertag, boundCommands, currentValue });
         parseConditional(currentValue);
-        console.log("[TriggerDialog-Debug] parsed configs:", eventConfigs);
+        console.log("[TriggerDialog-Debug] parsed configs:", eventConfigs, "activeEventIds:", activeEventIds);
     });
 
     function findSelectionIndex(list: string[], label: string): number {
@@ -215,8 +251,9 @@
             task_completed: "任务完成时"
         };
 
-        for (const [eventType, config] of Object.entries(eventConfigs)) {
-            if (config.selectedList.length > 0) {
+        for (const eventType of activeEventIds) {
+            const config = eventConfigs[eventType];
+            if (config && config.selectedList.length > 0) {
                 const eventLabel = eventLabels[eventType] || eventType;
                 const condPart = config.condition.trim() ? `(${config.condition.trim()})` : "";
                 const cmdsPart = config.selectedList.join(", ");
@@ -268,17 +305,64 @@
         </div>
     </div>
 
-    <!-- Event Switch Tabs Bar -->
-    <div class="layout-tab-bar" style="display: flex; border-bottom: 1px solid var(--b3-border-color); margin-bottom: 12px; flex-shrink: 0; gap: 2px;">
-        {#each eventTypes as ev}
-            <button 
-                class="b3-button {activeEvent === ev.id ? 'b3-button--primary' : 'b3-button--text'}" 
-                style="flex: 1; font-size: 11px; padding: 6px 2px; border-radius: 4px 4px 0 0; text-align: center; white-space: nowrap; height: auto;"
-                on:click={() => activeEvent = ev.id}
-            >
-                {ev.label}
-            </button>
-        {/each}
+    <!-- Event Switch Tabs Bar with Add Dropdown -->
+    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--b3-border-color); margin-bottom: 12px; flex-shrink: 0; position: relative;">
+        <div style="display: flex; gap: 4px; overflow-x: auto; flex: 1; padding-bottom: 2px;">
+            {#each activeEventTypes as ev}
+                <div 
+                    class="b3-button {activeEvent === ev.id ? 'b3-button--primary' : 'b3-button--text'}" 
+                    style="font-size: 11px; padding: 4px 8px; border-radius: 4px 4px 0 0; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; height: 26px;"
+                    on:click={() => activeEvent = ev.id}
+                >
+                    <span>{ev.label}</span>
+                    {#if ev.id !== 'tag_created'}
+                        <!-- svelte-ignore a11y-click-events-have-key-events -->
+                        <!-- svelte-ignore a11y-no-static-element-interactions -->
+                        <span 
+                            class="index-tab-remove"
+                            style="font-size: 11px; line-height: 1; opacity: 0.7; padding: 1px 3px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"
+                            on:click={(e) => removeEvent(ev.id, e)}
+                            title="移除此触发事件"
+                        >
+                            ✕
+                        </span>
+                    {/if}
+                </div>
+            {/each}
+        </div>
+
+        {#if remainingEventTypes.length > 0}
+            <div style="position: relative; flex-shrink: 0; margin-left: 8px;">
+                <button 
+                    class="b3-button b3-button--outline" 
+                    style="font-size: 11px; padding: 2px 8px; height: 26px; display: flex; align-items: center; gap: 4px;"
+                    on:click={() => isAddDropdownOpen = !isAddDropdownOpen}
+                    title="添加其他触发事件"
+                >
+                    <span style="font-weight: bold; font-size: 13px; line-height: 1;">+</span>
+                    <span>添加事件</span>
+                </button>
+
+                {#if isAddDropdownOpen}
+                    <!-- svelte-ignore a11y-click-events-have-key-events -->
+                    <!-- svelte-ignore a11y-no-static-element-interactions -->
+                    <div 
+                        style="position: absolute; right: 0; top: 30px; z-index: 100; background: var(--b3-theme-surface); border: 1px solid var(--b3-border-color); border-radius: 6px; box-shadow: var(--b3-dialog-shadow); padding: 4px; min-width: 130px; display: flex; flex-direction: column; gap: 2px;"
+                    >
+                        {#each remainingEventTypes as rem}
+                            <div 
+                                class="b3-list-item" 
+                                style="font-size: 11px; padding: 6px 10px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: space-between;"
+                                on:click={() => addEvent(rem.id)}
+                            >
+                                <span>{rem.label}</span>
+                                <span style="font-size: 10px; color: var(--b3-theme-primary); font-weight: bold;">+</span>
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
+            </div>
+        {/if}
     </div>
 
     <!-- Active Tab Configuration Body -->

@@ -30,7 +30,7 @@ export const COMMAND_DB_CONFIG: DbPageConfig = {
 export const TYPE_DB_CONFIG: DbPageConfig = {
     title: "supertag-db",
     attrName: "custom-index-supertag-db",
-    markdown: `该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 #Project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
+    markdown: `该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
     expectedColName: "Icon Menu",
     columns: [
         { name: "Icon Menu", type: "text", icon: "iconMenu" },
@@ -45,11 +45,11 @@ export interface DefaultRelationRule {
 
 export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     {
-        typeLabel: "#Project",
+        typeLabel: "project",
         commandLabels: ["全局关系图"]
     },
     {
-        typeLabel: "#Person",
+        typeLabel: "person",
         commandLabels: ["烟花", "消息提示", "转换为任务"]
     }
 ];
