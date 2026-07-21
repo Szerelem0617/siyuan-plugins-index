@@ -1,9 +1,9 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { COMMAND_REGISTRY } from "../../registration";
 
     export let dialog: any;
     export let supertag: string;
-    export let boundCommands: { label: string; rowId: string }[];
+    export let boundCommands: { label: string; rowId: string; commandRef?: string }[];
     export let currentValue: string;
     export let onSave: (updatedValue: string) => Promise<void>;
 
@@ -69,42 +69,111 @@
         return result;
     }
 
-    // Helper parser for multiline configurations
+    function resolveLabelFromRef(refOrLabel: string): string {
+        const base = refOrLabel.split("(")[0].trim();
+        const argsStr = refOrLabel.includes("(") ? refOrLabel.slice(refOrLabel.indexOf("(")) : "";
+        const bound = boundCommands.find(c => c.commandRef === base || c.label === base);
+        if (bound) return bound.label + argsStr;
+        for (const [lbl, def] of Object.entries(COMMAND_REGISTRY)) {
+            if (def.commandRef === base || lbl === base) {
+                return lbl + argsStr;
+            }
+        }
+        return refOrLabel;
+    }
+
+    // Helper parser for multiline configurations & TS dynamic scripts
     function parseConditional(text: string) {
-        const lines = (text || "").split("\n").map(l => l.trim()).filter(Boolean);
+        text = (text || "").trim();
+        if (!text) return;
+
+        // Reset eventConfigs to ensure fresh parsing without duplicates
+        for (const key of Object.keys(eventConfigs)) {
+            eventConfigs[key].selectedList = [];
+            eventConfigs[key].condition = "";
+        }
+
+        // 1. 如果包含 TS 脚本或者带有 // 注释
+        if (text.includes("async") || text.includes("dispatch(") || text.includes("//")) {
+            // 首先尝试从顶部的注释行中精确读取说明： // [打上标签时] -> ☑ 转换为任务
+            const commentLineRegex = /\/\/\s*\[([^\]]+)\](?:\(([^\)]+)\))?\s*->\s*(.+)/g;
+            let commentMatch;
+            let foundCommentConfig = false;
+
+            while ((commentMatch = commentLineRegex.exec(text)) !== null) {
+                foundCommentConfig = true;
+                const rawEvent = commentMatch[1].trim();
+                const condition = commentMatch[2] ? commentMatch[2].trim() : "";
+                const cmdsText = commentMatch[3].trim();
+                const rawCmds = splitCommands(cmdsText);
+                const cmds = rawCmds.map(resolveLabelFromRef);
+
+                let eventType = "tag_created";
+                if (rawEvent === "打上标签时" || rawEvent === "tag_created") eventType = "tag_created";
+                else if (rawEvent === "移除标签时" || rawEvent === "tag_removed") eventType = "tag_removed";
+                else if (rawEvent === "内容变动时" || rawEvent === "block_content_changed") eventType = "block_content_changed";
+                else if (rawEvent === "属性变动时" || rawEvent === "block_attribute_changed") eventType = "block_attribute_changed";
+                else if (rawEvent === "任务完成时" || rawEvent === "task_completed") eventType = "task_completed";
+
+                if (eventConfigs[eventType]) {
+                    eventConfigs[eventType].condition = condition;
+                    eventConfigs[eventType].selectedList = cmds;
+                }
+            }
+
+            if (foundCommentConfig) return;
+
+            // 其次尝试从代码片段中的 dispatch 结构还原
+            const regex = /eventName\s*===\s*["']([^"']+)["'][\s\S]*?\{([\s\S]*?)\}/g;
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const eventType = match[1].trim();
+                const body = match[2];
+                const dispatchRegex = /dispatch\(["']([^"']+)["'](?:,\s*(\{[\s\S]*?\}|[^)]+))?\)/g;
+                let dMatch;
+                const cmds: string[] = [];
+                while ((dMatch = dispatchRegex.exec(body)) !== null) {
+                    const rawRef = dMatch[1];
+                    const label = resolveLabelFromRef(rawRef);
+                    const rawArgs = dMatch[2];
+                    if (rawArgs) {
+                        let cleanArgs = rawArgs.trim();
+                        if (cleanArgs.startsWith("{") && cleanArgs.endsWith("}")) {
+                            cleanArgs = cleanArgs.slice(1, -1).trim();
+                        }
+                        cmds.push(`${label}(${cleanArgs})`);
+                    } else {
+                        cmds.push(label);
+                    }
+                }
+                if (eventConfigs[eventType]) {
+                    eventConfigs[eventType].selectedList = cmds;
+                }
+            }
+            return;
+        }
+
+        // 2. 传统纯文本解析 (Legacy Fallback)
+        const lines = text.split("\n").map(l => l.trim()).filter(l => Boolean(l) && !l.startsWith("//") && !l.startsWith("#"));
         for (const line of lines) {
             const match = line.match(/^\[([^\]]+)\](?:\(([^\)]+)\))?\s*->\s*(.+)$/);
             if (match) {
                 const rawEvent = match[1].trim();
                 const condition = match[2] ? match[2].trim() : "";
                 const cmdsText = match[3].trim();
-                const cmds = splitCommands(cmdsText);
+                const rawCmds = splitCommands(cmdsText);
+                const cmds = rawCmds.map(resolveLabelFromRef);
 
                 let eventType = "tag_created";
-                if (rawEvent === "打上标签时" || rawEvent === "tag_created") {
-                    eventType = "tag_created";
-                } else if (rawEvent === "移除标签时" || rawEvent === "tag_removed") {
-                    eventType = "tag_removed";
-                } else if (rawEvent === "内容变动时" || rawEvent === "block_content_changed") {
-                    eventType = "block_content_changed";
-                } else if (rawEvent === "属性变动时" || rawEvent === "block_attribute_changed") {
-                    eventType = "block_attribute_changed";
-                } else if (rawEvent === "任务完成时" || rawEvent === "task_completed") {
-                    eventType = "task_completed";
-                }
+                if (rawEvent === "打上标签时" || rawEvent === "tag_created") eventType = "tag_created";
+                else if (rawEvent === "移除标签时" || rawEvent === "tag_removed") eventType = "tag_removed";
+                else if (rawEvent === "内容变动时" || rawEvent === "block_content_changed") eventType = "block_content_changed";
+                else if (rawEvent === "属性变动时" || rawEvent === "block_attribute_changed") eventType = "block_attribute_changed";
+                else if (rawEvent === "任务完成时" || rawEvent === "task_completed") eventType = "task_completed";
 
                 if (eventConfigs[eventType]) {
                     eventConfigs[eventType].condition = condition;
                     eventConfigs[eventType].selectedList = cmds;
-                }
-            } else {
-                // Legacy format fallback: comma-separated command labels in tag_created
-                const cmds = splitCommands(line);
-                if (cmds.length > 0) {
-                    eventConfigs.tag_created.selectedList = [
-                        ...eventConfigs.tag_created.selectedList,
-                        ...cmds
-                    ];
                 }
             }
         }
@@ -135,7 +204,8 @@
     }
 
     async function handleSave() {
-        const lines: string[] = [];
+        const commentLines: string[] = [];
+        const statements: string[] = [];
         const eventLabels: Record<string, string> = {
             tag_created: "打上标签时",
             tag_removed: "移除标签时",
@@ -149,12 +219,38 @@
                 const eventLabel = eventLabels[eventType] || eventType;
                 const condPart = config.condition.trim() ? `(${config.condition.trim()})` : "";
                 const cmdsPart = config.selectedList.join(", ");
-                lines.push(`[${eventLabel}]${condPart} -> ${cmdsPart}`);
+                commentLines.push(`// [${eventLabel}]${condPart} -> ${cmdsPart}`);
+
+                const subStatements: string[] = [];
+                for (const cmdItem of config.selectedList) {
+                    const matchArgs = cmdItem.match(/^([^(]+)\((.*)\)$/);
+                    const label = matchArgs ? matchArgs[1].trim() : cmdItem.trim();
+                    const boundCmd = boundCommands.find(c => c.label === label);
+                    const cmdRef = boundCmd?.commandRef || COMMAND_REGISTRY[label]?.commandRef || label;
+
+                    if (matchArgs) {
+                        const argsStr = matchArgs[2].trim();
+                        const formattedArgs = argsStr.startsWith("{") ? argsStr : `{ ${argsStr} }`;
+                        subStatements.push(`        await dispatch("${cmdRef}", ${formattedArgs});`);
+                    } else {
+                        subStatements.push(`        await dispatch("${cmdRef}");`);
+                    }
+                }
+                
+                statements.push(`    if (eventName === "${eventType}") {\n${subStatements.join("\n")}\n    }`);
             }
         }
 
-        const serialized = lines.join("\n");
-        await onSave(serialized);
+        if (statements.length === 0) {
+            await onSave("");
+            dialog.destroy();
+            return;
+        }
+
+        const commentsHeader = commentLines.join("\n");
+        const scriptBody = `async ({ dispatch, state, eventName, showMessage }) => {\n${statements.join("\n")}\n}`;
+        const scriptContent = `${commentsHeader}\n\n${scriptBody}`;
+        await onSave(scriptContent);
         dialog.destroy();
     }
 </script>

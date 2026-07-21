@@ -175,7 +175,18 @@ export async function initSystemTables() {
     }
 
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
-    const defaultPersonConditional = "[打上标签时] -> ☑ 转换为任务\n[任务完成时] -> 🎆 烟花, 💬 消息提示";
+    const defaultPersonConditional = `// [打上标签时] -> ☑ 转换为任务
+// [任务完成时] -> 🎆 烟花, 💬 消息提示(message="🎉 恭喜！任务完成状态: {{vars.completed}}")
+
+async ({ dispatch, state, eventName }) => {
+    if (eventName === "tag_created") {
+        await dispatch("plugin-index.command.turnIntoTask");
+    }
+    if (eventName === "task_completed") {
+        await dispatch("plugin-index.effect.fireworks");
+        await dispatch("siyuan.ui.toast", { message: "🎉 恭喜！任务完成状态: " + (state.vars.completed || state.vars["index-task"] || "completed") });
+    }
+}`;
 
     if (typeCount === 0) {
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 

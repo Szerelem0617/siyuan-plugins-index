@@ -50,6 +50,6 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     },
     {
         typeLabel: "#Person",
-        commandLabels: ["烟花", "消息提示"]
+        commandLabels: ["烟花", "消息提示", "转换为任务"]
     }
 ];

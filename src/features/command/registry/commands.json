@@ -348,7 +348,7 @@
                     "required": false,
                     "paramMode": "template",
                     "default": "看到这条消息会有好运～",
-                    "templateVars": ["{{date}}", "{{time}}", "{{block_id}}", "{{attr:KEY}}"]
+                    "templateVars": ["{{date}}", "{{time}}", "{{block_id}}", "{{vars.KEY}}"]
                 },
                 {
                     "key": "timeout",
@@ -420,7 +420,7 @@
                 "rowID": "20260714160000-turnintotask",
                 "label": "☑ 转换为任务",
                 "paramMapping": "",
-                "uiEntries": ["palette"]
+                "uiEntries": ["inline", "palette"]
             }
         }
     ],
@@ -438,6 +438,6 @@
         "{{parent_id}}": "触发块的父块 ID（API 查询）",
         "{{root_id}}": "所在文档的根块 ID",
         "{{notebook_id}}": "所在笔记本 ID",
-        "{{attr:KEY}}": "触发块的指定属性值，如 {{attr:custom-status}}"
+        "{{vars.KEY}}": "统一变量池或属性值，如 {{vars.completed}} 或 {{vars.task_status}}"
     }
 }

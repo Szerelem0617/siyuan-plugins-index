@@ -365,7 +365,11 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
 
     if (context.vars) {
         for (const [k, v] of Object.entries(context.vars)) {
-            variables[`vars.${k}`] = v === undefined || v === null ? "" : String(v);
+            const strVal = v === undefined || v === null ? "" : String(v);
+            variables[`vars.${k}`] = strVal;
+            if (!(k in variables)) {
+                variables[k] = strVal;
+            }
         }
     }
 
@@ -556,6 +560,44 @@ function getBlockType(blockEl: HTMLElement): string | null {
     };
 
     return map[dataType] || null;
+}
+
+/**
+ * 更新 Context 中的统一变量池 vars，并自动支持落地持久化。
+ */
+export async function updateContextVar(
+    context: CommandContext,
+    key: string,
+    value: any,
+    options?: { persist?: boolean }
+): Promise<void> {
+    if (!context.vars) {
+        context.vars = {};
+    }
+    context.vars[key] = value;
+
+    const blockId = getBlockId(context);
+    if (!blockId) return;
+
+    // 确定属性持久化的 key 格式 (自动加 custom- 前缀以匹配思源块属性规范)
+    const attrKey = key.startsWith("custom-") ? key : `custom-${key}`;
+
+    if (options?.persist !== false) {
+        try {
+            await post("/api/attr/setBlockAttrs", {
+                id: blockId,
+                attrs: {
+                    [attrKey]: String(value)
+                }
+            });
+            if (context.blockEl) {
+                context.blockEl.setAttribute(attrKey, String(value));
+            }
+            console.log(`[Auto-Persistence] Updated var "${key}" = "${value}" and persisted as attribute "${attrKey}" on block ${blockId}`);
+        } catch (e) {
+            console.error(`[Auto-Persistence] Failed to persist var "${key}" on block ${blockId}:`, e);
+        }
+    }
 }
 
 /** 导出供外部使用（如 tag-suggestion 过滤） */

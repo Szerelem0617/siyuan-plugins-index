@@ -7,8 +7,72 @@ import { showMessage } from "siyuan";
 import { formatDate } from "../../../shared/utils";
 import { getColIDMap } from "../../../shared/utils/av-utils";
 import { tableSyncTimes, instantiateAV, getSqliteEngine } from "../../sqlite/sqlite-manager";
-import { dispatchCommand, parseParam } from "../command-dispatcher";
+import { dispatchCommand, parseParam, updateContextVar, type CommandContext } from "../command-dispatcher";
 import { SupertagRenderer } from "./SupertagRenderer";
+
+export async function executeTsScript(scriptText: string, context: CommandContext, eventName?: string): Promise<boolean> {
+    try {
+        console.log(`[Supertag-TS] Executing dynamic TS/JS script for block ${context.blockEl?.getAttribute("data-node-id")} on event ${eventName}`);
+        
+        const delay = (ms: number | string) => {
+            let numMs = typeof ms === "number" ? ms : 0;
+            if (typeof ms === "string") {
+                if (ms.endsWith("s")) numMs = parseFloat(ms) * 1000;
+                else if (ms.endsWith("m")) numMs = parseFloat(ms) * 60 * 1000;
+                else numMs = parseFloat(ms);
+            }
+            return new Promise(resolve => setTimeout(resolve, numMs));
+        };
+
+        const dispatch = async (commandId: string, params?: any) => {
+            console.log(`[Supertag-TS-Dispatch] Executing dispatch("${commandId}") on event "${eventName}"`);
+            return await dispatchCommand(commandId, params, context);
+        };
+
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        
+        let codeText = scriptText.trim();
+        // 剥离顶部的 // 注释行，找到真实代码起始行
+        const lines = codeText.split("\n");
+        const firstCodeLineIndex = lines.findIndex(line => {
+            const l = line.trim();
+            return l && !l.startsWith("//") && !l.startsWith("/*") && !l.startsWith("*");
+        });
+
+        if (firstCodeLineIndex > -1) {
+            codeText = lines.slice(firstCodeLineIndex).join("\n").trim();
+        }
+
+        let body = codeText;
+        if (body.startsWith("async ({") || body.startsWith("async (") || body.startsWith("({")) {
+            body = `return (${body})(arguments[0]);`;
+        } else if (body.startsWith("async function") || body.startsWith("function")) {
+            body = `return (${body})(arguments[0]);`;
+        } else {
+            body = `return (async ({ dispatch, state, delay, context, eventName, showMessage, updateVar }) => {\n${body}\n})(arguments[0]);`;
+        }
+
+        console.log(`[Supertag-TS-CompiledBody] Executing compiled body for event "${eventName}":\n${body}`);
+
+        const fn = new AsyncFunction("env", body);
+        const env = {
+            dispatch,
+            state: { vars: context.vars },
+            delay,
+            context,
+            eventName,
+            showMessage,
+            updateVar: (k: string, v: any, persist?: boolean) => updateContextVar(context, k, v, { persist })
+        };
+
+        await fn(env);
+        return true;
+    } catch (err) {
+        console.error(`[Supertag-TS] Error executing dynamic TS/JS script:`, err);
+        showMessage(`❌ TS 动态脚本执行报错: ${err}`, 5000, "error");
+        return false;
+    }
+}
 
 export interface TriggerCommandRef {
     labelOrId: string;
@@ -615,30 +679,74 @@ export class SupertagMonitor {
             const typeDbRes = db.exec(`SELECT "${conditionalColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag}' OR LOWER("${supertagColName}") = '${cleanTag}'`);
 
             if (typeDbRes && typeDbRes.length > 0 && typeDbRes[0].values.length > 0) {
-                const conditionalVal = typeDbRes[0].values[0][0];
+                const conditionalVal = String(typeDbRes[0].values[0][0] || "").trim();
                 if (conditionalVal) {
-                    const rules = parseConditionalString(String(conditionalVal));
+                    const doc = document;
+                    const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
+                    if (blockEl && !blockEl.getAttribute("data-node-id")) {
+                        blockEl.setAttribute("data-node-id", blockId);
+                    }
+
+                    const protyle = (window as any).siyuan?.ws?.protyle || null;
+                    const pipelineVars: Record<string, any> = {};
+
+                    // 1. 自动预加载目标块的持久化属性到 pipelineVars 中 (统一 vars 属性池)
+                    try {
+                        const attrRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+                        if (attrRes && typeof attrRes === "object") {
+                            for (const [k, v] of Object.entries(attrRes)) {
+                                pipelineVars[k] = v;
+                                if (k.startsWith("custom-")) {
+                                    const cleanKey = k.replace(/^custom-/, "");
+                                    pipelineVars[cleanKey] = v;
+                                }
+                            }
+                        }
+                        const taskVal = pipelineVars["index-task"] || pipelineVars["task-status"] || pipelineVars["task_status"] || (eventName === "task_completed" ? "completed" : "pending");
+                        pipelineVars["completed"] = taskVal;
+                        pipelineVars["task_status"] = taskVal;
+                        pipelineVars["task-status"] = taskVal;
+                        pipelineVars["index-task"] = taskVal;
+
+                        console.log(`[Supertag-Debug] Pre-loaded block attributes for ${blockId} on event ${eventName}:`, pipelineVars);
+                    } catch (e) {
+                        console.warn(`[Supertag-Trigger] Failed to pre-load block attributes for ${blockId}:`, e);
+                    }
+
+                    const context: CommandContext = {
+                        blockEl,
+                        protyleEl: protyle?.element || null,
+                        protyle,
+                        supertag: cleanTag,
+                        vars: pipelineVars
+                    };
+
+                    // 2. 判定是否为原生 TS/JS 动态脚本模式
+                    const isTsScript = conditionalVal.includes("async") || conditionalVal.includes("dispatch(") || (conditionalVal.includes("=>") && !conditionalVal.includes("->"));
+                    if (isTsScript) {
+                        console.log(`[Supertag-Trigger] Executing native TS/JS dynamic script for tag #${cleanTag} on event ${eventName}`);
+                        await executeTsScript(conditionalVal, context, eventName);
+                        return;
+                    }
+
+                    // 3. 否则走结构化命令管道解析
+                    const rules = parseConditionalString(conditionalVal);
                     const targetRule = rules.find(r => r.event === eventName);
 
                     if (targetRule && targetRule.commands.length > 0) {
                         let conditionMet = true;
                         if (targetRule.condition) {
                             console.log(`[Supertag-Trigger] Evaluating condition: ${targetRule.condition}`);
-                            // Extensible condition checks go here
                         }
 
                         if (conditionMet) {
                             console.log(`[Supertag-Trigger] Condition met. Executing commands for tag #${cleanTag} on event ${eventName}:`, targetRule.commands);
 
-                            const pipelineVars: Record<string, any> = {};
-
-                            // Execute sequentially in order as a pipeline
                             for (const cmdObj of targetRule.commands) {
                                 const cmdLabel = cmdObj.labelOrId;
                                 const cmdInfo = COMMAND_REGISTRY[cmdLabel];
                                 const commandRef = cmdInfo?.commandRef || cmdLabel;
                                 
-                                // Base param mapping from Layer 2
                                 const baseParamMapping = cmdInfo?.paramMapping || "";
                                 const baseParams = parseParam(baseParamMapping);
                                 const inlineArgs = cmdObj.args || {};
@@ -646,30 +754,15 @@ export class SupertagMonitor {
 
                                 console.log(`[Supertag-Trigger] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId} with merged params:`, mergedParams);
 
-                                const doc = document;
-                                const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
-                                if (blockEl && !blockEl.getAttribute("data-node-id")) {
-                                    blockEl.setAttribute("data-node-id", blockId);
-                                }
-
-                                const protyle = (window as any).siyuan?.ws?.protyle || null;
-                                const context = {
-                                    blockEl,
-                                    protyleEl: protyle?.element || null,
-                                    protyle,
-                                    supertag: cleanTag,
-                                    vars: pipelineVars
-                                };
-
                                 try {
                                     const dispatchRes = await dispatchCommand(commandRef, mergedParams, context);
                                     if (!dispatchRes.success || dispatchRes.continue === false || dispatchRes.value === false || dispatchRes.status === "break") {
                                         console.log(`[Supertag-Trigger] Pipeline execution halted: Command "${cmdLabel}" returned break, false, or failed.`);
-                                        break; // Halt the execution of subsequent commands!
+                                        break;
                                     }
                                 } catch (cmdErr) {
                                     console.error(`[Supertag-Trigger] Failed to dispatch command: ${cmdLabel}`, cmdErr);
-                                    break; // Halt the execution on error
+                                    break;
                                 }
                             }
                         }

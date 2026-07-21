@@ -151,15 +151,18 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
             cmdLabelCol = cmdLabelColRes[0].values[0][0];
         }
 
-        const boundCommands: { label: string; rowId: string }[] = [];
+        const boundCommands: { label: string; rowId: string; commandRef: string }[] = [];
         if (linkedRowIds.length > 0) {
             const placeholders = linkedRowIds.map(() => "?").join(",");
             const cmdsQuery = db.exec(`SELECT _itemID, "${cmdLabelCol}" FROM ${cmdTableName} WHERE _itemID IN (${placeholders})`, linkedRowIds);
             if (cmdsQuery.length > 0 && cmdsQuery[0].values.length > 0) {
                 cmdsQuery[0].values.forEach((row: any) => {
+                    const label = String(row[1] || "").trim();
+                    const cmdInfo = COMMAND_REGISTRY[label];
                     boundCommands.push({
                         rowId: String(row[0]),
-                        label: String(row[1] || "").trim()
+                        label: label,
+                        commandRef: cmdInfo?.commandRef || label
                     });
                 });
             }

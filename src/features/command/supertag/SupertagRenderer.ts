@@ -69,64 +69,68 @@ export class SupertagRenderer {
     }
 
     /**
-     * Scan the DOM for blocks carrying `custom-supertags` or `custom-is-task` and render inline pills.
+     * Directly render tags and virtual task checkbox pill for a single block DOM element instantly.
      */
-    private static renderBlockTags(editorEl: HTMLElement) {
-        const blocks = editorEl.querySelectorAll("[custom-supertags], [custom-is-task='true']");
-        blocks.forEach((block: any) => {
-            const blockId = block.getAttribute("data-node-id");
-            if (!blockId) return;
+    public static renderSingleBlockElement(blockEl: HTMLElement) {
+        if (!blockEl) return;
+        const blockId = blockEl.getAttribute("data-node-id");
+        if (!blockId) return;
 
-            const rawTags = block.getAttribute("custom-supertags") || "";
-            const tags = parseSupertags(rawTags);
-            const isTask = block.getAttribute("custom-is-task") === "true";
-            const taskStatus = block.getAttribute("custom-task-status") || "pending";
+        const editorEl = blockEl.closest(".protyle-wysiwyg") as HTMLElement || document.body;
+        const rawTags = blockEl.getAttribute("custom-supertags") || "";
+        const tags = parseSupertags(rawTags);
+        const taskStatus = blockEl.getAttribute("custom-index-task");
+        const isTask = Boolean(taskStatus);
 
-            // Find or create Siyuan's native attribute container inside the block
-            let attrEl = block.querySelector(".protyle-attr") as HTMLElement;
-            if (!attrEl) {
-                attrEl = document.createElement("div");
-                attrEl.className = "protyle-attr";
-                attrEl.setAttribute("contenteditable", "false");
-                block.appendChild(attrEl);
-            }
+        let attrEl = blockEl.querySelector(".protyle-attr") as HTMLElement;
+        if (!attrEl) {
+            attrEl = document.createElement("div");
+            attrEl.className = "protyle-attr";
+            attrEl.setAttribute("contenteditable", "false");
+            blockEl.appendChild(attrEl);
+        }
 
-            // Find or create our metadata container inside Siyuan's native attribute bar
-            let container = attrEl.querySelector(".index-block-meta-container") as HTMLElement;
+        let container = attrEl.querySelector(".index-block-meta-container") as HTMLElement;
+        
+        if (tags.length === 0 && !isTask) {
+            if (container) container.remove();
+            return;
+        }
+
+        if (container) {
+            container.innerHTML = "";
+        } else {
+            container = document.createElement("div");
+            container.className = "index-block-meta-container";
+            container.style.cssText = "display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle;";
             
-            if (tags.length === 0 && !isTask) {
-                if (container) container.remove();
-                return;
-            }
-
-            if (container) {
-                container.innerHTML = "";
+            if (attrEl.firstChild) {
+                attrEl.insertBefore(container, attrEl.firstChild);
             } else {
-                container = document.createElement("div");
-                container.className = "index-block-meta-container";
-                container.style.cssText = "display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle;";
-                
-                // Insert container at the front of Siyuan's attribute bar
-                if (attrEl.firstChild) {
-                    attrEl.insertBefore(container, attrEl.firstChild);
-                } else {
-                    attrEl.appendChild(container);
-                }
+                attrEl.appendChild(container);
             }
+        }
 
-            // 1. Render virtual checkbox if it is a task block
-            if (isTask) {
-                const checkboxPill = this.createCheckboxPill(blockId, taskStatus, editorEl);
-                container.appendChild(checkboxPill);
-            }
+        if (isTask && taskStatus) {
+            const checkboxPill = this.createCheckboxPill(blockId, taskStatus, editorEl);
+            container.appendChild(checkboxPill);
+        }
 
-            // 2. Render supertags
-            tags.forEach(tag => {
-                const pill = this.createTagPill(tag, async () => {
-                    await this.removeTagFromBlock(blockId, tag, "block", editorEl);
-                }, true);
-                container.appendChild(pill);
-            });
+        tags.forEach(tag => {
+            const pill = this.createTagPill(tag, async () => {
+                await this.removeTagFromBlock(blockId, tag, "block", editorEl);
+            }, true);
+            container.appendChild(pill);
+        });
+    }
+
+    /**
+     * Scan the DOM for blocks carrying `custom-supertags` or `custom-index-task` and render inline pills.
+     */
+    public static renderBlockTags(editorEl: HTMLElement) {
+        const blocks = editorEl.querySelectorAll("[custom-supertags], [custom-index-task]");
+        blocks.forEach((block: any) => {
+            this.renderSingleBlockElement(block);
         });
     }
 
@@ -163,18 +167,19 @@ export class SupertagRenderer {
             const newStatus = isCompleted ? "pending" : "completed";
             
             try {
-                // Update Siyuan block attributes
+                // Update Siyuan block attributes (Pure single attribute custom-index-task)
                 await post("/api/attr/setBlockAttrs", {
                     id: blockId,
                     attrs: {
-                        "custom-task-status": newStatus
+                        "custom-index-task": newStatus
                     }
                 });
                 
                 // Update local DOM attributes immediately
-                const blockEl = editorEl.querySelector(`[data-node-id="${blockId}"]`);
+                const blockEl = (document.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement) || editorEl.querySelector(`[data-node-id="${blockId}"]`);
                 if (blockEl) {
-                    blockEl.setAttribute("custom-task-status", newStatus);
+                    blockEl.setAttribute("custom-index-task", newStatus);
+                    this.renderSingleBlockElement(blockEl);
                 }
                 
                 // Trigger event content change or task completed to run pipeline
