@@ -7,13 +7,91 @@ import { showMessage } from "siyuan";
 import { formatDate } from "../../../shared/utils";
 import { getColIDMap } from "../../../shared/utils/av-utils";
 import { tableSyncTimes, instantiateAV, getSqliteEngine } from "../../sqlite/sqlite-manager";
-import { dispatchCommand } from "../command-dispatcher";
+import { dispatchCommand, parseParam } from "../command-dispatcher";
 import { SupertagRenderer } from "./SupertagRenderer";
+
+export interface TriggerCommandRef {
+    labelOrId: string;
+    args?: Record<string, any>;
+}
 
 export interface TriggerRule {
     event: string;
     condition: string;
-    commands: string[];
+    commands: TriggerCommandRef[];
+}
+
+export function splitCommands(text: string): string[] {
+    const result: string[] = [];
+    let current = "";
+    let parenDepth = 0;
+    let inQuotes = false;
+    let quoteChar = "";
+    
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (inQuotes) {
+            if (char === quoteChar && text[i - 1] !== "\\") {
+                inQuotes = false;
+            }
+            current += char;
+        } else {
+            if (char === '"' || char === "'") {
+                inQuotes = true;
+                quoteChar = char;
+                current += char;
+            } else if (char === "(") {
+                parenDepth++;
+                current += char;
+            } else if (char === ")") {
+                parenDepth--;
+                current += char;
+            } else if ((char === "," || char === "，") && parenDepth === 0) {
+                result.push(current.trim());
+                current = "";
+            } else {
+                current += char;
+            }
+        }
+    }
+    if (current.trim()) {
+        result.push(current.trim());
+    }
+    return result;
+}
+
+export function parseCommandWithArgs(cmdStr: string): TriggerCommandRef {
+    cmdStr = cmdStr.trim();
+    const match = cmdStr.match(/^([^(]+)(?:\((.*)\))?$/);
+    if (!match) {
+        return { labelOrId: cmdStr };
+    }
+    
+    const labelOrId = match[1].trim();
+    const argsStr = match[2] ? match[2].trim() : "";
+    if (!argsStr) {
+        return { labelOrId };
+    }
+    
+    const args: Record<string, any> = {};
+    const regex = /(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))/g;
+    let argMatch;
+    while ((argMatch = regex.exec(argsStr)) !== null) {
+        const key = argMatch[1];
+        const val = argMatch[2] ?? argMatch[3] ?? argMatch[4];
+        
+        if (val === "true") {
+            args[key] = true;
+        } else if (val === "false") {
+            args[key] = false;
+        } else if (!isNaN(Number(val)) && val.trim() !== "") {
+            args[key] = Number(val);
+        } else {
+            args[key] = val;
+        }
+    }
+    
+    return { labelOrId, args };
 }
 
 export function parseConditionalString(text: string): TriggerRule[] {
@@ -36,20 +114,23 @@ export function parseConditionalString(text: string): TriggerRule[] {
                 event = "block_content_changed";
             } else if (rawEvent === "属性变动时" || rawEvent === "block_attribute_changed") {
                 event = "block_attribute_changed";
+            } else if (rawEvent === "任务完成时" || rawEvent === "task_completed") {
+                event = "task_completed";
             } else {
                 event = rawEvent;
             }
             
-            const commands = cmdsText.split(/[,，]/).map(c => c.trim()).filter(Boolean);
+            const commandTokens = splitCommands(cmdsText);
+            const commands = commandTokens.map(parseCommandWithArgs);
             rules.push({ event, condition, commands });
         } else {
             // Fallback for legacy comma-separated lists
-            const commands = line.split(/[,，]/).map(c => c.trim()).filter(Boolean);
-            if (commands.length > 0) {
+            const commandTokens = splitCommands(line);
+            if (commandTokens.length > 0) {
                 rules.push({
                     event: "tag_created",
                     condition: "",
-                    commands
+                    commands: commandTokens.map(parseCommandWithArgs)
                 });
             }
         }
@@ -132,6 +213,54 @@ export class SupertagMonitor {
 
     public getPreferredConfig(typeName: string) {
         return this.prefs[typeName];
+    }
+
+    public async processBlockContentChanged(blockId: string) {
+        let tags = this.tagCache.get(blockId);
+        if (!tags) {
+            try {
+                const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+                const rawVal = attrsRes ? attrsRes["custom-supertags"] : null;
+                if (rawVal) {
+                    const parsed = JSON.parse(rawVal);
+                    if (Array.isArray(parsed)) {
+                        tags = new Set(parsed.map(t => String(t).trim().toLowerCase()));
+                        this.tagCache.set(blockId, tags);
+                    }
+                }
+            } catch (_) {}
+        }
+        if (!tags) tags = new Set<string>();
+        
+        if (tags.size > 0) {
+            for (const tag of tags) {
+                await this.triggerConditionalCommands(blockId, tag, "block_content_changed");
+            }
+        }
+    }
+
+    public async processTaskCompleted(blockId: string) {
+        let tags = this.tagCache.get(blockId);
+        if (!tags) {
+            try {
+                const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+                const rawVal = attrsRes ? attrsRes["custom-supertags"] : null;
+                if (rawVal) {
+                    const parsed = JSON.parse(rawVal);
+                    if (Array.isArray(parsed)) {
+                        tags = new Set(parsed.map(t => String(t).trim().toLowerCase()));
+                        this.tagCache.set(blockId, tags);
+                    }
+                }
+            } catch (_) {}
+        }
+        if (!tags) tags = new Set<string>();
+        
+        if (tags.size > 0) {
+            for (const tag of tags) {
+                await this.triggerConditionalCommands(blockId, tag, "task_completed");
+            }
+        }
     }
 
     destroy() {
@@ -501,13 +630,21 @@ export class SupertagMonitor {
                         if (conditionMet) {
                             console.log(`[Supertag-Trigger] Condition met. Executing commands for tag #${cleanTag} on event ${eventName}:`, targetRule.commands);
 
+                            const pipelineVars: Record<string, any> = {};
+
                             // Execute sequentially in order as a pipeline
-                            for (const cmdLabel of targetRule.commands) {
+                            for (const cmdObj of targetRule.commands) {
+                                const cmdLabel = cmdObj.labelOrId;
                                 const cmdInfo = COMMAND_REGISTRY[cmdLabel];
                                 const commandRef = cmdInfo?.commandRef || cmdLabel;
-                                const paramMapping = cmdInfo?.paramMapping || "";
+                                
+                                // Base param mapping from Layer 2
+                                const baseParamMapping = cmdInfo?.paramMapping || "";
+                                const baseParams = parseParam(baseParamMapping);
+                                const inlineArgs = cmdObj.args || {};
+                                const mergedParams = Object.assign({}, baseParams, inlineArgs);
 
-                                console.log(`[Supertag-Trigger] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId}`);
+                                console.log(`[Supertag-Trigger] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId} with merged params:`, mergedParams);
 
                                 const doc = document;
                                 const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
@@ -520,13 +657,14 @@ export class SupertagMonitor {
                                     blockEl,
                                     protyleEl: protyle?.element || null,
                                     protyle,
-                                    supertag: cleanTag
+                                    supertag: cleanTag,
+                                    vars: pipelineVars
                                 };
 
                                 try {
-                                    const dispatchRes = await dispatchCommand(commandRef, paramMapping, context);
-                                    if (!dispatchRes.success || dispatchRes.value === false) {
-                                        console.log(`[Supertag-Trigger] Pipeline execution halted: Command "${cmdLabel}" returned false or failed.`);
+                                    const dispatchRes = await dispatchCommand(commandRef, mergedParams, context);
+                                    if (!dispatchRes.success || dispatchRes.continue === false || dispatchRes.value === false || dispatchRes.status === "break") {
+                                        console.log(`[Supertag-Trigger] Pipeline execution halted: Command "${cmdLabel}" returned break, false, or failed.`);
                                         break; // Halt the execution of subsequent commands!
                                     }
                                 } catch (cmdErr) {

@@ -422,32 +422,6 @@
                 "paramMapping": "",
                 "uiEntries": ["palette"]
             }
-        },
-        {
-            "id": "plugin-index.command.checkTaskCompleted",
-            "name": "检测任务完成",
-            "description": "检测当前块是否为已完成的任务列表项，如果是则触发烟花特效和完成提示。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [],
-            "constraints": {
-                "requiresFocus": false,
-                "environment": "universal"
-            },
-            "meta": {
-                "scope": "self",
-                "category": "edit",
-                "source": "plugin",
-                "plugin": "index",
-                "appliesTo": ["list"]
-            },
-            "seed": {
-                "rowID": "20260717130000-checktaskcompleted",
-                "label": "☑ 检测任务完成",
-                "paramMapping": "",
-                "uiEntries": ["palette"]
-            }
         }
     ],
     "paramModes": {

@@ -69,16 +69,18 @@ export class SupertagRenderer {
     }
 
     /**
-     * Scan the DOM for blocks carrying `custom-supertags` and render inline pills.
+     * Scan the DOM for blocks carrying `custom-supertags` or `custom-is-task` and render inline pills.
      */
     private static renderBlockTags(editorEl: HTMLElement) {
-        const blocks = editorEl.querySelectorAll("[custom-supertags]");
+        const blocks = editorEl.querySelectorAll("[custom-supertags], [custom-is-task='true']");
         blocks.forEach((block: any) => {
             const blockId = block.getAttribute("data-node-id");
             if (!blockId) return;
 
-            const rawTags = block.getAttribute("custom-supertags");
+            const rawTags = block.getAttribute("custom-supertags") || "";
             const tags = parseSupertags(rawTags);
+            const isTask = block.getAttribute("custom-is-task") === "true";
+            const taskStatus = block.getAttribute("custom-task-status") || "pending";
 
             // Find or create Siyuan's native attribute container inside the block
             let attrEl = block.querySelector(".protyle-attr") as HTMLElement;
@@ -89,10 +91,10 @@ export class SupertagRenderer {
                 block.appendChild(attrEl);
             }
 
-            // Find or create our supertags container inside Siyuan's native attribute bar
-            let container = attrEl.querySelector(".index-block-supertags") as HTMLElement;
+            // Find or create our metadata container inside Siyuan's native attribute bar
+            let container = attrEl.querySelector(".index-block-meta-container") as HTMLElement;
             
-            if (tags.length === 0) {
+            if (tags.length === 0 && !isTask) {
                 if (container) container.remove();
                 return;
             }
@@ -101,7 +103,7 @@ export class SupertagRenderer {
                 container.innerHTML = "";
             } else {
                 container = document.createElement("div");
-                container.className = "index-block-supertags";
+                container.className = "index-block-meta-container";
                 container.style.cssText = "display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle;";
                 
                 // Insert container at the front of Siyuan's attribute bar
@@ -112,6 +114,13 @@ export class SupertagRenderer {
                 }
             }
 
+            // 1. Render virtual checkbox if it is a task block
+            if (isTask) {
+                const checkboxPill = this.createCheckboxPill(blockId, taskStatus, editorEl);
+                container.appendChild(checkboxPill);
+            }
+
+            // 2. Render supertags
             tags.forEach(tag => {
                 const pill = this.createTagPill(tag, async () => {
                     await this.removeTagFromBlock(blockId, tag, "block", editorEl);
@@ -119,6 +128,73 @@ export class SupertagRenderer {
                 container.appendChild(pill);
             });
         });
+    }
+
+    private static createCheckboxPill(blockId: string, status: string, editorEl: HTMLElement): HTMLElement {
+        const pill = document.createElement("div");
+        pill.className = "index-task-checkbox-pill";
+        
+        const isCompleted = status === "completed";
+        
+        pill.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            padding: 0px 6px;
+            border-radius: 4px;
+            background-color: ${isCompleted ? "var(--b3-theme-primary-light)" : "var(--b3-theme-background-hover)"};
+            border: 1px solid ${isCompleted ? "var(--b3-theme-primary)" : "var(--b3-border-color)"};
+            color: ${isCompleted ? "var(--b3-theme-primary)" : "var(--b3-theme-on-surface-light)"};
+            font-weight: bold;
+            font-size: 10px;
+            height: 16px;
+            line-height: 14px;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            user-select: none;
+            vertical-align: middle;
+            box-sizing: border-box;
+        `;
+        
+        pill.innerText = isCompleted ? "☑ 已完成" : "☐ 待办";
+        
+        pill.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const newStatus = isCompleted ? "pending" : "completed";
+            
+            try {
+                // Update Siyuan block attributes
+                await post("/api/attr/setBlockAttrs", {
+                    id: blockId,
+                    attrs: {
+                        "custom-task-status": newStatus
+                    }
+                });
+                
+                // Update local DOM attributes immediately
+                const blockEl = editorEl.querySelector(`[data-node-id="${blockId}"]`);
+                if (blockEl) {
+                    blockEl.setAttribute("custom-task-status", newStatus);
+                }
+                
+                // Trigger event content change or task completed to run pipeline
+                console.log(`[Supertag-Trigger] Virtual task status changed to: ${newStatus} for block: ${blockId}`);
+                if (newStatus === "completed") {
+                    await supertagMonitor.processTaskCompleted(blockId);
+                } else {
+                    await supertagMonitor.processBlockContentChanged(blockId);
+                }
+                
+                // Re-render visually
+                this.renderBlockTags(editorEl);
+                
+                showMessage(`任务状态更新为: ${newStatus === "completed" ? "已完成" : "待办"}`);
+            } catch (err) {
+                console.error("[SupertagRenderer] Failed to toggle virtual task status:", err);
+            }
+        });
+        
+        return pill;
     }
 
     private static createTagPill(tagName: string, onRemove: () => Promise<void>, isSmall: boolean = false): HTMLElement {

@@ -172,37 +172,21 @@ export async function initSystemTables() {
             console.error("[SQLite-Init] Failed to ensure turnIntoTask seeded:", e);
         }
 
-        // Ensure plugin-index.command.checkTaskCompleted exists in TABLE_COMMANDS
-        try {
-            const checkExists = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS} WHERE Command_ID = 'plugin-index.command.checkTaskCompleted'`);
-            const existsCount = checkExists?.[0]?.values?.[0]?.[0] || 0;
-            if (Number(existsCount) === 0) {
-                const checkTaskCmd = (commandsData as any).commands.find((c: any) => c.id === 'plugin-index.command.checkTaskCompleted');
-                if (checkTaskCmd && checkTaskCmd.seed) {
-                    const s = checkTaskCmd.seed;
-                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, UI_Entries) 
-                            VALUES (?, ?, ?, ?, ?)`, 
-                            [s.rowID, s.label, checkTaskCmd.id, s.paramMapping || "", "快捷命令"]);
-                }
-            }
-        } catch (e) {
-            console.error("[SQLite-Init] Failed to ensure checkTaskCompleted seeded:", e);
-        }
     }
 
     const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
-    const defaultPersonConditional = "[打上标签时] -> ☑ 转换为任务\n[内容变动时] -> ☑ 检测任务完成";
+    const defaultPersonConditional = "[打上标签时] -> ☑ 转换为任务\n[任务完成时] -> 🎆 烟花, 💬 消息提示";
 
     if (typeCount === 0) {
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
             ["20260526204605-7hun58a", "#Project", "🌐 全局关系图", ""]);
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
-            ["20260526204605-v11e2ta", "#Person", "🎆 烟花, 💬 消息提示, ☑ 转换为任务, ☑ 检测任务完成", defaultPersonConditional]);
+            ["20260526204605-v11e2ta", "#Person", "🎆 烟花, 💬 消息提示, ☑ 转换为任务", defaultPersonConditional]);
     } else {
         try {
             // Update #Person conditional unconditionally to make sure it gets the latest seed rule in development
             db.run(`UPDATE ${TABLE_TYPES} SET Conditional = ? WHERE supertag = '#Person'`, [defaultPersonConditional]);
-            db.run(`UPDATE ${TABLE_TYPES} SET Icon_Menu = '🎆 烟花, 💬 消息提示, ☑ 转换为任务, ☑ 检测任务完成' WHERE supertag = '#Person'`);
+            db.run(`UPDATE ${TABLE_TYPES} SET Icon_Menu = '🎆 烟花, 💬 消息提示, ☑ 转换为任务' WHERE supertag = '#Person'`);
         } catch (_) { /* ignore */ }
     }
 

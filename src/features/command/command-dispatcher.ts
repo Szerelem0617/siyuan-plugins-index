@@ -29,6 +29,7 @@ export interface CommandContext {
     protyleEl: HTMLElement | null;
     supertag?: string;
     triggerEl?: HTMLElement;
+    vars?: Record<string, any>;
 }
 
 export interface DispatchResult {
@@ -36,6 +37,8 @@ export interface DispatchResult {
     method: "keyboard" | "global" | "api" | "custom" | "unknown";
     detail: string;
     value?: any;
+    continue?: boolean;
+    status?: "success" | "break" | "skip" | "retry" | "rollback" | "error";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,9 +54,13 @@ export interface DispatchResult {
  */
 export async function dispatchCommand(
     commandId: string,
-    rawParam: string | null | undefined,
+    rawParam: string | Record<string, unknown> | null | undefined,
     context: CommandContext
 ): Promise<DispatchResult> {
+
+    if (!context.vars) {
+        context.vars = {};
+    }
 
     // 1. 查询注册表
     const def = commandRegistry.getCommand(commandId);
@@ -253,7 +260,25 @@ async function dispatchCustom(
     const result = await executor(params, context);
     console.log(`[Dispatcher] Custom command executor finished for: ${def.id}. Return value:`, result);
     
-    return { success: true, method: "custom", detail: def.id, value: result };
+    if (result && typeof result === "object" && ("success" in result || "continue" in result || "status" in result)) {
+        return {
+            success: result.success !== false,
+            method: "custom",
+            detail: def.id,
+            value: result.value,
+            continue: result.continue,
+            status: result.status,
+        };
+    }
+    
+    return {
+        success: true,
+        method: "custom",
+        detail: def.id,
+        value: result,
+        continue: result !== false,
+        status: result === false ? "break" : "success"
+    };
 }
 // ─────────────────────────────────────────────────────────────────────────────
 // Param resolution（静态参 / 注入参 / 模板参）
@@ -267,7 +292,7 @@ async function dispatchCustom(
  */
 async function buildParams(
     def: CommandDef,
-    rawParam: string | null | undefined,
+    rawParam: string | Record<string, unknown> | null | undefined,
     context: CommandContext
 ): Promise<Record<string, unknown>> {
 
@@ -338,6 +363,12 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
         "block_id": blockId,
     };
 
+    if (context.vars) {
+        for (const [k, v] of Object.entries(context.vars)) {
+            variables[`vars.${k}`] = v === undefined || v === null ? "" : String(v);
+        }
+    }
+
     if (context.supertag && blockId) {
         console.log(`[Dispatcher-Debug] Resolving template with supertag: "${context.supertag}"`);
         const layer4Params = await resolveLayer4Params(blockId, context.supertag);
@@ -377,15 +408,20 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
 
 
 /** 解析 AV Command Param 列里的 JSON 字符串 */
-export function parseParam(raw: string | null | undefined): Record<string, unknown> {
-    if (!raw || raw.trim() === "") return {};
-    try {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-            return parsed as Record<string, unknown>;
+export function parseParam(raw: string | Record<string, unknown> | null | undefined): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
+    if (typeof raw === "string") {
+        const trimmed = raw.trim();
+        if (trimmed === "") return {};
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+                return parsed as Record<string, unknown>;
+            }
+        } catch (e) {
+            console.warn("[Dispatcher] Failed to parse Command Param JSON:", raw, e);
         }
-    } catch (e) {
-        console.warn("[Dispatcher] Failed to parse Command Param JSON:", raw, e);
     }
     return {};
 }

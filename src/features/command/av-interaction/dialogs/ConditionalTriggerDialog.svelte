@@ -16,7 +16,8 @@
         tag_created: { condition: "", selectedList: [] },
         tag_removed: { condition: "", selectedList: [] },
         block_content_changed: { condition: "", selectedList: [] },
-        block_attribute_changed: { condition: "", selectedList: [] }
+        block_attribute_changed: { condition: "", selectedList: [] },
+        task_completed: { condition: "", selectedList: [] }
     };
 
     let activeEvent: string = "tag_created";
@@ -25,8 +26,48 @@
         { id: "tag_created", label: "添加标签时" },
         { id: "tag_removed", label: "移除标签时" },
         { id: "block_content_changed", label: "内容变动时" },
-        { id: "block_attribute_changed", label: "属性变动时" }
+        { id: "block_attribute_changed", label: "属性变动时" },
+        { id: "task_completed", label: "任务完成时" }
     ];
+
+    function splitCommands(text: string): string[] {
+        const result: string[] = [];
+        let current = "";
+        let parenDepth = 0;
+        let inQuotes = false;
+        let quoteChar = "";
+        
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            if (inQuotes) {
+                if (char === quoteChar && text[i - 1] !== "\\") {
+                    inQuotes = false;
+                }
+                current += char;
+            } else {
+                if (char === '"' || char === "'") {
+                    inQuotes = true;
+                    quoteChar = char;
+                    current += char;
+                } else if (char === "(") {
+                    parenDepth++;
+                    current += char;
+                } else if (char === ")") {
+                    parenDepth--;
+                    current += char;
+                } else if ((char === "," || char === "，") && parenDepth === 0) {
+                    result.push(current.trim());
+                    current = "";
+                } else {
+                    current += char;
+                }
+            }
+        }
+        if (current.trim()) {
+            result.push(current.trim());
+        }
+        return result;
+    }
 
     // Helper parser for multiline configurations
     function parseConditional(text: string) {
@@ -37,7 +78,7 @@
                 const rawEvent = match[1].trim();
                 const condition = match[2] ? match[2].trim() : "";
                 const cmdsText = match[3].trim();
-                const cmds = cmdsText.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+                const cmds = splitCommands(cmdsText);
 
                 let eventType = "tag_created";
                 if (rawEvent === "打上标签时" || rawEvent === "tag_created") {
@@ -48,6 +89,8 @@
                     eventType = "block_content_changed";
                 } else if (rawEvent === "属性变动时" || rawEvent === "block_attribute_changed") {
                     eventType = "block_attribute_changed";
+                } else if (rawEvent === "任务完成时" || rawEvent === "task_completed") {
+                    eventType = "task_completed";
                 }
 
                 if (eventConfigs[eventType]) {
@@ -56,7 +99,7 @@
                 }
             } else {
                 // Legacy format fallback: comma-separated command labels in tag_created
-                const cmds = line.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+                const cmds = splitCommands(line);
                 if (cmds.length > 0) {
                     eventConfigs.tag_created.selectedList = [
                         ...eventConfigs.tag_created.selectedList,
@@ -73,11 +116,18 @@
         console.log("[TriggerDialog-Debug] parsed configs:", eventConfigs);
     });
 
+    function findSelectionIndex(list: string[], label: string): number {
+        return list.findIndex(item => {
+            const base = item.split("(")[0].trim();
+            return base === label;
+        });
+    }
+
     function toggleSelect(label: string) {
         const config = eventConfigs[activeEvent];
-        const index = config.selectedList.indexOf(label);
+        const index = findSelectionIndex(config.selectedList, label);
         if (index > -1) {
-            config.selectedList = config.selectedList.filter(item => item !== label);
+            config.selectedList = config.selectedList.filter((_, idx) => idx !== index);
         } else {
             config.selectedList = [...config.selectedList, label];
         }
@@ -90,7 +140,8 @@
             tag_created: "打上标签时",
             tag_removed: "移除标签时",
             block_content_changed: "内容变动时",
-            block_attribute_changed: "属性变动时"
+            block_attribute_changed: "属性变动时",
+            task_completed: "任务完成时"
         };
 
         for (const [eventType, config] of Object.entries(eventConfigs)) {
@@ -161,7 +212,7 @@
                 选择并排序动作命令 (Actions)：
             </div>
             {#each boundCommands as cmd}
-                {@const selIndex = eventConfigs[activeEvent].selectedList.indexOf(cmd.label)}
+                {@const selIndex = findSelectionIndex(eventConfigs[activeEvent].selectedList, cmd.label)}
                 <!-- svelte-ignore a11y-click-events-have-key-events -->
                 <!-- svelte-ignore a11y-no-static-element-interactions -->
                 <div 
