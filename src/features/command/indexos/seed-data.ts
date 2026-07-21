@@ -51,5 +51,13 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     {
         typeLabel: "task",
         commandLabels: ["☑ 转换为任务", "转换为任务", "🎆 烟花", "烟花"]
+    },
+    {
+        typeLabel: "pipeline",
+        commandLabels: ["⚡ API 插入块测试", "API 插入块测试", "📝 API 更新块内容", "API 更新块内容"]
+    },
+    {
+        typeLabel: "permanent",
+        commandLabels: ["⚡ API 插入块测试", "API 插入块测试", "📝 API 更新块内容", "API 更新块内容"]
     }
 ];

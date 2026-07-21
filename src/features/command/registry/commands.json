@@ -270,6 +270,12 @@
                 "scope": "self",
                 "category": "edit",
                 "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260527120000-update",
+                "label": "📝 API 更新块内容",
+                "paramMapping": "{\"id\":\"{{block_id}}\",\"dataType\":\"markdown\",\"data\":\"[Auto Update] Updated at {{time}}\"}",
+                "uiEntries": ["inline", "palette"]
             }
         },
         {

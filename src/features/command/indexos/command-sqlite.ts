@@ -168,16 +168,50 @@ export async function initSystemTables() {
                             [s.rowID, s.label, turnTaskCmd.id, s.paramMapping || "", "快捷命令"]);
                 }
             }
-
-            // Ensure Param_Mapping has {} for parametric commands
-            db.run(`UPDATE ${TABLE_COMMANDS} SET Param_Mapping = '{}' WHERE Command_ID IN ('siyuan.ui.toast', 'plugin-index.command.turnIntoTask') AND (Param_Mapping IS NULL OR Param_Mapping = '')`);
         } catch (e) {
             console.error("[SQLite-Init] Failed to ensure turnIntoTask seeded:", e);
         }
 
+        // Ensure api.block.update exists in TABLE_COMMANDS
+        try {
+            const checkUpdateExists = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS} WHERE Command_ID = 'api.block.update'`);
+            const updateCount = checkUpdateExists?.[0]?.values?.[0]?.[0] || 0;
+            if (Number(updateCount) === 0) {
+                const updateCmd = (commandsData as any).commands.find((c: any) => c.id === 'api.block.update');
+                if (updateCmd && updateCmd.seed) {
+                    const s = updateCmd.seed;
+                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, UI_Entries) 
+                            VALUES (?, ?, ?, ?, ?)`, 
+                            [s.rowID, s.label, updateCmd.id, s.paramMapping || "{}", "快捷命令"]);
+                }
+            }
+        } catch (e) {
+            console.error("[SQLite-Init] Failed to ensure api.block.update seeded:", e);
+        }
+
+        // Ensure Param_Mapping has {} for parametric commands
+        try {
+            db.run(`UPDATE ${TABLE_COMMANDS} SET Param_Mapping = '{}' WHERE Command_ID IN ('siyuan.ui.toast', 'plugin-index.command.turnIntoTask') AND (Param_Mapping IS NULL OR Param_Mapping = '')`);
+        } catch (_) { /* ignore */ }
     }
 
-    const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
+    const defaultPipelineConditional = `// [打上标签时] -> ⚡ API 插入块测试, 📝 API 更新块内容
+
+async ({ dispatch, state, eventName }) => {
+    if (eventName === "tag_created") {
+        await dispatch("api.block.insert", { dataType: "markdown", data: "[Pipeline Step 1] Time: \${time}", previousID: "\${block_id}" });
+        await dispatch("api.block.update", { id: "\${block_id}", dataType: "markdown", data: "[Pipeline Step 2] Updated at \${time}" });
+    }
+}`;
+
+    const defaultPermanentConditional = `// [打上标签时] -> ⚡ API 插入块测试
+
+async ({ dispatch, state, eventName }) => {
+    if (eventName === "tag_created") {
+        await dispatch("api.block.insert", { dataType: "markdown", data: "[Permanent Init] Inserted at \${time}", previousID: "\${block_id}" });
+    }
+}`;
+
     const defaultTaskConditional = `// [打上标签时] -> ☑ 转换为任务
 // [移除标签时] -> ☑ 转换为任务
 // [任务完成时] -> 🎆 烟花
@@ -191,15 +225,37 @@ async ({ dispatch, state, eventName }) => {
     }
 }`;
 
+    const typeCount = db.exec(`SELECT count(*) FROM ${TABLE_TYPES}`)[0].values[0][0];
+
     if (typeCount === 0) {
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
             ["20260526204605-7hun58a", "project", "🌐 全局关系图", ""]);
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
             ["20260526204605-v11e2ta", "task", "", defaultTaskConditional]);
+        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
+            ["20260721140000-pipeline", "pipeline", "", defaultPipelineConditional]);
+        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
+            ["20260721140000-permanent", "permanent", "📝 API 更新块内容", defaultPermanentConditional]);
     } else {
         try {
-            // Update task supertag conditional and clear Icon_Menu unconditionally in development
             db.run(`UPDATE ${TABLE_TYPES} SET supertag = 'task', Conditional = ?, Icon_Menu = '' WHERE supertag IN ('person', '#Person', '#task', 'task')`, [defaultTaskConditional]);
+            
+            // Ensure pipeline and permanent exist in development
+            const checkPipe = db.exec(`SELECT count(*) FROM ${TABLE_TYPES} WHERE supertag = 'pipeline'`);
+            if (Number(checkPipe?.[0]?.values?.[0]?.[0] || 0) === 0) {
+                db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
+                    ["20260721140000-pipeline", "pipeline", "", defaultPipelineConditional]);
+            } else {
+                db.run(`UPDATE ${TABLE_TYPES} SET Conditional = ? WHERE supertag = 'pipeline'`, [defaultPipelineConditional]);
+            }
+
+            const checkPerm = db.exec(`SELECT count(*) FROM ${TABLE_TYPES} WHERE supertag = 'permanent'`);
+            if (Number(checkPerm?.[0]?.values?.[0]?.[0] || 0) === 0) {
+                db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
+                    ["20260721140000-permanent", "permanent", "📝 API 更新块内容", defaultPermanentConditional]);
+            } else {
+                db.run(`UPDATE ${TABLE_TYPES} SET Conditional = ?, Icon_Menu = '📝 API 更新块内容' WHERE supertag = 'permanent'`, [defaultPermanentConditional]);
+            }
         } catch (_) { /* ignore */ }
     }
 

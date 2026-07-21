@@ -334,14 +334,6 @@ export class SupertagMonitor {
         }
     }
 
-    private async triggerConditionalCommands(
-        blockId: string, 
-        cleanTag: string, 
-        eventName: "tag_created" | "tag_removed" | "block_content_changed" | "block_attribute_changed" | "task_completed"
-    ) {
-        // ... existing logic ...
-    }
-
     private async handleWsMessage({ detail }: any) {
         if (detail.cmd !== "transactions") return;
 

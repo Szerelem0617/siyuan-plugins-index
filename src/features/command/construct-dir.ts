@@ -440,6 +440,31 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
         }
     }
 
+    // Ensure all supertags in DEFAULT_RELATION_BINDINGS exist as rows in Type-DB AV
+    if (primaryKeyId) {
+        for (const binding of DEFAULT_RELATION_BINDINGS) {
+            const clean = binding.typeLabel.replace(/^#/, "").toLowerCase();
+            if (!typeMap[clean]) {
+                console.log(`[IndexOS-Debug] Adding missing supertag row '${clean}' to Type-DB AV...`);
+                // @ts-ignore
+                const newRowId = window.Lute ? window.Lute.NewNodeID() : `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+                await post("/api/av/addAttributeViewBlocks", {
+                    avID: typeAvId,
+                    srcs: [{ itemID: newRowId, id: "", isDetached: true }]
+                });
+                await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                    avID: typeAvId,
+                    values: [{
+                        keyID: primaryKeyId,
+                        itemID: newRowId,
+                        value: { type: "block", block: { content: clean } }
+                    }]
+                });
+                typeMap[clean] = newRowId;
+            }
+        }
+    }
+
     console.log("[IndexOS-Debug] commandMap:", commandMap, "typeMap:", typeMap);
 
     const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
