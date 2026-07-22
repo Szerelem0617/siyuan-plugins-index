@@ -526,19 +526,17 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
             }
         }
 
-        if (commandRowIds.length > 0) {
-            console.log(`[IndexOS-Debug] Binding ${cleanBindingType} (rowID: ${typeRowId}) to Command Row IDs:`, commandRowIds);
-            batchValues.push({
-                keyID: typeRelKeyId,
-                itemID: typeRowId,
-                value: {
-                    type: "relation",
-                    relation: {
-                        blockIDs: commandRowIds
-                    }
+        console.log(`[IndexOS-Debug] Binding ${cleanBindingType} (rowID: ${typeRowId}) to Command Row IDs:`, commandRowIds);
+        batchValues.push({
+            keyID: typeRelKeyId,
+            itemID: typeRowId,
+            value: {
+                type: "relation",
+                relation: {
+                    blockIDs: commandRowIds
                 }
-            });
-        }
+            }
+        });
     }
 
     if (batchValues.length > 0) {

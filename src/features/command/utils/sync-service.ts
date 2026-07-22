@@ -258,9 +258,8 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         // 3. Load Type Bindings (Layer 3)
         let querySql = "";
         if (hasRelationCol) {
-            querySql = `SELECT "${typeSupertagCol}", "${typeRelationCol}" FROM ${typesTable}`;
+            querySql = `SELECT "${typeSupertagCol}", Icon_Menu, "${typeRelationCol}" FROM ${typesTable}`;
         } else {
-            // Check if Icon_Menu exists in column names, if not fallback to Block_Icon_Menu
             const checkCols = await runQuery(`PRAGMA table_info(${typesTable})`);
             const colNames = checkCols?.values?.map((c: any) => c[1]) || [];
             if (colNames.includes("Icon_Menu")) {
@@ -277,65 +276,63 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         const newRegistry: SupertagCommand[] = [];
         for (const row of typeRes.values) {
             const typeTagRaw = row[0];
+            const iconMenuText = row[1] || "";
+            const relationRaw = hasRelationCol ? (row[2] || "") : "";
 
             if (typeTagRaw) {
                 const cleanTag = String(typeTagRaw).replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
 
-                if (hasRelationCol) {
-                    const relationRaw = row[1];
-                    if (relationRaw) {
-                        try {
-                            const linkedRowIds: string[] = JSON.parse(relationRaw);
-                            if (Array.isArray(linkedRowIds)) {
-                                for (const cmdRowId of linkedRowIds) {
-                                    const cmdInfo = cmdByRowId[cmdRowId];
-                                    if (cmdInfo) {
-                                        // Check if already bound to avoid duplicates in the same UI location
-                                        const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
+                // 1. 优先解析 Icon Menu 文本列：这些命令明确需要注入到 UI 菜单
+                if (iconMenuText) {
+                    const mappedCmds = String(iconMenuText).split(/[,，]/).map(s => s.trim()).filter(Boolean);
+                    for (const cmdName of mappedCmds) {
+                        const cmdNameLower = cmdName.toLowerCase();
+                        const foundKey = Object.keys(newCommandRegistry).find(k => k.toLowerCase().includes(cmdNameLower));
+                        const cmdInfo = foundKey ? newCommandRegistry[foundKey] : undefined;
+                        if (cmdInfo) {
+                            const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
+                            if (!exists) {
+                                newRegistry.push({
+                                    typeTag: cleanTag,
+                                    methodName: cmdInfo.methodName,
+                                    commandRef: cmdInfo.commandRef,
+                                    paramMapping: cmdInfo.paramMapping,
+                                    uiLocation: "IconMenu"
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // 2. 解析 绑定命令 关联列：这些命令关联到 Tag，但未写入 Icon Menu 列的标记为 BoundOnly
+                if (relationRaw) {
+                    try {
+                        const linkedRowIds: string[] = JSON.parse(relationRaw);
+                        if (Array.isArray(linkedRowIds)) {
+                            for (const cmdRowId of linkedRowIds) {
+                                const cmdInfo = cmdByRowId[cmdRowId];
+                                if (cmdInfo) {
+                                    const inIconMenu = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
+                                    if (!inIconMenu) {
+                                        const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef);
                                         if (!exists) {
                                             newRegistry.push({
                                                 typeTag: cleanTag,
                                                 methodName: cmdInfo.methodName,
                                                 commandRef: cmdInfo.commandRef,
                                                 paramMapping: cmdInfo.paramMapping,
-                                                uiLocation: "IconMenu"
+                                                uiLocation: "BoundOnly"
                                             });
                                         }
                                     }
                                 }
                             }
-                        } catch (e) {
                         }
-                    }
-                } else {
-                    const processMenu = (raw: any, location: string) => {
-                        if (!raw) return;
-                        const mappedCmds = String(raw).split(/[,，]/).map(s => s.trim()).filter(Boolean);
-                        for (const cmdName of mappedCmds) {
-                            const cmdNameLower = cmdName.toLowerCase();
-                            const foundKey = Object.keys(newCommandRegistry).find(k => k.toLowerCase().includes(cmdNameLower));
-                            const cmdInfo = foundKey ? newCommandRegistry[foundKey] : undefined;
-                            if (cmdInfo) {
-                                newRegistry.push({
-                                    typeTag: cleanTag,
-                                    methodName: cmdInfo.methodName,
-                                    commandRef: cmdInfo.commandRef,
-                                    paramMapping: cmdInfo.paramMapping,
-                                    uiLocation: location
-                                });
-                            }
-                        }
-                    };
-
-                    if (row.length === 2) {
-                        processMenu(row[1], "IconMenu");
-                    } else if (row.length >= 3) {
-                        processMenu(row[1], "IconMenu");
-                        processMenu(row[2], "CurrentPageMenu");
+                    } catch (e) {
                     }
                 }
 
-                // 确保每一个定义在 supertag-db 中的标签都能作为合法 Supertag 注册并出现在工具组件列表中
+                // 确保每一个定义在 supertag-db 中的标签都能作为合法 Supertag 注册
                 if (cleanTag && !newRegistry.some(r => r.typeTag === cleanTag)) {
                     newRegistry.push({
                         typeTag: cleanTag,
@@ -457,10 +454,13 @@ async function refreshRegistryFromApi() {
             if (typeTagRaw) {
                 const cleanTag = typeTagRaw.replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
 
-                if (hasRelationCol) {
-                    // Parse relations only
-                    for (const cmdRowId of linkedRowIds) {
-                        const cmdInfo = cmdByRowId[cmdRowId];
+                // 1. 优先解析 Icon Menu 文本列：显式要在 UI 菜单中展示
+                if (iconMenuRaw) {
+                    const mappedCmds = String(iconMenuRaw).split(/[,，]/).map(s => s.trim()).filter(Boolean);
+                    for (const cmdName of mappedCmds) {
+                        const cmdNameLower = cmdName.toLowerCase();
+                        const foundKey = Object.keys(newCommandRegistry).find(k => k.toLowerCase().includes(cmdNameLower));
+                        const cmdInfo = foundKey ? newCommandRegistry[foundKey] : undefined;
                         if (cmdInfo) {
                             const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
                             if (!exists) {
@@ -474,27 +474,28 @@ async function refreshRegistryFromApi() {
                             }
                         }
                     }
-                } else {
-                    // Parse text menus only
-                    const processMenu = (raw: string, location: string) => {
-                        if (!raw) return;
-                        const mappedCmds = raw.split(/[,，]/).map(s => s.trim()).filter(Boolean);
-                        for (const cmdName of mappedCmds) {
-                            const cmdNameLower = cmdName.toLowerCase();
-                            const foundKey = Object.keys(newCommandRegistry).find(k => k.toLowerCase().includes(cmdNameLower));
-                            const cmdInfo = foundKey ? newCommandRegistry[foundKey] : undefined;
-                            if (cmdInfo) {
-                                newRegistry.push({
-                                    typeTag: cleanTag,
-                                    methodName: cmdInfo.methodName,
-                                    commandRef: cmdInfo.commandRef,
-                                    paramMapping: cmdInfo.paramMapping,
-                                    uiLocation: location
-                                });
+                }
+
+                // 2. 解析 绑定命令 关联列：这些命令关联到 Tag，但未写入 Icon Menu 列的标记为 BoundOnly
+                if (hasRelationCol) {
+                    for (const cmdRowId of linkedRowIds) {
+                        const cmdInfo = cmdByRowId[cmdRowId];
+                        if (cmdInfo) {
+                            const inIconMenu = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
+                            if (!inIconMenu) {
+                                const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef);
+                                if (!exists) {
+                                    newRegistry.push({
+                                        typeTag: cleanTag,
+                                        methodName: cmdInfo.methodName,
+                                        commandRef: cmdInfo.commandRef,
+                                        paramMapping: cmdInfo.paramMapping,
+                                        uiLocation: "BoundOnly"
+                                    });
+                                }
                             }
                         }
-                    };
-                    processMenu(iconMenuRaw, "IconMenu");
+                    }
                 }
             }
         }

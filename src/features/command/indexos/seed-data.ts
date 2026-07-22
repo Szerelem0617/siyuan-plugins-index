@@ -63,6 +63,6 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     },
     {
         typeLabel: "permanent",
-        commandLabels: ["⚡ API 插入块测试", "API 插入块测试", "📝 安全更新块内容", "安全更新块内容"]
+        commandLabels: ["📝 安全更新块内容", "安全更新块内容"]
     }
 ];

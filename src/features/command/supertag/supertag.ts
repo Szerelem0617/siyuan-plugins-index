@@ -662,12 +662,58 @@ export class SupertagMonitor {
             const isLogicTag = SUPERTAG_REGISTRY.some(l => l.typeTag.toLowerCase() === cleanTag);
             const tagEnabled = this.isTagEnabled(cleanTag, isLogicTag);
 
-            // 检查绑定的命令中是否有需要跨步骤/持久化输出的逻辑（例如含有 _outputMapping，或使用了 {{var.createdblock}} 等跨命令出参入参映射）
+            // 动态判定此 tag 绑定的命令是否需要持久化数据库
+            // 核心原则：只有多个独立触发的菜单命令之间存在"生产者-消费者"关系时才需要持久化
+            //   - 生产者：paramMapping 中声明了 _outputMapping（如 insert 命令产出 createdblock）
+            //   - 消费者：paramMapping 中引用了 {{var.xxx}}（如 update 命令消费 {{var.createdblock}}）
+            // 在同一个 Conditional 管道内的命令通过内存流转，不需要持久化
             const boundCommands = SUPERTAG_REGISTRY.filter(l => l.typeTag.toLowerCase() === cleanTag);
-            const requiresPersistence = !isLogicTag || boundCommands.some(cmd => {
-                const pm = cmd.paramMapping || "";
-                return pm.includes("_outputMapping") || pm.includes("{{var.") || pm.includes("createdblock") || pm.includes("updatedblock");
-            });
+            const iconMenuCommands = boundCommands.filter(l => l.uiLocation === "IconMenu");
+            let requiresPersistence = !isLogicTag; // 纯数据 tag 始终需要持久化
+
+            if (isLogicTag && iconMenuCommands.length > 0) {
+                let hasProducer = false; // 是否有关联命令声明了 _outputMapping
+                let hasConsumer = false; // 是否有 Icon Menu 菜单命令引用了 {{var.xxx}}
+
+                const hasVarRef = (obj: any): boolean => {
+                    if (typeof obj === "string") return /\{\{var\.[^}]+\}\}/.test(obj);
+                    if (Array.isArray(obj)) return obj.some(hasVarRef);
+                    if (typeof obj === "object" && obj !== null) {
+                        return Object.entries(obj).some(([k, v]) => k !== "_outputMapping" && hasVarRef(v));
+                    }
+                    return false;
+                };
+
+                // 检查关联的所有命令中是否有生产者
+                for (const cmd of boundCommands) {
+                    try {
+                        const pm = cmd.paramMapping || "";
+                        if (!pm.trim()) continue;
+                        const parsed = JSON.parse(pm);
+                        if (typeof parsed !== "object" || parsed === null) continue;
+
+                        if (parsed._outputMapping && typeof parsed._outputMapping === "object" && Object.keys(parsed._outputMapping).length > 0) {
+                            hasProducer = true;
+                        }
+                    } catch {}
+                }
+
+                // 检查 Icon Menu 菜单命令中是否有消费者（需要手动在菜单上独立点按来消费变量）
+                for (const cmd of iconMenuCommands) {
+                    try {
+                        const pm = cmd.paramMapping || "";
+                        if (!pm.trim()) continue;
+                        const parsed = JSON.parse(pm);
+                        if (typeof parsed !== "object" || parsed === null) continue;
+
+                        if (hasVarRef(parsed)) {
+                            hasConsumer = true;
+                        }
+                    } catch {}
+                }
+
+                requiresPersistence = hasProducer && hasConsumer;
+            }
 
             let targetConfig: TypeConfig | null = null;
 

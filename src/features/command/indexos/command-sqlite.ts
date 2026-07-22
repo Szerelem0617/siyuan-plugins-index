@@ -249,7 +249,7 @@ async ({ dispatch, state, eventName }) => {
                 db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
                     ["20260721140000-pipeline", "pipeline", "", defaultPipelineConditional]);
             } else {
-                db.run(`UPDATE ${TABLE_TYPES} SET Conditional = ? WHERE supertag = 'pipeline'`, [defaultPipelineConditional]);
+                db.run(`UPDATE ${TABLE_TYPES} SET Conditional = ?, Icon_Menu = '' WHERE supertag = 'pipeline'`, [defaultPipelineConditional]);
             }
 
             const checkPerm = db.exec(`SELECT count(*) FROM ${TABLE_TYPES} WHERE supertag = 'permanent'`);
