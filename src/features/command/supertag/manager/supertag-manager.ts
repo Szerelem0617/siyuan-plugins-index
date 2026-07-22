@@ -1,15 +1,12 @@
-// Supertag manager panel injection
 import { Dialog } from "siyuan";
 import SupertagManagerDialog from "./supertag-manager-dialog.svelte";
-import { i18n } from "../../../shared/utils";
+import { i18n } from "../../../../shared/utils";
 
 export class SupertagManager {
     private observer: MutationObserver | null = null;
 
     init() {
-        // 初始化时尝试注入
         this.inject();
-        // 监听 DOM 变化以自动重新注入（当用户切换面板或思源重绘时）
         this.startObserver();
     }
 
@@ -23,12 +20,10 @@ export class SupertagManager {
     }
 
     private inject() {
-        // 如果已经注入则跳过
         if (document.getElementById("supertag-management")) {
             return;
         }
 
-        // 定位标签面板的容器
         let tagPanels = Array.from(document.querySelectorAll('.sy__tag'));
         if (tagPanels.length === 0) {
             tagPanels = Array.from(document.querySelectorAll('.layout-tab-container > div[data-type="tag"], .layout-tab-container > div[data-type="dock-tag"]'));
@@ -37,7 +32,6 @@ export class SupertagManager {
 
         tagPanels.forEach(panel => {
             const blockIcons = panel.querySelector('.block__icons');
-            // 确保找到了标题栏，并且尚未注入过
             if (blockIcons && !panel.querySelector('#supertag-management')) {
                 const html = `
                 <div id="supertag-management" class="b3-list-item" style="margin: 4px 8px 0; cursor: pointer; transition: background-color 0.2s;">
@@ -52,7 +46,6 @@ export class SupertagManager {
 
                 blockIcons.insertAdjacentHTML('afterend', html);
 
-                // 绑定点击事件
                 const mgmtBtn = panel.querySelector('#supertag-management');
                 if (mgmtBtn) {
                     mgmtBtn.addEventListener("click", (e) => this.openDialog(e));
@@ -63,7 +56,6 @@ export class SupertagManager {
 
     private startObserver() {
         this.observer = new MutationObserver(() => {
-            // 判断当前 DOM 中是否缺失该元素
             if (!document.getElementById("supertag-management")) {
                 this.inject();
             }
@@ -72,7 +64,6 @@ export class SupertagManager {
     }
 
     private openDialog(e: Event) {
-        // 防止点击穿透或触发面板其他折叠逻辑
         e.stopPropagation();
         e.preventDefault();
 

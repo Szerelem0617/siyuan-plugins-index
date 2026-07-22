@@ -1,7 +1,7 @@
 import { post } from "../../../shared/api-client/request";
 import { showMessage } from "siyuan";
 import type { CommandContext } from "../command-dispatcher";
-import { SupertagRenderer } from "../supertag/SupertagRenderer";
+import { SupertagRenderer } from "../supertag";
 
 export async function triggerTurnIntoTask(
     params: Record<string, unknown>,
@@ -51,7 +51,10 @@ export async function triggerTurnIntoTask(
                 SupertagRenderer.renderSingleBlockElement(liveBlockEl);
             }
             if (editorEl) {
-                await SupertagRenderer.renderDocumentTags(targetBlockId, editorEl);
+                const pageDocId = editorEl.querySelector(".protyle-title")?.getAttribute("data-node-id");
+                if (pageDocId) {
+                    await SupertagRenderer.renderDocumentTags(pageDocId, editorEl);
+                }
             }
 
             showMessage("✨ 已取消虚拟任务状态");
@@ -76,7 +79,10 @@ export async function triggerTurnIntoTask(
                 SupertagRenderer.renderSingleBlockElement(liveBlockEl);
             }
             if (editorEl) {
-                await SupertagRenderer.renderDocumentTags(targetBlockId, editorEl);
+                const pageDocId = editorEl.querySelector(".protyle-title")?.getAttribute("data-node-id");
+                if (pageDocId) {
+                    await SupertagRenderer.renderDocumentTags(pageDocId, editorEl);
+                }
             }
 
             showMessage("✨ 已成功转换为虚拟任务");

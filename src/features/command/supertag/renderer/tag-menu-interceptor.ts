@@ -1,8 +1,8 @@
-import { post } from "../../../shared/api-client/request";
-import { supertagMonitor } from "./supertag";
-import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../registration";
+import { post } from "../../../../shared/api-client/request";
+import { supertagMonitor } from "../core/supertag-listener";
+import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
-import { parseSupertags, serializeSupertags } from "../utils/supertag-helper";
+import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
 
 // Visual indicator/badge texts to identify supertags in the list
 const BADGE_MARKER = "🐬";
@@ -13,7 +13,7 @@ async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
 
     // 2. Fetch current page attributes
     const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });
-    const attrs = attrsRes || {};
+    const attrs = attrsRes?.data || attrsRes || {};
     const rawTags = attrs["custom-supertags"];
     
     const currentCustom = parseSupertags(rawTags);
@@ -37,10 +37,10 @@ async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
 function renderSupertagsInPanel(panel: HTMLElement, query: string) {
     panel.innerHTML = "";
 
-    const dbConfigs = supertagMonitor.getDataRegistry() || [];
+    const dbConfigs: any[] = [];
     const logicConfigs = SUPERTAG_REGISTRY || [];
 
-    const dataNames = new Set(dbConfigs.map(c => c.typeName.trim().toLowerCase()));
+    const dataNames = new Set(dbConfigs.map((c: any) => c.typeName.trim().toLowerCase()));
     const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
 
     const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
@@ -60,7 +60,6 @@ function renderSupertagsInPanel(panel: HTMLElement, query: string) {
     });
 
     const createSection = (title: string, tags: string[], color: string) => {
-        // If there are no items in this category, don't render it at all
         if (tags.length === 0) return null;
 
         const section = document.createElement("div");
@@ -105,7 +104,6 @@ function renderSupertagsInPanel(panel: HTMLElement, query: string) {
     if (cmdSec) panel.appendChild(cmdSec);
     if (dataSec) panel.appendChild(dataSec);
 
-    // If no supertags match at all, show empty indicator
     if (!cmdSec && !dataSec) {
         const empty = document.createElement("div");
         empty.style.cssText = "font-size: 11px; opacity: 0.5; text-align: center; padding: 20px 0; font-style: italic; color: var(--b3-theme-on-surface-light);";
@@ -115,44 +113,34 @@ function renderSupertagsInPanel(panel: HTMLElement, query: string) {
 }
 
 function transformTagMenu(menuFilter: HTMLElement, inputEl: HTMLInputElement) {
-    // Avoid double transformation
     if (menuFilter.classList.contains("indexos-transformed")) return;
     menuFilter.classList.add("indexos-transformed");
 
-    // 1. Expand Siyuan's menu width to fit two columns
     const menuEl = menuFilter.closest(".b3-menu") as HTMLElement;
     if (menuEl) {
         menuEl.style.width = "540px";
         menuEl.style.maxWidth = "95vw";
     }
 
-    // 2. Locate native tag list container
     const nativeList = menuFilter.querySelector(".b3-list--background") as HTMLElement;
     if (!nativeList) return;
 
-    // 3. Create a flex row wrapper container
     const rowContainer = document.createElement("div");
     rowContainer.style.cssText = "display: flex; flex-direction: row; height: 320px; overflow: hidden; border-top: 1px solid var(--b3-border-color);";
 
-    // Re-style native tag list to occupy the right column (let it retain its native scroll and columns styling)
     nativeList.style.cssText = "flex: 1.1; overflow: auto; height: 100%; margin: 0; padding: 4px; box-sizing: border-box;";
     
-    // Insert rowContainer before nativeList
     nativeList.parentNode?.insertBefore(rowContainer, nativeList);
 
-    // 4. Create the Left Column: Supertags panel
     const supertagPanel = document.createElement("div");
     supertagPanel.className = "indexos-supertags-panel";
     supertagPanel.style.cssText = "flex: 0.9; overflow-y: auto; height: 100%; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border-right: 1px solid var(--b3-border-color); box-sizing: border-box;";
     
-    // Append Left Column first (Supertags), then Right Column (Native tag list)
     rowContainer.appendChild(supertagPanel);
     rowContainer.appendChild(nativeList);
 
-    // 5. Initial render of supertags (no filter query)
     renderSupertagsInPanel(supertagPanel, "");
 
-    // 6. Listen to search inputs to dynamically filter supertags
     inputEl.addEventListener("input", () => {
         const query = inputEl.value.trim().toLowerCase();
         renderSupertagsInPanel(supertagPanel, query);
@@ -160,7 +148,6 @@ function transformTagMenu(menuFilter: HTMLElement, inputEl: HTMLInputElement) {
 }
 
 export function initTagMenuInterceptor() {
-    // Observe DOM additions to catch when Siyuan's Tag dialog is opened
     const observer = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {

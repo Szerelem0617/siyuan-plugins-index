@@ -1,14 +1,15 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig } from "../../data/av-setting/db-config";
-    import { type TypeConfig } from "../../data/av-setting/types";
-    import { i18n } from "../../../shared/utils";
-    import { supertagMonitor } from "./supertag";
+    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig } from "../../../data/av-setting/db-config";
+    import { type TypeConfig } from "../../../data/av-setting/types";
+    import { i18n } from "../../../../shared/utils";
+    import { supertagMonitor } from "../core/supertag-listener";
+    import { supertagBinder } from "../core/supertag-binder";
     import { showMessage } from "siyuan";
     import {
         SUPERTAG_REGISTRY,
         type SupertagCommand,
-    } from "../registration";
+    } from "../../registration";
 
     export let dialog: any;
     export let supertagManager: any;
@@ -27,13 +28,9 @@
     let commandComponents: TagGroup[] = [];
 
     onMount(async () => {
-        // 1. Fetch Data from Layer 4 (Scanning)
         const scannedData = await getGlobalTypeConfigs();
-
-        // 2. Fetch Logic from Layer 3 (Registry)
         const logicData = SUPERTAG_REGISTRY;
 
-        // Grouping logic
         const allTagNames = new Set([
             ...scannedData.map((d) => d.typeName.toLowerCase()),
             ...logicData.map((l) => l.typeTag.toLowerCase()),
@@ -59,7 +56,7 @@
         allTagNames.forEach((name) => {
             const hasData = dataMap.has(name);
             const hasLogic = logicMap.has(name);
-            const pref = supertagMonitor.getPreferredConfig(name);
+            const pref = supertagBinder.getPref(name);
 
             const group: TagGroup = {
                 typeName: name,
@@ -69,10 +66,8 @@
             };
 
             if (hasLogic) {
-                // 包含了所有具备动作/触发逻辑的超级标签（无论是否实例化为数据库）
                 tempCmdComp.push(group);
             } else if (hasData) {
-                // 纯数据/视图数据库标签
                 tempDataComp.push(group);
             }
         });
@@ -86,14 +81,13 @@
     });
 
     async function handlePrefChange(typeName: string, avId: string) {
-        await supertagMonitor.setPreferredConfig(typeName, avId);
+        supertagBinder.setPref(typeName, avId);
     }
 
     async function handleToggleEnable(group: TagGroup, checked: boolean) {
         try {
-            await supertagMonitor.setTagEnabled(group.typeName, checked);
+            supertagBinder.setPref(group.typeName, checked ? "enabled" : "disabled");
             
-            // Trigger Svelte arrays updates
             commandComponents = [...commandComponents];
             dataComponents = [...dataComponents];
 
@@ -101,17 +95,6 @@
         } catch (e: any) {
             console.error("Failed to toggle supertag state:", e);
             showMessage(`保存配置失败: ${e.message || e}`, 5000, "error");
-        }
-    }
-
-    async function handleConfigureTemplate(group: TagGroup) {
-        const config =
-            group.dataConfigs.find((c) => c.avId === group.selectedAvId) ||
-            group.dataConfigs[0];
-        if (config) {
-            console.log("Configuring template for:", config);
-            await supertagManager.configureTemplate(config);
-            dialog.destroy();
         }
     }
 
@@ -218,7 +201,7 @@
 
                 {#each currentList as group}
                     {@const isLogic = group.logicConfigs.length > 0}
-                    {@const isEnabled = supertagMonitor.isTagEnabled(group.typeName, isLogic)}
+                    {@const isEnabled = supertagBinder.getPref(group.typeName) !== "disabled"}
                     <div class="b3-list-item">
                         <svg
                             class="b3-list-item__graphic"

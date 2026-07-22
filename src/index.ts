@@ -13,9 +13,14 @@ import { DEV_ENABLE_INIT_SYS } from "./features/command/registration";
 import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems } from "./features/command/menu-hooks";
 import { refreshSupertagRegistry, syncGlobalSupertagsCache } from "./features/command/utils/sync-service";
 import { commandRegistry } from "./features/command/registry/command-registry";
-import { supertagMonitor } from "./features/command/supertag/supertag";
-import { supertagManager } from "./features/command/supertag/supertag-manager";
-import { initTagSuggestion, bindProtyleHintExtend } from "./features/command/supertag/tag-suggestion";
+import { 
+    supertagMonitor, 
+    supertagManager, 
+    initTagSuggestion, 
+    bindProtyleHintExtend, 
+    SupertagRenderer, 
+    initTagMenuInterceptor 
+} from "./features/command/supertag";
 import { refreshTopBarCommands, handleTopBarEvents, destroyTopBarCommands } from "./features/command/global-registration/top-bar";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
@@ -29,9 +34,6 @@ import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
 import { triggerTurnIntoTask } from "./features/command/effect/turn-into-task";
 import { triggerSafeUpdateBlock } from "./features/command/effect/safe-update-block";
-
-import { SupertagRenderer } from "./features/command/supertag/SupertagRenderer";
-import { initTagMenuInterceptor } from "./features/command/supertag/tag-menu-interceptor";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;

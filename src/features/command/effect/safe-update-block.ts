@@ -1,6 +1,6 @@
 import { post } from "../../../shared/api-client/request";
 import { resolveTemplate, getBlockId, type CommandContext } from "../command-dispatcher";
-import { SupertagRenderer } from "../supertag/SupertagRenderer";
+import { SupertagRenderer } from "../supertag";
 import { formatDate } from "../../../shared/utils";
 
 /**

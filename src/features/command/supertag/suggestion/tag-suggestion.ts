@@ -1,11 +1,12 @@
 import { Plugin } from "siyuan";
-import { post } from "../../../shared/api-client/request";
-import { supertagMonitor } from "./supertag";
-import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../registration";
-import { SupertagRenderer } from "./SupertagRenderer";
-import { parseSupertags, serializeSupertags, findActiveBlock } from "../utils/supertag-helper";
-import { commandRegistry } from "../registry/command-registry";
-import { getBlockType } from "../command-dispatcher";
+import { post } from "../../../../shared/api-client/request";
+import { supertagMonitor } from "../core/supertag-listener";
+import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../../registration";
+import { SupertagRenderer } from "../renderer/SupertagRenderer";
+import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
+import { findActiveBlock } from "../../utils/supertag-helper";
+import { commandRegistry } from "../../registry/command-registry";
+import { getBlockType } from "../../command-dispatcher";
 
 export const tagSuggestionState = {
     enabled: true,
@@ -15,10 +16,7 @@ export const tagSuggestionState = {
 let cachedNativeTags: string[] = [];
 let lastNativeFetch = 0;
 
-// The trigger character for inline blocks is "#". Siyuan handles this natively.
-// We attach our Supertags panel to the left side of Siyuan's native hint popover.
 const SUPERTAG_TRIGGER = "#";
-
 let blockSupertagsPanel: HTMLDivElement | null = null;
 
 export async function refreshNativeTagsCache() {
@@ -51,13 +49,11 @@ export async function initTagSuggestion(plugin: Plugin) {
 }
 
 async function handleBlockSupertagClick(tag: string, protyle: any) {
-    // 1. Hide Siyuan's hint popup and our panel
     if (protyle.hint && protyle.hint.element) {
         protyle.hint.element.classList.add("fn__none");
     }
     hideBlockSupertagsPanel();
 
-    // 2. Find the actual editing block element from cursor
     const blockEl = findActiveBlock(protyle);
     if (!blockEl) {
         console.error("[Supertag] Block element not found from cursor");
@@ -65,7 +61,6 @@ async function handleBlockSupertagClick(tag: string, protyle: any) {
     }
     const blockId = blockEl.getAttribute("data-node-id")!;
 
-    // 3. Delete the "#query" prefix from editor DOM
     const selection = window.getSelection();
     const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
     if (range) {
@@ -83,7 +78,6 @@ async function handleBlockSupertagClick(tag: string, protyle: any) {
         }
     }
 
-    // 4. Save custom-supertags attribute
     const raw = blockEl.getAttribute("custom-supertags");
     const currentCustom = parseSupertags(raw);
     const updatedCustom = Array.from(new Set([...currentCustom, tag]));
@@ -103,7 +97,6 @@ async function handleBlockSupertagClick(tag: string, protyle: any) {
         console.error("[Supertag] setBlockAttrs failed:", e);
     }
 
-    // 5. Persist content change via updateBlock
     const newHTML = blockEl.outerHTML;
     try {
         await post("/api/block/updateBlock", {
@@ -115,7 +108,6 @@ async function handleBlockSupertagClick(tag: string, protyle: any) {
         console.error("[Supertag] updateBlock failed:", e);
     }
 
-    // 6. Trigger commands and render pill
     await supertagMonitor.processNewTag(blockId, tag);
     SupertagRenderer.render(protyle);
 }
@@ -141,27 +133,22 @@ function getQueryText(protyle: any): string {
 function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle: any) {
     panel.innerHTML = "";
 
-    const dbConfigs = supertagMonitor.getDataRegistry() || [];
+    const dbConfigs: any[] = [];
     const logicConfigs = SUPERTAG_REGISTRY || [];
 
-    const dataNames = new Set(dbConfigs.map(c => c.typeName.trim().toLowerCase()));
+    const dataNames = new Set(dbConfigs.map((c: any) => c.typeName.trim().toLowerCase()));
     const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
 
-    console.log(`[TagSuggestion-Debug] query: "${query}", dataNames:`, Array.from(dataNames), "logicNames:", Array.from(logicNames), "SUPERTAG_REGISTRY:", logicConfigs);
-
     const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
-    const matched = allSupertags.filter(t => t.includes(query) && supertagMonitor.isTagEnabled(t));
+    const matched = allSupertags.filter(t => t.includes(query));
 
-    // 获取当前块类型，用于 appliesTo 兼容性检查
     const activeBlock = findActiveBlock(protyle);
     const currentBlockType = activeBlock ? getBlockType(activeBlock) : null;
 
-    // 预计算每个 supertag 的 appliesTo 兼容性
     const incompatibleTags = new Set<string>();
     if (currentBlockType) {
         for (const tag of matched) {
             const tagLower = tag.toLowerCase();
-            // 查找该 supertag 绑定的所有命令
             const boundCmds = logicConfigs.filter(l => l.typeTag.trim().toLowerCase() === tagLower);
             for (const bound of boundCmds) {
                 const cmdDef = commandRegistry.getCommand(bound.commandRef);
@@ -189,7 +176,6 @@ function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle:
     });
 
     const createSection = (title: string, tags: string[], color: string) => {
-        // If there are no items in this category, don't render it at all
         if (tags.length === 0) return null;
 
         const section = document.createElement("div");
@@ -238,7 +224,6 @@ function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle:
     if (cmdSec) panel.appendChild(cmdSec);
     if (dataSec) panel.appendChild(dataSec);
 
-    // If no supertags match at all, show empty indicator
     if (!cmdSec && !dataSec) {
         const empty = document.createElement("div");
         empty.style.cssText = "font-size: 11px; opacity: 0.5; text-align: center; padding: 20px 0; font-style: italic; color: var(--b3-theme-on-surface-light);";
@@ -260,10 +245,6 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
         document.body.appendChild(blockSupertagsPanel);
     }
 
-    // Refresh registry to keep it fresh
-    supertagMonitor.refreshRegistry().catch(() => {});
-
-    // Position panel to the left of Siyuan's native hint popover
     const rect = hintEl.getBoundingClientRect();
     const panelWidth = 240;
     let left = rect.left - panelWidth - 6;
@@ -287,7 +268,6 @@ function hideBlockSupertagsPanel() {
 export function bindProtyleHintExtend(protyle: any) {
     if (!protyle || !protyle.options) return;
 
-    // Set up MutationObserver to sync our panel visibility with Siyuan's native hint popover
     if (protyle.hint && protyle.hint.element && !protyle.hint.isObserverAttached) {
         protyle.hint.isObserverAttached = true;
         const observer = new MutationObserver(() => {
@@ -295,7 +275,6 @@ export function bindProtyleHintExtend(protyle: any) {
             if (isHidden) {
                 hideBlockSupertagsPanel();
             } else {
-                // Wait briefly for editor layout selection stability
                 setTimeout(() => {
                     const query = getQueryText(protyle);
                     showBlockSupertagsPanel(protyle, query);
@@ -305,7 +284,6 @@ export function bindProtyleHintExtend(protyle: any) {
         observer.observe(protyle.hint.element, { attributes: true, attributeFilter: ["class"] });
     }
 
-    // Capture editor input changes to update search filtering in real time
     if (protyle.wysiwyg && protyle.wysiwyg.element && !protyle.wysiwyg.isInputAttached) {
         protyle.wysiwyg.isInputAttached = true;
         protyle.wysiwyg.element.addEventListener("input", () => {
@@ -321,7 +299,6 @@ export function bindProtyleHintExtend(protyle: any) {
     protyle.options.hint = protyle.options.hint || {};
     protyle.options.hint.extend = protyle.options.hint.extend || [];
 
-    // Avoid duplicate registration (using "#" as extend key)
     const hasRegistered = protyle.options.hint.extend.some((ext: any) => ext.isIndexOS && ext.key === SUPERTAG_TRIGGER);
     if (hasRegistered) return;
 
@@ -331,8 +308,6 @@ export function bindProtyleHintExtend(protyle: any) {
         hint(value: string, protyleInstance: any, source: string) {
             refreshNativeTagsCache().catch(() => {});
             
-            // Return only Siyuan's native tags inside Siyuan's native list,
-            // keeping our supertags fully separated in our own right-hand panel.
             const query = value.trim().toLowerCase();
             const matchedNative = cachedNativeTags.filter(t => t.toLowerCase().includes(query));
 

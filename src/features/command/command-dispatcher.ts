@@ -20,7 +20,7 @@ import type { CommandDef, ParamSchema } from "./registry/command-registry";
 import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } from "./utils/context-extractor";
 export { getBlockId };
 import { renderTemplate, formatDate, formatTime } from "./utils/template-engine";
-import { persistOutputVariablesToLayer4 } from "./supertag/supertag";
+import { persistOutputVariablesToLayer4 } from "./supertag";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types

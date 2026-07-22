@@ -1,8 +1,8 @@
-import { post } from "../../../shared/api-client/request";
+import { post } from "../../../../shared/api-client/request";
 import { showMessage } from "siyuan";
-import { supertagMonitor } from "./supertag";
-import { globalSupertagsCache } from "../registration";
-import { parseSupertags, serializeSupertags } from "../utils/supertag-helper";
+import { supertagMonitor } from "../core/supertag-listener";
+import { globalSupertagsCache } from "../../registration";
+import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
 
 export class SupertagRenderer {
     private static renderedMap = new Map<string, string[]>();
@@ -60,9 +60,15 @@ export class SupertagRenderer {
             const titleEl = editorEl.querySelector(".protyle-title");
             if (!titleEl) return;
 
+            // Ensure docId matches actual page document node ID
+            const pageDocId = titleEl.getAttribute("data-node-id");
+            if (pageDocId && docId !== pageDocId) {
+                return;
+            }
+
             // Query page attributes
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });
-            const attrs = attrsRes || {};
+            const attrs = attrsRes?.data || attrsRes || {};
             const rawTags = attrs["custom-supertags"];
             const taskStatus = attrs["custom-index-task"];
             const isTask = Boolean(taskStatus);
