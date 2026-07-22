@@ -45,7 +45,7 @@ export async function getBlockAttrs(blockId: string): Promise<Record<string, str
     }
     try {
         const res = await post("/api/attr/getBlockAttrs", { id: blockId });
-        return res.data ?? {};
+        return (res?.data || res || {}) as Record<string, string>;
     } catch (err) {
         console.error("[ContextExtractor] Error getting block attributes:", err);
         return {};
@@ -150,6 +150,15 @@ export async function resolveLayer4Params(blockId: string, supertag?: string): P
         }
 
         if (matchedDbs.length === 0) {
+            // 没有对应的数据库时，回退读取块自身的 custom-* 属性作为参数变量
+            const attrs = await getBlockAttrs(blockId);
+            for (const [k, v] of Object.entries(attrs)) {
+                if (k.startsWith("custom-")) {
+                    const cleanKey = k.replace(/^custom-/, "");
+                    params[k] = String(v);
+                    params[cleanKey] = String(v);
+                }
+            }
             return params;
         }
 

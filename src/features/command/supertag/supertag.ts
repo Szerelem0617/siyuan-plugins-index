@@ -740,24 +740,29 @@ export class SupertagMonitor {
                     }
                 }
             } else if (tagEnabled && requiresPersistence) {
-                // 如果开启且需要持久化（纯数据tag 或 含有出参落盘/跨命令变量映射的命令tag，如 permanent），自动建立数据库
-                // 对于在一个管道中即时流转、无需持久化的命令 tag，默认不新建数据库
-                console.log(`[Supertag] No existing AV found for enabled tag #${cleanTag} (requiresPersistence=${requiresPersistence}). Instantiating new AV database under IndexOS / data-dbs...`);
-                try {
-                    const { getOrStoreDataDbDoc } = await import("../data-db-management");
-                    const newDb = await getOrStoreDataDbDoc(cleanTag);
-                    if (newDb.avId) {
-                        targetConfig = {
-                            typeName: cleanTag,
-                            avId: newDb.avId,
-                            blockId: newDb.docId,
-                            avName: cleanTag
-                        };
-                        // 重新刷一遍 global type configs
-                        this.dataRegistry = await getGlobalTypeConfigs();
+                // 先检查用户是否发起了“实例化”（即 index-data-dbs 页面是否存在）
+                const { isDataDbsInstantiated, getOrStoreDataDbDoc } = await import("../data-db-management");
+                const isInstantiated = await isDataDbsInstantiated();
+
+                if (isInstantiated) {
+                    console.log(`[Supertag] No existing AV found for enabled tag #${cleanTag} (requiresPersistence=${requiresPersistence}). Instantiating new AV database under IndexOS / data-dbs...`);
+                    try {
+                        const newDb = await getOrStoreDataDbDoc(cleanTag);
+                        if (newDb.avId) {
+                            targetConfig = {
+                                typeName: cleanTag,
+                                avId: newDb.avId,
+                                blockId: newDb.docId,
+                                avName: cleanTag
+                            };
+                            // 重新刷一遍 global type configs
+                            this.dataRegistry = await getGlobalTypeConfigs();
+                        }
+                    } catch (instErr) {
+                        console.error(`[Supertag] Failed to auto-create AV database under data-dbs for #${cleanTag}:`, instErr);
                     }
-                } catch (instErr) {
-                    console.error(`[Supertag] Failed to auto-create AV database under data-dbs for #${cleanTag}:`, instErr);
+                } else {
+                    console.log(`[Supertag] index-data-dbs page does not exist (user has not instantiated system databases). Skipping AV database creation for #${cleanTag}. Attributes will be stored directly on block custom attributes.`);
                 }
             }
 
@@ -798,40 +803,73 @@ export class SupertagMonitor {
         cleanTag: string, 
         eventName: "tag_created" | "tag_removed" | "block_content_changed" | "block_attribute_changed" | "task_completed"
     ) {
-        const typeAvId = getTypeAvId();
-        if (!typeAvId) return;
-
         try {
-            const tableName = `av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-            const { db } = await getSqliteEngine();
-            
-            // Find primary key column name (usually block type)
-            const schemaCols = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [typeAvId]);
-            let supertagColName = "supertag";
-            if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
-                supertagColName = String(schemaCols[0].values[0][0]);
+            let conditionalVal = "";
+            const typeAvId = getTypeAvId();
+
+        if (typeAvId) {
+            try {
+                const tableName = `av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+                const { db } = await getSqliteEngine();
+                
+                // Find primary key column name (usually block type)
+                const schemaCols = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [typeAvId]);
+                let supertagColName = "supertag";
+                if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
+                    supertagColName = String(schemaCols[0].values[0][0]);
+                }
+
+                // Find Conditional trigger column name
+                const schemaConditional = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Conditional' OR key_name = '触发器' OR key_name = 'On Create' OR key_name = '创建时')`, [typeAvId]);
+                let conditionalColName = "Conditional";
+                if (schemaConditional.length > 0 && schemaConditional[0].values.length > 0) {
+                    conditionalColName = String(schemaConditional[0].values[0][0]);
+                }
+
+                const typeDbRes = db.exec(`SELECT "${conditionalColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag}' OR LOWER("${supertagColName}") = '${cleanTag}'`);
+
+                if (typeDbRes && typeDbRes.length > 0 && typeDbRes[0].values.length > 0) {
+                    conditionalVal = String(typeDbRes[0].values[0][0] || "").trim();
+                }
+            } catch (dbErr) {
+                console.warn("[Supertag-Trigger] Failed to query SQLite for conditional script:", dbErr);
             }
+        }
 
-            // Find Conditional trigger column name
-            const schemaConditional = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Conditional' OR key_name = '触发器' OR key_name = 'On Create' OR key_name = '创建时')`, [typeAvId]);
-            let conditionalColName = "Conditional";
-            if (schemaConditional.length > 0 && schemaConditional[0].values.length > 0) {
-                conditionalColName = String(schemaConditional[0].values[0][0]);
-            }
-
-            const typeDbRes = db.exec(`SELECT "${conditionalColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag}' OR LOWER("${supertagColName}") = '${cleanTag}'`);
-
-            if (typeDbRes && typeDbRes.length > 0 && typeDbRes[0].values.length > 0) {
-                const conditionalVal = String(typeDbRes[0].values[0][0] || "").trim();
-                if (conditionalVal) {
-                    const doc = document;
-                    const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
-                    if (blockEl && !blockEl.getAttribute("data-node-id")) {
-                        blockEl.setAttribute("data-node-id", blockId);
+        // 兜底 1：直接从系统 SQLite 引擎表 sys_type_db 查询该 Supertag 的 Conditional 脚本定义
+        if (!conditionalVal) {
+            try {
+                const { db } = await getSqliteEngine();
+                const sysRes = db.exec(`SELECT Conditional FROM sys_type_db WHERE LOWER(supertag) = '#${cleanTag}' OR LOWER(supertag) = '${cleanTag}'`);
+                if (sysRes && sysRes.length > 0 && sysRes[0].values.length > 0) {
+                    conditionalVal = String(sysRes[0].values[0][0] || "").trim();
+                    if (conditionalVal) {
+                        console.log(`[Supertag-Trigger] Found conditional script in sys_type_db for #${cleanTag}`);
                     }
+                }
+            } catch (sysErr) {
+                console.warn("[Supertag-Trigger] Failed to query sys_type_db:", sysErr);
+            }
+        }
 
-                    const protyle = (window as any).siyuan?.ws?.protyle || null;
-                    const pipelineVars: Record<string, any> = {};
+        // 兜底 2：使用 SUPERTAG_REGISTRY 内置定义的 conditionalScript！
+        if (!conditionalVal) {
+            const regMatch = SUPERTAG_REGISTRY.find(item => item.typeTag.replace(/#/g, "").trim().toLowerCase() === cleanTag);
+            if (regMatch && (regMatch as any).conditionalScript) {
+                conditionalVal = (regMatch as any).conditionalScript.trim();
+                console.log(`[Supertag-Trigger] Using built-in SUPERTAG_REGISTRY conditional script for #${cleanTag}`);
+            }
+        }
+
+        if (conditionalVal) {
+            const doc = document;
+            const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
+            if (blockEl && !blockEl.getAttribute("data-node-id")) {
+                blockEl.setAttribute("data-node-id", blockId);
+            }
+
+            const protyle = (window as any).siyuan?.ws?.protyle || null;
+            const pipelineVars: Record<string, any> = {};
 
                     // 1. 自动预加载目标块的持久化属性到 pipelineVars 中 (统一 vars 属性池)
                     try {
@@ -911,7 +949,6 @@ export class SupertagMonitor {
                         }
                     }
                 }
-            }
         } catch (e) {
             console.error(`[Supertag-Trigger] Error triggering ${eventName} commands:`, e);
         }
@@ -1044,8 +1081,41 @@ export async function persistOutputVariablesToLayer4(
         const configs = await getGlobalTypeConfigs();
         const tagMatch = configs.find(c => c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag.toLowerCase());
         
+        // 仅收集在 _outputMapping 中被用户显式命名/映射的出参变量！
+        const mappingAliases = (outputVars._outputMapping || {}) as Record<string, string>;
+        const targetOutputEntries: [string, string][] = [];
+
+        for (const [outKey, alias] of Object.entries(mappingAliases)) {
+            if (!alias) continue;
+            // 尝试按出参别名 alias 或原始出参键名 outKey 查找解出的真实变量值
+            const val = outputVars[alias] ?? outputVars[outKey] ?? outputVars.id ?? outputVars.createdblock ?? outputVars.last_id;
+            if (val !== undefined && val !== null && String(val).trim() !== "") {
+                targetOutputEntries.push([alias, String(val).trim()]);
+            }
+        }
+
+        // 兜底：若未显式指定 _outputMapping 但存在 createdblock 出参，也记录为 createdblock
+        if (targetOutputEntries.length === 0 && outputVars.createdblock) {
+            targetOutputEntries.push(["createdblock", String(outputVars.createdblock).trim()]);
+        }
+
+        if (targetOutputEntries.length === 0) return;
+
+        // 若未选择实例化（未创建数据库）或未找到对应的 Layer 4 AV 数据库，直接落盘写回块的 custom-* 属性中！
         if (!tagMatch) {
-            console.log(`[Supertag-Output] Layer 4 AV for supertag #${cleanTag} not found. Skipping output persistence.`);
+            console.log(`[Supertag-Output] Layer 4 AV for supertag #${cleanTag} not found. Persisting ${targetOutputEntries.length} output variables to block custom attributes instead.`);
+            const customAttrs: Record<string, string> = {};
+            for (const [alias, valStr] of targetOutputEntries) {
+                const attrName = alias.startsWith("custom-") ? alias : `custom-${alias}`;
+                customAttrs[attrName] = valStr;
+            }
+            if (Object.keys(customAttrs).length > 0) {
+                await post("/api/attr/setBlockAttrs", {
+                    id: blockId,
+                    attrs: customAttrs
+                });
+                console.log(`[Supertag-Output] Successfully set custom attributes on block ${blockId}:`, customAttrs);
+            }
             return;
         }
 
@@ -1069,26 +1139,6 @@ export async function persistOutputVariablesToLayer4(
         const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
         const existingKeys: any[] = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
         let lastKeyId = existingKeys.length > 0 ? existingKeys[existingKeys.length - 1].id : "";
-
-        // 仅收集在 _outputMapping 中被用户显式命名/映射的出参变量！
-        const mappingAliases = (outputVars._outputMapping || {}) as Record<string, string>;
-        const targetOutputEntries: [string, string][] = [];
-
-        for (const [outKey, alias] of Object.entries(mappingAliases)) {
-            if (!alias) continue;
-            // 尝试按出参别名 alias 或原始出参键名 outKey 查找解出的真实变量值
-            const val = outputVars[alias] ?? outputVars[outKey] ?? outputVars.id ?? outputVars.createdblock ?? outputVars.last_id;
-            if (val !== undefined && val !== null && String(val).trim() !== "") {
-                targetOutputEntries.push([alias, String(val).trim()]);
-            }
-        }
-
-        // 兜底：若未显式指定 _outputMapping 但存在 createdblock 出参，也记录为 createdblock
-        if (targetOutputEntries.length === 0 && outputVars.createdblock) {
-            targetOutputEntries.push(["createdblock", String(outputVars.createdblock).trim()]);
-        }
-
-        if (targetOutputEntries.length === 0) return;
 
         console.log(`[Supertag-Output] 📤 Persisting ${targetOutputEntries.length} explicit output variables to Layer 4 AV #${cleanTag} (${avId}):`, targetOutputEntries);
 

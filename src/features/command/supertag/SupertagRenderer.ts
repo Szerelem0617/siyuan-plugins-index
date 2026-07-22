@@ -135,11 +135,18 @@ export class SupertagRenderer {
             return;
         }
 
+        const renderedKey = `${tags.join(",")}|${taskStatus || ""}`;
+        if (container && container.getAttribute("data-rendered-key") === renderedKey) {
+            return;
+        }
+
         if (container) {
             container.innerHTML = "";
+            container.setAttribute("data-rendered-key", renderedKey);
         } else {
             container = document.createElement("div");
             container.className = "index-block-meta-container";
+            container.setAttribute("data-rendered-key", renderedKey);
             container.style.cssText = "display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle;";
             
             if (attrEl.firstChild) {
@@ -199,10 +206,12 @@ export class SupertagRenderer {
         `;
         
         pill.innerText = isCompleted ? "☑ 已完成" : "☐ 待办";
-        
-        pill.addEventListener("click", async (e) => {
+
+        const toggleTask = async (e: Event) => {
+            e.preventDefault();
             e.stopPropagation();
             const newStatus = isCompleted ? "pending" : "completed";
+            console.log(`[Supertag-Pill-Debug] Clicked task checkbox pill on block "${blockId}". Toggling status: ${status} -> ${newStatus}`);
             
             try {
                 // Update Siyuan block attributes (Pure single attribute custom-index-task)
@@ -232,7 +241,10 @@ export class SupertagRenderer {
             } catch (err) {
                 console.error("[SupertagRenderer] Failed to toggle virtual task status:", err);
             }
-        });
+        };
+
+        pill.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
+        pill.addEventListener("click", toggleTask);
         
         return pill;
     }
@@ -307,10 +319,16 @@ export class SupertagRenderer {
         closeBtn.addEventListener("mouseout", () => {
             closeBtn.style.color = "var(--b3-theme-on-surface-light)";
         });
-        closeBtn.addEventListener("click", (e) => {
+        
+        const handleRemove = async (e: Event) => {
+            e.preventDefault();
             e.stopPropagation();
-            onRemove();
-        });
+            console.log(`[Supertag-Pill-Debug] Clicked remove pill for tag #${tagName}`);
+            await onRemove();
+        };
+
+        closeBtn.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
+        closeBtn.addEventListener("click", handleRemove);
 
         pill.appendChild(closeBtn);
         return pill;
@@ -325,8 +343,8 @@ export class SupertagRenderer {
 
             // Get current attributes
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
-            const attrs = attrsRes || {};
-            const rawTags = attrs["custom-supertags"];
+            const attrs = attrsRes?.data || attrsRes || {};
+            const rawTags = attrs["custom-supertags"] || attrsRes?.["custom-supertags"];
 
             const tags = parseSupertags(rawTags);
 

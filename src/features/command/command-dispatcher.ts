@@ -418,7 +418,7 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
         }
     }
 
-    if (context.supertag && blockId) {
+    if (blockId) {
         const layer4Params = await resolveLayer4Params(blockId, context.supertag);
         if (Object.keys(layer4Params).length > 0) {
             isClassMethodMode = true;

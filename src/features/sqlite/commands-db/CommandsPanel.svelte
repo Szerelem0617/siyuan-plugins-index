@@ -168,7 +168,8 @@
     function copyButtonLink(cmdId: string, paramStr: string, label: string) {
         if (!cmdId) return;
         try {
-            const href = encodeBtnHref({ command: cmdId, param: paramStr || undefined, label });
+            // 复制为普通命令链接（尊重系统/Supertag动态配置，不强行冻结/脱钩参数）
+            const href = encodeBtnHref({ command: cmdId });
 
             navigator.clipboard.writeText(href).then(() => {
                 showMessage(`📋 已复制命令按钮链接: ${label || cmdId}`);

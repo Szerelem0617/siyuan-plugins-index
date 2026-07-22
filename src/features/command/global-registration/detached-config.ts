@@ -32,6 +32,12 @@ export function configureDetachedCommand(linkEl: HTMLElement) {
         } catch (_) {
             currentParams = {};
         }
+    } else if (cmdDef.seed?.paramMapping) {
+        try {
+            currentParams = JSON.parse(cmdDef.seed.paramMapping);
+        } catch (_) {
+            currentParams = {};
+        }
     }
 
     const dialog = new Dialog({
