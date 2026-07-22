@@ -38,6 +38,11 @@ export const TYPE_DB_CONFIG: DbPageConfig = {
     ]
 };
 
+export const DATA_DBS_CONFIG = {
+    title: "data-dbs",
+    attrName: "custom-index-data-dbs"
+};
+
 export interface DefaultRelationRule {
     typeLabel: string;
     commandLabels: string[];
@@ -54,10 +59,10 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     },
     {
         typeLabel: "pipeline",
-        commandLabels: ["⚡ API 插入块测试", "API 插入块测试", "📝 API 更新块内容", "API 更新块内容"]
+        commandLabels: ["⚡ API 插入块测试", "API 插入块测试", "📝 安全更新块内容", "安全更新块内容"]
     },
     {
         typeLabel: "permanent",
-        commandLabels: ["⚡ API 插入块测试", "API 插入块测试", "📝 API 更新块内容", "API 更新块内容"]
+        commandLabels: ["⚡ API 插入块测试", "API 插入块测试", "📝 安全更新块内容", "安全更新块内容"]
     }
 ];

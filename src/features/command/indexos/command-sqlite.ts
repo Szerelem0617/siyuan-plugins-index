@@ -195,14 +195,14 @@ export async function initSystemTables() {
         } catch (_) { /* ignore */ }
     }
 
-    const defaultPipelineConditional = `// [打上标签时] -> ⚡ API 插入块测试, 📝 API 更新块内容
+    const defaultPipelineConditional = `// [打上标签时] -> ⚡ API 插入块测试, 📝 安全更新块内容
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
         const step1 = await dispatch("api.block.insert", { dataType: "markdown", data: "[Pipeline Step 1] Time: {{time}}", previousID: "{{block_id}}" });
         const createdId = step1?.id || state.vars?.createdblock;
         if (createdId) {
-            await dispatch("api.block.update", { id: createdId, dataType: "markdown", data: "[Pipeline Step 2] Updated newly created block at {{time}}" });
+            await dispatch("plugin-index.command.safeUpdateBlock", { id: createdId, dataType: "markdown", data: "[Pipeline Step 2] Updated newly created block at {{time}}" });
         }
     }
 }`;
@@ -238,7 +238,7 @@ async ({ dispatch, state, eventName }) => {
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
             ["20260721140000-pipeline", "pipeline", "", defaultPipelineConditional]);
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
-            ["20260721140000-permanent", "permanent", "📝 API 更新块内容", defaultPermanentConditional]);
+            ["20260721140000-permanent", "permanent", "📝 安全更新块内容", defaultPermanentConditional]);
     } else {
         try {
             db.run(`UPDATE ${TABLE_TYPES} SET supertag = 'task', Conditional = ?, Icon_Menu = '' WHERE supertag IN ('person', '#Person', '#task', 'task')`, [defaultTaskConditional]);
@@ -255,9 +255,9 @@ async ({ dispatch, state, eventName }) => {
             const checkPerm = db.exec(`SELECT count(*) FROM ${TABLE_TYPES} WHERE supertag = 'permanent'`);
             if (Number(checkPerm?.[0]?.values?.[0]?.[0] || 0) === 0) {
                 db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
-                    ["20260721140000-permanent", "permanent", "📝 API 更新块内容", defaultPermanentConditional]);
+                    ["20260721140000-permanent", "permanent", "📝 安全更新块内容", defaultPermanentConditional]);
             } else {
-                db.run(`UPDATE ${TABLE_TYPES} SET Conditional = ?, Icon_Menu = '📝 API 更新块内容' WHERE supertag = 'permanent'`, [defaultPermanentConditional]);
+                db.run(`UPDATE ${TABLE_TYPES} SET Conditional = ?, Icon_Menu = '📝 安全更新块内容' WHERE supertag = 'permanent'`, [defaultPermanentConditional]);
             }
         } catch (_) { /* ignore */ }
     }

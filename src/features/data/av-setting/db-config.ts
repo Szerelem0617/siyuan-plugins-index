@@ -5,6 +5,7 @@ import { getColIDMap, buildAvHierarchy, resolveInheritance, isValueEmpty } from 
 import { post } from "../../../shared/api-client/request";
 import { formatDate, getAttrFromIAL, i18n } from "../../../shared/utils";
 import { SUPERTAG_REGISTRY } from "../../command/registration";
+import { fetchAllAVBlocks } from "../../sqlite/sqlite-data-fetcher";
 
 export const ATTR_DB_CONFIG = "custom-index-db-config";
 
@@ -195,13 +196,18 @@ export async function setColumnWeakInheritance(avId: string, colId: string, avBl
  */
 export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
     try {
-        const stmt = `SELECT id, name, content, ial FROM blocks WHERE ial LIKE '%${ATTR_DB_CONFIG}="%'`;
-        const res = await client.sql({ stmt });
         const configs: TypeConfig[] = [];
-        const avNameCache = new Map<string, string>();
+        const processedAvIds = new Set<string>();
 
-        if (res.data) {
-            for (const row of res.data) {
+        // System AV names/types to exclude from supertag data management
+        const SYSTEM_EXCLUDED = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag"]);
+
+        // 1. Fetch explicitly configured AV blocks (IAL contains custom-index-db-config)
+        const stmtConfig = `SELECT id, name, content, ial FROM blocks WHERE ial LIKE '%${ATTR_DB_CONFIG}="%'`;
+        const resConfig = await client.sql({ stmt: stmtConfig });
+
+        if (resConfig.data) {
+            for (const row of resConfig.data) {
                 const configStr = getAttrFromIAL(row.ial, ATTR_DB_CONFIG);
                 const blockAttr = getAttrFromIAL(row.ial, "name") || getAttrFromIAL(row.ial, "custom-av-name") || "";
                 let dbName = row.name || blockAttr || "";
@@ -211,36 +217,27 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                         const config: DbConfig = JSON.parse(configStr);
                         const targetAvId = config.avId || row.id;
 
-                        // Helper to resolve the DB name dynamically
-                        const resolveDBName = async () => {
-                            let finalAvName = dbName.trim();
-                            if (!finalAvName) {
-                                if (avNameCache.has(targetAvId)) {
-                                    finalAvName = avNameCache.get(targetAvId) || "";
-                                } else {
-                                    try {
-                                        const renderRes = await post("/api/av/renderAttributeView", { id: targetAvId });
-                                        finalAvName = (renderRes?.name || renderRes?.view?.name || "").trim();
-                                        avNameCache.set(targetAvId, finalAvName);
-                                    } catch (e) {
-                                        avNameCache.set(targetAvId, "");
-                                    }
-                                }
-                            }
-                            return finalAvName;
-                        };
+                        let finalAvName = dbName.trim();
+                        if (!finalAvName) {
+                            try {
+                                const renderRes = await post("/api/av/renderAttributeView", { id: targetAvId });
+                                finalAvName = (renderRes?.name || renderRes?.view?.name || "").trim();
+                            } catch (e) { }
+                        }
 
-                        const finalAvName = await resolveDBName();
-                        if (finalAvName) {
-                            // 1. Add base table-name supertag
+                        const cleanAvName = finalAvName.toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+
+                        if (finalAvName && !SYSTEM_EXCLUDED.has(cleanAvName)) {
+                            processedAvIds.add(targetAvId);
+                            processedAvIds.add(row.id);
+
                             configs.push({
-                                typeName: finalAvName.toLowerCase(),
+                                typeName: cleanAvName,
                                 avId: targetAvId,
                                 blockId: row.id,
                                 avName: finalAvName
                             });
 
-                            // 2. Add sub-type supertags (TableName.CustomName) if configured
                             if (config.typeFieldId && config.typeMappings) {
                                 for (const m of config.typeMappings) {
                                     const subTagName = (m.name || "").trim();
@@ -259,47 +256,47 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                             }
                         }
                     } catch (e) {
-                        console.error("Failed to parse DB config for block:", row.id, e);
+                        console.error("[DbConfig] Failed to parse db config:", e);
                     }
                 }
             }
         }
 
-        // Fallback: Scan all databases ('av' blocks) and match their names against SUPERTAG_REGISTRY tags
+        // 2. Full Workspace Scan: Use fetchAllAVBlocks methodology to resolve real avId and realName
         try {
-            const allAvBlocks = await client.sql({ stmt: "SELECT id, name, content, ial FROM blocks WHERE type = 'av'" });
-            if (allAvBlocks && allAvBlocks.data) {
-                for (const avRow of allAvBlocks.data) {
-                    const avId = avRow.id;
-                    const hasExisting = configs.some(c => c.avId === avId);
-                    if (hasExisting) continue;
+            const rawAvBlocks = await fetchAllAVBlocks();
+            for (const b of rawAvBlocks) {
+                const targetAvId = b.avId;
+                if (!targetAvId || targetAvId === "Not Found" || processedAvIds.has(targetAvId)) continue;
 
-                    const blockName = avRow.name || getAttrFromIAL(avRow.ial, "name") || getAttrFromIAL(avRow.ial, "custom-av-name") || "";
-                    if (!blockName) continue;
+                let dbName = b.name;
+                if (!dbName || dbName === "Unnamed Database" || dbName === "Unnamed") {
+                    try {
+                        const renderRes = await post("/api/av/renderAttributeView", { id: targetAvId });
+                        dbName = (renderRes?.name || renderRes?.view?.name || "").trim();
+                    } catch (e) { }
+                }
 
-                    const cleanDbName = blockName.trim().toLowerCase();
+                if (!dbName || dbName === "Unnamed Database" || dbName === "Unnamed") continue;
 
-                    const uniqueTags = new Set(SUPERTAG_REGISTRY.map(item => item.typeTag.trim().toLowerCase()));
-                    for (const tag of uniqueTags) {
-                        if (tag === cleanDbName || cleanDbName.includes(tag) || tag.includes(cleanDbName)) {
-                            console.log(`[Supertag-Fallback] Found unregistered AV "${blockName}" (${avId}) matching tag "${tag}". Auto-registering config mapping.`);
-                            configs.push({
-                                typeName: tag,
-                                avId: avId,
-                                blockId: avRow.id,
-                                avName: blockName
-                            });
-                        }
-                    }
+                const cleanDbName = dbName.toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+                if (cleanDbName && !SYSTEM_EXCLUDED.has(cleanDbName)) {
+                    processedAvIds.add(targetAvId);
+                    configs.push({
+                        typeName: cleanDbName,
+                        avId: targetAvId,
+                        blockId: b.blockId,
+                        avName: dbName
+                    });
                 }
             }
-        } catch (fallbackErr) {
-            console.error("[Supertag-Fallback] Failed to run database scan fallback:", fallbackErr);
+        } catch (scanErr) {
+            console.error("[DbConfig] Failed to scan all workspace AV blocks via fetchAllAVBlocks:", scanErr);
         }
 
         return configs;
     } catch (e) {
-        console.error("Failed to get global type configs", e);
+        console.error("[DbConfig] Failed to get global type configs:", e);
         return [];
     }
 }

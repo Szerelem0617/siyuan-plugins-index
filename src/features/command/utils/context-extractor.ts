@@ -58,18 +58,15 @@ export async function getBlockAttrs(blockId: string): Promise<Record<string, str
 export async function resolveLayer4Params(blockId: string, supertag?: string): Promise<Record<string, string>> {
     const params: Record<string, string> = {};
     if (!blockId) {
-        console.warn(`[Layer4Params-Debug] Aborted: blockId is empty!`);
         return params;
     }
 
     const cleanTag = supertag ? supertag.replace(/^#/, "").trim().toLowerCase() : "";
-    console.log(`[Layer4Params-Debug] Starting Layer 4 resolution. blockId: "${blockId}", supertag: "${supertag}", cleanTag: "${cleanTag}"`);
 
     const querySQLite = async (): Promise<Array<{ tableName: string; avId: string; name: string; rowData: Record<string, string> }>> => {
         const tablesRes = await runQuery(`
             SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'av_%'
         `);
-        console.log(`[Layer4Params-Debug] SQLite Master av_ tables:`, JSON.stringify(tablesRes?.values || []));
         if (!tablesRes || !tablesRes.values || tablesRes.values.length === 0) {
             return [];
         }
@@ -83,7 +80,6 @@ export async function resolveLayer4Params(blockId: string, supertag?: string): P
             try {
                 const existsRes = await runQuery(`SELECT count(*) FROM "${tableName}" WHERE rowID = ?`, [blockId]);
                 const existsCount = existsRes?.values?.[0]?.[0] || 0;
-                console.log(`[Layer4Params-Debug] Table "${tableName}" exists check for block "${blockId}": existsCount=${existsCount}`);
                 if (Number(existsCount) > 0) {
                     const avId = tableNameToAvId(tableName);
                     
@@ -101,12 +97,11 @@ export async function resolveLayer4Params(blockId: string, supertag?: string): P
                         cols.forEach((colName, idx) => {
                             rowData[colName] = vals[idx] !== null && vals[idx] !== undefined ? String(vals[idx]) : "";
                         });
-                        console.log(`[Layer4Params-Debug] Match found in table "${tableName}" (${dbRealName}). RowData:`, JSON.stringify(rowData));
                         matches.push({ tableName, avId, name: dbRealName, rowData });
                     }
                 }
             } catch (err) {
-                console.error(`[Layer4Params-Debug] Error querying table "${tableName}":`, err);
+                console.error(`[Layer4Params] Error querying table "${tableName}":`, err);
             }
         }
         return matches;
@@ -118,35 +113,29 @@ export async function resolveLayer4Params(blockId: string, supertag?: string): P
 
         // 2. If not found in SQLite, trigger passive sync fallback
         if (matchedDbs.length === 0) {
-            console.log(`[Layer4Params-Debug] Block "${blockId}" not found in SQLite cache. Pulling attributes from Siyuan...`);
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
             const avsAttr = attrsRes.data?.["custom-avs"] || "";
-            console.log(`[Layer4Params-Debug] Siyuan block custom-avs attribute value: "${avsAttr}"`);
             const avIds = avsAttr.split(",").map((id: string) => id.trim()).filter(Boolean);
             
             let syncedAny = false;
             for (const avId of avIds) {
                 try {
-                    console.log(`[Layer4Params-Debug] Instantiating block's containing AV: "${avId}"`);
                     await instantiateAV(avId, true); // force sync
                     syncedAny = true;
                 } catch (syncErr) {
-                    console.error(`[Layer4Params-Debug] Passive sync failed for ${avId}:`, syncErr);
+                    console.error(`[Layer4Params] Passive sync failed for ${avId}:`, syncErr);
                 }
             }
 
             if (avIds.length === 0 && cleanTag) {
-                console.log(`[Layer4Params-Debug] No containing AVs found. Fallback matching global database configurations for cleanTag: "${cleanTag}"`);
                 const configs = await getGlobalTypeConfigs();
                 const matchedConfigs = configs.filter(c => {
                     const typeName = (c.typeName || "").trim().toLowerCase();
                     return typeName === cleanTag || typeName.includes(cleanTag) || cleanTag.includes(typeName);
                 });
-                console.log(`[Layer4Params-Debug] Global matched configurations:`, JSON.stringify(matchedConfigs));
                 for (const config of matchedConfigs) {
                     if (config.avId) {
                         try {
-                            console.log(`[Layer4Params-Debug] Syncing matched database: "${config.avId}"`);
                             await instantiateAV(config.avId, true); // force sync
                             syncedAny = true;
                         } catch (syncErr) { /* ignore */ }
@@ -161,7 +150,6 @@ export async function resolveLayer4Params(blockId: string, supertag?: string): P
         }
 
         if (matchedDbs.length === 0) {
-            console.warn(`[Layer4Params-Debug] No databases containing block "${blockId}" found after sync.`);
             return params;
         }
 
@@ -174,9 +162,6 @@ export async function resolveLayer4Params(blockId: string, supertag?: string): P
             });
             if (sameNameDb) {
                 targetDb = sameNameDb;
-                console.log(`[Layer4Params-Debug] Priority match selected table: "${targetDb.tableName}" (${targetDb.name})`);
-            } else {
-                console.log(`[Layer4Params-Debug] No exact name match for tag "${cleanTag}". Selecting first available table: "${targetDb.tableName}" (${targetDb.name})`);
             }
         }
 
@@ -195,9 +180,8 @@ export async function resolveLayer4Params(blockId: string, supertag?: string): P
                 if (keyName) params[keyName] = cellValue;
             }
         }
-        console.log(`[Layer4Params-Debug] Successfully resolved database parameters:`, JSON.stringify(params));
     } catch (e) {
-        console.error("[Layer4Params-Debug] Error resolving Layer 4 params:", e);
+        console.error("[Layer4Params] Error resolving Layer 4 params:", e);
     }
 
     return params;

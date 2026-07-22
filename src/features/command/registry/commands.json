@@ -203,6 +203,17 @@
                     "description": "指定插入到某块之前"
                 }
             ],
+            "outputs": [
+                {
+                    "key": "id",
+                    "label": "生成的新块 ID",
+                    "type": "text",
+                    "required": true,
+                    "paramMode": "template",
+                    "default": "createdblock",
+                    "description": "后创块在思源内核中生成的 14 位真实 Block ID"
+                }
+            ],
             "constraints": {
                 "requiresFocus": false,
                 "environment": "kernel"
@@ -220,12 +231,11 @@
             }
         },
         {
-            "id": "api.block.update",
-            "name": "API：更新块内容",
-            "description": "通过后端 API 更新指定块的内容。完全不依赖 UI，支持定时任务。",
+            "id": "plugin-index.command.safeUpdateBlock",
+            "name": "📝 安全更新块内容",
+            "description": "无损更新目标块的 DOM/Markdown 内容，自动保留 Supertag 与数据库关联等全量自定义属性",
             "dispatch": {
-                "method": "api",
-                "endpoint": "/api/block/updateBlock"
+                "method": "custom"
             },
             "params": [
                 {
@@ -262,6 +272,17 @@
                     ]
                 }
             ],
+            "outputs": [
+                {
+                    "key": "id",
+                    "label": "更新目标块 ID",
+                    "type": "text",
+                    "required": true,
+                    "paramMode": "template",
+                    "default": "updatedblock",
+                    "description": "被更新的块 ID"
+                }
+            ],
             "constraints": {
                 "requiresFocus": false,
                 "environment": "kernel"
@@ -273,8 +294,8 @@
             },
             "seed": {
                 "rowID": "20260527120000-update",
-                "label": "📝 API 更新块内容",
-                "paramMapping": "{\"id\":\"{{block_id}}\",\"dataType\":\"markdown\",\"data\":\"[Auto Update] Updated at {{time}}\"}",
+                "label": "📝 安全更新块内容",
+                "paramMapping": "{\"id\":\"{{var.createdblock}}\",\"dataType\":\"markdown\",\"data\":\"[Auto Update] Updated at {{time}}\",\"_outputMapping\":{\"id\":\"updatedblock\"}}",
                 "uiEntries": ["inline", "palette"]
             }
         },

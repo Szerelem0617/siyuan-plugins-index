@@ -110,20 +110,16 @@ export function addCommandTestMenuItem({ detail }: any) {
 export function addDoctreeMenuItems({ detail }: any) {
     if (!DEV_ENABLE_INIT_SYS) return;
     const menu = detail.menu;
-    console.log("[Supertag-Debug] addDoctreeMenuItems triggered synchronously. detail:", detail);
     if (!menu || !detail.elements || detail.elements.length === 0) {
-        console.log("[Supertag-Debug] addDoctreeMenuItems missing menu or elements");
         return;
     }
 
     const el = detail.elements[0];
     const docId = el.getAttribute("data-node-id");
-    console.log("[Supertag-Debug] doctree el:", el, "docId:", docId);
     if (!docId) return;
 
     try {
         const tags = globalSupertagsCache.get(docId) || [];
-        console.log("[Supertag-Debug] doctree tags from cache:", tags);
         if (tags.length === 0) return;
 
         for (const tag of tags) {
@@ -131,7 +127,6 @@ export function addDoctreeMenuItems({ detail }: any) {
                 (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
                 && (item.uiLocation === "IconMenu" || item.uiLocation === "BlockIconMenu" || item.uiLocation === "PageMenu")
             );
-            console.log("[Supertag-Debug] doctree matched commands:", matches);
 
             if (matches.length > 0) {
                 for (const match of matches) {
@@ -139,14 +134,14 @@ export function addDoctreeMenuItems({ detail }: any) {
                         icon: "iconPlay",
                         label: `⚡ (#${tag}) ${match.methodName}`,
                         click: async () => {
-                            const activeProtyle = (window as any).activeProtyleInstance;
-                            const protyleEl = activeProtyle?.element || null;
-                            const blockEl = protyleEl?.querySelector(`[data-node-id="${docId}"]`) || null;
-
                             await refreshSupertagRegistry();
                             const freshMatch = SUPERTAG_REGISTRY.find(item =>
                                 item.commandRef === match.commandRef && item.typeTag === match.typeTag
                             ) || match;
+                            
+                            const activeProtyle = (window as any).activeProtyleInstance;
+                            const protyleEl = activeProtyle?.element || null;
+                            const blockEl = protyleEl?.querySelector(`[data-node-id="${docId}"]`) || null;
 
                             await dispatchCommand(freshMatch.commandRef, freshMatch.paramMapping, { 
                                 blockEl: blockEl || document.createElement("div"), 
@@ -170,19 +165,15 @@ export function addEditorTitleIconMenuItems({ detail }: any) {
     if (!DEV_ENABLE_INIT_SYS) return;
     const menu = detail.menu;
     const protyle = detail.protyle;
-    console.log("[Supertag-Debug] addEditorTitleIconMenuItems triggered synchronously. detail:", detail);
     if (!menu || !protyle) {
-        console.log("[Supertag-Debug] addEditorTitleIconMenuItems missing menu or protyle");
         return;
     }
 
     const docId = protyle.block?.rootID || protyle.blockId;
-    console.log("[Supertag-Debug] editor title docId:", docId);
     if (!docId) return;
 
     try {
         const tags = globalSupertagsCache.get(docId) || [];
-        console.log("[Supertag-Debug] editor title tags from cache:", tags);
         if (tags.length === 0) return;
 
         for (const tag of tags) {
@@ -190,7 +181,6 @@ export function addEditorTitleIconMenuItems({ detail }: any) {
                 (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
                 && (item.uiLocation === "IconMenu" || item.uiLocation === "BlockIconMenu" || item.uiLocation === "PageMenu")
             );
-            console.log("[Supertag-Debug] editor title matched commands:", matches);
 
             if (matches.length > 0) {
                 for (const match of matches) {
@@ -198,13 +188,13 @@ export function addEditorTitleIconMenuItems({ detail }: any) {
                         icon: "iconPlay",
                         label: `⚡ (#${tag}) ${match.methodName}`,
                         click: async () => {
-                            const protyleEl = protyle.element || null;
-                            const blockEl = protyleEl?.querySelector(`[data-node-id="${docId}"]`) || null;
-
                             await refreshSupertagRegistry();
                             const freshMatch = SUPERTAG_REGISTRY.find(item =>
                                 item.commandRef === match.commandRef && item.typeTag === match.typeTag
                             ) || match;
+                            
+                            const protyleEl = protyle.element || null;
+                            const blockEl = protyleEl?.querySelector(`[data-node-id="${docId}"]`) || null;
 
                             await dispatchCommand(freshMatch.commandRef, freshMatch.paramMapping, { 
                                 blockEl: blockEl || document.createElement("div"), 

@@ -9,10 +9,13 @@ import {
     NOTEBOOK_ICON, 
     COMMAND_DB_CONFIG, 
     TYPE_DB_CONFIG, 
+    DATA_DBS_CONFIG,
     DEFAULT_RELATION_BINDINGS,
     ColumnMeta,
     DbPageConfig
 } from "./indexos/seed-data";
+import { getOrCreateDataDbsParentDoc, getOrStoreDataDbDoc } from "./data-db-management";
+export { getOrStoreDataDbDoc };
 
 /**
  * Helper to add columns to an Attribute View (AV)
@@ -186,6 +189,9 @@ export async function constructCommandStorage() {
                 }
             }
         );
+
+        // 4. Init Parent Page data-dbs and initial Child Page (Databases 1)
+        await getOrCreateDataDbsParentDoc(targetNotebookId);
 
         if (commandDb?.avId && typeDb?.avId) {
             await establishDbRelation(commandDb.avId, typeDb.avId);

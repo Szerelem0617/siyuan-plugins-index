@@ -28,6 +28,7 @@ import { canUseFeature } from "./features/dev-mode/policy-guard";
 import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
 import { triggerTurnIntoTask } from "./features/command/effect/turn-into-task";
+import { triggerSafeUpdateBlock } from "./features/command/effect/safe-update-block";
 
 import { SupertagRenderer } from "./features/command/supertag/SupertagRenderer";
 import { initTagMenuInterceptor } from "./features/command/supertag/tag-menu-interceptor";
@@ -35,6 +36,7 @@ import { initTagMenuInterceptor } from "./features/command/supertag/tag-menu-int
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
     private lastActiveDoc: { rootId: string, notebookId: string, path: string } | null = null;
+    private openUrlPluginHandler?: (event: any) => void;
 
     //加载插件
     async onload() {
@@ -65,6 +67,11 @@ export default class IndexPlugin extends Plugin {
         const turnIntoTaskCmd = commandRegistry.getCommand("plugin-index.command.turnIntoTask");
         if (turnIntoTaskCmd) {
             turnIntoTaskCmd.dispatch.executor = triggerTurnIntoTask;
+        }
+
+        const safeUpdateCmd = commandRegistry.getCommand("plugin-index.command.safeUpdateBlock");
+        if (safeUpdateCmd) {
+            safeUpdateCmd.dispatch.executor = triggerSafeUpdateBlock;
         }
 
 

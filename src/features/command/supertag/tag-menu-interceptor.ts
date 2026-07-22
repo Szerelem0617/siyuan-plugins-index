@@ -46,19 +46,16 @@ function renderSupertagsInPanel(panel: HTMLElement, query: string) {
     const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
     const matched = allSupertags.filter(t => t.includes(query));
 
-    const classes: string[] = [];
+    const cmdComps: string[] = [];
     const dataComps: string[] = [];
-    const toolComps: string[] = [];
 
     matched.forEach(tag => {
         const isData = dataNames.has(tag);
         const isLogic = logicNames.has(tag);
-        if (isData && isLogic) {
-            classes.push(tag);
+        if (isLogic) {
+            cmdComps.push(tag);
         } else if (isData) {
             dataComps.push(tag);
-        } else {
-            toolComps.push(tag);
         }
     });
 
@@ -102,16 +99,14 @@ function renderSupertagsInPanel(panel: HTMLElement, query: string) {
         return section;
     };
 
-    const classSec = createSection("类 (Class)", classes.sort(), "var(--b3-theme-primary)");
-    const dataSec = createSection("数据组件", dataComps.sort(), "#4caf50");
-    const toolSec = createSection("工具组件", toolComps.sort(), "#ff9800");
+    const cmdSec = createSection("命令tag", cmdComps.sort(), "var(--b3-theme-primary)");
+    const dataSec = createSection("数据tag", dataComps.sort(), "#4caf50");
 
-    if (classSec) panel.appendChild(classSec);
+    if (cmdSec) panel.appendChild(cmdSec);
     if (dataSec) panel.appendChild(dataSec);
-    if (toolSec) panel.appendChild(toolSec);
 
     // If no supertags match at all, show empty indicator
-    if (!classSec && !dataSec && !toolSec) {
+    if (!cmdSec && !dataSec) {
         const empty = document.createElement("div");
         empty.style.cssText = "font-size: 11px; opacity: 0.5; text-align: center; padding: 20px 0; font-style: italic; color: var(--b3-theme-on-surface-light);";
         empty.innerText = "无匹配的超级标签";

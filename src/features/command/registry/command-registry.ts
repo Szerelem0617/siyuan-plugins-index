@@ -142,6 +142,8 @@ export interface CommandDef {
     dispatch: DispatchConfig;
     /** 参数 Schema 列表（顺序即调用顺序） */
     params: ParamSchema[];
+    /** 出参 Schema 列表（返回值与产出的变量字段） */
+    outputs?: ParamSchema[];
     /** 执行约束 */
     constraints: CommandConstraints;
     /** 元信息 */

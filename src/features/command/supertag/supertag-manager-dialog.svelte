@@ -14,7 +14,7 @@
     export let supertagManager: any;
 
     let loading = true;
-    let activeTab: "data" | "tool" | "class" = "class";
+    let activeTab: "data" | "command" = "command";
 
     interface TagGroup {
         typeName: string;
@@ -24,8 +24,7 @@
     }
 
     let dataComponents: TagGroup[] = [];
-    let toolComponents: TagGroup[] = [];
-    let classes: TagGroup[] = [];
+    let commandComponents: TagGroup[] = [];
 
     onMount(async () => {
         // 1. Fetch Data from Layer 4 (Scanning)
@@ -54,9 +53,8 @@
             logicMap.get(name)!.push(l);
         });
 
-        const tempClasses: TagGroup[] = [];
         const tempDataComp: TagGroup[] = [];
-        const tempToolComp: TagGroup[] = [];
+        const tempCmdComp: TagGroup[] = [];
 
         allTagNames.forEach((name) => {
             const hasData = dataMap.has(name);
@@ -70,20 +68,19 @@
                 selectedAvId: pref || dataMap.get(name)?.[0]?.avId || "",
             };
 
-            if (hasData && hasLogic) {
-                tempClasses.push(group);
+            if (hasLogic) {
+                // 包含了所有具备动作/触发逻辑的超级标签（无论是否实例化为数据库）
+                tempCmdComp.push(group);
             } else if (hasData) {
+                // 纯数据/视图数据库标签
                 tempDataComp.push(group);
-            } else if (hasLogic) {
-                tempToolComp.push(group);
             }
         });
 
         const sorter = (a: TagGroup, b: TagGroup) =>
             a.typeName.localeCompare(b.typeName);
-        classes = tempClasses.sort(sorter);
+        commandComponents = tempCmdComp.sort(sorter);
         dataComponents = tempDataComp.sort(sorter);
-        toolComponents = tempToolComp.sort(sorter);
 
         loading = false;
     });
@@ -97,9 +94,8 @@
             await supertagMonitor.setTagEnabled(group.typeName, checked);
             
             // Trigger Svelte arrays updates
-            classes = [...classes];
+            commandComponents = [...commandComponents];
             dataComponents = [...dataComponents];
-            toolComponents = [...toolComponents];
 
             showMessage(checked ? `✓ 超级标签 #${group.typeName} 推荐已启用` : `✗ 超级标签 #${group.typeName} 推荐已禁用`);
         } catch (e: any) {
@@ -120,11 +116,9 @@
     }
 
     $: currentList =
-        activeTab === "class"
-            ? classes
-            : activeTab === "data"
-              ? dataComponents
-              : toolComponents;
+        activeTab === "command"
+            ? commandComponents
+            : dataComponents;
 </script>
 
 <div
@@ -138,44 +132,31 @@
     >
         <div class="fn__flex">
             <div
+                class="item {activeTab === 'command' ? 'item--focus' : ''}"
+                role="tab"
+                tabindex="0"
+                on:click={() => (activeTab = "command")}
+                on:keydown={(e) => e.key === 'Enter' && (activeTab = "command")}
+            >
+                <span class="item__text">命令tag</span>
+                <span
+                    class="b3-chip b3-chip--small"
+                    style="margin-left: 4px; opacity: 0.6;"
+                    >{commandComponents.length}</span
+                >
+            </div>
+            <div
                 class="item {activeTab === 'data' ? 'item--focus' : ''}"
                 role="tab"
                 tabindex="0"
                 on:click={() => (activeTab = "data")}
                 on:keydown={(e) => e.key === 'Enter' && (activeTab = "data")}
             >
-                <span class="item__text">数据组件</span>
+                <span class="item__text">数据tag</span>
                 <span
                     class="b3-chip b3-chip--small"
                     style="margin-left: 4px; opacity: 0.6;"
                     >{dataComponents.length}</span
-                >
-            </div>
-            <div
-                class="item {activeTab === 'tool' ? 'item--focus' : ''}"
-                role="tab"
-                tabindex="0"
-                on:click={() => (activeTab = "tool")}
-                on:keydown={(e) => e.key === 'Enter' && (activeTab = "tool")}
-            >
-                <span class="item__text">工具组件</span>
-                <span
-                    class="b3-chip b3-chip--small"
-                    style="margin-left: 4px; opacity: 0.6;"
-                    >{toolComponents.length}</span
-                >
-            </div>
-            <div
-                class="item {activeTab === 'class' ? 'item--focus' : ''}"
-                role="tab"
-                tabindex="0"
-                on:click={() => (activeTab = "class")}
-                on:keydown={(e) => e.key === 'Enter' && (activeTab = "class")}
-            >
-                <span class="item__text">类 (Class)</span>
-                <span
-                    class="b3-chip b3-chip--small"
-                    style="margin-left: 4px; opacity: 0.6;">{classes.length}</span
                 >
             </div>
         </div>
@@ -205,11 +186,9 @@
                 <p>该分类下暂无内容</p>
                 <p style="font-size: 0.9em; opacity: 0.6;">
                     {#if activeTab === "data"}
-                        在属性视图右上角配置“数据组件”即可在此显示
-                    {:else if activeTab === "tool"}
-                        在 Type-DB 中手动添加逻辑条目即可在此显示
+                        工作区中的数据库将在此显示（默认未开启）
                     {:else}
-                        当“数据组件”与“工具组件”具有相同标签名时，将自动升级为“类”
+                        触发器与命令绑定的标签将在此显示（默认未开启）
                     {/if}
                 </p>
             </div>
@@ -238,7 +217,8 @@
                 </div>
 
                 {#each currentList as group}
-                    {@const isEnabled = supertagMonitor.isTagEnabled(group.typeName)}
+                    {@const isLogic = group.logicConfigs.length > 0}
+                    {@const isEnabled = supertagMonitor.isTagEnabled(group.typeName, isLogic)}
                     <div class="b3-list-item">
                         <svg
                             class="b3-list-item__graphic"

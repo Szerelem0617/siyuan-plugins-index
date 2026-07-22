@@ -33,6 +33,17 @@ export async function executeTsScript(scriptText: string, context: CommandContex
                 context.vars.last_id = res.id;
                 context.vars.id = res.id;
             }
+            if (params && params._outputMapping) {
+                if (!context.vars) context.vars = {};
+                context.vars._outputMapping = params._outputMapping;
+            }
+
+            // 自动把命令产出的变量（出参）写回/建列落盘到 Layer 4 数据库
+            const targetBlockId = context.blockEl?.getAttribute("data-node-id") || getBlockId(context);
+            if (targetBlockId && context.supertag && context.vars) {
+                await persistOutputVariablesToLayer4(targetBlockId, context.supertag, context.vars);
+            }
+
             return res;
         };
 
@@ -233,20 +244,44 @@ export class SupertagMonitor {
     public getDataRegistry(): TypeConfig[] {
         return this.dataRegistry.filter(c => this.isTagEnabled(c.typeName));
     }
-    public isTagEnabled(tagName: string): boolean {
-        const disabledMap = (this.prefs as any).disabledRecommendationTags || {};
-        return disabledMap[tagName.toLowerCase()] !== true;
+
+    public isTagEnabled(tagName: string, isLogicTag?: boolean): boolean {
+        const tagKey = tagName.toLowerCase();
+        const prefs = this.prefs as any;
+
+        // Check if explicitly disabled or enabled in prefs
+        if (prefs.disabledTags && prefs.disabledTags[tagKey] === true) {
+            return false;
+        }
+        if (prefs.enabledTags && prefs.enabledTags[tagKey] === true) {
+            return true;
+        }
+
+        // Default behavior if not explicitly overridden by user:
+        // 如果是 命令tag (isLogicTag = true)，默认启用 (true)
+        // 如果是 纯数据tag (isLogicTag = false)，默认禁用 (false)
+        if (isLogicTag !== undefined) {
+            return isLogicTag;
+        }
+        
+        // Fallback: check if it exists in SUPERTAG_REGISTRY
+        const isRegisteredLogic = SUPERTAG_REGISTRY.some(l => l.typeTag.toLowerCase() === tagKey);
+        return isRegisteredLogic;
     }
 
     public async setTagEnabled(tagName: string, enabled: boolean) {
-        if (!(this.prefs as any).disabledRecommendationTags) {
-            (this.prefs as any).disabledRecommendationTags = {};
-        }
+        const tagKey = tagName.toLowerCase();
+        if (!(this.prefs as any).enabledTags) (this.prefs as any).enabledTags = {};
+        if (!(this.prefs as any).disabledTags) (this.prefs as any).disabledTags = {};
+
         if (enabled) {
-            delete (this.prefs as any).disabledRecommendationTags[tagName.toLowerCase()];
+            (this.prefs as any).enabledTags[tagKey] = true;
+            delete (this.prefs as any).disabledTags[tagKey];
         } else {
-            (this.prefs as any).disabledRecommendationTags[tagName.toLowerCase()] = true;
+            (this.prefs as any).disabledTags[tagKey] = true;
+            delete (this.prefs as any).enabledTags[tagKey];
         }
+
         if (this.pluginInstance) {
             await this.pluginInstance.saveData("supertag-prefs.json", this.prefs);
         }
@@ -613,33 +648,68 @@ export class SupertagMonitor {
 
     public async processNewTag(blockId: string, tag: string) {
         try {
-            // Refresh registry if empty or periodically
-            if (SUPERTAG_REGISTRY.length === 0 || Date.now() - this.lastUpdate > 5 * 60 * 1000) {
-                await this.refreshRegistry();
-            }
-
             const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
+            console.log(`[Supertag] 🏷️ Processing supertag #${cleanTag} for block "${blockId}"...`);
 
-            // --- Path B: Data Component Persistence (Layer 4) ---
-            const dataMatches = this.dataRegistry.filter(c =>
+            // --- Step 1: Data Component Persistence (Layer 4) ---
+            // 确保全量扫描刷新 TypeConfigs
+            this.dataRegistry = await getGlobalTypeConfigs();
+
+            let dataMatches = this.dataRegistry.filter(c =>
                 this.isTagEnabled(c.typeName) && c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag
             );
 
-            if (dataMatches.length > 0) {
-                let targetConfig = dataMatches[0];
+            const isLogicTag = SUPERTAG_REGISTRY.some(l => l.typeTag.toLowerCase() === cleanTag);
+            const tagEnabled = this.isTagEnabled(cleanTag, isLogicTag);
 
-                // If ambiguity exists, resolve via User Preferences
+            // 检查绑定的命令中是否有需要跨步骤/持久化输出的逻辑（例如含有 _outputMapping，或使用了 {{var.createdblock}} 等跨命令出参入参映射）
+            const boundCommands = SUPERTAG_REGISTRY.filter(l => l.typeTag.toLowerCase() === cleanTag);
+            const requiresPersistence = !isLogicTag || boundCommands.some(cmd => {
+                const pm = cmd.paramMapping || "";
+                return pm.includes("_outputMapping") || pm.includes("{{var.") || pm.includes("createdblock") || pm.includes("updatedblock");
+            });
+
+            let targetConfig: TypeConfig | null = null;
+
+            if (dataMatches.length > 0) {
+                targetConfig = dataMatches[0];
                 if (dataMatches.length > 1) {
                     const prefAvId = this.prefs[cleanTag];
                     if (prefAvId) {
                         targetConfig = dataMatches.find(c => c.avId === prefAvId) || targetConfig;
                     }
                 }
-
-                await this.applySupertag(blockId, cleanTag, targetConfig);
+            } else if (tagEnabled && requiresPersistence) {
+                // 如果开启且需要持久化（纯数据tag 或 含有出参落盘/跨命令变量映射的命令tag，如 permanent），自动建立数据库
+                // 对于在一个管道中即时流转、无需持久化的命令 tag，默认不新建数据库
+                console.log(`[Supertag] No existing AV found for enabled tag #${cleanTag} (requiresPersistence=${requiresPersistence}). Instantiating new AV database under IndexOS / data-dbs...`);
+                try {
+                    const { getOrStoreDataDbDoc } = await import("../data-db-management");
+                    const newDb = await getOrStoreDataDbDoc(cleanTag);
+                    if (newDb.avId) {
+                        targetConfig = {
+                            typeName: cleanTag,
+                            avId: newDb.avId,
+                            blockId: newDb.docId,
+                            avName: cleanTag
+                        };
+                        // 重新刷一遍 global type configs
+                        this.dataRegistry = await getGlobalTypeConfigs();
+                    }
+                } catch (instErr) {
+                    console.error(`[Supertag] Failed to auto-create AV database under data-dbs for #${cleanTag}:`, instErr);
+                }
             }
 
-            // --- Path C: Execute Trigger Commands (Layer 3 trigger) ---
+            if (targetConfig) {
+                console.log(`[Supertag] Step 1: Binding block "${blockId}" as row in Layer 4 AV "${targetConfig.avName}" (${targetConfig.avId})...`);
+                await this.applySupertag(blockId, cleanTag, targetConfig);
+            } else {
+                console.log(`[Supertag] Step 1: No Layer 4 AV matching #${cleanTag} bound.`);
+            }
+
+            // --- Step 2: Execute Trigger Commands (Layer 3 trigger) ---
+            console.log(`[Supertag] Step 2: Executing conditional trigger commands for #${cleanTag}...`);
             await this.triggerConditionalCommands(blockId, cleanTag, "tag_created");
         } catch (e) {
             console.error("[Supertag] Failed to process new tag:", blockId, e);
@@ -890,3 +960,118 @@ export class SupertagMonitor {
 }
 
 export const supertagMonitor = new SupertagMonitor();
+
+/**
+ * 将命令执行后产出的变量 (例如 createdblock = "20260721...")
+ * 自动写入 Layer 4 对应 Supertag 的数据库中。
+ * 如果对应列 (Column) 不存在，自动建列并落盘！
+ */
+export async function persistOutputVariablesToLayer4(
+    blockId: string,
+    cleanTag: string,
+    outputVars: Record<string, any>
+) {
+    if (!blockId || !cleanTag || !outputVars || Object.keys(outputVars).length === 0) return;
+
+    try {
+        // 1. 查找此 supertag 对应的 Layer 4 AV 数据库
+        const configs = await getGlobalTypeConfigs();
+        const tagMatch = configs.find(c => c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag.toLowerCase());
+        
+        if (!tagMatch) {
+            console.log(`[Supertag-Output] Layer 4 AV for supertag #${cleanTag} not found. Skipping output persistence.`);
+            return;
+        }
+
+        const avId = tagMatch.avId;
+        let { blockToItem } = await getColIDMap(avId);
+        let itemId = blockToItem.get(blockId);
+
+        if (!itemId) {
+            // 若块尚未在该 AV 数据库行中，实时补齐添加该块为独立行
+            const newGenItemId = window.Lute?.NewNodeID() || Date.now().toString();
+            await post("/api/av/addAttributeViewBlocks", {
+                avID: avId,
+                srcs: [{ itemID: newGenItemId, id: blockId, isDetached: false }]
+            });
+            await sleep(300);
+            const refreshedMap = await getColIDMap(avId);
+            itemId = refreshedMap.blockToItem.get(blockId) || newGenItemId;
+        }
+
+        // 2. 获取当前 AV 的全量列定义 (Keys)
+        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
+        const existingKeys: any[] = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
+        let lastKeyId = existingKeys.length > 0 ? existingKeys[existingKeys.length - 1].id : "";
+
+        // 仅收集在 _outputMapping 中被用户显式命名/映射的出参变量！
+        const mappingAliases = (outputVars._outputMapping || {}) as Record<string, string>;
+        const targetOutputEntries: [string, string][] = [];
+
+        for (const [outKey, alias] of Object.entries(mappingAliases)) {
+            if (!alias) continue;
+            // 尝试按出参别名 alias 或原始出参键名 outKey 查找解出的真实变量值
+            const val = outputVars[alias] ?? outputVars[outKey] ?? outputVars.id ?? outputVars.createdblock ?? outputVars.last_id;
+            if (val !== undefined && val !== null && String(val).trim() !== "") {
+                targetOutputEntries.push([alias, String(val).trim()]);
+            }
+        }
+
+        // 兜底：若未显式指定 _outputMapping 但存在 createdblock 出参，也记录为 createdblock
+        if (targetOutputEntries.length === 0 && outputVars.createdblock) {
+            targetOutputEntries.push(["createdblock", String(outputVars.createdblock).trim()]);
+        }
+
+        if (targetOutputEntries.length === 0) return;
+
+        console.log(`[Supertag-Output] 📤 Persisting ${targetOutputEntries.length} explicit output variables to Layer 4 AV #${cleanTag} (${avId}):`, targetOutputEntries);
+
+        // 3. 逐个检查并自动建列 (Auto-create missing Column)
+        for (const [colName, valStr] of targetOutputEntries) {
+            let keyObj = existingKeys.find((k: any) => k.name === colName);
+            let keyId = keyObj?.id;
+
+            if (!keyId) {
+                // 动态自动新增列！
+                // @ts-ignore
+                keyId = window.Lute.NewNodeID();
+                console.log(`[Supertag-Output] ✨ Auto-creating missing Text Column "${colName}" in Layer 4 AV #${cleanTag}...`);
+                
+                await post("/api/av/addAttributeViewKey", {
+                    avID: avId,
+                    keyID: keyId,
+                    keyName: colName,
+                    keyType: "text",
+                    keyIcon: "iconText",
+                    previousKeyID: lastKeyId
+                });
+
+                lastKeyId = keyId;
+                existingKeys.push({ id: keyId, name: colName, type: "text" });
+                await new Promise(r => setTimeout(r, 200));
+            }
+
+            // 4. 将出参数据写入对应列的单元格中！
+            console.log(`[Supertag-Output] 💾 Writing cell value for Column "${colName}": ${valStr}`);
+            await post("/api/av/batchSetAttributeViewBlockAttrs", {
+                avID: avId,
+                values: [{
+                    keyID: keyId,
+                    itemID: itemId,
+                    value: {
+                        type: "text",
+                        text: { content: valStr }
+                    }
+                }]
+            });
+        }
+
+        // 清理 SQLite 刷新缓存
+        tableSyncTimes.delete(avId);
+        await instantiateAV(avId, true);
+        console.log(`[Supertag-Output] ✅ Successfully persisted output variables into Layer 4 AV #${cleanTag}`);
+
+    } catch (e) {
+        console.error(`[Supertag-Output] Error persisting output variables to Layer 4:`, e);
+    }
+}

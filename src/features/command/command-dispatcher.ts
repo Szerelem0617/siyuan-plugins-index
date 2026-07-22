@@ -18,7 +18,9 @@ import { post } from "../../shared/api-client/request";
 import { commandRegistry } from "./registry/command-registry";
 import type { CommandDef, ParamSchema } from "./registry/command-registry";
 import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } from "./utils/context-extractor";
+export { getBlockId };
 import { renderTemplate, formatDate, formatTime } from "./utils/template-engine";
+import { persistOutputVariablesToLayer4 } from "./supertag/supertag";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -124,6 +126,12 @@ export async function dispatchCommand(
             showMessage(`❌ 命令执行失败: ${result.detail}`, 5000, "error");
         } else {
             console.log(`[Dispatcher] Command "${commandId}" executed successfully:`, result);
+
+            // 自动把出参保存写回/建列到 Layer 4 数据库
+            const targetBlockId = getBlockId(context);
+            if (targetBlockId && context.supertag && context.vars) {
+                await persistOutputVariablesToLayer4(targetBlockId, context.supertag, context.vars);
+            }
         }
         return result;
     } catch (err) {
@@ -267,6 +275,16 @@ async function dispatchApi(
         context.vars.id = extractedId;
         context.vars.last_id = extractedId;
         context.vars.createdblock = extractedId;
+
+        // 支持处理在入参/出参配置对话框中用户自定义的 _outputMapping 别名映射
+        if (params && typeof params._outputMapping === "object" && params._outputMapping !== null) {
+            context.vars._outputMapping = params._outputMapping;
+            for (const [outKey, alias] of Object.entries(params._outputMapping as Record<string, string>)) {
+                if (alias) {
+                    context.vars[alias] = extractedId;
+                }
+            }
+        }
     }
 
     return resObj;
@@ -376,8 +394,7 @@ async function buildParams(
  *   {{root_id}}      所在文档根块 ID
  *   {{attr:KEY}}     触发块的自定义属性值
  */
-async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
-    console.log(`[Dispatcher-Debug] resolveTemplate input: "${text}"`);
+export async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
     if (!text.includes("{{") && !text.includes("${")) return text;
 
     // 自动兼容并归一化 ${xxx} 占位符为标准 {{xxx}} 格式
@@ -394,7 +411,7 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
     if (context.vars) {
         for (const [k, v] of Object.entries(context.vars)) {
             const strVal = v === undefined || v === null ? "" : String(v);
-            variables[`vars.${k}`] = strVal;
+            variables[`var.${k}`] = strVal; // 仅支持 var.xxx 标准占位符格式
             if (!(k in variables)) {
                 variables[k] = strVal;
             }
@@ -402,18 +419,18 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
     }
 
     if (context.supertag && blockId) {
-        console.log(`[Dispatcher-Debug] Resolving template with supertag: "${context.supertag}"`);
         const layer4Params = await resolveLayer4Params(blockId, context.supertag);
         if (Object.keys(layer4Params).length > 0) {
             isClassMethodMode = true;
-            Object.assign(variables, layer4Params);
+            for (const [k, v] of Object.entries(layer4Params)) {
+                const strVal = v === undefined || v === null ? "" : String(v);
+                // 仅当数据库中的值非空，或者内存变量池中尚无此变量时才覆盖写入
+                if (strVal !== "" || !(k in variables) || !variables[k]) {
+                    variables[k] = strVal;
+                    variables[`var.${k}`] = strVal;
+                }
+            }
         }
-    }
-
-    if (isClassMethodMode) {
-        console.log(`[Dispatcher] Executing in Class Method mode for supertag: ${context.supertag}`);
-    } else {
-        console.log(`[Dispatcher] Executing in Tool Component mode (no active Class/Database mapping). Database attributes mapping is disabled.`);
     }
 
     if (normalizedText.includes("{{root_id}}") || normalizedText.includes("{{parent_id}}")) {
@@ -431,9 +448,7 @@ async function resolveTemplate(text: string, context: CommandContext): Promise<s
         }
     }
 
-    const result = renderTemplate(normalizedText, variables, isClassMethodMode);
-    console.log(`[Dispatcher-Debug] resolveTemplate final output: "${result}"`);
-    return result;
+    return renderTemplate(normalizedText, variables, isClassMethodMode);
 }
 
 
