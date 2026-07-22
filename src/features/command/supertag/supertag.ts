@@ -346,24 +346,38 @@ export class SupertagMonitor {
     }
 
     public async processTaskCompleted(blockId: string) {
-        let tags = this.tagCache.get(blockId);
+        let tags: Set<string> | undefined;
+        try {
+            const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+            const rawVal = attrsRes ? attrsRes["custom-supertags"] : null;
+            if (rawVal) {
+                const parsed = JSON.parse(rawVal);
+                if (Array.isArray(parsed)) {
+                    tags = new Set(parsed.map(t => String(t).trim().toLowerCase()));
+                }
+            }
+        } catch (_) {}
+
         if (!tags) {
-            try {
-                const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
-                const rawVal = attrsRes ? attrsRes["custom-supertags"] : null;
-                if (rawVal) {
-                    const parsed = JSON.parse(rawVal);
+            const blockEl = document.querySelector(`[data-node-id="${blockId}"]`);
+            const domVal = blockEl?.getAttribute("custom-supertags");
+            if (domVal) {
+                try {
+                    const parsed = JSON.parse(domVal);
                     if (Array.isArray(parsed)) {
                         tags = new Set(parsed.map(t => String(t).trim().toLowerCase()));
-                        this.tagCache.set(blockId, tags);
                     }
-                }
-            } catch (_) {}
+                } catch (_) {}
+            }
         }
-        if (!tags) tags = new Set<string>();
-        // Ensure "task" supertag is always present so task_completed triggers default task rules
-        tags.add("task");
-        
+
+        if (!tags) {
+            tags = this.tagCache.get(blockId) || new Set<string>();
+        }
+
+        // Update tagCache with live ground truth
+        this.tagCache.set(blockId, tags);
+
         for (const tag of tags) {
             await this.triggerConditionalCommands(blockId, tag, "task_completed");
         }
@@ -766,6 +780,12 @@ export class SupertagMonitor {
         try {
             const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
             
+            // Immediately purge removed tag from in-memory tagCache
+            const cached = this.tagCache.get(blockId);
+            if (cached) {
+                cached.delete(cleanTag);
+            }
+
             // Trigger tag_removed commands
             await this.triggerConditionalCommands(blockId, cleanTag, "tag_removed");
         } catch (e) {

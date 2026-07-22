@@ -199,8 +199,6 @@ export class SupertagRenderer {
                 } else {
                     await supertagMonitor.processBlockContentChanged(blockId);
                 }
-                
-                showMessage(`任务状态更新为: ${newStatus === "completed" ? "已完成" : "待办"}`);
             } catch (err) {
                 console.error("[SupertagRenderer] Failed to toggle virtual task status:", err);
             }
