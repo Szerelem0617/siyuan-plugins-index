@@ -6,6 +6,36 @@ import { parseSupertags, serializeSupertags } from "../utils/supertag-helper";
 
 export class SupertagRenderer {
     private static renderedMap = new Map<string, string[]>();
+    private static isObserverInit = false;
+
+    /**
+     * 初始化前端 MutationObserver 监听器。
+     * 当 DOM 节点变动或 custom-supertags / custom-index-task 属性改变时，
+     * 自动在前端实时挂载渲染 Supertag 胶囊药丸，无需后端轮询或复杂 API 调用。
+     */
+    public static initAutoObserver() {
+        if (this.isObserverInit) return;
+        this.isObserverInit = true;
+
+        let timer: any = null;
+        const observer = new MutationObserver(() => {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => {
+                const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
+                const editorEl = activeProtyle?.element || document.querySelector(".protyle-content") || document.body;
+                if (editorEl) {
+                    this.renderBlockTags(editorEl as HTMLElement);
+                }
+            }, 50);
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["custom-supertags", "custom-index-task"]
+        });
+    }
 
     /**
      * Scan the editor and render tags for the page and its blocks.

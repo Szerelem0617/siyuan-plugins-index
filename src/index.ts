@@ -123,6 +123,7 @@ export default class IndexPlugin extends Plugin {
         avEventHandler.init();
         supertagMonitor.init(this);
         supertagManager.init();
+        SupertagRenderer.initAutoObserver();
         await initTagSuggestion(this);
         initTagMenuInterceptor();
         if (DEV_ENABLE_INIT_SYS) {
