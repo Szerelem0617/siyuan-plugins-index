@@ -557,10 +557,29 @@ async function handleAvMouseOver(event: MouseEvent) {
         return;
     }
 
-    const { cell, avId, rowId, isPrimaryKeyCell } = hoverCtx;
+    const { cell, avId, rowId, colId, isPrimaryKeyCell } = hoverCtx;
     const commandAvId = getCommandAvId();
-    
-    if (avId !== commandAvId || !isPrimaryKeyCell) {
+
+    // Check if hovering over Icon Menu cell in Type-DB (Supertag-DB)
+    let isIconMenuHover = false;
+    let clickedColName = "";
+    if (avId !== commandAvId) {
+        try {
+            const { db } = await getSqliteEngine();
+            const checkColRes = db.exec(`SELECT key_name, col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
+            if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
+                const keyName = checkColRes[0].values[0][0];
+                clickedColName = checkColRes[0].values[0][1];
+                if (keyName === "Icon Menu" || keyName === "图标菜单") {
+                    isIconMenuHover = true;
+                }
+            }
+        } catch (e) {
+            console.error("[HoverTooltip] Schema check failed:", e);
+        }
+    }
+
+    if (!isIconMenuHover && (avId !== commandAvId || !isPrimaryKeyCell)) {
         hideTooltip();
         return;
     }
@@ -575,6 +594,39 @@ async function handleAvMouseOver(event: MouseEvent) {
     try {
         const { db } = await getSqliteEngine();
         const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+        if (isIconMenuHover) {
+            const rowQuery = db.exec(`SELECT "${clickedColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+            const valStr = (rowQuery.length > 0 && rowQuery[0].values.length > 0) ? String(rowQuery[0].values[0][0] || "") : (cell.textContent || "");
+            const cmdIds = valStr.split(",").map(s => s.trim()).filter(Boolean);
+
+            if (cmdIds.length === 0) {
+                hideTooltip();
+                return;
+            }
+
+            const previewItems = cmdIds.map(cmdId => {
+                const cmdDef = commandRegistry.getCommand(cmdId) || commandRegistry.findByNameOrId(cmdId);
+                const name = cmdDef?.name || cmdId;
+                const desc = cmdDef?.description ? `<div style="font-size: 10px; color: var(--b3-theme-on-surface-mute); margin-top: 1px;">${cmdDef.description}</div>` : "";
+                return `
+                    <div style="padding: 4px 0; border-bottom: 1px dashed var(--b3-border-color);">
+                        <div style="font-weight: 600; color: var(--b3-theme-primary); font-size: 11px;">⚡ ${name}</div>
+                        <div style="font-family: monospace; font-size: 9px; opacity: 0.6;">${cmdId}</div>
+                        ${desc}
+                    </div>
+                `;
+            }).join("");
+
+            const content = `
+                <div style="font-size: 10px; font-weight: bold; color: var(--b3-theme-on-surface-light); margin-bottom: 4px; border-bottom: 1px solid var(--b3-border-color); padding-bottom: 4px;">
+                    📌 已挂载到 Icon Menu 的命令列表 (${cmdIds.length})
+                </div>
+                ${previewItems}
+            `;
+            showTooltip(cell, content);
+            return;
+        }
         
         const schemaCmdIdCol = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Command ID' OR key_name = '命令ID')`, [avId]);
         let cmdIdCol = "Command_ID";

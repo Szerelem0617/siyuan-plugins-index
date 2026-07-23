@@ -45,24 +45,24 @@ export const DATA_DBS_CONFIG = {
 
 export interface DefaultRelationRule {
     typeLabel: string;
-    commandLabels: string[];
+    commandIds: string[];
 }
 
 export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     {
         typeLabel: "project",
-        commandLabels: ["全局关系图"]
+        commandIds: ["siyuan.view.graph"]
     },
     {
         typeLabel: "task",
-        commandLabels: ["☑ 转换为任务", "转换为任务", "🎆 烟花", "烟花"]
+        commandIds: ["plugin-index.command.turnIntoTask", "plugin-index.effect.fireworks"]
     },
     {
         typeLabel: "pipeline",
-        commandLabels: ["⚡ API 插入块测试", "API 插入块测试", "📝 安全更新块内容", "安全更新块内容"]
+        commandIds: ["api.block.insert", "plugin-index.command.safeUpdateBlock"]
     },
     {
         typeLabel: "permanent",
-        commandLabels: ["📝 安全更新块内容", "安全更新块内容"]
+        commandIds: ["plugin-index.command.safeUpdateBlock"]
     }
 ];

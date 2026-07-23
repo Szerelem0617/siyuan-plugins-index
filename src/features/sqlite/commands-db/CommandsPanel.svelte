@@ -142,25 +142,6 @@
     {#if loading}
         <div style="text-align: center; padding: 40px; opacity: 0.4;">加载指令数据中...</div>
     {:else}
-        <!-- Source info badge -->
-        <div class="fn__flex" style="align-items: center; gap: 8px; font-size: 11px; padding: 6px 12px; background: var(--b3-theme-surface); border-radius: 4px; border: 1px solid var(--b3-border-color);">
-            <span>📊 数据源: <strong>{isInitialized ? "思源活数据表 (Live AV)" : "本地系统种子表 (SQLite Seeds)"}</strong></span>
-            <span style="opacity: 0.3;">|</span>
-            <span>指令表: <code style="font-family: monospace;">{tableNameToAvId(commandsTable)}</code></span>
-            <span style="opacity: 0.3;">|</span>
-            <span>类型表: <code style="font-family: monospace;">{tableNameToAvId(typesTable)}</code></span>
-            <div style="flex: 1;"></div>
-            <button class="b3-button b3-button--text" style="font-size: 10px; padding: 2px 6px;" on:click={loadData}>⟳ 刷新数据</button>
-        </div>
-
-        <!-- System Admin Action Bar -->
-        <div class="fn__flex" style="align-items: center; gap: 8px; font-size: 11px; padding: 6px 12px; background: var(--b3-theme-surface); border-radius: 4px; border: 1px solid var(--b3-border-color);">
-            <span style="font-weight: 600; color: var(--b3-theme-primary); margin-right: 4px;">⚙️ 系统管理:</span>
-            <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={handleInitSystem}>
-                🗄️ 实例化
-            </button>
-        </div>
-
         <!-- Section 1: Command List (逻辑工厂) -->
         <div class="db-section fn__flex-column" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
             <div class="fn__flex" style="align-items: center; margin-bottom: 12px; gap: 8px; justify-content: space-between; flex-wrap: wrap;">
@@ -173,6 +154,9 @@
                         placeholder="过滤指令名称或ID..."
                         bind:value={cmdSearchQuery}
                     />
+                    <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 2px 8px; font-weight: 500; margin-left: 4px;" on:click={handleInitSystem}>
+                        🗄️ 实例化数据库
+                    </button>
                 </div>
                 <div style="font-size: 11px; opacity: 0.8; color: var(--b3-theme-primary); font-weight: 500;">
                     💡 点击任意指令卡片，即可快速复制对应的“按钮链接”到剪贴板。
@@ -258,9 +242,4 @@
         overflow-y: auto;
         box-shadow: 0 4px 16px rgba(0,0,0,0.35);
     }
-                    {/each}
-                </div>
-            {/if}
-        </div>
-    </div>
-{/if}
+</style>

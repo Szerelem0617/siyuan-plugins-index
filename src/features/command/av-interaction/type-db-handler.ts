@@ -19,14 +19,19 @@ export async function handleTypeDbAltClick(
 
     const { db } = await getSqliteEngine();
 
-    // Check if the clicked column name in Siyuan matches "Conditional" or "触发器"
+    // Check column type / name in Siyuan
     let isConditionalCol = false;
+    let isIconMenuCol = false;
+    let clickedColName = "";
     try {
-        const checkColRes = db.exec(`SELECT key_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
+        const checkColRes = db.exec(`SELECT key_name, col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
         if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
             const keyName = checkColRes[0].values[0][0];
+            clickedColName = checkColRes[0].values[0][1];
             if (keyName === "Conditional" || keyName === "触发器" || keyName === "On Create" || keyName === "创建时") {
                 isConditionalCol = true;
+            } else if (keyName === "Icon Menu" || keyName === "图标菜单" || keyName === "绑定命令") {
+                isIconMenuCol = true;
             }
         }
     } catch (e) {
@@ -35,6 +40,11 @@ export async function handleTypeDbAltClick(
 
     if (isConditionalCol) {
         await openConditionalSelector(avId, rowId, colId);
+        return;
+    }
+
+    if (isIconMenuCol) {
+        await openIconMenuSelector(avId, rowId, colId, clickedColName, cellEl);
         return;
     }
 
@@ -193,4 +203,121 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
         console.error("Open Conditional Config error:", e);
         showMessage(`读取配置失败: ${e.message}`, 3000, "error");
     }
+}
+
+async function openIconMenuSelector(avId: string, rowId: string, colId: string, clickedColName: string, cellEl: HTMLElement) {
+    let currentIconMenuVal = "";
+    let supertagLabel = "supertag";
+    let boundCommandRowIds: string[] = [];
+
+    try {
+        const { db } = await getSqliteEngine();
+        const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+        // 1. Get the primary key column name (supertag)
+        const supertagColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [avId]);
+        let supertagCol = "supertag";
+        if (supertagColRes.length > 0 && supertagColRes[0].values.length > 0) {
+            supertagCol = supertagColRes[0].values[0][0];
+        }
+
+        // 2. Get the relation column name '绑定命令' in Type-DB
+        const relColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = '绑定命令'`, [avId]);
+        let typeRelationCol = "";
+        if (relColRes.length > 0 && relColRes[0].values.length > 0) {
+            typeRelationCol = relColRes[0].values[0][0];
+        }
+
+        const valRes = db.exec(`SELECT "${supertagCol}", "${clickedColName}"${typeRelationCol ? `, "${typeRelationCol}"` : ""} FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+        if (valRes.length > 0 && valRes[0].values.length > 0) {
+            supertagLabel = String(valRes[0].values[0][0] || "supertag").trim();
+            currentIconMenuVal = String(valRes[0].values[0][1] || "");
+            const relationRaw = String(valRes[0].values[0][2] || "");
+            if (relationRaw) {
+                try {
+                    boundCommandRowIds = JSON.parse(relationRaw);
+                } catch (_) {}
+            }
+        }
+    } catch (e) {
+        currentIconMenuVal = cellEl?.textContent?.trim() || "";
+    }
+
+    const commandAvId = getCommandAvId();
+    let selectableCommands: any[] = [];
+
+    // Query Command IDs and Labels of ONLY the bound commands from Command-DB
+    if (commandAvId && boundCommandRowIds.length > 0) {
+        try {
+            const { db } = await getSqliteEngine();
+            const cmdTableName = `av_${commandAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+            const cmdLabelColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [commandAvId]);
+            let cmdLabelCol = "label";
+            if (cmdLabelColRes.length > 0 && cmdLabelColRes[0].values.length > 0) {
+                cmdLabelCol = cmdLabelColRes[0].values[0][0];
+            }
+
+            const schemaCmdIdCol = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Command ID' OR key_name = '命令ID')`, [commandAvId]);
+            let cmdIdCol = "Command_ID";
+            if (schemaCmdIdCol.length > 0 && schemaCmdIdCol[0].values.length > 0) {
+                cmdIdCol = String(schemaCmdIdCol[0].values[0][0]);
+            }
+
+            const placeholders = boundCommandRowIds.map(() => "?").join(",");
+            const cmdsQuery = db.exec(`SELECT _itemID, "${cmdLabelCol}", "${cmdIdCol}" FROM ${cmdTableName} WHERE _itemID IN (${placeholders})`, boundCommandRowIds);
+            if (cmdsQuery.length > 0 && cmdsQuery[0].values.length > 0) {
+                cmdsQuery[0].values.forEach((row: any) => {
+                    const label = String(row[1] || "").trim();
+                    const commandId = String(row[2] || "").trim();
+                    const cmdDef = commandRegistry.findByNameOrId(label) || commandRegistry.getCommand(commandId);
+                    selectableCommands.push({
+                        id: commandId || cmdDef?.id || label,
+                        name: cmdDef?.name || label,
+                        description: cmdDef?.description || `命令 ID: ${commandId}`,
+                        params: cmdDef?.params || []
+                    });
+                });
+            }
+        } catch (err) {
+            console.error("[AltClick-IconMenu] Failed to query bound commands from Command-DB:", err);
+        }
+    }
+
+    // Fallback: If no relation row IDs, fallback to memory registered commands that match labels
+    if (selectableCommands.length === 0) {
+        selectableCommands = commandRegistry.getAllCommands().map(c => ({
+            id: c.id,
+            name: c.name,
+            description: c.description || "",
+            params: c.params || []
+        }));
+    }
+
+    if (selectableCommands.length === 0) {
+        showMessage("请先在'绑定命令'关联列中添加命令", 3000, "info");
+        return;
+    }
+
+    const dialog = new Dialog({
+        title: `配置图标菜单`,
+        content: `<div id="icon-menu-config-dialog" style="height: 100%;"></div>`,
+        width: "420px",
+        height: "450px"
+    });
+
+    const IconMenuConfigDialog = (await import("./dialogs/IconMenuConfigDialog.svelte")).default;
+
+    new IconMenuConfigDialog({
+        target: document.getElementById("icon-menu-config-dialog")!,
+        props: {
+            dialog,
+            supertag: supertagLabel,
+            availableCommands: selectableCommands,
+            currentIconMenuVal,
+            onSave: async (updatedVal: string) => {
+                await updateCellValue(null, avId, rowId, colId, updatedVal);
+                showMessage(`✓ 已更新 Supertag #${supertagLabel} 的 Icon Menu 配置`);
+            }
+        }
+    });
 }

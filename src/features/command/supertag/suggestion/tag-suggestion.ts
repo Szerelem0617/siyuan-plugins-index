@@ -112,10 +112,10 @@ async function handleBlockSupertagClick(tag: string, protyle: any) {
     SupertagRenderer.render(protyle);
 }
 
-function getQueryText(protyle: any): string {
+function getQueryText(protyle: any): string | null {
     const selection = window.getSelection();
     const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
-    if (!range) return "";
+    if (!range) return null;
     
     const textNode = range.startContainer;
     if (textNode.nodeType === 3) {
@@ -127,7 +127,7 @@ function getQueryText(protyle: any): string {
             return beforeCursor.substring(lastHash + 1).trim();
         }
     }
-    return "";
+    return null;
 }
 
 function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle: any) {
@@ -277,7 +277,12 @@ export function bindProtyleHintExtend(protyle: any) {
             } else {
                 setTimeout(() => {
                     const query = getQueryText(protyle);
-                    showBlockSupertagsPanel(protyle, query);
+                    // 仅当文本中确实以 # 触发（query 不为 null）时才显示超级标签侧边面板
+                    if (query !== null) {
+                        showBlockSupertagsPanel(protyle, query);
+                    } else {
+                        hideBlockSupertagsPanel();
+                    }
                 }, 30);
             }
         });
@@ -289,8 +294,10 @@ export function bindProtyleHintExtend(protyle: any) {
         protyle.wysiwyg.element.addEventListener("input", () => {
             if (protyle.hint && !protyle.hint.element.classList.contains("fn__none")) {
                 const query = getQueryText(protyle);
-                if (blockSupertagsPanel && blockSupertagsPanel.style.display !== "none") {
+                if (query !== null && blockSupertagsPanel && blockSupertagsPanel.style.display !== "none") {
                     renderSupertagsInBlockPanel(blockSupertagsPanel, query, protyle);
+                } else if (query === null) {
+                    hideBlockSupertagsPanel();
                 }
             }
         });

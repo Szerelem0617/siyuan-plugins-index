@@ -142,7 +142,7 @@ export async function constructCommandStorage() {
             targetNotebookId,
             TYPE_DB_CONFIG,
             async (avId) => {
-                // 必须在创建 Icon Menu 与 Conditional 列前先建立关联列 '绑定命令'，这样 '绑定命令' 才会自然位于主键右侧（第二列）
+                // 建立双向关联列 '绑定命令' <-> '绑定类'
                 if (commandDb?.avId) {
                     await establishDbRelation(commandDb.avId, avId);
                 }
@@ -421,11 +421,22 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
     const typeRows = typeRender?.view?.rows || typeRender?.rows || [];
 
     // Map labels to row IDs
+    // Map Command IDs to Command Row IDs or Command IDs directly
     const commandMap: Record<string, string> = {};
+    const commandIdIdx = (commandRender?.view?.columns || commandRender?.columns || []).findIndex((c: any) => c.name === "Command ID" || c.name === "Command_ID");
+    
     for (const row of commandRows) {
-        const firstCell = row.cells[0];
-        const label = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
-        commandMap[label.trim()] = row.id;
+        let cmdId = "";
+        if (commandIdIdx !== -1 && row.cells[commandIdIdx]) {
+            cmdId = row.cells[commandIdIdx]?.value?.text?.content || row.cells[commandIdIdx]?.value?.mText?.content || "";
+        }
+        if (!cmdId) {
+            const firstCell = row.cells[0];
+            cmdId = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
+        }
+        if (cmdId) {
+            commandMap[cmdId.trim()] = row.id;
+        }
     }
 
     const primaryKeyId = await getAvPrimaryKeyColId(typeAvId);
@@ -459,7 +470,6 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
 
     // 2. 为每个 supertag 选择唯一的为主种子行，并标记多余重复行进行清理
     for (const [tag, rows] of Object.entries(supertagRowGroups)) {
-        // 优先保留 ID 与 seed 对应，或有 Icon_Menu / Conditional 内容的行
         let primaryRow = rows.find(r => SEED_ROW_ID_MAP[r.id] === tag);
         if (!primaryRow) {
             primaryRow = rows.find(r => r.cells.some((c: any) => c?.value?.text?.content || c?.value?.mText?.content)) || rows[0];
@@ -467,7 +477,6 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
 
         typeMap[tag] = primaryRow.id;
 
-        // 如果主键文本未正确填充，进行补全
         const primaryLabel = (primaryRow.cells[0]?.value?.block?.content || primaryRow.cells[0]?.value?.mText?.content || primaryRow.cells[0]?.value?.text?.content || "").trim();
         if (primaryLabel !== tag && primaryKeyId) {
             console.log(`[IndexOS-Debug] Setting primary key content '${tag}' on row ${primaryRow.id}...`);
@@ -481,7 +490,6 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
             });
         }
 
-        // 收集多余的重复行 ID
         for (const row of rows) {
             if (row.id !== primaryRow.id) {
                 duplicateRowIdsToRemove.push(row.id);
@@ -489,7 +497,6 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
         }
     }
 
-    // 3. 从 AV 视图中彻底彻底删除重复的散乱行
     if (duplicateRowIdsToRemove.length > 0) {
         console.log(`[IndexOS-Debug] Removing ${duplicateRowIdsToRemove.length} duplicate supertag rows from Type-DB AV:`, duplicateRowIdsToRemove);
         await post("/api/av/removeAttributeViewBlocks", {
@@ -503,17 +510,11 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
 
     const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
     const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
+    const iconMenuKey = typeKeys.find((k: any) => k.name === "Icon Menu");
     const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
 
-    if (!typeRelKey) {
-        console.warn("[IndexOS] Relation key '绑定命令' not found in Type-DB keys.");
-        return;
-    }
-
-    const typeRelKeyId = typeRelKey.id;
     const batchValues: any[] = [];
 
-    // Populate relation batch values from rules
     for (const binding of DEFAULT_RELATION_BINDINGS) {
         const cleanBindingType = binding.typeLabel.replace(/^#/, "").toLowerCase();
         const typeRowId = typeMap[cleanBindingType];
@@ -522,29 +523,43 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
             continue;
         }
 
-        const commandRowIds: string[] = [];
-        for (const cmdLabel of binding.commandLabels) {
-            const cleanCmdLabel = cmdLabel.replace(/^☑\s*/, "").trim();
-            // Find command ID whose label matches (partial or exact)
-            const matchedKey = Object.keys(commandMap).find(k => k === cmdLabel || k.includes(cmdLabel) || k.includes(cleanCmdLabel));
-            if (matchedKey && commandMap[matchedKey]) {
-                if (!commandRowIds.includes(commandMap[matchedKey])) {
-                    commandRowIds.push(commandMap[matchedKey]);
+        // 1. Populate Icon Menu text column
+        if (iconMenuKey) {
+            const validCommandIds = binding.commandIds.filter(id => Boolean(id));
+            const iconMenuTextValue = validCommandIds.join(", ");
+            batchValues.push({
+                keyID: iconMenuKey.id,
+                itemID: typeRowId,
+                value: {
+                    type: "text",
+                    text: {
+                        content: iconMenuTextValue
+                    }
                 }
-            }
+            });
         }
 
-        console.log(`[IndexOS-Debug] Binding ${cleanBindingType} (rowID: ${typeRowId}) to Command Row IDs:`, commandRowIds);
-        batchValues.push({
-            keyID: typeRelKeyId,
-            itemID: typeRowId,
-            value: {
-                type: "relation",
-                relation: {
-                    blockIDs: commandRowIds
+        // 2. Populate 绑定命令 AV Relation column
+        if (typeRelKey) {
+            const commandRowIds: string[] = [];
+            for (const cmdId of binding.commandIds) {
+                if (commandMap[cmdId]) {
+                    commandRowIds.push(commandMap[cmdId]);
                 }
             }
-        });
+            if (commandRowIds.length > 0) {
+                batchValues.push({
+                    keyID: typeRelKey.id,
+                    itemID: typeRowId,
+                    value: {
+                        type: "relation",
+                        relation: {
+                            blockIDs: commandRowIds
+                        }
+                    }
+                });
+            }
+        }
     }
 
     if (batchValues.length > 0) {
