@@ -68,9 +68,11 @@ export async function insertAction(targetBlockId?: string) {
     // Use the forced local config if available, otherwise use global/merged defaults
     const currentConfig = forceLocalConfig || settings.getMergedConfig({});
     
+    // 适配 3.7.3 顶层笔记本文档：顶层笔记本文档 rootID === boxID，其 path 为 /<boxID>.sy。
+    // listDocsByPath 需要传 "/" 才能获取到笔记本根层的一级子文档。
+    const targetPath = block.data.path === `/${block.data.box}.sy` ? "/" : block.data.path;
 
-
-    await generateIndex(block.data.box, block.data.path, indexQueue, 0, currentConfig);
+    await generateIndex(block.data.box, targetPath, indexQueue, 0, currentConfig);
     let data = queuePopAll(indexQueue, "", currentConfig);
 
     if (data != '') {
@@ -132,7 +134,11 @@ export async function autoUpdateIndex(notebookId: string, path: string, parentId
         if (!localConfig.autoUpdate) return;
 
         let indexQueue = new IndexQueue();
-        await generateIndex(notebookId, path, indexQueue, 0, localConfig);
+        
+        // 适配 3.7.3 顶层笔记本文档：顶层笔记本文档的 path 为 /<boxID>.sy 或 /
+        const targetPath = path === `/${notebookId}.sy` ? "/" : path;
+
+        await generateIndex(notebookId, targetPath, indexQueue, 0, localConfig);
         let data = queuePopAll(indexQueue, "", localConfig);
 
         if (data != '') {
