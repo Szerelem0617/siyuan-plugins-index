@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig } from "../../../data/av-setting/db-config";
-    import { type TypeConfig } from "../../../data/av-setting/types";
+    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig } from "../../../av/av-setting/db-config";
+    import { type TypeConfig } from "../../../av/av-setting/types";
     import { i18n } from "../../../../shared/utils";
     import { supertagMonitor } from "../core/supertag-listener";
     import { supertagBinder } from "../core/supertag-binder";

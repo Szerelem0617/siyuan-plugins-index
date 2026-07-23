@@ -65,15 +65,23 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
         const newInlineBtns: InlineButtonCmd[] = [];
         const newPaletteCmds: PaletteCommand[] = [];
 
-        const colIdx = (name: string) => {
-            return cmdRes.columns.findIndex(c => c.toLowerCase() === name.toLowerCase());
+        const colIdx = (...names: string[]) => {
+            for (const name of names) {
+                const cleanTarget = name.toLowerCase().replace(/[\s\-_]/g, "");
+                const idx = cmdRes.columns.findIndex(c => c.toLowerCase().replace(/[\s\-_]/g, "") === cleanTarget);
+                if (idx !== -1) return idx;
+            }
+            return -1;
         };
 
-        const idIdx = colIdx("rowID");
-        const labelIdx = colIdx(commandLabelCol);
-        const cmdIdIdx = colIdx("Command_ID");
-        const paramIdx = colIdx("Param_Mapping");
-        const uiEntriesIdx = colIdx("UI_Entries");
+        const idIdx = colIdx("rowID", "id");
+        const labelIdx = colIdx(commandLabelCol, "主键", "label");
+        const cmdIdIdx = colIdx("Command_ID", "Command ID", "command_id");
+        const paramIdx = colIdx("Param_Mapping", "Param Mapping", "param_mapping");
+        const uiEntriesIdx = colIdx("UI_Entries", "UI 入口", "UI_入口", "ui_entries");
+
+        console.log(`[TopBar-Debug] Found ${cmdRes.values.length} rows in ${commandsTable}. Columns:`, cmdRes.columns);
+        console.log(`[TopBar-Debug] Column Indices - id: ${idIdx}, label: ${labelIdx}, cmdId: ${cmdIdIdx}, param: ${paramIdx}, uiEntries: ${uiEntriesIdx}`);
 
         for (const row of cmdRes.values) {
             const id = String(row[idIdx]);
@@ -87,6 +95,8 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             const uiEntries = uiEntriesIdx > -1 ? String(row[uiEntriesIdx] || "") : "";
             const hasEntry = (type: string) => uiEntries.includes(type);
 
+            console.log(`[TopBar-Debug] Row label: "${label}", commandId: "${commandId}", uiEntries: "${uiEntries}" -> hasShortcut: ${hasEntry("快捷命令")}`);
+
             if (commandId && label) {
                 if (hasEntry("顶栏")) {
                     newTopBars.push({ id, label, commandId, commandParam, requiresParams });
@@ -99,6 +109,8 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
                 }
             }
         }
+
+        console.log(`[TopBar-Debug] Parsed: topBars=${newTopBars.length}, inlineBtns=${newInlineBtns.length}, paletteCmds=${newPaletteCmds.length}`);
 
         applyTopBarUpdates(newTopBars, newInlineBtns, newPaletteCmds);
         return true;

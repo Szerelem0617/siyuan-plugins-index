@@ -207,7 +207,7 @@ function renderList(query: string) {
         : registeredCommands;
 
     if (filteredCommands.length === 0) {
-        paletteEl.innerHTML = `<div class="b3-list-item b3-list-item--two" style="padding: 8px 12px; color: var(--b3-theme-on-surface-light);">没有匹配的命令 (Command-DB 中勾选"启用"项)</div>`;
+        paletteEl.innerHTML = `<div class="b3-list-item b3-list-item--two" style="padding: 8px 12px; color: var(--b3-theme-on-surface-light);">没有匹配的快捷命令 (请在 Command-DB 的 "UI 入口" 列勾选 "快捷命令")</div>`;
         paletteEl.classList.remove("fn__none");
         return;
     }

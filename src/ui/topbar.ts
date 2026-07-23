@@ -3,8 +3,8 @@ import {
     //  fetchSyncPost,
     //  openTab
 } from "siyuan";
-import { insertAction } from "../features/insert-toc/index/action";
-import { insertOutlineAction } from "../features/insert-toc/outline/action";
+import { insertAction } from "../features/insert-moc/index/action";
+import { insertOutlineAction } from "../features/insert-moc/outline/action";
 import { i18n, isMobile, plugin } from "../shared/utils";
 import SettingsTab from "./components/setting.svelte"
 

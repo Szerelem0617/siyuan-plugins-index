@@ -271,6 +271,7 @@ class CommandRegistry {
             console.warn(`[Registry] Command "${def.id}" is being overwritten.`);
         }
         this.store.set(def.id, def);
+        console.log(`[Registry] Successfully registered command from plugin "${pluginName}":`, def.id, def.name);
     }
 
     /**

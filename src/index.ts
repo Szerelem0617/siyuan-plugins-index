@@ -4,8 +4,8 @@ import { setI18n, setPlugin } from "./shared/utils";
 import { createDialog, initTopbar } from "./ui/topbar";
 import { settings, CONFIG } from "./core/settings";
 import { buildDoc as buildDocNew } from "./features/builder/menu";
-import { addDataMenuItems } from "./features/data/list/menu";
-import { addAVMenuItems, avEventHandler } from "./features/data/attribute-view/events";
+import { addDataMenuItems } from "./features/av/list/menu";
+import { addAVMenuItems, avEventHandler } from "./features/av/attribute-view/events";
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
@@ -13,6 +13,7 @@ import { DEV_ENABLE_INIT_SYS } from "./features/command/registration";
 import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems } from "./features/command/menu-hooks";
 import { refreshSupertagRegistry, syncGlobalSupertagsCache } from "./features/command/utils/sync-service";
 import { commandRegistry } from "./features/command/registry/command-registry";
+import { dispatchCommand } from "./features/command/command-dispatcher";
 import { 
     supertagMonitor, 
     supertagManager, 
@@ -43,13 +44,19 @@ export default class IndexPlugin extends Plugin {
     async onload() {
         console.log(`IndexPlugin onload v${version}`);
         
-        // Expose global database SQL API
+        // Expose global database SQL API & Command API
         (window as any).indexOS = {
             db: {
                 runQuery,
                 executeWritableSql,
                 instantiateAV,
                 registerFriendlyTableName,
+            },
+            commands: {
+                registerCommand: (def: any) => commandRegistry.registerCommand(def),
+                unregisterPlugin: (pluginName: string) => commandRegistry.unregisterPlugin(pluginName),
+                getCommand: (id: string) => commandRegistry.getCommand(id),
+                executeCommand: (id: string, params?: any, context?: any) => dispatchCommand(id, params, context || { blockEl: document.body, protyleEl: null })
             }
         };
         // 内置命令表先行加载，其他所有模块（Dispatcher、第三方插件）均可安全地调用 getCommand()
@@ -169,6 +176,9 @@ export default class IndexPlugin extends Plugin {
                 await refreshSupertagRegistry();
                 await refreshTopBarCommands();
                 await syncGlobalSupertagsCache();
+                
+                // 广播 indexos-ready 全局事件通知第三方插件
+                window.dispatchEvent(new CustomEvent("indexos-ready", { detail: (window as any).indexOS }));
             }).catch(e => console.error("[SQLite] Preload failed", e));
             this.registerSqliteEntry();
         }

@@ -2,7 +2,7 @@ import { Dialog, showMessage } from "siyuan";
 import { getCommandAvId, COMMAND_REGISTRY } from "../registration";
 import { encodeBtnHref } from "../global-registration/inline-button";
 import { commandRegistry } from "../registry/command-registry";
-import { updateCellValue } from "../../data/attribute-view/special/special-handlers";
+import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
 import { getSqliteEngine, executeWritableSql } from "../../sqlite/sqlite-manager";
 import { post } from "../../../shared/api-client/request";
 import { getParamColKeyId } from "./query-helper";
@@ -54,18 +54,43 @@ export async function handleAvFooterClick(event: MouseEvent) {
 async function triggerRegistryCommandSelectorForInsert(avContainer: Element, avId: string) {
     let commands: any[] = [];
     try {
+        // 先从内存注册表中获取全量已注册命令（包括动态注册的第三方插件命令）
+        const memoryCommands = commandRegistry.getAllCommands().map(c => ({
+            id: c.id,
+            name: c.name,
+            description: c.description || "",
+            params: c.params || []
+        }));
+
+        const existingIds = new Set(memoryCommands.map(c => c.id));
+
+        // 再补充 SQLite 中可能存在的记录
         const { db } = await getSqliteEngine();
         const qRes = db.exec(`SELECT id, name, description, params FROM sys_registry_db`);
         if (qRes.length > 0 && qRes[0].values.length > 0) {
-            commands = qRes[0].values.map(row => ({
-                id: String(row[0] || ""),
-                name: String(row[1] || ""),
-                description: String(row[2] || ""),
-                params: JSON.parse(String(row[3] || "[]"))
-            }));
+            for (const row of qRes[0].values) {
+                const id = String(row[0] || "");
+                if (id && !existingIds.has(id)) {
+                    memoryCommands.push({
+                        id,
+                        name: String(row[1] || ""),
+                        description: String(row[2] || ""),
+                        params: JSON.parse(String(row[3] || "[]"))
+                    });
+                }
+            }
         }
+        commands = memoryCommands;
+        console.log(`[SelectorDialog] Total available commands: ${commands.length}`, commands.map(c => c.id));
     } catch (e) {
         console.error("[FooterClick] Failed to query registry commands:", e);
+        commands = commandRegistry.getAllCommands().map(c => ({
+            id: c.id,
+            name: c.name,
+            description: c.description || "",
+            params: c.params || []
+        }));
+        console.log(`[SelectorDialog] Fallback commands count: ${commands.length}`, commands.map(c => c.id));
     }
 
     if (commands.length === 0) {

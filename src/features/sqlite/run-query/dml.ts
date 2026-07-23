@@ -42,6 +42,16 @@ function packCellValue(kt: string, val: any): any {
             contents = [val];
         }
         return { type: "mSelect", mSelect: contents.map(c => ({ content: c, color: "" })) };
+    } else if (kt === "mAsset") {
+        let assets: any[] = [];
+        if (typeof val === "string" && val.startsWith("[")) {
+            try { assets = JSON.parse(val); } catch { assets = [{ type: "file", name: val, content: val }]; }
+        } else if (Array.isArray(val)) {
+            assets = val.map(a => typeof a === "string" ? { type: "file", name: a, content: a } : a);
+        } else if (val) {
+            assets = [{ type: "file", name: String(val), content: String(val) }];
+        }
+        return { type: "mAsset", mAsset: assets };
     } else {
         return { type: kt, [kt]: { content: val === null || val === undefined ? "" : String(val) } };
     }
@@ -126,6 +136,9 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                     const val = tuple[i];
                     const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
                     if (!colSchema) continue;
+                    if (!colSchema.writable) {
+                        throw new Error(`无法更新只读列 "${colName}" (类型: ${colSchema.keyType})。创建时间、更新时间、汇总(rollup)、关联块(block)、模板列等不可被修改。`);
+                    }
 
                     allUpdates.push({
                         keyID: colSchema.keyId,
@@ -231,6 +244,9 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
         for (const [colName, val] of Object.entries(assignments)) {
             const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
             if (!colSchema) throw new Error(`Column '${colName}' not found in table schema.`);
+            if (!colSchema.writable) {
+                throw new Error(`无法更新只读列 "${colName}" (类型: ${colSchema.keyType})。创建时间、更新时间、汇总(rollup)、关联块(block)、模板列等不可被修改。`);
+            }
             
             for (const rowID of rowIDs) {
                 let itemID = rowID;

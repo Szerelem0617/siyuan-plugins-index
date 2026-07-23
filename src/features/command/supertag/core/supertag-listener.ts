@@ -6,8 +6,8 @@
 
 import { post } from "../../../../shared/api-client/request";
 import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../../registration";
-import { getGlobalTypeConfigs } from "../../../data/av-setting/db-config";
-import { type TypeConfig } from "../../../data/av-setting/types";
+import { getGlobalTypeConfigs } from "../../../av/av-setting/db-config";
+import { type TypeConfig } from "../../../av/av-setting/types";
 import { parseSupertags, serializeSupertags, diffSupertags, cleanTagString, tagCache } from "./supertag-diff";
 import { supertagBinder } from "./supertag-binder";
 import { triggerConditionalCommands } from "./supertag-trigger";

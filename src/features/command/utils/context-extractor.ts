@@ -8,7 +8,7 @@
 import type { CommandContext } from "../command-dispatcher";
 import { post } from "../../../shared/api-client/request";
 import { runQuery, tableNameToAvId, instantiateAV } from "../../sqlite/sqlite-manager";
-import { getGlobalTypeConfigs } from "../../data/av-setting/db-config";
+import { getGlobalTypeConfigs } from "../../av/av-setting/db-config";
 
 /**
  * Gets the block ID from the current context.

@@ -26,7 +26,7 @@
                 "rowID": "20260526204558-bp28zp8",
                 "label": "🌐 全局关系图",
                 "paramMapping": "",
-                "uiEntries": ["topbar", "inline", "palette"]
+                "uiEntries": ["inline", "palette"]
             }
         },
         {
@@ -225,7 +225,7 @@
             },
             "seed": {
                 "rowID": "20260527120000-insert",
-                "label": "⚡ API 插入块测试",
+                "label": "⚡ 插入块",
                 "paramMapping": "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}",
                 "uiEntries": ["palette"]
             }

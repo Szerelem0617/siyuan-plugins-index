@@ -120,7 +120,15 @@ export async function constructCommandStorage() {
 
                     populateOps.push({ keyID: keyMap["Command ID"], itemID: rowID, value: { type: "text", text: { content: String(commandID || "") } } });
                     populateOps.push({ keyID: keyMap["Param Mapping"], itemID: rowID, value: { type: "text", text: { content: String(paramMapping || "") } } });
-                    populateOps.push({ keyID: keyMap["UI 入口"], itemID: rowID, value: { type: "text", text: { content: String(uiEntries || "") } } });
+                    const entriesList = String(uiEntries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    populateOps.push({
+                        keyID: keyMap["UI 入口"],
+                        itemID: rowID,
+                        value: {
+                            type: "mSelect",
+                            mSelect: entriesList.map(name => ({ content: name }))
+                        }
+                    });
                 }
 
                 if (populateOps.length > 0) {

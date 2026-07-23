@@ -319,7 +319,7 @@ function openButtonConfigurationDialog(targetRange: Range) {
     ).join("");
 
     if (!optionsHtml) {
-        optionsHtml = `<option value="">没有启用的内联按钮，请前往 Command-DB 勾选</option>`;
+        optionsHtml = `<option value="">没有关联行内按钮入口的命令，请在 Command-DB 的 "UI 入口" 列勾选</option>`;
     }
 
     const dialog = new Dialog({

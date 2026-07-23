@@ -1,7 +1,7 @@
 import { Protyle } from "siyuan";
 import { i18n, plugin, isMobile } from "../shared/utils";
-import { insertAction } from "../features/insert-toc/index/action";
-import { insertOutlineAction } from "../features/insert-toc/outline/action";
+import { insertAction } from "../features/insert-moc/index/action";
+import { insertOutlineAction } from "../features/insert-moc/outline/action";
 import { getInitSystemSlashCommand } from "../features/command/registration";
 import { getInlineButtonSlashCommand } from "../features/command/global-registration/inline-button";
 

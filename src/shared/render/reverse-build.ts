@@ -21,7 +21,7 @@ export function generateBuilderListItem(item: ReverseBuildItem, indent: string =
 
 /**
  * 递归获取子文档树，并以严格符合 Builder (双链数据库) 引擎语法的格式生成 Markdown。
- * 取代了原本写在 TOC 目录里的杂揉逻辑，完全分离。
+ * 取代了原本写在 MOC 目录里的杂揉逻辑，完全分离。
  */
 export async function buildSubdocTreeMarkdown(notebookId: string, path: string, tab = 0, isOrdered = false): Promise<string> {
     let md = "";

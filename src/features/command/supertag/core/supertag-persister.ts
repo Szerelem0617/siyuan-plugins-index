@@ -7,7 +7,7 @@
  */
 
 import { post } from "../../../../shared/api-client/request";
-import { getGlobalTypeConfigs } from "../../../data/av-setting/db-config";
+import { getGlobalTypeConfigs } from "../../../av/av-setting/db-config";
 import { getColIDMap } from "../../../../shared/utils/av-utils";
 import { sleep } from "../../../../shared/utils";
 

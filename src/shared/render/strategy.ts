@@ -1,5 +1,5 @@
 /**
- * Rendering strategies for TOC/Outline items
+ * Rendering strategies for MOC/Outline items
  * Shared across Index and Outline features
  */
 
@@ -19,14 +19,14 @@ export interface RenderItem {
     ial?: string; // Siyuan block attributes suffix
 }
 
-export interface TOCStrategy {
+export interface MOCStrategy {
     render(item: RenderItem, context: RenderContext, indent: string): string;
 }
 
 /**
  * Standard Siyuan Markdown Link Strategy: [text](siyuan://blocks/id)
  */
-export class LinkStrategy implements TOCStrategy {
+export class LinkStrategy implements MOCStrategy {
     render(item: RenderItem, context: RenderContext, indent: string): string {
         const marker = context.listType === "unordered" ? "* " : "1. ";
         const ialStr = item.ial ? `\n${indent}   {: ${item.ial}}` : "";
@@ -50,7 +50,7 @@ export class LinkStrategy implements TOCStrategy {
 /**
  * Standard Siyuan Block Reference Strategy: ((id "text"))
  */
-export class RefStrategy implements TOCStrategy {
+export class RefStrategy implements MOCStrategy {
     render(item: RenderItem, context: RenderContext, indent: string): string {
         const marker = context.listType === "unordered" ? "* " : "1. ";
         const ialStr = item.ial ? `\n${indent}   {: ${item.ial}}` : "";
@@ -75,7 +75,7 @@ export class RefStrategy implements TOCStrategy {
 /**
  * Protyle Native Dynamic Reference Strategy: <span data-type="block-ref" ...>
  */
-export class DynamicRefStrategy implements TOCStrategy {
+export class DynamicRefStrategy implements MOCStrategy {
     render(item: RenderItem, context: RenderContext, indent: string): string {
         const marker = context.listType === "unordered" ? "* " : "1. ";
         const span = `<span data-type="block-ref" data-id="${item.id}" data-subtype="d">${item.text}</span>`;
@@ -93,13 +93,13 @@ export class DynamicRefStrategy implements TOCStrategy {
 }
 
 export class StrategyRegistry {
-    private static strategies: Record<string, TOCStrategy> = {
+    private static strategies: Record<string, MOCStrategy> = {
         "link": new LinkStrategy(),
         "reference": new RefStrategy(),
         "dynamic-ref": new DynamicRefStrategy()
     };
 
-    static get(type: string): TOCStrategy {
+    static get(type: string): MOCStrategy {
         return this.strategies[type] || this.strategies["link"];
     }
 }

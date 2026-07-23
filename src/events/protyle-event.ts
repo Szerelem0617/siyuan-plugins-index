@@ -1,7 +1,7 @@
-import { autoUpdateIndex } from "../features/insert-toc/index/action";
-import { autoUpdateOutline } from "../features/insert-toc/outline/action";
+import { autoUpdateIndex } from "../features/insert-moc/index/action";
+import { autoUpdateOutline } from "../features/insert-moc/outline/action";
 import { autoUpdateBuilder } from "../features/builder/auto-update";
-import { autoUpdateListAVs } from "../features/data/list/auto-update";
+import { autoUpdateListAVs } from "../features/av/list/auto-update";
 import { isMobile } from "../shared/utils";
 import { client } from "../shared/api-client";
 // import { settings } from "./settings";

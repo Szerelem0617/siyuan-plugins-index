@@ -9,7 +9,7 @@ import { getColIDMap } from "../../../../shared/utils/av-utils";
 import { tableSyncTimes, instantiateAV } from "../../../sqlite/sqlite-manager";
 import { formatDate } from "../../../../shared/utils";
 import { showMessage } from "siyuan";
-import type { TypeConfig } from "../../../data/av-setting/types";
+import type { TypeConfig } from "../../../av/av-setting/types";
 
 export interface SupertagPrefs {
     [tag: string]: string; // tag -> avId preference
