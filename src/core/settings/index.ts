@@ -21,7 +21,6 @@ export class SettingsProperty {
     icon: boolean;
     iconOutline: boolean;
     dbAddTemplateCols: boolean;
-    devMode: boolean;
 
     constructor() {
         this.depth = 0;
@@ -42,7 +41,6 @@ export class SettingsProperty {
         this.icon = false;
         this.iconOutline = false;
         this.dbAddTemplateCols = true;
-        this.devMode = false;
     }
 
     getAll() {
@@ -64,7 +62,6 @@ export class SettingsProperty {
         this.icon = settings.get("icon") ?? false;
         this.iconOutline = settings.get("iconOutline") ?? false;
         this.dbAddTemplateCols = settings.get("dbAddTemplateCols") ?? true;
-        this.devMode = settings.get("devMode") ?? false;
     }
 }
 

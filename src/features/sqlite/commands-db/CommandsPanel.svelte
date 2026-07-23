@@ -6,7 +6,6 @@
     import { showMessage } from "siyuan";
     import { constructCommandStorage } from "../../command/construct-dir";
     import { getSystemTableNames, initSystemTables } from "../../command/indexos/command-sqlite";
-    import { canUseFeature } from "../../dev-mode/policy-guard";
 
     let loading = true;
     let showPullModal = false;
@@ -239,11 +238,9 @@
                 🗄️ 实例化
             </button>
 
-            {#if canUseFeature("commands.pull")}
-                <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={openPullModal}>
-                    📥 拉取内置命令
-                </button>
-            {/if}
+            <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 3px 8px; font-weight: 500;" on:click={openPullModal}>
+                📥 拉取内置命令
+            </button>
         </div>
 
         <!-- Section 1: Command List (逻辑工厂) -->

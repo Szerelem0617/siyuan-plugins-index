@@ -10,11 +10,6 @@
         title: i18n.settingsTab.items.dbAddTemplateCols.title,
         content: i18n.settingsTab.items.dbAddTemplateCols.content,
     };
-
-    const devModeContent = {
-        title: i18n.settingsTab.items.devMode.title,
-        content: i18n.settingsTab.items.devMode.content,
-    };
 </script>
 
 <div class={tabbarfocus === "data" ? "" : "fn__none"}>
@@ -30,13 +25,4 @@
         settingKey="dbAddTemplateCols"
         bind:settingValue={settingsStrings.dbAddTemplateCols}
     />
-
-    {#if DEV_ENABLE_INIT_SYS}
-        <SettingItem
-            content={devModeContent}
-            type="switch"
-            settingKey="devMode"
-            bind:settingValue={settingsStrings.devMode}
-        />
-    {/if}
 </div>

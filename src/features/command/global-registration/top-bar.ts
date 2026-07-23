@@ -9,7 +9,6 @@ import { getSqliteEngine, runQuery, instantiateAV, checkTableExists, tableNameTo
 import { getCommandAvId, getTypeAvId, getCommandDocId, getTypeDocId } from "../registration";
 import { getTargetTablesInfo, refreshSupertagRegistry } from "../utils/sync-service";
 import { initSystemTables } from "../indexos/command-sqlite";
-import { isDevModeActive } from "../../dev-mode";
 
 export interface TopBarCommand {
     id: string;

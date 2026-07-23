@@ -2,7 +2,6 @@ import { constructCommandStorage } from "./construct-dir";
 import { i18n } from "../../shared/utils";
 import { type Protyle } from "siyuan";
 import { registerFriendlyTableName } from "../sqlite/sqlite-manager";
-import { isDevModeActive } from "../dev-mode";
 import { refreshSupertagRegistry } from "./utils/sync-service";
 
 export const DEV_ENABLE_INIT_SYS = true;
@@ -72,7 +71,7 @@ export function getTypeDocId() { return typeDocId; }
  * 生成用于 Slash (/) 召唤出的初始构建指令选项
  */
 export function getInitSystemSlashCommand() {
-    if (!DEV_ENABLE_INIT_SYS || !isDevModeActive()) return null;
+    if (!DEV_ENABLE_INIT_SYS) return null;
 
     return [
         {

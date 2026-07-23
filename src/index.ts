@@ -29,7 +29,6 @@ import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
 import { getSqliteEngine, runQuery, executeWritableSql, instantiateAV, registerFriendlyTableName } from "./features/sqlite/sqlite-manager";
 import { version } from "../plugin.json";
 import { initSystemTables } from "./features/command/indexos/command-sqlite";
-import { canUseFeature } from "./features/dev-mode/policy-guard";
 import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
 import { triggerTurnIntoTask } from "./features/command/effect/turn-into-task";
@@ -272,7 +271,6 @@ export default class IndexPlugin extends Plugin {
             e.stopPropagation();
             e.preventDefault();
             
-            if (!canUseFeature("database.diagnose")) return;
             this.openSqliteStatus();
         }
     }
