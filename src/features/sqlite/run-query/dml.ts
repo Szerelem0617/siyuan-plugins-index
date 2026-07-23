@@ -29,7 +29,9 @@ function packCellValue(kt: string, val: any): any {
         }
         return { type: "relation", relation: { blockIDs } };
     } else if (kt === "select") {
-        return { type: "select", select: { content: val === null || val === undefined ? "" : String(val) } };
+        // 思源 Value 结构体中 select 和 mSelect 都使用 mSelect 字段
+        const content = val === null || val === undefined ? "" : String(val);
+        return { type: "select", mSelect: content ? [{ content, color: "" }] : [] };
     } else if (kt === "mSelect") {
         let contents: string[] = [];
         if (typeof val === "string" && val.startsWith("[")) {
@@ -73,7 +75,7 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
         await instantiateAV(avID, true);
         const dbTable = avIdToTableName(avID);
 
-        // Find primary key column index in INSERT columns (id / rowID / _itemID)
+        // Find primary key/ID column index in INSERT columns
         const idColIndex = colNames.findIndex(c => c.toLowerCase() === "id" || c.toLowerCase() === "rowid" || c.toLowerCase() === "_itemid");
 
         let insertedCount = 0;
@@ -82,11 +84,12 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
 
         for (const tuple of tuples) {
             if (tuple.length !== colNames.length) {
-                throw new Error(`Column count (${colNames.length}) does not match value count (${tuple.length}) in tuple.`);
+                throw new Error(`列与值数量不匹配：SQL 中指定的列数量为 ${colNames.length} 个 (${colNames.join(", ")}), 但 VALUES 括号内传入了 ${tuple.length} 个值 [${tuple.join(", ")}]。请确保每组 VALUES (...) 的参数个数与列数量一致。`);
             }
 
             let existingItemID: string | null = null;
             if (idColIndex !== -1) {
+                // 有指定 id/rowID 列
                 const targetId = String(tuple[idColIndex]);
                 try {
                     const res = db.exec(`SELECT "_itemID" FROM "${dbTable}" WHERE rowID = ? OR "_itemID" = ?`, [targetId, targetId]);
@@ -94,6 +97,24 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                         existingItemID = String(res[0].values[0][0]);
                     }
                 } catch {}
+            } else {
+                // 没有指定 id/rowID 列，使用传入的第一列（通常是主键列，例如 "主键"）作为匹配依据
+                const firstColName = colNames[0];
+                const firstColVal = tuple[0];
+                const colSchema = schema.find(c => c.colName === firstColName || c.keyName === firstColName);
+                if (colSchema) {
+                    try {
+                        const res = db.exec(`SELECT "_itemID" FROM "${dbTable}" WHERE "${colSchema.colName}" = ?`, [firstColVal]);
+                        if (res.length > 0 && res[0].values.length > 0) {
+                            if (res[0].values.length > 1) {
+                                throw new Error(`UPSERT 无法确定更新目标：在列 "${firstColName}" 中找到了 ${res[0].values.length} 条值为 "${firstColVal}" 的重复行。在存在重名行时，请显式指定 id 或 rowID 列进行精确更新。`);
+                            }
+                            existingItemID = String(res[0].values[0][0]);
+                        }
+                    } catch (e: any) {
+                        if (e.message?.includes("UPSERT 无法确定更新目标")) throw e;
+                    }
+                }
             }
 
             if (existingItemID) {
@@ -115,8 +136,8 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
             } else {
                 // INSERT new detached row
                 insertedCount++;
-                // @ts-ignore
-                const newRowID = (idColIndex !== -1 && tuple[idColIndex]) ? String(tuple[idColIndex]) : (window.Lute?.NewNodeID?.() || `row_${Date.now()}`);
+                // @ts-ignore - 始终使用思源标准 NodeID 格式，用户提供的 id 值仅用于 UPSERT 查找已存在行
+                const newRowID = window.Lute?.NewNodeID?.() || `${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 9)}`;
                 
                 await post("/api/av/addAttributeViewBlocks", {
                     avID: avID,
@@ -124,10 +145,14 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                 });
 
                 for (let i = 0; i < colNames.length; i++) {
+                    if (i === idColIndex) continue; // 跳过 id/rowID 伪列
                     const colName = colNames[i];
                     const val = tuple[i];
                     const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
-                    if (!colSchema) continue;
+                    if (!colSchema) {
+                        console.warn(`[DML-UPSERT] Column "${colName}" not found in AV schema. Available columns: [${schema.map(c => `${c.colName}(${c.keyType})`).join(", ")}]`);
+                        continue;
+                    }
 
                     allUpdates.push({
                         keyID: colSchema.keyId,
@@ -259,7 +284,7 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
 
         for (const tuple of tuples) {
             if (colNames.length !== tuple.length) {
-                throw new Error(`Column count (${colNames.length}) does not match value count (${tuple.length}) in tuple.`);
+                throw new Error(`列与值数量不匹配：SQL 中指定的列数量为 ${colNames.length} 个 (${colNames.join(", ")}), 但 VALUES 括号内传入了 ${tuple.length} 个值 [${tuple.join(", ")}]。请确保每组 VALUES (...) 的参数个数与列数量一致。`);
             }
 
             // Generate new Siyuan block ID
@@ -277,7 +302,10 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                 const colName = colNames[idx];
                 const val = tuple[idx];
                 const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
-                if (!colSchema) continue;
+                if (!colSchema) {
+                    console.warn(`[DML-INSERT] Column "${colName}" not found in AV schema. Available columns: [${schema.map(c => `${c.colName}(${c.keyType})`).join(", ")}]`);
+                    continue;
+                }
                 
                 values.push({
                     keyID: colSchema.keyId,

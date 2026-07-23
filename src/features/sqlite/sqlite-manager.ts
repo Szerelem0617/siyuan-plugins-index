@@ -624,12 +624,13 @@ export async function executeWritableSql(sql: string, options?: DDLOptions): Pro
     const processedSql = preprocessSql(sql);
     const { db } = await getSqliteEngine();
     
-    // Check DML statements
+    // Check DML statements (including REPLACE INTO / UPSERT INTO)
     const isUpdate = /^\s*UPDATE\b/i.test(processedSql);
     const isInsert = /^\s*INSERT\b/i.test(processedSql);
     const isDelete = /^\s*DELETE\b/i.test(processedSql);
+    const isReplace = /^\s*(?:REPLACE|UPSERT)\b/i.test(processedSql);
     
-    if (isUpdate || isInsert || isDelete) {
+    if (isUpdate || isInsert || isDelete || isReplace) {
         return executeDML(processedSql, db);
     }
     
