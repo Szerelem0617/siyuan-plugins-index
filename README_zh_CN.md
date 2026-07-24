@@ -10,17 +10,12 @@
 
 `CTRL + ALT + O` 插入当前文档大纲
 
-🚀**测试功能**：
+🚀 **实验性功能 (v1.10.0)**：
 
-为目录以及其它列表创建数据库。
-加入数据库后，可通过 `alt + click` 单元格来批量配置属性。
+可以在插件设置的「数据库」页面中勾选开启 **开发者模式**，开启后可通过 `Alt + 点击思源原生搜索图标` 或快捷键 `⌥⌘S` (Mac) / `Alt+Cmd+S` 唤出数据库与命令管理面板：
 
-<img src="https://raw.githubusercontent.com/Szerelem0617/siyuan-plugins-index/main/asset/guide-create-db.jpg" width="500" />
-
-# 1.9.15 版本更新
-
-- 修复思源v3.6.5版本目录无法正常显示的问题
-
+1. **统一数据库管理与 SQL 查询**：支持集中查看管理工作区中的所有属性视图数据库，并可通过 SQL 交互终端对数据库数据进行即时查询、增删改查。详细说明请参考：[数据库与 SQLite 运维指南](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/guide-sqlite.md)
+2. **命令管理与超级标签 (Supertag) 绑定**：内置全局命令注册与触发器系统，支持复制行内命令按钮链接、将指令绑定至特定 Supertag、配置自动化条件触发规则等高级功能。
 
 # 更新日志
 
@@ -38,4 +33,4 @@
 
 # 致谢
 
-特别感谢 [TinkMingKing](https://github.com/TinkMingKing) 大佬之前对插件的精心维护，以及将仓库转交给我的信任。
+特别感谢 [TinkMingKing](https://github.com/TinkMingKing) 大佬之前对插件的精心维护，以及将仓库转交给我的信任。详细致谢列表请参阅：[致谢说明文档](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/acknowledgments.md)
