@@ -12,14 +12,13 @@
 
 🚀 **实验性功能 (v1.10.0)**：
 
-可以在插件设置的「数据库」页面中勾选开启 **开发者模式**，开启后可通过 `Alt + 点击思源原生搜索图标` 或快捷键 `⌥⌘S` (Mac) / `Alt+Cmd+S` 唤出数据库与命令管理面板：
+开启方式：插件设置 -> 数据库 -> 勾选 **开发者模式**。开启后可通过 `Alt + 点击搜索图标` 或快捷键 `⌥⌘S` 唤出控制台：
 
-1. **统一数据库管理与 SQL 查询**：支持集中查看管理工作区中的所有属性视图数据库，并可通过 SQL 交互终端对数据库数据进行即时查询、增删改查。详细说明请参考：[数据库与 SQLite 运维指南](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/guide-sqlite.md)
-2. **命令管理与超级标签 (Supertag) 绑定**：内置全局命令注册与触发器系统，支持复制行内命令按钮链接、将指令绑定至特定 Supertag、配置自动化条件触发规则等高级功能。
+- **`/插入命令按钮`**：在编辑器中输入 `/插入命令按钮` 可快速插入可点击交互的命令按钮。
+- **数据库与 SQL 管理**：支持统一管理工作区的属性视图数据库，并可用 SQL 终端即时查询与修改数据。
+- **命令与 Supertag 绑定**：在控制台中点击“实例化数据库”后，可将指令与特定超级标签关联，解锁更丰富的高级配置。
 
-# 更新日志
-
-[CHANGELOG](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/CHANGELOG.md)
+# [更新日志](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/CHANGELOG.md)
 
 # 支持开发者
 
@@ -31,6 +30,4 @@
   
   <img src="https://raw.githubusercontent.com/Szerelem0617/siyuan-plugins-index/main/asset/qr.jpg" width="200" />
 
-# 致谢
-
-特别感谢 [TinkMingKing](https://github.com/TinkMingKing) 大佬之前对插件的精心维护，以及将仓库转交给我的信任。详细致谢列表请参阅：[致谢说明文档](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/acknowledgments.md)
+# [致谢名单](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/acknowledgments.md)
