@@ -15,7 +15,7 @@
 开启方式：插件设置 -> 数据库 -> 勾选 **开发者模式**。开启后可通过 `Alt + 点击搜索图标` 或快捷键 `⌥⌘S` 唤出控制台：
 
 - **`/插入命令按钮`**：在编辑器中输入 `/插入命令按钮` 可快速插入可点击交互的命令按钮。
-- **数据库与 SQL 管理**：支持统一管理工作区的属性视图数据库，并可用 SQL 终端即时查询与修改数据。
+- **数据库与 SQL 管理**：支持统一管理工作区的属性视图数据库，并可用 [SQL 终端即时查询与修改数据](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/guide-sqlite.md)。
 - **命令与 Supertag 绑定**：在控制台中点击“实例化数据库”后，可将指令与特定超级标签关联，解锁更丰富的高级配置。
 
 # [更新日志](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/CHANGELOG.md)
