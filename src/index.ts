@@ -86,6 +86,7 @@ export default class IndexPlugin extends Plugin {
 
         this.init();
         await settings.initData();
+        addSlash(); // Rebuild slash items after settings are loaded
         await initTopbar();
 
         if (isDevInitSysEnabled()) {
@@ -256,8 +257,9 @@ export default class IndexPlugin extends Plugin {
         });
     }
 
-    onDataChanged() {
-        settings.load();
+    async onDataChanged() {
+        await settings.load();
+        addSlash();
     }
 
     //获取i18n和插件类实例
@@ -300,9 +302,18 @@ export default class IndexPlugin extends Plugin {
             });
             observer.observe(document.body, { childList: true, subtree: true });
         }
+
+        // 全局快捷键监听: Cmd + Alt + S / Ctrl + Alt + S 呼出命令与数据库管理面板
+        window.addEventListener("keydown", (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === "s" || e.key === "S")) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openSqliteStatus();
+            }
+        }, true);
     }
 
-    private openSqliteStatus() {
+    public openSqliteStatus() {
         const dialog = new Dialog({
             title: "数据库管理",
             content: `<div id="sqlite-status-container" class="fn__flex-1" style="height: 100%;"></div>`,

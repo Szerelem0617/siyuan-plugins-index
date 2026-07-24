@@ -1,6 +1,7 @@
 {
   "insertIndex": "Insert Index",
   "insertoutline": "Insert Outline",
+  "openSqliteStatus": "Database & Command Palette",
   "settings": "Settings",
   "addTopBarIcon": "Insert Index",
   "indexSettings": "Index",

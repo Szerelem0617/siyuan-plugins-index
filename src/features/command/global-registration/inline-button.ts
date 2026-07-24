@@ -137,7 +137,7 @@ export function getInlineButtonSlashCommand() {
 
     return {
         filter: ["btn", "button", "按钮"],
-        html: `<div class="b3-list-item__first"><span class="b3-list-item__text">插入智能按钮 (基础配置块)</span><span class="b3-list-item__meta">插件</span></div>`,
+        html: `<div class="b3-list-item__first"><span class="b3-list-item__text">插入命令按钮</span><span class="b3-list-item__meta">插件</span></div>`,
         id: "insertSmartButton",
         callback: (protyle: any) => {
             if (typeof protyle.insert === "function") protyle.insert("");

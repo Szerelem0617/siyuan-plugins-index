@@ -40,6 +40,14 @@ export async function initTopbar() {
         }
     });
 
+    plugin.addCommand({
+        langKey: "openSqliteStatus",
+        hotkey: "⌥⌘S",
+        callback: async () => {
+            (plugin as any).openSqliteStatus?.();
+        }
+    });
+
     // //设置右键监听
     // topBarElement.addEventListener("contextmenu", async () => {
     //     await createDialog();
