@@ -1,7 +1,7 @@
 import { dispatchCommand } from "../command-dispatcher";
 import { commandRegistry } from "../registry/command-registry";
 import { showMessage, Dialog } from "siyuan";
-import { DEV_ENABLE_INIT_SYS, SUPERTAG_REGISTRY, COMMAND_REGISTRY } from "../registration";
+import { isDevInitSysEnabled, DEV_ENABLE_INIT_SYS, SUPERTAG_REGISTRY, COMMAND_REGISTRY } from "../registration";
 import { refreshSupertagRegistry } from "../utils/sync-service";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ export function updateInlineButtonList(buttonCmds: InlineButtonCmd[]) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getInlineButtonSlashCommand() {
-    if (!DEV_ENABLE_INIT_SYS) return null;
+    if (!isDevInitSysEnabled()) return null;
 
     return {
         filter: ["btn", "button", "按钮"],

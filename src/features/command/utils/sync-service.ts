@@ -4,7 +4,7 @@ import { getSqliteEngine, runQuery, checkTableExists, instantiateAV, tableNameTo
 import { initSystemTables } from "../indexos/command-sqlite";
 import { parseSupertags } from "./supertag-helper";
 import { 
-    DEV_ENABLE_INIT_SYS,
+    isDevInitSysEnabled,
     getCommandAvId,
     getTypeAvId,
     getCommandDocId,
@@ -165,7 +165,7 @@ export async function getTargetTablesInfo() {
  * 优先尝试从 SQLite 加载以获得更好的性能 and 统一性
  */
 export async function refreshSupertagRegistry() {
-    if (DEV_ENABLE_INIT_SYS) {
+    if (isDevInitSysEnabled()) {
         try {
             const { db } = await getSqliteEngine();
             if (db) {

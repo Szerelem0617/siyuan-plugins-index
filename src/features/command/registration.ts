@@ -4,7 +4,13 @@ import { type Protyle } from "siyuan";
 import { registerFriendlyTableName } from "../sqlite/sqlite-manager";
 import { refreshSupertagRegistry } from "./utils/sync-service";
 
-export const DEV_ENABLE_INIT_SYS = true;
+import { settings } from "../../core/settings";
+
+export function isDevInitSysEnabled(): boolean {
+    return !!settings.get("devMode");
+}
+
+export const DEV_ENABLE_INIT_SYS = false;
 
 // --- 内存缓存：Supertag 注册表 ---
 export interface CommandDef {
@@ -71,7 +77,7 @@ export function getTypeDocId() { return typeDocId; }
  * 生成用于 Slash (/) 召唤出的初始构建指令选项
  */
 export function getInitSystemSlashCommand() {
-    if (!DEV_ENABLE_INIT_SYS) return null;
+    if (!isDevInitSysEnabled()) return null;
 
     return [
         {

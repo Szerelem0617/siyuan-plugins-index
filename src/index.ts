@@ -9,7 +9,7 @@ import { addAVMenuItems, avEventHandler } from "./features/av/attribute-view/eve
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
-import { DEV_ENABLE_INIT_SYS } from "./features/command/registration";
+import { isDevInitSysEnabled, setCommandAvId, setTypeAvId, setCommandDocId, setTypeDocId, COMMAND_REGISTRY } from "./features/command/registration";
 import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems } from "./features/command/menu-hooks";
 import { refreshSupertagRegistry, syncGlobalSupertagsCache } from "./features/command/utils/sync-service";
 import { commandRegistry } from "./features/command/registry/command-registry";
@@ -84,18 +84,18 @@ export default class IndexPlugin extends Plugin {
 
 
 
-        if (DEV_ENABLE_INIT_SYS) {
+        this.init();
+        await settings.initData();
+        await initTopbar();
+
+        if (isDevInitSysEnabled()) {
             refreshSupertagRegistry();
             await refreshTopBarCommands();
         }
-        this.init();
-        await initTopbar();
-        // await this.initSettings();
-        await settings.initData();
         //监听块菜单事件
         this.eventBus.on("click-blockicon", buildDocNew);
         this.eventBus.on("click-blockicon", addDataMenuItems);
-        if (DEV_ENABLE_INIT_SYS) {
+        if (isDevInitSysEnabled()) {
             this.eventBus.on("click-blockicon", addCommandTestMenuItem);
             this.eventBus.on("open-menu-doctree", addDoctreeMenuItems);
             this.eventBus.on("click-editortitleicon", addEditorTitleIconMenuItems);
@@ -123,7 +123,7 @@ export default class IndexPlugin extends Plugin {
         this.switchHandler = this.onTabSwitch.bind(this);
         this.eventBus.on("switch-protyle", this.switchHandler);
 
-        if (DEV_ENABLE_INIT_SYS) {
+        if (isDevInitSysEnabled()) {
             this.eventBus.on("ws-main", handleTopBarEvents);
         }
 
@@ -134,7 +134,7 @@ export default class IndexPlugin extends Plugin {
         SupertagRenderer.initAutoObserver();
         await initTagSuggestion(this);
         initTagMenuInterceptor();
-        if (DEV_ENABLE_INIT_SYS) {
+        if (isDevInitSysEnabled()) {
             initInlineButtonListener();
             initCommandPalette();
             initButtonLinkListener();
@@ -166,7 +166,7 @@ export default class IndexPlugin extends Plugin {
 
 
         // SQLite Entry Point: Alt + Click on Native Search Button
-        if (DEV_ENABLE_INIT_SYS) {
+        if (isDevInitSysEnabled()) {
             getSqliteEngine().then(async () => {
                 console.log("[IndexOS] SQLite Engine Ready. Initializing builtin DB...");
                 await initSystemTables();
@@ -190,7 +190,7 @@ export default class IndexPlugin extends Plugin {
     onunload() {
         this.eventBus.off("click-blockicon", buildDocNew);
         this.eventBus.off("click-blockicon", addDataMenuItems);
-        if (DEV_ENABLE_INIT_SYS) {
+        if (isDevInitSysEnabled()) {
             this.eventBus.off("click-blockicon", addCommandTestMenuItem);
             this.eventBus.off("open-menu-doctree", addDoctreeMenuItems);
             this.eventBus.off("click-editortitleicon", addEditorTitleIconMenuItems);
@@ -198,7 +198,7 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.off("open-menu-av", addAVMenuItems);
         this.eventBus.off("loaded-protyle-static", updateIndex);
         this.eventBus.off("switch-protyle", this.switchHandler);
-        if (DEV_ENABLE_INIT_SYS) {
+        if (isDevInitSysEnabled()) {
             this.eventBus.off("ws-main", handleTopBarEvents);
         }
 
@@ -206,7 +206,7 @@ export default class IndexPlugin extends Plugin {
         avEventHandler.destroy();
         supertagMonitor.destroy();
         supertagManager.destroy();
-        if (DEV_ENABLE_INIT_SYS) {
+        if (isDevInitSysEnabled()) {
             destroyInlineButtonListener();
             destroyCommandPalette();
             destroyButtonLinkListener();

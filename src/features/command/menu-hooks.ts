@@ -3,7 +3,7 @@ import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./
 import { addSupertagMenuOption } from "./utils/menu-helper";
 import { refreshSupertagRegistry } from "./utils/sync-service";
 import { 
-    DEV_ENABLE_INIT_SYS, 
+    isDevInitSysEnabled, 
     SUPERTAG_REGISTRY, 
     globalSupertagsCache 
 } from "./registration";
@@ -12,7 +12,7 @@ import {
  * 从缓存同步挂载方法 (同步执行，确保菜单显示)
  */
 export function addCommandTestMenuItem({ detail }: any) {
-    if (!DEV_ENABLE_INIT_SYS) return;
+    if (!isDevInitSysEnabled()) return;
 
     const blockElements = detail.blockElements;
     const menu = detail.menu;
@@ -108,7 +108,7 @@ export function addCommandTestMenuItem({ detail }: any) {
  * Handle document sidebar tree item right click menu
  */
 export function addDoctreeMenuItems({ detail }: any) {
-    if (!DEV_ENABLE_INIT_SYS) return;
+    if (!isDevInitSysEnabled()) return;
     const menu = detail.menu;
     if (!menu || !detail.elements || detail.elements.length === 0) {
         return;
@@ -162,7 +162,7 @@ export function addDoctreeMenuItems({ detail }: any) {
  * Handle editor page title icon click menu
  */
 export function addEditorTitleIconMenuItems({ detail }: any) {
-    if (!DEV_ENABLE_INIT_SYS) return;
+    if (!isDevInitSysEnabled()) return;
     const menu = detail.menu;
     const protyle = detail.protyle;
     if (!menu || !protyle) {

@@ -300,10 +300,11 @@ export async function executeDDL(processedSql: string, db: any, options?: DDLOpt
             const refTable = matchDef[5] || null;
             
             let colType = "text";
-            const validTypes = ["block", "text", "number", "select", "mselect", "date", "checkbox", "relation", "masset", "rollup", "template", "created", "updated"];
+            const validTypes = ["block", "text", "number", "select", "mselect", "date", "checkbox", "relation", "masset", "rollup", "template", "created", "updated", "url", "email", "phone", "linenumber"];
             if (validTypes.includes(rawType)) {
                 if (rawType === "mselect") colType = "mSelect";
                 else if (rawType === "masset") colType = "mAsset";
+                else if (rawType === "linenumber") colType = "lineNumber";
                 else colType = rawType;
             }
             
@@ -478,10 +479,11 @@ export async function executeDDL(processedSql: string, db: any, options?: DDLOpt
             const refTable = typeMatch ? typeMatch[3] : null;
             
             let colType = "text";
-            const validTypes = ["block", "text", "number", "select", "mselect", "date", "checkbox", "relation", "masset", "rollup", "template", "created", "updated"];
+            const validTypes = ["block", "text", "number", "select", "mselect", "date", "checkbox", "relation", "masset", "rollup", "template", "created", "updated", "url", "email", "phone", "linenumber"];
             if (validTypes.includes(rawType)) {
                 if (rawType === "mselect") colType = "mSelect";
                 else if (rawType === "masset") colType = "mAsset";
+                else if (rawType === "linenumber") colType = "lineNumber";
                 else colType = rawType;
             }
             

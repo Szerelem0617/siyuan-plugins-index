@@ -21,6 +21,7 @@ export class SettingsProperty {
     icon: boolean;
     iconOutline: boolean;
     dbAddTemplateCols: boolean;
+    devMode: boolean;
 
     constructor() {
         this.depth = 0;
@@ -41,6 +42,7 @@ export class SettingsProperty {
         this.icon = false;
         this.iconOutline = false;
         this.dbAddTemplateCols = true;
+        this.devMode = false;
     }
 
     getAll() {
@@ -62,6 +64,7 @@ export class SettingsProperty {
         this.icon = settings.get("icon") ?? false;
         this.iconOutline = settings.get("iconOutline") ?? false;
         this.dbAddTemplateCols = settings.get("dbAddTemplateCols") ?? true;
+        this.devMode = settings.get("devMode") ?? false;
     }
 }
 
@@ -94,18 +97,23 @@ class Settings {
     }
 
     set(key: any, value: any, config = CONFIG) {
+        if (!plugin.data) plugin.data = {};
+        if (!plugin.data[config]) plugin.data[config] = {};
         plugin.data[config][key] = value;
     }
 
     get(key: any, config = CONFIG) {
-        return plugin.data[config]?.[key];
+        return plugin.data?.[config]?.[key];
     }
 
     async load(config = CONFIG) {
         await plugin.loadData(config);
+        if (!plugin.data) plugin.data = {};
+        if (!plugin.data[config]) plugin.data[config] = {};
     }
 
     async save(config = CONFIG) {
+        if (!plugin.data || !plugin.data[config]) return;
         await plugin.saveData(config, plugin.data[config]);
     }
 
