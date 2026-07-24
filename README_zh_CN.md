@@ -30,4 +30,4 @@
   
   <img src="https://raw.githubusercontent.com/Szerelem0617/siyuan-plugins-index/main/asset/qr.jpg" width="200" />
 
-# [致谢名单](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/acknowledgments.md)
+# [致谢](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/acknowledgments.md)
