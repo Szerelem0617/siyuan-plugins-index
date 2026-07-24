@@ -66,7 +66,6 @@ export async function constructCommandStorage() {
         let targetNotebookId = notebooks.find((n: any) => n.name === NOTEBOOK_NAME && !n.closed)?.id;
 
         if (!targetNotebookId) {
-            console.log(`[IndexOS] Notebook not found, creating new: ${NOTEBOOK_NAME}`);
             const res = await post("/api/notebook/createNotebook", { name: NOTEBOOK_NAME });
             targetNotebookId = res.notebook.id;
             await sleep(500);
@@ -75,7 +74,6 @@ export async function constructCommandStorage() {
         // Set notebook icon to NOTEBOOK_ICON
         try {
             await post("/api/notebook/setNotebookIcon", { notebook: targetNotebookId, icon: NOTEBOOK_ICON });
-            console.log(`[IndexOS] Set notebook icon for ${NOTEBOOK_NAME} to Dolphin`);
         } catch (iconErr) {
             console.warn(`[IndexOS] Failed to set notebook icon:`, iconErr);
         }
@@ -98,7 +96,6 @@ export async function constructCommandStorage() {
                 }));
 
                 if (addRows.length > 0) {
-                    console.log(`[IndexOS] Adding ${addRows.length} detached rows to Command-DB AV ${avId}...`);
                     await post("/api/av/addAttributeViewBlocks", { avID: avId, srcs: addRows });
                     await sleep(500);
                 }
@@ -166,7 +163,6 @@ export async function constructCommandStorage() {
                 }));
 
                 if (addRows.length > 0) {
-                    console.log(`[IndexOS] Adding ${addRows.length} detached rows to Type-DB AV ${avId}...`);
                     await post("/api/av/addAttributeViewBlocks", { avID: avId, srcs: addRows });
                     await sleep(500);
                 }
@@ -211,7 +207,6 @@ export async function constructCommandStorage() {
             setTypeDocId(typeDb.docId);
 
             // Sync the newly created AVs into SQLite av_ tables
-            console.log("[IndexOS] Syncing newly initialized Command-DB and Type-DB to SQLite...");
             await instantiateAV(commandDb.avId, true);
             await instantiateAV(typeDb.avId, true);
 
@@ -220,7 +215,6 @@ export async function constructCommandStorage() {
             db.run(`DROP TABLE IF EXISTS sys_command_db;`);
             db.run(`DROP TABLE IF EXISTS sys_type_db;`);
             await saveDatabaseToDisk();
-            console.log("[IndexOS] Dropped sys_command_db and sys_type_db tables.");
         }
 
         showMessage(`[IndexOS] 系统存储库初始化完成！`, 3000);
@@ -350,8 +344,6 @@ async function establishDbRelation(commandAvId: string, typeAvId: string) {
         if (!isLinkedAfterTx) {
             throw new Error("Failed to establish bidirectional relation between Command-DB and Type-DB after 3 attempts.");
         }
-    } else {
-        console.log("[IndexOS] Bidirectional relation '绑定类' <-> '绑定命令' is already set up and linked.");
     }
 
     // 1. 默认隐藏 Command-DB 中的 Command ID 列，防止用户误改
@@ -360,7 +352,6 @@ async function establishDbRelation(commandAvId: string, typeAvId: string) {
         const cmdKeys = Array.isArray(cmdKeysRes) ? cmdKeysRes : (cmdKeysRes.keys || []);
         const cmdIdKey = cmdKeys.find((k: any) => k.name === "Command ID" || k.name === "Command_ID");
         if (cmdIdKey) {
-            console.log(`[IndexOS] Hiding 'Command ID' column (id: ${cmdIdKey.id}) in Command-DB (${commandAvId})...`);
             await post("/api/transactions", {
                 app: "plugin-index",
                 reqId: Date.now(),
@@ -387,7 +378,6 @@ async function establishDbRelation(commandAvId: string, typeAvId: string) {
         const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
 
         if (primaryKeyCol && typeRelKey) {
-            console.log(`[IndexOS] Moving '绑定命令' column right next to Primary Key in Type-DB...`);
             await post("/api/transactions", {
                 app: "plugin-index",
                 reqId: Date.now(),
@@ -412,7 +402,6 @@ async function establishDbRelation(commandAvId: string, typeAvId: string) {
 }
 
 async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
-    console.log("[IndexOS-Debug] Binding default relation values dynamically...");
     
     const commandRender = await post("/api/av/renderAttributeView", { id: commandAvId });
     const commandRows = commandRender?.view?.rows || commandRender?.rows || [];
@@ -479,7 +468,6 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
 
         const primaryLabel = (primaryRow.cells[0]?.value?.block?.content || primaryRow.cells[0]?.value?.mText?.content || primaryRow.cells[0]?.value?.text?.content || "").trim();
         if (primaryLabel !== tag && primaryKeyId) {
-            console.log(`[IndexOS-Debug] Setting primary key content '${tag}' on row ${primaryRow.id}...`);
             await post("/api/av/batchSetAttributeViewBlockAttrs", {
                 avID: typeAvId,
                 values: [{
@@ -498,15 +486,12 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
     }
 
     if (duplicateRowIdsToRemove.length > 0) {
-        console.log(`[IndexOS-Debug] Removing ${duplicateRowIdsToRemove.length} duplicate supertag rows from Type-DB AV:`, duplicateRowIdsToRemove);
         await post("/api/av/removeAttributeViewBlocks", {
             avID: typeAvId,
             srcs: duplicateRowIdsToRemove.map(id => ({ itemID: id }))
         });
         await sleep(500);
     }
-
-    console.log("[IndexOS-Debug] commandMap:", commandMap, "typeMap:", typeMap);
 
     const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
     const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
@@ -519,7 +504,6 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
         const cleanBindingType = binding.typeLabel.replace(/^#/, "").toLowerCase();
         const typeRowId = typeMap[cleanBindingType];
         if (!typeRowId) {
-            console.warn(`[IndexOS-Debug] Could not find row ID for Supertag: ${binding.typeLabel} (clean: ${cleanBindingType})`);
             continue;
         }
 

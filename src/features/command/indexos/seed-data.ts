@@ -66,3 +66,5 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
         commandIds: ["plugin-index.command.safeUpdateBlock"]
     }
 ];
+
+export const BUILTIN_SUPERTAGS = new Set(["project", "task", "pipeline", "permanent"]);

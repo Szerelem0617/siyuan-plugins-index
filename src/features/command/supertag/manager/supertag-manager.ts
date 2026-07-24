@@ -70,8 +70,8 @@ export class SupertagManager {
         const dialog = new Dialog({
             title: i18n.supertagManager.title,
             content: `<div id="supertag-manager-container" style="height: 100%;"></div>`,
-            width: "600px",
-            height: "500px",
+            width: "720px",
+            height: "520px",
         });
 
         new SupertagManagerDialog({

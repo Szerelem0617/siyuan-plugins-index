@@ -11,11 +11,15 @@
         type SupertagCommand,
     } from "../../registration";
 
+    import { BUILTIN_SUPERTAGS } from "../../indexos/seed-data";
+    import { openTab } from "siyuan";
+    import { plugin } from "../../../../shared/utils";
+
     export let dialog: any;
     export let supertagManager: any;
 
     let loading = true;
-    let activeTab: "data" | "command" = "command";
+    let activeTab: "data" | "command" = "data";
 
     interface TagGroup {
         typeName: string;
@@ -26,6 +30,34 @@
 
     let dataComponents: TagGroup[] = [];
     let commandComponents: TagGroup[] = [];
+
+    import { post } from "../../../../shared/api-client/request";
+
+    function locateAv(avId: string) {
+        if (!avId) return;
+        
+        post("/api/query/sql", {
+            stmt: `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avId}%' OR ial LIKE '%${avId}%') LIMIT 1`
+        }).then((res) => {
+            let targetBlockId = (res && res.length > 0) ? res[0].id : (avIdToBlockIdMap.get(avId) || avId);
+            openTab({
+                app: plugin.app,
+                doc: {
+                    id: targetBlockId,
+                    action: ["cb-get-hl", "cb-get-focus"]
+                }
+            });
+        }).catch((e) => {
+            console.error("Locate AV failed:", e);
+            openTab({
+                app: plugin.app,
+                doc: {
+                    id: avId,
+                    action: ["cb-get-hl", "cb-get-focus"]
+                }
+            });
+        });
+    }
 
     onMount(async () => {
         const scannedData = await getGlobalTypeConfigs();
@@ -99,9 +131,9 @@
     }
 
     $: currentList =
-        activeTab === "command"
-            ? commandComponents
-            : dataComponents;
+        activeTab === "data"
+            ? dataComponents
+            : commandComponents;
 </script>
 
 <div
@@ -115,20 +147,6 @@
     >
         <div class="fn__flex">
             <div
-                class="item {activeTab === 'command' ? 'item--focus' : ''}"
-                role="tab"
-                tabindex="0"
-                on:click={() => (activeTab = "command")}
-                on:keydown={(e) => e.key === 'Enter' && (activeTab = "command")}
-            >
-                <span class="item__text">命令tag</span>
-                <span
-                    class="b3-chip b3-chip--small"
-                    style="margin-left: 4px; opacity: 0.6;"
-                    >{commandComponents.length}</span
-                >
-            </div>
-            <div
                 class="item {activeTab === 'data' ? 'item--focus' : ''}"
                 role="tab"
                 tabindex="0"
@@ -140,6 +158,20 @@
                     class="b3-chip b3-chip--small"
                     style="margin-left: 4px; opacity: 0.6;"
                     >{dataComponents.length}</span
+                >
+            </div>
+            <div
+                class="item {activeTab === 'command' ? 'item--focus' : ''}"
+                role="tab"
+                tabindex="0"
+                on:click={() => (activeTab = "command")}
+                on:keydown={(e) => e.key === 'Enter' && (activeTab = "command")}
+            >
+                <span class="item__text">命令tag</span>
+                <span
+                    class="b3-chip b3-chip--small"
+                    style="margin-left: 4px; opacity: 0.6;"
+                    >{commandComponents.length}</span
                 >
             </div>
         </div>
@@ -184,12 +216,12 @@
                 >
                     <span
                         class="b3-list-item__text"
-                        style="font-weight: bold; opacity: 0.6; flex: 1.2;"
+                        style="font-weight: bold; opacity: 0.6; flex: 1.8;"
                         >标签 (Type)</span
                     >
                     <span
                         class="b3-list-item__text"
-                        style="font-weight: bold; opacity: 0.6; flex: 3.5;"
+                        style="font-weight: bold; opacity: 0.6; flex: 3.2;"
                         >绑定详情 (Storage / Logic)</span
                     >
                     <span
@@ -210,25 +242,32 @@
                         >
 
                         <!-- Tag Name Column -->
-                        <span
-                            class="b3-list-item__text"
-                            style="font-weight: bold; flex: 1.2;"
+                        <div
+                            class="b3-list-item__text fn__flex-column"
+                            style="flex: 1.8; justify-content: center; gap: 2px;"
                         >
-                            {group.typeName}
-                        </span>
+                            <span style="font-weight: bold; line-height: 1.2; word-break: break-all;">{group.typeName}</span>
+                            {#if BUILTIN_SUPERTAGS.has(group.typeName.toLowerCase())}
+                                <span
+                                    class="b3-chip b3-chip--info b3-chip--small"
+                                    style="font-size: 9px; font-weight: normal; opacity: 0.8; align-self: flex-start; margin-top: 2px;"
+                                    title="系统预置的标准 Supertag"
+                                >系统内置</span>
+                            {/if}
+                        </div>
 
                         <!-- Details Column -->
                         <div
                             class="b3-list-item__text fn__flex-column"
-                            style="flex: 3.5; gap: 4px;"
+                            style="flex: 3.2; gap: 4px;"
                         >
                             {#if group.dataConfigs.length > 0}
                                 <div
                                     class="fn__flex"
-                                    style="align-items: center;"
+                                    style="align-items: center; gap: 6px;"
                                 >
                                     <svg
-                                        style="width: 12px; height: 12px; margin-right: 4px; opacity: 0.5;"
+                                        style="width: 12px; height: 12px; opacity: 0.5;"
                                         ><use xlink:href="#iconDatabase"
                                         ></use></svg
                                     >
@@ -269,6 +308,17 @@
                                                     )}</span
                                         >
                                     {/if}
+
+                                    <!-- Locate Button for Data Tag -->
+                                    <button
+                                        class="b3-button b3-button--text"
+                                        style="font-size: 11px; padding: 1px 6px; line-height: 1.2; display: inline-flex; align-items: center; gap: 2px;"
+                                        title="定位到对应数据库"
+                                        on:click={() => locateAv(group.selectedAvId || group.dataConfigs[0]?.avId)}
+                                    >
+                                        <svg style="width: 11px; height: 11px;"><use xlink:href="#iconFocus"></use></svg>
+                                        <span>Locate</span>
+                                    </button>
                                 </div>
                             {/if}
 

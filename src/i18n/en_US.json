@@ -188,7 +188,7 @@
     "syncTo": "Sync to",
     "batchSyncTo": "Batch sync to descendants",
     "syncToFiltered": "Sync to filtered items",
-    "warning": "⚠️ The Database feature is currently in beta. Please be aware that structural changes within lists, such as **Outdenting** or **dragging blocks across different levels**, may cause database links to break or data loss. Please use with caution and recommend regular backups."
+    "warning": "⚠️ Developer mode and database advanced features are currently in experimental phase. Recommended for use in test workspaces only. Backward compatibility is not guaranteed until plugin v2.0.0 stable release."
   },
   "supertagManager": {
     "title": "Supertag Management",
