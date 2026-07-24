@@ -45,26 +45,26 @@ export const DATA_DBS_CONFIG = {
 
 export interface DefaultRelationRule {
     typeLabel: string;
-    commandIds: string[];
+    iconMenuCmdIds: string[];
+    relationCmdIds: string[];
 }
 
 export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     {
-        typeLabel: "project",
-        commandIds: ["siyuan.view.graph"]
-    },
-    {
         typeLabel: "task",
-        commandIds: ["plugin-index.command.turnIntoTask", "plugin-index.effect.fireworks"]
+        iconMenuCmdIds: [],
+        relationCmdIds: ["plugin-index.command.turnIntoTask", "plugin-index.effect.fireworks"]
     },
     {
         typeLabel: "pipeline",
-        commandIds: ["api.block.insert", "plugin-index.command.safeUpdateBlock"]
+        iconMenuCmdIds: [],
+        relationCmdIds: ["api.block.insert", "plugin-index.command.safeUpdateBlock"]
     },
     {
         typeLabel: "permanent",
-        commandIds: ["plugin-index.command.safeUpdateBlock"]
+        iconMenuCmdIds: ["plugin-index.command.safeUpdateBlock"],
+        relationCmdIds: ["api.block.insert", "plugin-index.command.safeUpdateBlock"]
     }
 ];
 
-export const BUILTIN_SUPERTAGS = new Set(["project", "task", "pipeline", "permanent"]);
+export const BUILTIN_SUPERTAGS = new Set(["task", "pipeline", "permanent"]);

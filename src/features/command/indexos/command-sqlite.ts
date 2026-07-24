@@ -232,8 +232,6 @@ async ({ dispatch, state, eventName }) => {
 
     if (typeCount === 0) {
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
-            ["20260526204605-7hun58a", "project", "🌐 全局关系图", ""]);
-        db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
             ["20260526204605-v11e2ta", "task", "", defaultTaskConditional]);
         db.run(`INSERT INTO ${TABLE_TYPES} (rowID, supertag, Icon_Menu, Conditional) VALUES (?, ?, ?, ?)`, 
             ["20260721140000-pipeline", "pipeline", "", defaultPipelineConditional]);
@@ -241,6 +239,9 @@ async ({ dispatch, state, eventName }) => {
             ["20260721140000-permanent", "permanent", "📝 安全更新块内容", defaultPermanentConditional]);
     } else {
         try {
+            // Delete project if exists in seed data
+            db.run(`DELETE FROM ${TABLE_TYPES} WHERE supertag = 'project'`);
+
             db.run(`UPDATE ${TABLE_TYPES} SET supertag = 'task', Conditional = ?, Icon_Menu = '' WHERE supertag IN ('person', '#Person', '#task', 'task')`, [defaultTaskConditional]);
             
             // Ensure pipeline and permanent exist in development

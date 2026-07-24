@@ -507,26 +507,33 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
             continue;
         }
 
-        // 1. Populate Icon Menu text column
+        // 1. Populate Icon Menu text column with command friendly labels
         if (iconMenuKey) {
-            const validCommandIds = binding.commandIds.filter(id => Boolean(id));
-            const iconMenuTextValue = validCommandIds.join(", ");
+            const validCommandNames: string[] = [];
+            for (const cmdId of binding.iconMenuCmdIds) {
+                const cmdRowId = commandMap[cmdId];
+                if (cmdRowId) {
+                    const row = commandRows.find((r: any) => r.id === cmdRowId);
+                    const label = row ? (row.cells[0]?.value?.block?.content || row.cells[0]?.value?.mText?.content || row.cells[0]?.value?.text?.content || "").trim() : "";
+                    if (label) validCommandNames.push(label);
+                }
+            }
             batchValues.push({
                 keyID: iconMenuKey.id,
                 itemID: typeRowId,
                 value: {
                     type: "text",
                     text: {
-                        content: iconMenuTextValue
+                        content: validCommandNames.join(", ")
                     }
                 }
             });
         }
 
-        // 2. Populate 绑定命令 AV Relation column
+        // 2. Populate 绑定命令 AV Relation column with relationCmdIds
         if (typeRelKey) {
             const commandRowIds: string[] = [];
-            for (const cmdId of binding.commandIds) {
+            for (const cmdId of binding.relationCmdIds) {
                 if (commandMap[cmdId]) {
                     commandRowIds.push(commandMap[cmdId]);
                 }

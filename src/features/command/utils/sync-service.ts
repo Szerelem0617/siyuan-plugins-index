@@ -304,7 +304,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                     }
                 }
 
-                // 2. 解析 绑定命令 关联列：这些命令关联到 Tag，但未写入 Icon Menu 列的标记为 BoundOnly
+                // 2. 解析 绑定命令 关联列或 Conditional 条件脚本中包含的命令引用
                 if (relationRaw) {
                     try {
                         const linkedRowIds: string[] = JSON.parse(relationRaw);
@@ -329,6 +329,31 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                             }
                         }
                     } catch (e) {
+                    }
+                }
+
+                // 3. 回退策略：解析 Conditional 自动化条件脚本中的命令引用 (如 dispatch("plugin-index.command.safeUpdateBlock"))
+                const conditionalText = row[3] || row[2] || "";
+                if (conditionalText) {
+                    const matches = String(conditionalText).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
+                    for (const m of matches) {
+                        const cmdRef = m[1];
+                        const foundCmd = Object.values(newCommandRegistry).find(c => c.commandRef === cmdRef);
+                        if (foundCmd) {
+                            const inIconMenu = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef && r.uiLocation === "IconMenu");
+                            if (!inIconMenu) {
+                                const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef);
+                                if (!exists) {
+                                    newRegistry.push({
+                                        typeTag: cleanTag,
+                                        methodName: foundCmd.methodName,
+                                        commandRef: foundCmd.commandRef,
+                                        paramMapping: foundCmd.paramMapping,
+                                        uiLocation: "BoundOnly"
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
 
