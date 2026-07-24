@@ -4,7 +4,7 @@
 
 ## 👨‍💻 维护者与贡献者
 
-- 特别感谢 [TinkMingKing](https://github.com/TinkMingKing) 大佬之前对插件的精心维护，以及将仓库转交给我的信任。
+- 特别感谢 [TinkMingKing](https://github.com/TinkMingKing) 大佬对插件的精心维护～
 
 ## ☕ 赞赏支持名单
 
