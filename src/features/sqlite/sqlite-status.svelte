@@ -83,6 +83,22 @@
                 }
             });
             
+            // Sort avBlocks: Pin command-db and supertag-db to top
+            tempBlocks.sort((a: any, b: any) => {
+                const nameA = (a.name || "").toLowerCase();
+                const nameB = (b.name || "").toLowerCase();
+                const isCmdA = nameA === "command-db";
+                const isCmdB = nameB === "command-db";
+                const isTagA = nameA === "supertag-db";
+                const isTagB = nameB === "supertag-db";
+
+                if (isCmdA) return -1;
+                if (isCmdB) return 1;
+                if (isTagA) return -1;
+                if (isTagB) return 1;
+                return nameA.localeCompare(nameB);
+            });
+            
             avBlocks = tempBlocks;
             
             avBlocks.forEach(b => {
@@ -262,14 +278,14 @@
             class:active={activeTab === "databases"}
             on:click={() => activeTab = "databases"}
         >
-            Databases ({avBlocks.length})
+            数据库 ({avBlocks.length})
         </button>
         <button
             class="tab-btn"
             class:active={activeTab === "console"}
             on:click={() => activeTab = "console"}
         >
-            SQL Console
+            SQL 控制台
         </button>
         <button
             class="tab-btn"

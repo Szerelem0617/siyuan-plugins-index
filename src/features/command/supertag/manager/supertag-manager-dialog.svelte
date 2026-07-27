@@ -105,8 +105,13 @@
             }
         });
 
-        const sorter = (a: TagGroup, b: TagGroup) =>
-            a.typeName.localeCompare(b.typeName);
+        const sorter = (a: TagGroup, b: TagGroup) => {
+            const isBuiltinA = BUILTIN_SUPERTAGS.has(a.typeName.toLowerCase());
+            const isBuiltinB = BUILTIN_SUPERTAGS.has(b.typeName.toLowerCase());
+            if (isBuiltinA && !isBuiltinB) return -1;
+            if (!isBuiltinA && isBuiltinB) return 1;
+            return a.typeName.localeCompare(b.typeName);
+        };
         commandComponents = tempCmdComp.sort(sorter);
         dataComponents = tempDataComp.sort(sorter);
 
