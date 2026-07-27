@@ -131,10 +131,18 @@ export default class IndexPlugin extends Plugin {
         initEmojiEvent();
         avEventHandler.init();
         supertagMonitor.init(this);
-        supertagManager.init();
+        supertagManager.updateState();
         SupertagRenderer.initAutoObserver();
         await initTagSuggestion(this);
         initTagMenuInterceptor();
+
+        // 监听设置变化事件，实现开发者模式开关实时刷新生效
+        window.addEventListener("index-plugin-setting-changed", (e: CustomEvent) => {
+            if (e.detail?.key === "devMode") {
+                supertagManager.updateState();
+                setTagSuggestionEnabled(!!e.detail.value);
+            }
+        });
         if (isDevInitSysEnabled()) {
             initInlineButtonListener();
             initCommandPalette();

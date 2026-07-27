@@ -42,9 +42,11 @@ export async function refreshNativeTagsCache() {
     }
 }
 
+import { settings } from "../../../../core/settings";
+
 export async function initTagSuggestion(plugin: Plugin) {
     tagSuggestionState.plugin = plugin;
-    tagSuggestionState.enabled = true;
+    tagSuggestionState.enabled = !!settings.get("devMode");
     refreshNativeTagsCache().catch(() => {});
 }
 
@@ -130,17 +132,24 @@ function getQueryText(protyle: any): string | null {
     return null;
 }
 
-function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle: any) {
+import { getGlobalTypeConfigs } from "../../../av/av-setting/db-config";
+import { supertagBinder } from "../core/supertag-binder";
+
+async function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle: any) {
     panel.innerHTML = "";
 
-    const dbConfigs: any[] = [];
+    const dbConfigs = await getGlobalTypeConfigs();
     const logicConfigs = SUPERTAG_REGISTRY || [];
 
     const dataNames = new Set(dbConfigs.map((c: any) => c.typeName.trim().toLowerCase()));
     const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
 
     const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
-    const matched = allSupertags.filter(t => t.includes(query));
+    const matched = allSupertags.filter(t => {
+        if (!t.includes(query)) return false;
+        const pref = supertagBinder.getPref(t);
+        return pref !== "disabled";
+    });
 
     const activeBlock = findActiveBlock(protyle);
     const currentBlockType = activeBlock ? getBlockType(activeBlock) : null;
@@ -233,7 +242,10 @@ function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, protyle:
 }
 
 function showBlockSupertagsPanel(protyle: any, query: string) {
-    if (!tagSuggestionState.enabled) return;
+    if (!tagSuggestionState.enabled || !settings.get("devMode")) {
+        hideBlockSupertagsPanel();
+        return;
+    }
 
     const hintEl = protyle.hint?.element as HTMLElement;
     if (!hintEl) return;

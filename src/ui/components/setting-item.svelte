@@ -11,6 +11,9 @@
     function updateSetting() {
         settings.set(settingKey, settingValue);
         settings.save();
+        window.dispatchEvent(new CustomEvent("index-plugin-setting-changed", {
+            detail: { key: settingKey, value: settingValue }
+        }));
     }
 </script>
 

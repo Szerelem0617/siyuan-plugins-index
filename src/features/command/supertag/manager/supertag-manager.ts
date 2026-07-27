@@ -2,12 +2,25 @@ import { Dialog } from "siyuan";
 import SupertagManagerDialog from "./supertag-manager-dialog.svelte";
 import { i18n } from "../../../../shared/utils";
 
+import { settings } from "../../../../core/settings";
+
 export class SupertagManager {
     private observer: MutationObserver | null = null;
 
     init() {
-        this.inject();
-        this.startObserver();
+        this.updateState();
+    }
+
+    updateState() {
+        const isDev = !!settings.get("devMode");
+        if (isDev) {
+            this.inject();
+            if (!this.observer) {
+                this.startObserver();
+            }
+        } else {
+            this.destroy();
+        }
     }
 
     destroy() {
@@ -20,6 +33,7 @@ export class SupertagManager {
     }
 
     private inject() {
+        if (!settings.get("devMode")) return;
         if (document.getElementById("supertag-management")) {
             return;
         }
