@@ -99,7 +99,8 @@
 
             if (hasLogic) {
                 tempCmdComp.push(group);
-            } else if (hasData) {
+            }
+            if (hasData) {
                 tempDataComp.push(group);
             }
         });
@@ -322,7 +323,7 @@
                                 </div>
                             {/if}
 
-                            {#if group.logicConfigs.length > 0}
+                            {#if group.logicConfigs.filter(l => l.methodName || l.commandRef).length > 0}
                                 <div
                                     class="fn__flex"
                                     style="align-items: center; flex-wrap: wrap; gap: 4px;"
@@ -331,7 +332,7 @@
                                         style="width: 12px; height: 12px; margin-right: 4px; opacity: 0.5;"
                                         ><use xlink:href="#iconPlay"></use></svg
                                     >
-                                    {#each group.logicConfigs as logic}
+                                    {#each group.logicConfigs.filter(l => l.methodName || l.commandRef) as logic}
                                         <span
                                             class="b3-chip b3-chip--small"
                                             style="font-size: 10px; background-color: var(--b3-theme-surface-lighter);"

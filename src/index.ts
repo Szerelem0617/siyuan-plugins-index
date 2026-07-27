@@ -19,6 +19,7 @@ import {
     supertagManager, 
     initTagSuggestion, 
     bindProtyleHintExtend, 
+    setTagSuggestionEnabled,
     SupertagRenderer, 
     initTagMenuInterceptor 
 } from "./features/command/supertag";
