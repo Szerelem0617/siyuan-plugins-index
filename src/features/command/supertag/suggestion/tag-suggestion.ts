@@ -253,7 +253,7 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
     if (!blockSupertagsPanel) {
         blockSupertagsPanel = document.createElement("div");
         blockSupertagsPanel.className = "indexos-block-supertags-panel b3-list b3-list--background";
-        blockSupertagsPanel.style.cssText = "position: absolute; width: 240px; max-height: 420px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border: 1px solid var(--b3-border-color); border-radius: 6px; box-shadow: var(--b3-dialog-shadow); z-index: 9999; box-sizing: border-box;";
+        blockSupertagsPanel.style.cssText = "position: fixed; width: 240px; max-height: 420px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border: 1px solid var(--b3-border-color); border-radius: 6px; box-shadow: var(--b3-dialog-shadow); z-index: 9999; box-sizing: border-box;";
         document.body.appendChild(blockSupertagsPanel);
     }
 
@@ -261,8 +261,6 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
     const panelWidth = 240;
     const windowHeight = window.innerHeight;
     const windowWidth = window.innerWidth;
-    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
-    const scrollLeft = window.scrollX || document.documentElement.scrollLeft || 0;
 
     let left = rect.left - panelWidth - 6;
     if (left < 0) {
@@ -272,33 +270,34 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
         left = Math.max(0, windowWidth - panelWidth - 6);
     }
 
-    // 1. Render items into DOM first so panel has nodes
+    // Render content first
     blockSupertagsPanel.style.display = "flex";
-    blockSupertagsPanel.style.visibility = "hidden"; // render invisibly to measure
     blockSupertagsPanel.style.height = "auto";
     renderSupertagsInBlockPanel(blockSupertagsPanel, query, protyle);
 
-    // 2. Measure actual rendered height, or fallback to an estimated panel height (280px) if DOM has not reflowed
+    // Use estimated panel height (280px min) for overflow check since DOM may not have reflowed yet
     const measuredHeight = blockSupertagsPanel.offsetHeight;
-    const panelHeight = measuredHeight > 50 ? measuredHeight : 280;
+    const estimatedHeight = measuredHeight > 50 ? measuredHeight : 280;
 
-    // Default top relative to document body
-    let finalTop = rect.top + scrollTop;
+    // Check if panel would overflow below viewport
+    const isOverflowBottom = (rect.top + estimatedHeight) > (windowHeight - 16);
 
-    // Check if showing below hintEl exceeds viewport bottom (using panelHeight)
-    const isOverflowBottom = (rect.top + panelHeight) > (windowHeight - 16);
+    // Reset both top/bottom before setting new position
+    blockSupertagsPanel.style.top = "";
+    blockSupertagsPanel.style.bottom = "";
 
     if (isOverflowBottom) {
-        // Anchor top upwards so panel bottom fits inside window
-        const topInViewport = Math.max(12, rect.bottom - panelHeight);
-        finalTop = topInViewport + scrollTop;
+        // Anchor panel BOTTOM to hint element BOTTOM — panel grows upward
+        const bottomOffset = windowHeight - rect.bottom;
+        blockSupertagsPanel.style.bottom = `${Math.max(8, bottomOffset)}px`;
+    } else {
+        // Normal: align panel top with hint top
+        blockSupertagsPanel.style.top = `${rect.top}px`;
     }
 
-    console.log(`[TagSuggestion-Debug] hintRect: top=${rect.top.toFixed(1)}, measuredH=${measuredHeight}, calcH=${panelHeight}, winH=${windowHeight}, isOverflowBottom=${isOverflowBottom}, finalTop=${finalTop.toFixed(1)}`);
+    blockSupertagsPanel.style.left = `${Math.max(6, left)}px`;
 
-    blockSupertagsPanel.style.left = `${Math.max(6, left + scrollLeft)}px`;
-    blockSupertagsPanel.style.top = `${finalTop}px`;
-    blockSupertagsPanel.style.visibility = "";
+    console.log(`[TagSuggestion-Debug] hintRect: top=${rect.top.toFixed(1)}, bottom=${rect.bottom.toFixed(1)}, measuredH=${measuredHeight}, estH=${estimatedHeight}, winH=${windowHeight}, overflow=${isOverflowBottom}`);
 }
 
 function hideBlockSupertagsPanel() {
