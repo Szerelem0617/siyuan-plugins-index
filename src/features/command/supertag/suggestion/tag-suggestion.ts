@@ -259,16 +259,46 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
 
     const rect = hintEl.getBoundingClientRect();
     const panelWidth = 240;
+    const windowHeight = window.innerHeight;
+    const windowWidth = window.innerWidth;
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+    const scrollLeft = window.scrollX || document.documentElement.scrollLeft || 0;
+
     let left = rect.left - panelWidth - 6;
     if (left < 0) {
         left = rect.right + 6;
     }
-    blockSupertagsPanel.style.left = `${left}px`;
-    blockSupertagsPanel.style.top = `${rect.top}px`;
-    blockSupertagsPanel.style.height = "auto";
-    blockSupertagsPanel.style.display = "flex";
+    if (left + panelWidth > windowWidth) {
+        left = Math.max(0, windowWidth - panelWidth - 6);
+    }
 
+    // 1. Render items into DOM first so panel has nodes
+    blockSupertagsPanel.style.display = "flex";
+    blockSupertagsPanel.style.visibility = "hidden"; // render invisibly to measure
+    blockSupertagsPanel.style.height = "auto";
     renderSupertagsInBlockPanel(blockSupertagsPanel, query, protyle);
+
+    // 2. Measure actual rendered height, or fallback to an estimated panel height (280px) if DOM has not reflowed
+    const measuredHeight = blockSupertagsPanel.offsetHeight;
+    const panelHeight = measuredHeight > 50 ? measuredHeight : 280;
+
+    // Default top relative to document body
+    let finalTop = rect.top + scrollTop;
+
+    // Check if showing below hintEl exceeds viewport bottom (using panelHeight)
+    const isOverflowBottom = (rect.top + panelHeight) > (windowHeight - 16);
+
+    if (isOverflowBottom) {
+        // Anchor top upwards so panel bottom fits inside window
+        const topInViewport = Math.max(12, rect.bottom - panelHeight);
+        finalTop = topInViewport + scrollTop;
+    }
+
+    console.log(`[TagSuggestion-Debug] hintRect: top=${rect.top.toFixed(1)}, measuredH=${measuredHeight}, calcH=${panelHeight}, winH=${windowHeight}, isOverflowBottom=${isOverflowBottom}, finalTop=${finalTop.toFixed(1)}`);
+
+    blockSupertagsPanel.style.left = `${Math.max(6, left + scrollLeft)}px`;
+    blockSupertagsPanel.style.top = `${finalTop}px`;
+    blockSupertagsPanel.style.visibility = "";
 }
 
 function hideBlockSupertagsPanel() {
