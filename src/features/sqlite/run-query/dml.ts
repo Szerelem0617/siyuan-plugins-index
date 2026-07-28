@@ -17,7 +17,9 @@ function packCellValue(kt: string, val: any): any {
     if (kt === "checkbox") {
         return { type: "checkbox", checkbox: { checked: Boolean(val) } };
     } else if (kt === "number") {
-        return { type: "number", number: { content: val === null || val === undefined ? "" : String(val), isNotEmpty: val !== null && val !== undefined } };
+        const numVal = (val === null || val === undefined || val === "") ? 0 : Number(val);
+        const isNotEmpty = val !== null && val !== undefined && val !== "";
+        return { type: "number", number: { content: isNaN(numVal) ? 0 : numVal, isNotEmpty } };
     } else if (kt === "relation") {
         let blockIDs: string[] = [];
         if (typeof val === "string" && val.startsWith("[")) {
@@ -52,6 +54,17 @@ function packCellValue(kt: string, val: any): any {
             assets = [{ type: "file", name: String(val), content: String(val) }];
         }
         return { type: "mAsset", mAsset: assets };
+    } else if (kt === "block") {
+        const valStr = val === null || val === undefined ? "" : String(val).trim();
+        const isBlockId = /^\d{14}-[a-z0-9]{7}$/i.test(valStr);
+        return {
+            type: "block",
+            block: {
+                content: isBlockId ? "" : valStr,
+                id: isBlockId ? valStr : ""
+            },
+            isDetached: !isBlockId
+        };
     } else {
         return { type: kt, [kt]: { content: val === null || val === undefined ? "" : String(val) } };
     }
@@ -136,9 +149,8 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                     const val = tuple[i];
                     const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
                     if (!colSchema) continue;
-                    if (!colSchema.writable) {
-                        throw new Error(`无法更新只读列 "${colName}" (类型: ${colSchema.keyType})。创建时间、更新时间、汇总(rollup)、关联块(block)、模板列等不可被修改。`);
-                    }
+                    // Primary block column or read-only system columns should be skipped without throwing error in UPSERT
+                    if (colSchema.keyType === "block" || !colSchema.writable) continue;
 
                     allUpdates.push({
                         keyID: colSchema.keyId,
@@ -147,15 +159,33 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                     });
                 }
             } else {
-                // INSERT new detached row
+                // INSERT new row (check if user provided explicit Block ID)
                 insertedCount++;
-                // @ts-ignore - 始终使用思源标准 NodeID 格式，用户提供的 id 值仅用于 UPSERT 查找已存在行
-                const newRowID = window.Lute?.NewNodeID?.() || `${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 9)}`;
+                let explicitBlockId: string | null = null;
+                if (idColIndex !== -1) {
+                    const candidate = String(tuple[idColIndex]).trim();
+                    if (/^\d{14}-[a-z0-9]{7}$/i.test(candidate)) explicitBlockId = candidate;
+                } else if (colNames.length > 0) {
+                    const candidate = String(tuple[0]).trim();
+                    if (/^\d{14}-[a-z0-9]{7}$/i.test(candidate)) explicitBlockId = candidate;
+                }
+
+                // @ts-ignore
+                const newRowID = explicitBlockId || window.Lute?.NewNodeID?.() || `${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 9)}`;
                 
-                await post("/api/av/addAttributeViewBlocks", {
-                    avID: avID,
-                    srcs: [{ itemID: newRowID, id: "", isDetached: true }]
-                });
+                if (explicitBlockId) {
+                    console.log(`[SQLiteManager] UPSERT inserting native block ${explicitBlockId} to AV ${avID}`);
+                    await post("/api/av/addAttributeViewBlocks", {
+                        avID: avID,
+                        srcs: [{ itemID: newRowID, id: explicitBlockId, isDetached: false }]
+                    });
+                } else {
+                    console.log(`[SQLiteManager] UPSERT inserting detached row ${newRowID} to AV ${avID}`);
+                    await post("/api/av/addAttributeViewBlocks", {
+                        avID: avID,
+                        srcs: [{ itemID: newRowID, id: "", isDetached: true }]
+                    });
+                }
 
                 for (let i = 0; i < colNames.length; i++) {
                     if (i === idColIndex) continue; // 跳过 id/rowID 伪列
@@ -166,6 +196,7 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                         console.warn(`[DML-UPSERT] Column "${colName}" not found in AV schema. Available columns: [${schema.map(c => `${c.colName}(${c.keyType})`).join(", ")}]`);
                         continue;
                     }
+                    if (colSchema.keyType === "block" || !colSchema.writable) continue;
 
                     allUpdates.push({
                         keyID: colSchema.keyId,
@@ -244,8 +275,8 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
         for (const [colName, val] of Object.entries(assignments)) {
             const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
             if (!colSchema) throw new Error(`Column '${colName}' not found in table schema.`);
-            if (!colSchema.writable) {
-                throw new Error(`无法更新只读列 "${colName}" (类型: ${colSchema.keyType})。创建时间、更新时间、汇总(rollup)、关联块(block)、模板列等不可被修改。`);
+            if (!colSchema.writable && colSchema.keyType !== "block") {
+                throw new Error(`无法更新只读列 "${colName}" (类型: ${colSchema.keyType})。创建时间、更新时间、汇总(rollup)、模板列等不可被修改。`);
             }
             
             for (const rowID of rowIDs) {
@@ -298,21 +329,48 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
         const insertedIds: string[] = [];
         const values: any[] = [];
 
+        // Check primary column or ID column for block ID
+        const idColIndex = colNames.findIndex(c => c.toLowerCase() === "id" || c.toLowerCase() === "rowid" || c.toLowerCase() === "_itemid");
+
         for (const tuple of tuples) {
             if (colNames.length !== tuple.length) {
                 throw new Error(`列与值数量不匹配：SQL 中指定的列数量为 ${colNames.length} 个 (${colNames.join(", ")}), 但 VALUES 括号内传入了 ${tuple.length} 个值 [${tuple.join(", ")}]。请确保每组 VALUES (...) 的参数个数与列数量一致。`);
             }
 
-            // Generate new Siyuan block ID
+            // Check if user provided an explicit Siyuan Block ID (14 digits format: YYYYMMDDHHMMSS-xxxxxxx)
+            let explicitBlockId: string | null = null;
+            let primaryColVal: any = null;
+
+            if (idColIndex !== -1) {
+                const candidate = String(tuple[idColIndex]).trim();
+                if (/^\d{14}-[a-z0-9]{7}$/i.test(candidate)) {
+                    explicitBlockId = candidate;
+                }
+            } else if (colNames.length > 0) {
+                primaryColVal = String(tuple[0]).trim();
+                if (/^\d{14}-[a-z0-9]{7}$/i.test(primaryColVal)) {
+                    explicitBlockId = primaryColVal;
+                }
+            }
+
+            // Generate or use provided Block ID
             // @ts-ignore
-            const newRowID = window.Lute?.NewNodeID?.() || `row_${Date.now()}`;
+            const newRowID = explicitBlockId || window.Lute?.NewNodeID?.() || `row_${Date.now()}`;
             insertedIds.push(newRowID);
             
-            console.log(`[SQLiteManager] Inserting new detached row ${newRowID} to AV ${avID}`);
-            await post("/api/av/addAttributeViewBlocks", {
-                avID: avID,
-                srcs: [{ itemID: newRowID, id: "", isDetached: true }]
-            });
+            if (explicitBlockId) {
+                console.log(`[SQLiteManager] Inserting native block ${explicitBlockId} to AV ${avID}`);
+                await post("/api/av/addAttributeViewBlocks", {
+                    avID: avID,
+                    srcs: [{ itemID: newRowID, id: explicitBlockId, isDetached: false }]
+                });
+            } else {
+                console.log(`[SQLiteManager] Inserting new detached row ${newRowID} to AV ${avID}`);
+                await post("/api/av/addAttributeViewBlocks", {
+                    avID: avID,
+                    srcs: [{ itemID: newRowID, id: "", isDetached: true }]
+                });
+            }
 
             for (let idx = 0; idx < colNames.length; idx++) {
                 const colName = colNames[idx];
@@ -320,6 +378,11 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                 const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
                 if (!colSchema) {
                     console.warn(`[DML-INSERT] Column "${colName}" not found in AV schema. Available columns: [${schema.map(c => `${c.colName}(${c.keyType})`).join(", ")}]`);
+                    continue;
+                }
+
+                // If primary column is type block (read-only primary key), Siyuan auto-binds block title, skip manual setting
+                if (colSchema.keyType === "block" || !colSchema.writable) {
                     continue;
                 }
                 
