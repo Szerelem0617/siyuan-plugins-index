@@ -191,12 +191,21 @@
   },
   "supertagManager": {
     "title": "超级标签管理",
-    "configRule": "配置规则",
-    "tagName": "标签名",
-    "targetDB": "目标数据库",
-    "actions": "操作",
-    "configTemplate": "配置模板（未上线）",
-    "noTags": "未发现已配置的超级标签",
-    "noTagsHint": "请在数据库高级设置中通过标记星标来创建超级标签"
+    "tabData": "数据tag",
+    "tabCommand": "命令tag",
+    "colTag": "标签 (Type)",
+    "colBinding": "绑定详情 (Storage / Logic)",
+    "colStatus": "启用状态",
+    "builtinTag": "系统内置",
+    "builtinTooltip": "系统预置的标准 Supertag",
+    "locate": "定位",
+    "locateTitle": "定位到对应数据库",
+    "duplicateName": "重名",
+    "noContent": "该分类下暂无内容",
+    "noContentData": "工作区中的数据库将在此显示（默认未开启）",
+    "noContentCommand": "触发器与命令绑定的标签将在此显示（默认未开启）",
+    "enableSuccess": "✓ 超级标签 #{tag} 推荐已启用",
+    "disableSuccess": "✗ 超级标签 #{tag} 推荐已禁用",
+    "saveFailed": "保存配置失败: {error}"
   }
 }

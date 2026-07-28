@@ -159,7 +159,7 @@
                 on:click={() => (activeTab = "data")}
                 on:keydown={(e) => e.key === 'Enter' && (activeTab = "data")}
             >
-                <span class="item__text">数据tag</span>
+                <span class="item__text">{i18n.supertagManager.tabData}</span>
                 <span
                     class="b3-chip b3-chip--small"
                     style="margin-left: 4px; opacity: 0.6;"
@@ -173,7 +173,7 @@
                 on:click={() => (activeTab = "command")}
                 on:keydown={(e) => e.key === 'Enter' && (activeTab = "command")}
             >
-                <span class="item__text">命令tag</span>
+                <span class="item__text">{i18n.supertagManager.tabCommand}</span>
                 <span
                     class="b3-chip b3-chip--small"
                     style="margin-left: 4px; opacity: 0.6;"
@@ -204,12 +204,12 @@
                     style="width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.5;"
                     ><use xlink:href="#iconTags"></use></svg
                 >
-                <p>该分类下暂无内容</p>
+                <p>{i18n.supertagManager.noContent}</p>
                 <p style="font-size: 0.9em; opacity: 0.6;">
                     {#if activeTab === "data"}
-                        工作区中的数据库将在此显示（默认未开启）
+                        {i18n.supertagManager.noContentData}
                     {:else}
-                        触发器与命令绑定的标签将在此显示（默认未开启）
+                        {i18n.supertagManager.noContentCommand}
                     {/if}
                 </p>
             </div>
@@ -223,17 +223,17 @@
                     <span
                         class="b3-list-item__text"
                         style="font-weight: bold; opacity: 0.6; flex: 1.8;"
-                        >标签 (Type)</span
+                        >{i18n.supertagManager.colTag}</span
                     >
                     <span
                         class="b3-list-item__text"
                         style="font-weight: bold; opacity: 0.6; flex: 3.2;"
-                        >绑定详情 (Storage / Logic)</span
+                        >{i18n.supertagManager.colBinding}</span
                     >
                     <span
                         class="b3-list-item__text"
                         style="font-weight: bold; opacity: 0.6; flex: 1.0; text-align: right;"
-                        >启用状态</span
+                        >{i18n.supertagManager.colStatus}</span
                     >
                 </div>
 
@@ -257,8 +257,8 @@
                                 <span
                                     class="b3-chip b3-chip--info b3-chip--small"
                                     style="font-size: 9px; font-weight: normal; opacity: 0.8; align-self: flex-start; margin-top: 2px;"
-                                    title="系统预置的标准 Supertag"
-                                >系统内置</span>
+                                    title={i18n.supertagManager.builtinTooltip}
+                                >{i18n.supertagManager.builtinTag}</span>
                             {/if}
                         </div>
 
@@ -301,7 +301,7 @@
                                         </select>
                                         <span
                                             class="b3-chip b3-chip--warning b3-chip--small"
-                                            style="margin-left:4px;">重名</span
+                                            style="margin-left:4px;">{i18n.supertagManager.duplicateName}</span
                                         >
                                     {:else}
                                         <span
@@ -319,11 +319,11 @@
                                     <button
                                         class="b3-button b3-button--text"
                                         style="font-size: 11px; padding: 1px 6px; line-height: 1.2; display: inline-flex; align-items: center; gap: 2px;"
-                                        title="定位到对应数据库"
+                                        title={i18n.supertagManager.locateTitle}
                                         on:click={() => locateAv(group.selectedAvId || group.dataConfigs[0]?.avId)}
                                     >
                                         <svg style="width: 11px; height: 11px;"><use xlink:href="#iconFocus"></use></svg>
-                                        <span>Locate</span>
+                                        <span>{i18n.supertagManager.locate}</span>
                                     </button>
                                 </div>
                             {/if}

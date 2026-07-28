@@ -192,12 +192,21 @@
   },
   "supertagManager": {
     "title": "Supertag Management",
-    "configRule": "Configure Rule",
-    "tagName": "Tag Name",
-    "targetDB": "Target Database",
-    "actions": "Actions",
-    "configTemplate": "Configure Template",
-    "noTags": "No Supertags configured",
-    "noTagsHint": "Mark mappings with a star in Database Settings to create Supertags"
+    "tabData": "Data Tag",
+    "tabCommand": "Command Tag",
+    "colTag": "Tag (Type)",
+    "colBinding": "Binding Details (Storage / Logic)",
+    "colStatus": "Status",
+    "builtinTag": "Built-in",
+    "builtinTooltip": "System pre-configured standard Supertag",
+    "locate": "Locate",
+    "locateTitle": "Locate target database",
+    "duplicateName": "Duplicate",
+    "noContent": "No content in this category",
+    "noContentData": "Databases in workspace will appear here (disabled by default)",
+    "noContentCommand": "Tags bound to triggers & commands will appear here (disabled by default)",
+    "enableSuccess": "✓ Supertag #{tag} recommendation enabled",
+    "disableSuccess": "✗ Supertag #{tag} recommendation disabled",
+    "saveFailed": "Failed to save configuration: {error}"
   }
 }

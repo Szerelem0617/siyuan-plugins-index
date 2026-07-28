@@ -2,27 +2,24 @@
 
 # Index Plugin
 
-The plugin will generate an icon on the right side of the topbar.
+The plugin generates an icon on the right side of the top bar.
 
-Left-click to insert a directory list; right-click for more actions.
+Left-click the plugin icon to insert an index list into the current document; right-click to show more operations.
 
-`CTRL + ALT + I` Insert Index (Content depends on 'Insertion Content' setting)
+`CTRL + ALT + I` Insert Index
 
-`CTRL + ALT + O` Insert current document outline
+`CTRL + ALT + O` Insert Current Document Outline
 
-# 🚀 Version 1.9.15
+🚀 **Experimental Features (v1.10.0+)** Requires SiYuan v3.7.3+:
 
-- Fix the issue where the directory cannot be displayed normally in version 3.6.5 of SiYuan
+How to enable: Go to Plugin Settings -> Database -> Check **Developer Mode**. Once enabled, press `Alt + Click Search Icon` or shortcut `⌥⌘S` to open the console palette:
 
-# 🚀 Tutorial
+- **`/Insert Command Button`**: Type `/Insert Command Button` (or `/插入命令按钮`) in the editor to quickly insert an interactive command button.
+- **Database & SQL Management**: Centrally manage Attribute View databases across the workspace, and use the [SQL Console for real-time querying & data manipulation](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/guide-sqlite.md).
+- **Commands & Supertag Binding**: Click "Instantiate Database" in the console palette to bind commands with specific Supertags and unlock advanced configurations.
+- Experimental features may contain breaking changes before reaching the v2.0.0 stable release. Please use with caution in production environments.
 
-**Experimental Feature**: After adding to the database, use `alt + click` on cells to batch configure attributes.
-
-<img src="https://raw.githubusercontent.com/Szerelem0617/siyuan-plugins-index/main/asset/guide-create-db.jpg" width="500" />
-
-# Changelog
-
-[CHANGELOG](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/CHANGELOG.md)
+# [Changelog](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/CHANGELOG.md)
 
 # Support the Developer
 
@@ -30,8 +27,8 @@ If you find this plugin helpful, consider supporting my work:
 
 - Give it a **Star** on [GitHub](https://github.com/Szerelem0617/siyuan-plugins-index) ⭐
 - Github Sponsors: [Sponsor Szerelem0617](https://github.com/sponsors/Szerelem0617)
+- WeChat Support:
 
+  <img src="https://raw.githubusercontent.com/Szerelem0617/siyuan-plugins-index/main/asset/qr.jpg" width="200" />
 
-# Acknowledgments
-
-Special thanks to [TinkMingKing](https://github.com/TinkMingKing) for his previous maintenance of the plugin and for trusting me with the repository transfer.
+# [Acknowledgments](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/acknowledgments.md)
