@@ -72,13 +72,20 @@
             
             const tempBlocks = Object.values(groups);
             
-            // Check for duplicate AV names
+            // Check for duplicate AV names (ignore empty or default unnamed database names)
             const nameCounts: Record<string, number> = {};
             tempBlocks.forEach((b: any) => {
-                nameCounts[b.name] = (nameCounts[b.name] || 0) + 1;
+                const name = (b.name || "").trim();
+                const isUnnamed = !name || name === "Unnamed Database" || name === "Unnamed" || name === "未命名数据库";
+                if (isUnnamed) {
+                    b.isUnnamed = true;
+                } else {
+                    nameCounts[name] = (nameCounts[name] || 0) + 1;
+                }
             });
             tempBlocks.forEach((b: any) => {
-                if (nameCounts[b.name] > 1) {
+                const name = (b.name || "").trim();
+                if (!b.isUnnamed && nameCounts[name] > 1) {
                     b.isDuplicateName = true;
                 }
             });
@@ -332,7 +339,11 @@
                                             {block.mirrorCount} 镜像
                                         </span>
                                     {/if}
-                                    {#if block.isDuplicateName}
+                                    {#if block.isUnnamed}
+                                        <span class="av-card__duplicate-badge" style="font-size: 10px; color: #f59e0b; font-weight: normal; margin-left: 4px; background: rgba(245, 158, 11, 0.15); padding: 1px 4px; border-radius: 3px;" title="该数据库未命名。请在界面上重命名以支持基于表名的 SQL 查询。">
+                                            ⚠️ 数据库未命名
+                                        </span>
+                                    {:else if block.isDuplicateName}
                                         <span class="av-card__duplicate-badge" style="font-size: 10px; color: #ef4444; font-weight: normal; margin-left: 4px; background: rgba(239, 68, 68, 0.15); padding: 1px 4px; border-radius: 3px;" title="Multiple databases share this name. SQL queries using this name will throw an error.">
                                             ⚠️ 同名冲突
                                         </span>
