@@ -304,6 +304,7 @@
             width: "400px",
             height: "500px"
         });
+        subDialog.element.classList.add("indexos-dialog");
 
         new FieldsConfigDialog({
             target: document.getElementById("fields-config-container")!,

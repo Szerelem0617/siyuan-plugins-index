@@ -82,6 +82,7 @@ export async function handleTypeDbAltClick(
             content: `<div class="b3-dialog__content" style="padding: 16px; display: flex; flex-direction: column; gap: 8px;" id="command-selector-container"></div>`,
             width: "360px"
         });
+        selectDialog.element.classList.add("indexos-dialog");
         const container = selectDialog.element.querySelector("#command-selector-container")!;
         container.innerHTML = `<div style="margin-bottom: 12px; font-weight: bold; color: var(--b3-theme-on-surface-light); font-size: 13px;">检测到绑定了多个命令，请选择一个进行配置：</div>`;
         
@@ -185,6 +186,7 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
             width: "420px",
             height: "520px"
         });
+        dialog.element.classList.add("indexos-dialog");
 
         new ConditionalTriggerDialog({
             target: dialog.element.querySelector("#conditional-config-container")!,
@@ -304,6 +306,7 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
         width: "420px",
         height: "450px"
     });
+    dialog.element.classList.add("indexos-dialog");
 
     const IconMenuConfigDialog = (await import("./dialogs/IconMenuConfigDialog.svelte")).default;
 

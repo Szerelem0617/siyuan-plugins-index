@@ -1,12 +1,13 @@
 /* src/ui/styles/utilities.css
- * IndexOS Utility Classes & Industrial Geek Tech Guidelines
+ * IndexOS Utility Classes & Mirrored Dual-Theme Component Guidelines
+ * Rule: 100% Component CSS driven by Token Variables via Mirror Architecture
  */
 
-/* ─── 强 Style 对话框：全域响应双主题 Token ─── */
+/* ─── 强 Style 对话框：全域响应双主题 1:1 镜面对称 Token ─── */
 .indexos-dialog .b3-dialog__container {
-    background: var(--indexos-bg-base) !important; /* 冰灰蓝底色 #EBF2F7 */
+    background: var(--indexos-bg-base) !important; 
     color: var(--indexos-text-main) !important;
-    border: 1px solid var(--indexos-border-subtle) !important;
+    border: 1px solid var(--indexos-border-light) !important;
     border-radius: 4px !important;                 /* 4px 极小硬朗圆角 */
     overflow: hidden !important;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15), 0 0 16px var(--indexos-accent-glow) !important;
@@ -16,7 +17,7 @@
 .indexos-dialog .b3-dialog__header {
     background: var(--indexos-bg-base) !important;
     color: var(--indexos-text-main) !important;
-    border-bottom: 1px solid var(--indexos-border-subtle) !important;
+    border-bottom: 1px solid var(--indexos-border-light) !important;
     font-weight: 600 !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
     font-size: 13px !important;
@@ -45,17 +46,18 @@
 /* 底部操作区 */
 .indexos-dialog .b3-dialog__action {
     background: var(--indexos-bg-base) !important;
-    border-top: 1px solid var(--indexos-border-subtle) !important;
+    border-top: 1px solid var(--indexos-border-light) !important;
     padding: 10px 16px !important;
 }
 
-/* ─── 皇家蓝 #28517F 主按钮 (极客 3px 圆角) ─── */
+/* ─── Primary 主按钮 (极客 3px 圆角 + 自动反色优化) ─── */
 .indexos-dialog .b3-button,
 .indexos-dialog .b3-button--cancel,
-.indexos-dialog .b3-button--primary {
-    background-color: #28517F !important; /* 皇家蓝填充 */
-    color: #FFFFFF !important;
-    border-radius: 3px !important;         /* 3px 硬朗圆角 */
+.indexos-dialog .b3-button--primary,
+.indexos-dialog .btn-primary {
+    background-color: var(--indexos-accent-primary) !important;  /* 浅色皇家蓝 / 深色 Sky Blue */
+    color: var(--indexos-btn-primary-text) !important;           /* 浅色纯白 / 深色钛深蓝黑 (自动反色) */
+    border-radius: 3px !important;                               /* 3px 硬朗圆角 */
     font-weight: 600 !important;
     border: none !important;
     padding: 6px 16px !important;
@@ -64,45 +66,46 @@
 
 .indexos-dialog .b3-button:hover,
 .indexos-dialog .b3-button--cancel:hover,
-.indexos-dialog .b3-button--primary:hover {
-    background-color: #1E40AF !important;
-    box-shadow: 0 2px 8px rgba(40, 81, 127, 0.3) !important;
+.indexos-dialog .b3-button--primary:hover,
+.indexos-dialog .btn-primary:hover {
+    background-color: var(--indexos-accent-hover) !important;   
+    box-shadow: 0 2px 8px var(--indexos-accent-glow) !important;
 }
 
 .indexos-dialog .b3-button--text {
     background: transparent !important;
     border: none !important;
-    color: #28517F !important;
+    color: var(--indexos-accent-primary) !important;
 }
 
 .indexos-dialog .b3-button--outline {
     background: transparent !important;
-    border: 1px solid #28517F !important;
-    color: #28517F !important;
+    border: 1px solid var(--indexos-accent-primary) !important;
+    color: var(--indexos-accent-primary) !important;
 }
 
-/* ─── 列表主容器卡片：纯白背景提亮 + 1px 精密微边框 + 4px 圆角 ─── */
+/* ─── 列表主容器卡片：数据容器 (Container) 纯白/钛合金面板提亮 ─── */
 .indexos-dialog .tag-list-container,
 .indexos-dialog .table-container,
 .indexos-dialog .b3-dialog__content,
 .indexos-management-panel .tag-list-container {
-    background-color: #FFFFFF !important; /* 必须用纯白提亮！ */
-    border: 1px solid rgba(40, 81, 127, 0.18) !important; /* 皇家蓝 18% 透明度边框 */
-    border-radius: 4px !important;         /* 4px 极小圆角 */
+    background-color: var(--indexos-bg-container) !important;    /* 浅色纯白 #FFFFFF / 深色钛合金 #1E293B */
+    border: 1px solid var(--indexos-border-light) !important;   /* 1px 精密微边框 */
+    border-radius: 4px !important;                               /* 4px 极小圆角 */
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
 }
 
 /* 列表单行：分割线代替阴影 */
 .indexos-dialog .b3-list-item,
 .indexos-dialog .tag-item-row {
-    border-bottom: 1px solid rgba(40, 81, 127, 0.08) !important;
+    border-bottom: 1px solid var(--indexos-border-divider) !important;
     background: transparent !important;
     padding: 8px 12px !important;
 }
 
 .indexos-dialog .b3-list-item:hover,
 .indexos-dialog .tag-item-row:hover {
-    background-color: #F0F7FF !important; /* 碧落浅色 Hover 衬底 */
+    background-color: var(--indexos-bg-highlight) !important;    /* Hover 衬底 */
 }
 
 /* ─── 工业控制台表头排版 ─── */
@@ -111,7 +114,7 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
     font-size: 11px !important;
     font-weight: 600 !important;
-    color: #5A7A95 !important;            /* 石墨灰蓝 */
+    color: var(--indexos-text-muted) !important;                /* 次要文本石墨蓝灰 / 钛灰 */
     text-transform: uppercase !important;
     letter-spacing: 0.08em !important;
 }
@@ -122,13 +125,13 @@
 .indexos-dialog .b3-list-item__text,
 .indexos-dialog .cmd-name-label {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    color: #0F243B !important;             /* 深海蓝黑 */
+    color: var(--indexos-text-main) !important;                  /* 深海蓝黑 / 纯白 */
 }
 
-/* ─── Switch 开关与左侧 Tag 图标硬朗化 ─── */
+/* ─── Switch 开关与左侧 Tag 图标 ─── */
 .indexos-dialog input[type="checkbox"].b3-switch:checked {
-    background-color: #28517F !important; /* 开启状态使用皇家蓝 */
-    border-color: #28517F !important;
+    background-color: var(--indexos-accent-primary) !important; 
+    border-color: var(--indexos-accent-primary) !important;
 }
 
 .indexos-dialog .b3-switch {
@@ -137,22 +140,22 @@
 
 .indexos-dialog .b3-list-item__graphic,
 .indexos-dialog .tag-icon {
-    color: #28517F !important;            /* 皇家蓝点缀 */
+    color: var(--indexos-accent-primary) !important;           
 }
 
-/* ─── 页签 (Tab Header) 皇家蓝 2px 指示线与 2px 胶囊 ─── */
+/* ─── 页签 (Tab Header) 2px 指示线与 2px 胶囊 ─── */
 .indexos-dialog .layout-tab-bar,
 .indexos-dialog .config__tab,
 .indexos-management-panel .layout-tab-bar {
     background: var(--indexos-bg-base) !important;
-    border-bottom: 1px solid rgba(40, 81, 127, 0.18) !important;
+    border-bottom: 1px solid var(--indexos-border-light) !important;
 }
 
 .indexos-dialog .layout-tab-bar .item,
 .indexos-dialog .config__tab .item,
 .indexos-management-panel .layout-tab-bar .item {
     background: transparent !important;
-    color: #5A7A95 !important;
+    color: var(--indexos-text-muted) !important;
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
@@ -162,7 +165,7 @@
 .indexos-dialog .layout-tab-bar .item.item--focus,
 .indexos-dialog .config__tab .item.item--focus,
 .indexos-management-panel .layout-tab-bar .item.item--focus {
-    color: #28517F !important;            /* 皇家蓝文字 */
+    color: var(--indexos-accent-primary) !important;           
     font-weight: 700 !important;
     background: transparent !important;
 }
@@ -170,42 +173,42 @@
 .indexos-dialog .layout-tab-bar .item--focus::after,
 .indexos-dialog .config__tab .item--focus::after,
 .indexos-management-panel .layout-tab-bar .item--focus::after {
-    background-color: #28517F !important; /* 皇家蓝 2px 底部指示线 */
+    background-color: var(--indexos-accent-primary) !important; /* 2px 底部指示线 */
     height: 2px !important;
     box-shadow: none !important;
 }
 
-/* 激活 Tab 旁边的 Count 胶囊 */
+/* 激活 Tab 旁边的 Count 胶囊 (Badge) */
 .indexos-dialog .b3-chip,
 .indexos-dialog .tab-count {
-    background-color: #EBF5FE !important; /* 碧落浅色 */
-    color: #28517F !important;            /* 皇家蓝 */
+    background-color: var(--indexos-accent-badge-bg) !important;  /* 浅色碧落 / 深色微光 */
+    color: var(--indexos-accent-badge-text) !important;          /* 浅色皇家蓝 / 深色天蓝 */
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    border-radius: 2px !important;         /* 2px 圆角胶囊 */
+    border-radius: 2px !important;                              /* 2px 圆角胶囊 */
     font-weight: 600 !important;
     font-size: 10px !important;
-    border: 1px solid rgba(40, 81, 127, 0.15) !important;
+    border: 1px solid var(--indexos-border-light) !important;
 }
 
-/* ─── 卡片 (av-card & cmd-item-card) 高光纯白卡片面板 ─── */
+/* ─── 卡片 (av-card & cmd-item-card) 高光纯白/钛合金面板 ─── */
 .indexos-dialog .av-card,
 .indexos-dialog .cmd-item-card {
-    background-color: #FFFFFF !important;
-    color: #0F243B !important;
-    border: 1px solid rgba(40, 81, 127, 0.18) !important;
+    background-color: var(--indexos-bg-container) !important;
+    color: var(--indexos-text-main) !important;
+    border: 1px solid var(--indexos-border-light) !important;
     border-radius: 4px !important;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
 }
 
 .indexos-dialog .av-card:hover,
 .indexos-dialog .cmd-item-card:hover {
-    background-color: #F0F7FF !important;
-    border-color: #28517F !important;
+    background-color: var(--indexos-bg-card-hover) !important;
+    border-color: var(--indexos-accent-primary) !important;
     transform: translateY(-1px);
 }
 
 .indexos-dialog .av-card__name {
-    color: #0F243B !important;
+    color: var(--indexos-text-main) !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
     font-weight: 600 !important;
 }
@@ -213,7 +216,7 @@
 .indexos-dialog .av-card__table,
 .indexos-dialog .av-card__id,
 .indexos-dialog .av-card__meta {
-    color: #5A7A95 !important;
+    color: var(--indexos-text-muted) !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
 }
 
@@ -221,43 +224,43 @@
 .indexos-dialog #index-settings,
 .indexos-dialog .config__panel {
     background: var(--indexos-bg-base) !important;
-    color: #0F243B !important;
-    overflow-x: hidden !important; /* 彻底消灭设置界面底部横向滑动 Scrollbar */
+    color: var(--indexos-text-main) !important;
+    overflow-x: hidden !important; 
 }
 
 /* 数据库与命令面板防止主窗口溢出 */
 .indexos-dialog .av-explorer-panel {
-    overflow: hidden !important;   /* 消除数据库界面最右侧整体上下滚动条 */
+    overflow: hidden !important;   
 }
 
 .indexos-dialog .config__item {
-    background: #FFFFFF !important;
-    border: 1px solid rgba(40, 81, 127, 0.18) !important;
+    background: var(--indexos-bg-container) !important;
+    border: 1px solid var(--indexos-border-light) !important;
     border-radius: 4px !important;
     margin-bottom: 8px !important;
-    color: #0F243B !important;
+    color: var(--indexos-text-main) !important;
     padding: 14px 16px !important;
 }
 
 /* 属性名称与描述说明 */
 .indexos-dialog .config__item .fn__flex-1 > div:first-child,
 .indexos-dialog .b3-label {
-    color: #0F243B !important;
+    color: var(--indexos-text-main) !important;
     font-weight: 600 !important;
     font-size: 13px !important;
 }
 
 .indexos-dialog .config__item .b3-label__text,
 .indexos-dialog .b3-label__text {
-    color: #5A7A95 !important;
+    color: var(--indexos-text-muted) !important;
     font-size: 12px !important;
 }
 
 /* 表单控件 (Select, Textfield, Slider) 工业化 */
 .indexos-dialog select.b3-select {
-    background: #FFFFFF !important;
-    color: #0F243B !important;
-    border: 1px solid rgba(40, 81, 127, 0.18) !important;
+    background: var(--indexos-bg-container) !important;
+    color: var(--indexos-text-main) !important;
+    border: 1px solid var(--indexos-border-light) !important;
     border-radius: 3px !important;
     padding: 6px 12px !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
@@ -265,25 +268,25 @@
 }
 
 .indexos-dialog select.b3-select:focus {
-    border-color: #28517F !important;
+    border-color: var(--indexos-accent-primary) !important;
 }
 
 .indexos-dialog select.b3-select option {
-    background: #FFFFFF !important;
-    color: #0F243B !important;
+    background: var(--indexos-bg-surface) !important;
+    color: var(--indexos-text-main) !important;
 }
 
 .indexos-dialog input.b3-text-field {
-    background: #FFFFFF !important;
-    color: #0F243B !important;
-    border: 1px solid rgba(40, 81, 127, 0.18) !important;
+    background: var(--indexos-bg-container) !important;
+    color: var(--indexos-text-main) !important;
+    border: 1px solid var(--indexos-border-light) !important;
     border-radius: 3px !important;
     padding: 6px 10px !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
 }
 
 .indexos-dialog input.b3-slider {
-    accent-color: #28517F !important;
+    accent-color: var(--indexos-accent-primary) !important;
 }
 
 /* ─── 极客工业风 Scrollbar 全局美化套件 (5px 超窄微条) ─── */
@@ -303,7 +306,7 @@
 .indexos-dialog ::-webkit-scrollbar-thumb,
 .indexos-management-panel ::-webkit-scrollbar-thumb,
 .indexos-weak-floating-panel ::-webkit-scrollbar-thumb {
-    background: rgba(40, 81, 127, 0.25) !important;
+    background: var(--indexos-border-light) !important;
     border-radius: 3px !important;
     transition: background 0.2s ease !important;
 }
@@ -311,16 +314,16 @@
 .indexos-dialog ::-webkit-scrollbar-thumb:hover,
 .indexos-management-panel ::-webkit-scrollbar-thumb:hover,
 .indexos-weak-floating-panel ::-webkit-scrollbar-thumb:hover {
-    background: #28517F !important;
+    background: var(--indexos-accent-primary) !important;
 }
 
 /* ─── 弱 Style 效果 ─── */
 .indexos-weak-floating-panel {
-    border-left: 2px solid var(--indexos-accent-sky, #38BDF8) !important;
-    box-shadow: var(--b3-dialog-shadow), 0 0 8px rgba(56, 189, 248, 0.15) !important;
+    border-left: 2px solid var(--indexos-accent-primary) !important;
+    box-shadow: var(--b3-dialog-shadow), 0 0 8px var(--indexos-accent-glow) !important;
 }
 
 .indexos-weak-focus-item {
-    border-left: 2px solid var(--indexos-accent-sky, #38BDF8) !important;
-    background-color: var(--indexos-weak-accent, rgba(56, 189, 248, 0.15)) !important;
+    border-left: 2px solid var(--indexos-accent-primary) !important;
+    background-color: var(--indexos-weak-accent) !important;
 }

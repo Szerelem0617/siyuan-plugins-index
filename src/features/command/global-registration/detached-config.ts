@@ -46,6 +46,7 @@ export function configureDetachedCommand(linkEl: HTMLElement) {
         width: "480px",
         height: "500px"
     });
+    dialog.element.classList.add("indexos-dialog");
 
     new ParamConfigDialog({
         target: dialog.element.querySelector("#detached-param-config-container")!,

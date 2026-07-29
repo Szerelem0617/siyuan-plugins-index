@@ -104,6 +104,7 @@ async function triggerRegistryCommandSelectorForInsert(avContainer: Element, avI
         width: "480px",
         height: "400px"
     });
+    dialog.element.classList.add("indexos-dialog");
 
     new RegistryCommandSelectorDialog({
         target: document.getElementById("registry-command-selector-dialog")!,
@@ -317,6 +318,7 @@ export async function handleCommandDbAltClick(
                 width: "360px",
                 height: "300px"
             });
+            dialog.element.classList.add("indexos-dialog");
 
             new UIEntriesSelectorDialog({
                 target: document.getElementById("ui-entries-config-dialog")!,
@@ -386,6 +388,7 @@ export async function handleCommandDbAltClick(
                 width: "480px",
                 height: "500px"
             });
+            dialog.element.classList.add("indexos-dialog");
 
             new ParamConfigDialog({
                 target: dialog.element.querySelector("#param-config-container")!,
@@ -483,6 +486,7 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
             width: "480px",
             height: "500px"
         });
+        dialog.element.classList.add("indexos-dialog");
 
         new ParamConfigDialog({
             target: dialog.element.querySelector("#param-config-container")!,

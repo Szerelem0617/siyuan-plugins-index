@@ -1,76 +1,86 @@
 /* src/ui/styles/tokens.css
- * IndexOS CSS Design System - Dual Theme Design Tokens
+ * IndexOS Geek Tech Industrial - Dual Theme Mirroring Tokens Architecture
  */
 
-/* ─── 默认浅色主题：极客工业风规范 (Geek Tech Light Industrial Theme) ─── */
+/* ─── 1. ☀️ LIGHT MODE (Industrial Geek Tech 浅色控制台) ─── */
 :root,
-html[data-theme-mode="light"] {
-    /* 核心背景 */
-    --indexos-bg-base: #EBF2F7;                    /* 1. 弹窗大背景：冰灰蓝底色，拉开对比沉降感 */
-    --indexos-bg-surface: #F8FAFC;                 /* 云雾白：侧边栏与导航区域 */
-    --indexos-bg-container: #FFFFFF;               /* 2. 列表主容器卡片：纯白背景提亮！ */
-    --indexos-bg-card: #FFFFFF;                    /* 纯白卡片面板 */
-    --indexos-bg-card-hover: #F0F7FF;              /* 碧落浅色 Hover 衬底 */
-    --indexos-bg-highlight: #EBF5FE;               /* 碧落浅色：用于 Active Tab 胶囊与选中衬底 */
+html[data-theme-mode="light"],
+.theme-light {
+    /* 基础结构层级 (Elevation) */
+    --indexos-bg-base: #EBF2F7;                    /* 1. 弹窗/页面大底色 (灰蓝沉降) */
+    --indexos-bg-surface: #F4F8FA;                 /* 2. 次级面板/侧边栏 */
+    --indexos-bg-container: #FFFFFF;               /* 3. 核心数据列表卡片 (纯白提亮) */
+    --indexos-bg-card: #FFFFFF;                    /* 3. 纯白卡片面板 */
+    --indexos-bg-card-hover: #F0F7FF;              /* 4. Hover 卡片衬底 */
+    --indexos-bg-highlight: #F0F7FF;               /* 4. 选中行 / Hover 碧落浅色衬底 */
 
-    /* 文字色彩 */
-    --indexos-text-main: #0F243B;                  /* 深海蓝黑：皇家蓝极暗衍生色，替代纯黑，清晰舒适 */
-    --indexos-text-muted: #5A7A95;                 /* 石墨蓝灰：代码行号、等宽 Tech Label */
-    --indexos-text-accent: #28517F;                /* 皇家蓝原色 */
-
-    /* 品牌高光 */
-    --indexos-accent-primary: #28517F;             /* 皇家蓝原色：Primary 按钮、选中指示线、焦点框 */
-    --indexos-accent-hover: #1E40AF;               /* 皇家蓝 Hover 态 */
-    --indexos-accent-sky: #3B82F6;                 /* 电光蓝：Glow 高光 */
-    --indexos-accent-neon: #3B82F6;                
-    --indexos-accent-glow: rgba(40, 81, 127, 0.20);
-
-    /* 边框 */
-    --indexos-border-subtle: rgba(40, 81, 127, 0.18); /* 皇家蓝 18% 透明度精密微边框 */
+    /* 边框与微构件 (Borders) */
+    --indexos-border-light: rgba(40, 81, 127, 0.15);  /* 1px 皇家蓝微边框 */
+    --indexos-border-subtle: rgba(40, 81, 127, 0.15); /* 1px 皇家蓝微边框 */
+    --indexos-border-divider: rgba(40, 81, 127, 0.08);/* 列表单行分割线 */
     --indexos-border-glow: 1px solid rgba(40, 81, 127, 0.35);
 
-    /* 状态信号灯 */
+    /* 文本与排版 (Typography) */
+    --indexos-text-main: #0F243B;                  /* 主文本 (深海蓝黑) */
+    --indexos-text-muted: #5A7A95;                 /* 次要文本 / Monospace 表头 (石墨灰蓝) */
+    --indexos-text-accent: #28517F;                /* 焦点高亮 */
+
+    /* 核心高光与交互 (Accent & Interaction) */
+    --indexos-accent-primary: #28517F;             /* 皇家蓝原色 (Primary 按钮/Active 指示) */
+    --indexos-accent-hover: #1E40AF;               /* Hover 态 */
+    --indexos-accent-sky: #3B82F6;                 /* 电光蓝 */
+    --indexos-accent-glow: rgba(40, 81, 127, 0.20);
+    --indexos-accent-badge-bg: #EBF5FE;            /* Count 胶囊/标签碧落浅衬底 */
+    --indexos-accent-badge-text: #28517F;          /* Count 胶囊/标签皇家蓝文字 */
+    --indexos-btn-primary-text: #FFFFFF;           /* Primary 按钮纯白字 */
+
+    /* 状态指示灯 (Status Indicators) */
     --indexos-status-success: #059669;
     --indexos-status-warning: #D97706;
     --indexos-status-error: #DC2626;
 
-    /* 弱 Style */
-    --indexos-weak-accent: #EBF5FE;                
+    /* 弱 Style (编辑器交互体验) */
+    --indexos-weak-accent: #EBF5FE;
     --indexos-weak-border: rgba(40, 81, 127, 0.25);
 }
 
-/* ─── 深色主题：Dark Titanium 钛蓝赛博风 (Dark Theme) ─── */
-html[data-theme-mode="dark"] {
-    /* 核心背景 */
-    --indexos-bg-base: #0F172A;
-    --indexos-bg-surface: #1E293B;
-    --indexos-bg-container: #1E293B;
-    --indexos-bg-card: #1E293B;
-    --indexos-bg-card-hover: #334155;
-    --indexos-bg-highlight: rgba(56, 189, 248, 0.15);
+/* ─── 2. 🌙 DARK MODE (Dark Titanium Slate 深色钛蓝赛博) ─── */
+html[data-theme-mode="dark"],
+.theme-dark {
+    /* 基础结构层级 (Elevation) */
+    --indexos-bg-base: #0B1120;                    /* 1. 弹窗/页面大底色 (深邃钛黑蓝) */
+    --indexos-bg-surface: #0F172A;                 /* 2. 次级面板/侧边栏 (Slate 钛蓝) */
+    --indexos-bg-container: #1E293B;               /* 3. 核心数据列表卡片 (钛合金面板提亮 #1E293B) */
+    --indexos-bg-card: #1E293B;                    /* 3. 钛合金卡片面板 */
+    --indexos-bg-card-hover: #2A3B53;              /* 4. Hover 钛卡片 */
+    --indexos-bg-highlight: #2A3B53;               /* 4. 选中行 / Hover 深蓝微高光衬底 */
 
-    /* 文字色彩 */
-    --indexos-text-main: #F8FAFC;
-    --indexos-text-muted: #94A3B8;
-    --indexos-text-accent: #38BDF8;
+    /* 边框与微构件 (Borders) */
+    --indexos-border-light: rgba(56, 189, 248, 0.20); /* 1px 电光的微亮边框 */
+    --indexos-border-subtle: rgba(56, 189, 248, 0.20);/* 1px 电光的微亮边框 */
+    --indexos-border-divider: rgba(255, 255, 255, 0.08);/* 列表单行分割线 */
+    --indexos-border-glow: 1px solid rgba(56, 189, 248, 0.35);
 
-    /* 品牌高光 */
-    --indexos-accent-primary: #38BDF8;
-    --indexos-accent-hover: #0EA5E9;
+    /* 文本与排版 (Typography) */
+    --indexos-text-main: #F8FAFC;                  /* 主文本 (高纯度冷白) */
+    --indexos-text-muted: #94A3B8;                 /* 次要文本 / Monospace 表头 (钛灰) */
+    --indexos-text-accent: #38BDF8;                /* 焦点高亮 */
+
+    /* 核心高光与交互 (Accent & Interaction) */
+    --indexos-accent-primary: #38BDF8;             /* Sky Blue 霓虹高光 (Primary 按钮/Active 指示) */
+    --indexos-accent-hover: #0EA5E9;               /* Hover 态 */
     --indexos-accent-sky: #38BDF8;
-    --indexos-accent-neon: #0EA5E9;
-    --indexos-accent-glow: rgba(56, 189, 248, 0.4);
+    --indexos-accent-glow: rgba(56, 189, 248, 0.40);
+    --indexos-accent-badge-bg: rgba(56, 189, 248, 0.15); /* Count 胶囊/标签微发光衬底 */
+    --indexos-accent-badge-text: #38BDF8;          /* Count 胶囊/标签高光文字 */
+    --indexos-btn-primary-text: #0B1120;           /* Primary 按钮黑字 (高对比度) */
 
-    /* 边框 */
-    --indexos-border-subtle: rgba(255, 255, 255, 0.1);
-    --indexos-border-glow: 1px solid rgba(56, 189, 248, 0.3);
-
-    /* 状态信号灯 */
+    /* 状态指示灯 (Status Indicators) */
     --indexos-status-success: #10B981;
     --indexos-status-warning: #F59E0B;
     --indexos-status-error: #EF4444;
 
     /* 弱 Style */
     --indexos-weak-accent: rgba(56, 189, 248, 0.15);
-    --indexos-weak-border: rgba(56, 189, 248, 0.3);
+    --indexos-weak-border: rgba(56, 189, 248, 0.30);
 }

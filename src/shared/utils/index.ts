@@ -38,6 +38,7 @@ export function confirmDialog(title: string, text: string, confirmCallback: () =
         </div>`,
         width: "520px",
     });
+    dialog.element.classList.add("indexos-dialog");
 
     const btns = dialog.element.querySelectorAll(".b3-button");
     btns[0].addEventListener("click", () => {

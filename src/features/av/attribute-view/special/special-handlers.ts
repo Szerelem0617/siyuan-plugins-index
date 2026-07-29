@@ -174,7 +174,7 @@ export function openEmojiDialog(protyleInstance: any, avID: string, rowID: strin
 export function openBuiltInImagesDialog(protyleInstance: any, avID: string, rowID: string, colID: string, isBatch = false, avBlockID = "") {
     let html = "";
     BGS.forEach((item, index) => {
-        html += `<div data-index="${index}" style="height: 128px;${item}; cursor: pointer; border-radius: 4px; border: 1px solid var(--b3-border-color);" class="b3-card b3-card--wrap"></div>`;
+        html += `<div data-index="${index}" style="height: 128px;${item}; cursor: pointer; border-radius: 4px; border: 1px solid var(--indexos-border-light);" class="b3-card b3-card--wrap av-card"></div>`;
     });
 
     const dialog = new Dialog({
@@ -182,6 +182,7 @@ export function openBuiltInImagesDialog(protyleInstance: any, avID: string, rowI
         content: `<div class="built-in-bgs" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 16px; overflow-y: auto; max-height: 70vh;">${html}</div>`,
         width: "900px",
     });
+    dialog.element.classList.add("indexos-dialog");
 
     dialog.element.addEventListener("click", (event) => {
         const target = event.target as HTMLElement;
@@ -202,21 +203,22 @@ export function openAssetDialog(protyleInstance: any, avID: string, rowID: strin
     const dialog = new Dialog({
         title: "选择资源",
         content: `
-        <div id="sync-plugin-asset-root" style="display:flex; height: 60vh; width: 100%; box-sizing: border-box; overflow: hidden; border-radius: 0 0 4px 4px;">
-            <div class="asset-sidebar" style="width: 320px; border-right: 1px solid var(--b3-border-color); display: flex; flex-direction: column; background-color: var(--b3-theme-surface);">
+        <div id="sync-plugin-asset-root" style="display:flex; height: 60vh; width: 100%; box-sizing: border-box; overflow: hidden; border-radius: 0 0 4px 4px; background-color: var(--indexos-bg-base);">
+            <div class="asset-sidebar" style="width: 320px; border-right: 1px solid var(--indexos-border-light); display: flex; flex-direction: column; background-color: var(--indexos-bg-surface);">
                 <div style="padding: 8px;">
-                    <input class="b3-text-field fn__block" placeholder="搜索资源 (↑↓导航 Enter选择)" id="asset-search-input" autofocus>
+                    <input class="b3-text-field fn__block" placeholder="搜索资源 (↑↓导航 Enter选择)" id="asset-search-input" autofocus style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background-color: var(--indexos-bg-container); color: var(--indexos-text-main); border: 1px solid var(--indexos-border-light);">
                 </div>
                 <div class="b3-list b3-list--background fn__flex-1" id="asset-list" style="overflow-y: auto;">
                     <div class="fn__loading" style="padding: 20px;"><img width="32px" src="/stage/loading-pure.svg"></div>
                 </div>
             </div>
-            <div id="asset-preview" class="fn__flex-1" style="padding: 16px; display: flex; align-items: center; justify-content: center; background-color: var(--b3-theme-background); overflow: hidden;">
-                <div class="ft__center ft__on-surface">请选择资源预览</div>
+            <div id="asset-preview" class="fn__flex-1" style="padding: 16px; display: flex; align-items: center; justify-content: center; background-color: var(--indexos-bg-base); color: var(--indexos-text-main); overflow: hidden;">
+                <div class="ft__center" style="color: var(--indexos-text-muted);">请选择资源预览</div>
             </div>
         </div>`,
         width: "900px",
     });
+    dialog.element.classList.add("indexos-dialog");
 
     const listEl = dialog.element.querySelector("#asset-list") as HTMLElement;
     const previewEl = dialog.element.querySelector("#asset-preview") as HTMLElement;
@@ -237,12 +239,12 @@ export function openAssetDialog(protyleInstance: any, avID: string, rowID: strin
                     const isFocus = index === 0 ? " b3-list-item--focus" : "";
                     html += `<div class="b3-list-item b3-list-item--hide-action${isFocus}" 
                         data-path="${item.path}" 
-                        style="cursor: pointer; padding: 4px 8px; margin: 2px 4px; border-radius: 4px;">
-                        <span class="b3-list-item__text">${item.hName}</span>
+                        style="cursor: pointer; padding: 6px 10px; margin: 2px 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+                        <span class="b3-list-item__text" style="color: var(--indexos-text-main);">${item.hName}</span>
                     </div>`;
                 });
             } else {
-                html = `<div class="b3-list--empty" style="padding: 16px; text-align: center; color: var(--b3-theme-on-surface-light);">无匹配资源</div>`;
+                html = `<div class="b3-list--empty" style="padding: 16px; text-align: center; color: var(--indexos-text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">无匹配资源</div>`;
             }
             listEl.innerHTML = html;
 
@@ -314,21 +316,22 @@ export function openTemplateDialog(protyleInstance: any, avID: string, rowID: st
     const dialog = new Dialog({
         title: "选择模板",
         content: `
-        <div id="sync-plugin-template-root" style="display:flex; height: 60vh; width: 100%; box-sizing: border-box; overflow: hidden; border-radius: 0 0 4px 4px;">
-            <div class="template-sidebar" style="width: 280px; border-right: 1px solid var(--b3-border-color); display: flex; flex-direction: column; background-color: var(--b3-theme-surface);">
+        <div id="sync-plugin-template-root" style="display:flex; height: 60vh; width: 100%; box-sizing: border-box; overflow: hidden; border-radius: 0 0 4px 4px; background-color: var(--indexos-bg-base);">
+            <div class="template-sidebar" style="width: 280px; border-right: 1px solid var(--indexos-border-light); display: flex; flex-direction: column; background-color: var(--indexos-bg-surface);">
                 <div style="padding: 8px;">
-                    <input class="b3-text-field fn__block" placeholder="搜索模板 (↑↓导航 Enter选择)" id="template-search-input" autofocus>
+                    <input class="b3-text-field fn__block" placeholder="搜索模板 (↑↓导航 Enter选择)" id="template-search-input" autofocus style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background-color: var(--indexos-bg-container); color: var(--indexos-text-main); border: 1px solid var(--indexos-border-light);">
                 </div>
                 <div class="b3-list b3-list--background fn__flex-1" id="template-list" style="overflow-y: auto;">
                     <div class="fn__loading" style="padding: 20px;"><img width="32px" src="/stage/loading-pure.svg"></div>
                 </div>
             </div>
-            <div id="template-preview" class="fn__flex-1" style="padding: 16px; overflow-y: auto; background-color: var(--b3-theme-background);">
-                <div class="ft__center ft__on-surface" style="margin-top: 20vh;">请选择模板预览</div>
+            <div id="template-preview" class="fn__flex-1" style="padding: 16px; overflow-y: auto; background-color: var(--indexos-bg-base); color: var(--indexos-text-main);">
+                <div class="ft__center" style="color: var(--indexos-text-muted); margin-top: 20vh;">请选择模板预览</div>
             </div>
         </div>`,
         width: "900px",
     });
+    dialog.element.classList.add("indexos-dialog");
 
     const listEl = dialog.element.querySelector("#template-list") as HTMLElement;
     const previewEl = dialog.element.querySelector("#template-preview") as HTMLElement;
@@ -347,12 +350,12 @@ export function openTemplateDialog(protyleInstance: any, avID: string, rowID: st
                     html += `<div class="b3-list-item b3-list-item--hide-action${isFocus}" 
                         data-path="${item.path}" 
                         data-content="${item.content.replace(/"/g, '&quot;')}"
-                        style="cursor: pointer; padding: 4px 8px; margin: 2px 4px; border-radius: 4px;">
-                        <span class="b3-list-item__text">${item.content}</span>
+                        style="cursor: pointer; padding: 6px 10px; margin: 2px 4px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+                        <span class="b3-list-item__text" style="color: var(--indexos-text-main);">${item.content}</span>
                     </div>`;
                 });
             } else {
-                html = `<div class="b3-list--empty" style="padding: 16px; text-align: center; color: var(--b3-theme-on-surface-light);">无匹配模板</div>`;
+                html = `<div class="b3-list--empty" style="padding: 16px; text-align: center; color: var(--indexos-text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">无匹配模板</div>`;
             }
             listEl.innerHTML = html;
 

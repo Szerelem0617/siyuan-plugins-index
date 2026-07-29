@@ -351,6 +351,7 @@ function openButtonConfigurationDialog(targetRange: Range) {
         `,
         width: "520px"
     });
+    dialog.element.classList.add("indexos-dialog");
 
     dialog.element.querySelector("#btn-config-confirm")?.addEventListener("click", () => {
         const selectEl = dialog.element.querySelector("#btn-action-select") as HTMLSelectElement;
