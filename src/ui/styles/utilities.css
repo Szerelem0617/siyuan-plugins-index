@@ -289,36 +289,42 @@
     accent-color: var(--indexos-accent-primary) !important;
 }
 
-/* ─── 极客工业风 Scrollbar 全局美化套件 (5px 超窄微条) ─── */
-.indexos-dialog ::-webkit-scrollbar,
-.indexos-management-panel ::-webkit-scrollbar,
-.indexos-weak-floating-panel ::-webkit-scrollbar,
-#siyuan-plugin-cmd-palette ::-webkit-scrollbar {
-    width: 5px !important;
-    height: 5px !important;
+/* ─── 全局 4px 超窄极客微条 Scrollbar 全覆盖 ─── */
+html body *::-webkit-scrollbar,
+html body div::-webkit-scrollbar,
+html body section::-webkit-scrollbar,
+html body .protyle-hint::-webkit-scrollbar,
+html body .b3-list::-webkit-scrollbar {
+    width: 4px !important;
+    height: 4px !important;
 }
 
-.indexos-dialog ::-webkit-scrollbar-track,
-.indexos-management-panel ::-webkit-scrollbar-track,
-.indexos-weak-floating-panel ::-webkit-scrollbar-track,
-#siyuan-plugin-cmd-palette ::-webkit-scrollbar-track {
+html body *::-webkit-scrollbar-track,
+html body div::-webkit-scrollbar-track,
+html body section::-webkit-scrollbar-track,
+html body .protyle-hint::-webkit-scrollbar-track,
+html body .b3-list::-webkit-scrollbar-track {
     background: transparent !important;
+    border-radius: 0 !important;
 }
 
-.indexos-dialog ::-webkit-scrollbar-thumb,
-.indexos-management-panel ::-webkit-scrollbar-thumb,
-.indexos-weak-floating-panel ::-webkit-scrollbar-thumb,
-#siyuan-plugin-cmd-palette ::-webkit-scrollbar-thumb {
+html body *::-webkit-scrollbar-thumb,
+html body div::-webkit-scrollbar-thumb,
+html body section::-webkit-scrollbar-thumb,
+html body .protyle-hint::-webkit-scrollbar-thumb,
+html body .b3-list::-webkit-scrollbar-thumb {
     background: var(--indexos-border-light) !important;
-    border-radius: 3px !important;
-    transition: background 0.2s ease !important;
+    border-radius: 2px !important;
+    transition: all 0.2s ease !important;
 }
 
-.indexos-dialog ::-webkit-scrollbar-thumb:hover,
-.indexos-management-panel ::-webkit-scrollbar-thumb:hover,
-.indexos-weak-floating-panel ::-webkit-scrollbar-thumb:hover,
-#siyuan-plugin-cmd-palette ::-webkit-scrollbar-thumb:hover {
+html body *::-webkit-scrollbar-thumb:hover,
+html body div::-webkit-scrollbar-thumb:hover,
+html body section::-webkit-scrollbar-thumb:hover,
+html body .protyle-hint::-webkit-scrollbar-thumb:hover,
+html body .b3-list::-webkit-scrollbar-thumb:hover {
     background: var(--indexos-accent-primary) !important;
+    box-shadow: 0 0 6px var(--indexos-accent-glow) !important;
 }
 
 /* ─── 弱 Style 效果 ─── */
@@ -398,4 +404,86 @@
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+}
+
+/* ─── Supertag 极客工业风组件规范 (.indexos-supertag-chip & 编辑器内标签重塑) ─── */
+.indexos-supertag-chip,
+html body .protyle-wysiwyg span[data-type*="tag"],
+html body .protyle-wysiwyg span[data-type*="NodeTag"],
+html body .protyle-wysiwyg [data-type*="tag"],
+html body .protyle-wysiwyg [data-type*="NodeTag"],
+html body span[data-type="tag"],
+html body span[data-type="NodeTag"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 2px 8px !important;
+    background-color: var(--indexos-accent-badge-bg) !important;
+    color: var(--indexos-accent-badge-text) !important;
+    border: 1px solid var(--indexos-border-light) !important;
+    border-radius: 3px !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.9em !important;
+    font-weight: 600 !important;
+    transition: all 0.15s ease !important;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
+.indexos-supertag-chip:hover,
+html body .protyle-wysiwyg span[data-type*="tag"]:hover,
+html body .protyle-wysiwyg span[data-type*="NodeTag"]:hover {
+    border-color: var(--indexos-accent-primary) !important;
+    box-shadow: 0 0 6px var(--indexos-accent-glow) !important;
+    transform: translateY(-1px) !important;
+    color: var(--indexos-accent-primary) !important;
+}
+
+/* 思源原生 # 标签提示菜单强力重塑 (.protyle-hint) */
+html body .protyle-hint {
+    background-color: var(--indexos-bg-base) !important;
+    border: 1px solid var(--indexos-border-light) !important;
+    border-radius: 4px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), 0 0 8px var(--indexos-accent-glow) !important;
+}
+
+html body .protyle-hint .b3-list-item {
+    background-color: var(--indexos-bg-container) !important;
+    color: var(--indexos-text-main) !important;
+    border-bottom: 1px solid var(--indexos-border-divider) !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    border-radius: 3px !important;
+    margin: 2px 4px !important;
+}
+
+html body .protyle-hint .b3-list-item--focus,
+html body .protyle-hint .b3-list-item:hover {
+    background-color: var(--indexos-weak-accent) !important;
+    color: var(--indexos-accent-primary) !important;
+    border-color: var(--indexos-accent-primary) !important;
+}
+
+/* Supertag 悬浮提示面板 (.indexos-block-supertags-panel) */
+.indexos-block-supertags-panel {
+    background-color: var(--indexos-bg-base) !important;
+    border: 1px solid var(--indexos-border-light) !important;
+    border-left: 2px solid var(--indexos-accent-primary) !important;
+    border-radius: 4px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 8px var(--indexos-accent-glow) !important;
+}
+
+.indexos-block-supertags-panel .b3-list-item {
+    background-color: var(--indexos-bg-container) !important;
+    border: 1px solid var(--indexos-border-divider) !important;
+    border-radius: 3px !important;
+    color: var(--indexos-text-main) !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    transition: all 0.15s ease !important;
+}
+
+.indexos-block-supertags-panel .b3-list-item:hover,
+.indexos-block-supertags-panel .b3-list-item--focus {
+    background-color: var(--indexos-weak-accent) !important;
+    border-color: var(--indexos-accent-primary) !important;
+    color: var(--indexos-accent-primary) !important;
 }

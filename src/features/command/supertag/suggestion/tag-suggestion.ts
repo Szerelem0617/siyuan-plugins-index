@@ -184,29 +184,29 @@ async function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, pr
         }
     });
 
-    const createSection = (title: string, tags: string[], color: string) => {
+    const createSection = (title: string, tags: string[]) => {
         if (tags.length === 0) return null;
 
         const section = document.createElement("div");
         section.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
 
         const header = document.createElement("div");
-        header.style.cssText = `font-size: 11px; font-weight: bold; color: ${color}; border-bottom: 1px solid var(--b3-border-color); padding-bottom: 2px; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;`;
-        header.innerHTML = `<span>${title}</span><span style="opacity: 0.6; font-size: 9px; background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 4px;">${tags.length}</span>`;
+        header.style.cssText = `font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--indexos-text-muted); border-bottom: 1px solid var(--indexos-border-light); padding-bottom: 4px; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;`;
+        header.innerHTML = `<span>${title}</span><span style="background: var(--indexos-accent-badge-bg); color: var(--indexos-accent-badge-text); font-family: ui-monospace, monospace; border-radius: 2px; padding: 1px 5px; font-size: 9px; font-weight: 600; border: 1px solid var(--indexos-border-light);">${tags.length}</span>`;
         section.appendChild(header);
 
         const list = document.createElement("div");
-        list.style.cssText = "display: flex; flex-direction: column; gap: 2px;";
+        list.style.cssText = "display: flex; flex-direction: column; gap: 4px;";
         tags.forEach(tag => {
             const isIncompat = incompatibleTags.has(tag);
             const item = document.createElement("div");
             item.className = "b3-list-item b3-list-item--narrow";
-            item.style.cssText = `display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;${isIncompat ? " opacity: 0.4;" : ""}`;
+            item.style.cssText = `display: flex; align-items: center; padding: 6px 10px; border-radius: 3px; cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 600; background: var(--indexos-bg-container); border: 1px solid var(--indexos-border-divider);${isIncompat ? " opacity: 0.4;" : ""}`;
 
-            const iconColor = isIncompat ? "var(--b3-theme-on-surface-light)" : color;
-            let labelHtml = `<svg class="b3-list-item__graphic" style="width: 12px; height: 12px; color: ${iconColor}; margin-right: 8px;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="font-weight: 500; color: var(--b3-theme-on-background);">${tag}</span>`;
+            const iconColor = isIncompat ? "var(--indexos-text-muted)" : "var(--indexos-accent-primary)";
+            let labelHtml = `<svg class="b3-list-item__graphic" style="width: 13px; height: 13px; color: ${iconColor}; margin-right: 8px; flex-shrink: 0;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="color: var(--indexos-text-main); font-weight: 600;">${tag}</span>`;
             if (isIncompat) {
-                labelHtml += `<span style="margin-left: auto; font-size: 9px; color: var(--b3-theme-on-surface-light); opacity: 0.8;">不推荐</span>`;
+                labelHtml += `<span style="margin-left: auto; font-size: 9px; color: var(--indexos-text-muted); opacity: 0.8; font-family: ui-monospace, monospace;">不推荐</span>`;
             }
             item.innerHTML = labelHtml;
             
@@ -227,15 +227,15 @@ async function renderSupertagsInBlockPanel(panel: HTMLElement, query: string, pr
         return section;
     };
 
-    const cmdSec = createSection("命令tag", cmdComps.sort(), "var(--b3-theme-primary)");
-    const dataSec = createSection("数据tag", dataComps.sort(), "#4caf50");
+    const cmdSec = createSection("命令 TAG", cmdComps.sort());
+    const dataSec = createSection("数据 TAG", dataComps.sort());
 
     if (cmdSec) panel.appendChild(cmdSec);
     if (dataSec) panel.appendChild(dataSec);
 
     if (!cmdSec && !dataSec) {
         const empty = document.createElement("div");
-        empty.style.cssText = "font-size: 11px; opacity: 0.5; text-align: center; padding: 20px 0; font-style: italic; color: var(--b3-theme-on-surface-light);";
+        empty.style.cssText = "font-size: 11px; text-align: center; padding: 20px 0; font-family: ui-monospace, monospace; color: var(--indexos-text-muted);";
         empty.innerText = "无匹配的超级标签";
         panel.appendChild(empty);
     }
@@ -249,6 +249,8 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
 
     const hintEl = protyle.hint?.element as HTMLElement;
     if (!hintEl) return;
+
+    console.log("[IndexOS-Supertag-Debug] Native hint element:", hintEl, "Classes:", hintEl.className, "InnerHTML snippet:", hintEl.innerHTML.substring(0, 100));
 
     if (!blockSupertagsPanel) {
         blockSupertagsPanel = document.createElement("div");

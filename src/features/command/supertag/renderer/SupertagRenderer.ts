@@ -84,7 +84,7 @@ export class SupertagRenderer {
                 container = document.createElement("div");
                 container.className = "index-doc-supertags";
                 container.setAttribute("contenteditable", "false");
-                container.style.cssText = "display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 8px; margin-top: 10px; border-bottom: 1px dashed var(--b3-border-color); flex-shrink: 0; min-height: 24px; align-items: center;";
+                container.style.cssText = "display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 8px; margin-top: 10px; border-bottom: 1px dashed var(--indexos-border-light); flex-shrink: 0; min-height: 24px; align-items: center;";
                 titleEl.appendChild(container);
             }
 
@@ -102,21 +102,20 @@ export class SupertagRenderer {
 
             tags.forEach(tag => {
                 const pill = this.createTagPill(tag, async () => {
-                    await this.removeTagFromBlock(docId, tag, "page", editorEl);
-                });
+                    await this.removeTagFromBlock(docId, tag, "doc", editorEl);
+                }, false);
                 container.appendChild(pill);
             });
-
         } catch (e) {
             console.error("[SupertagRenderer] Failed to render document tags:", e);
         }
     }
 
     /**
-     * Directly render tags and virtual task checkbox pill for a single block DOM element instantly.
+     * Render tags on a single block DOM element.
      */
     public static renderSingleBlockElement(blockEl: HTMLElement) {
-        if (!blockEl) return;
+        if (!blockEl || !blockEl.getAttribute) return;
         const blockId = blockEl.getAttribute("data-node-id");
         if (!blockId) return;
 
@@ -187,23 +186,24 @@ export class SupertagRenderer {
 
     private static createCheckboxPill(blockId: string, status: string, editorEl: HTMLElement): HTMLElement {
         const pill = document.createElement("div");
-        pill.className = "index-task-checkbox-pill";
+        pill.className = "index-task-checkbox-pill indexos-supertag-chip";
         
         const isCompleted = status === "completed";
         
         pill.style.cssText = `
             display: inline-flex;
             align-items: center;
-            gap: 2px;
-            padding: 0px 6px;
-            border-radius: 4px;
-            background-color: ${isCompleted ? "var(--b3-theme-primary-light)" : "var(--b3-theme-background-hover)"};
-            border: 1px solid ${isCompleted ? "var(--b3-theme-primary)" : "var(--b3-border-color)"};
-            color: ${isCompleted ? "var(--b3-theme-primary)" : "var(--b3-theme-on-surface-light)"};
-            font-weight: bold;
+            gap: 4px;
+            padding: 1px 8px;
+            border-radius: 3px;
+            background-color: ${isCompleted ? "var(--indexos-accent-badge-bg)" : "var(--indexos-bg-container)"};
+            border: 1px solid var(--indexos-border-light);
+            color: ${isCompleted ? "var(--indexos-accent-primary)" : "var(--indexos-text-muted)"};
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-weight: 600;
             font-size: 10px;
-            height: 16px;
-            line-height: 14px;
+            height: 18px;
+            line-height: 16px;
             cursor: pointer;
             transition: all 0.15s ease-in-out;
             user-select: none;
@@ -218,185 +218,165 @@ export class SupertagRenderer {
             e.stopPropagation();
             const newStatus = isCompleted ? "pending" : "completed";
             console.log(`[Supertag-Pill-Debug] Clicked task checkbox pill on block "${blockId}". Toggling status: ${status} -> ${newStatus}`);
-            
+
             try {
-                // Update Siyuan block attributes (Pure single attribute custom-index-task)
+                // Update DOM immediately for instant UI feedback
+                blockId === editorEl.querySelector(".protyle-title")?.getAttribute("data-node-id")
+                    ? editorEl.querySelector(".protyle-title")?.setAttribute("custom-index-task", newStatus)
+                    : editorEl.querySelector(`[data-node-id="${blockId}"]`)?.setAttribute("custom-index-task", newStatus);
+
+                // Update backend attribute
                 await post("/api/attr/setBlockAttrs", {
                     id: blockId,
                     attrs: {
                         "custom-index-task": newStatus
                     }
                 });
-                
-                // Re-render visually for both document page tags and block tags instantly
-                const targetBlockEl = (document.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement) || editorEl.querySelector(`[data-node-id="${blockId}"]`);
-                if (targetBlockEl) {
-                    targetBlockEl.setAttribute("custom-index-task", newStatus);
-                    this.renderSingleBlockElement(targetBlockEl);
-                }
-                await this.renderDocumentTags(blockId, editorEl);
-                this.renderBlockTags(editorEl);
-                
-                // Trigger event content change or task completed to run pipeline
-                console.log(`[Supertag-Trigger] Virtual task status changed to: ${newStatus} for block: ${blockId}`);
+
+                // Trigger task completed event if transitioned to completed
                 if (newStatus === "completed") {
-                    await supertagMonitor.processTaskCompleted(blockId);
+                    supertagMonitor.emit("task_completed", { blockId });
+                }
+
+                // Re-render
+                if (editorEl.querySelector(".protyle-title")?.getAttribute("data-node-id") === blockId) {
+                    await this.renderDocumentTags(blockId, editorEl);
                 } else {
-                    await supertagMonitor.processBlockContentChanged(blockId);
+                    const block = editorEl.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement;
+                    if (block) this.renderSingleBlockElement(block);
                 }
             } catch (err) {
                 console.error("[SupertagRenderer] Failed to toggle virtual task status:", err);
+                showMessage("更新任务状态失败", 3000, "error");
             }
         };
 
-        pill.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
         pill.addEventListener("click", toggleTask);
-        
         return pill;
     }
 
     private static createTagPill(tagName: string, onRemove: () => Promise<void>, isSmall: boolean = false): HTMLElement {
         const pill = document.createElement("div");
-        pill.className = "index-supertag-pill";
+        pill.className = "index-supertag-pill indexos-supertag-chip";
         
-        if (isSmall) {
-            pill.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                gap: 2px;
-                padding: 0px 6px;
-                border-radius: 4px;
-                background-color: var(--b3-theme-background-hover);
-                border: 1px solid var(--b3-theme-primary-light);
-                color: var(--b3-theme-primary);
-                font-weight: 500;
-                font-size: 10px;
-                height: 16px;
-                line-height: 14px;
-                cursor: default;
-                transition: all 0.15s ease-in-out;
-                user-select: none;
-                vertical-align: middle;
-                box-sizing: border-box;
-            `;
-        } else {
-            pill.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                padding: 2px 8px;
-                border-radius: 12px;
-                background-color: var(--b3-theme-background-hover);
-                border: 1px solid var(--b3-theme-primary-light);
-                color: var(--b3-theme-primary);
-                font-weight: 500;
-                font-size: 11px;
-                line-height: 1.2;
-                cursor: default;
-                transition: all 0.15s ease-in-out;
-                margin-right: 4px;
-                user-select: none;
-            `;
-        }
+        pill.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: ${isSmall ? "0px 6px" : "2px 8px"};
+            border-radius: 3px;
+            background-color: var(--indexos-accent-badge-bg);
+            border: 1px solid var(--indexos-border-light);
+            color: var(--indexos-accent-badge-text);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-weight: 600;
+            font-size: ${isSmall ? "10px" : "11px"};
+            line-height: 1.2;
+            cursor: default;
+            transition: all 0.15s ease-in-out;
+            margin-right: 4px;
+            user-select: none;
+            box-sizing: border-box;
+        `;
 
-        const nameSpan = document.createElement("span");
-        nameSpan.innerText = tagName;
-        pill.appendChild(nameSpan);
+        const labelSpan = document.createElement("span");
+        labelSpan.style.cssText = "display: inline-flex; align-items: center; gap: 2px;";
+        labelSpan.innerHTML = `<span style="opacity: 0.7;">#</span>${this.escapeHtml(tagName)}`;
+        pill.appendChild(labelSpan);
 
         const closeBtn = document.createElement("span");
+        closeBtn.className = "index-supertag-pill-close";
         closeBtn.innerHTML = "&times;";
         closeBtn.style.cssText = `
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 14px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            margin-left: 2px;
+            font-size: 12px;
+            line-height: 1;
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            transition: background-color 0.1s ease;
-            color: var(--b3-theme-on-surface-light);
+            cursor: pointer;
+            opacity: 0.6;
+            transition: all 0.15s ease;
         `;
         
-        closeBtn.addEventListener("mouseover", () => {
-            closeBtn.style.color = "var(--b3-theme-error)";
+        closeBtn.addEventListener("mouseenter", () => {
+            closeBtn.style.opacity = "1";
+            closeBtn.style.backgroundColor = "rgba(220, 38, 38, 0.2)";
+            closeBtn.style.color = "#DC2626";
         });
-        closeBtn.addEventListener("mouseout", () => {
-            closeBtn.style.color = "var(--b3-theme-on-surface-light)";
+        closeBtn.addEventListener("mouseleave", () => {
+            closeBtn.style.opacity = "0.6";
+            closeBtn.style.backgroundColor = "transparent";
+            closeBtn.style.color = "inherit";
         });
-        
-        const handleRemove = async (e: Event) => {
+
+        closeBtn.addEventListener("click", async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log(`[Supertag-Pill-Debug] Clicked remove pill for tag #${tagName}`);
             await onRemove();
-        };
-
-        closeBtn.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
-        closeBtn.addEventListener("click", handleRemove);
+        });
 
         pill.appendChild(closeBtn);
         return pill;
     }
 
-    /**
-     * Helper to write tag removal back to block attributes.
-     */
-    private static async removeTagFromBlock(blockId: string, tagToRemove: string, type: "page" | "block", editorEl: HTMLElement) {
+    private static async removeTagFromBlock(blockId: string, tagToRemove: string, scope: "doc" | "block", editorEl: HTMLElement) {
         try {
-            console.log(`[Tag-Remove] Removing tag "${tagToRemove}" from ${type} "${blockId}"...`);
-
-            // Get current attributes
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
             const attrs = attrsRes?.data || attrsRes || {};
-            const rawTags = attrs["custom-supertags"] || attrsRes?.["custom-supertags"];
+            const rawTags = attrs["custom-supertags"] || "";
+            const currentTags = parseSupertags(rawTags);
 
-            const tags = parseSupertags(rawTags);
+            const newTags = currentTags.filter(t => t.toLowerCase() !== tagToRemove.toLowerCase());
+            const newRawValue = serializeSupertags(newTags);
 
-            const updatedTags = tags.filter(t => t !== tagToRemove);
-            globalSupertagsCache.set(blockId, updatedTags);
-            
-            // Prepare attributes update
-            const updateAttrs: Record<string, string> = {
-                "custom-supertags": serializeSupertags(updatedTags)
-            };
-
-            const isTaskTag = tagToRemove.toLowerCase() === "task";
-            if (isTaskTag) {
-                console.log(`[Tag-Remove] Task supertag removed. Clearing custom-index-task attribute on ${blockId}`);
-                updateAttrs["custom-index-task"] = "";
+            // Update DOM attribute
+            if (scope === "doc") {
+                const titleEl = editorEl.querySelector(".protyle-title");
+                if (newRawValue) {
+                    titleEl?.setAttribute("custom-supertags", newRawValue);
+                } else {
+                    titleEl?.removeAttribute("custom-supertags");
+                }
+            } else {
+                const blockEl = editorEl.querySelector(`[data-node-id="${blockId}"]`);
+                if (newRawValue) {
+                    blockEl?.setAttribute("custom-supertags", newRawValue);
+                } else {
+                    blockEl?.removeAttribute("custom-supertags");
+                }
             }
 
-            // Write back to Siyuan
+            // Update Backend
             await post("/api/attr/setBlockAttrs", {
                 id: blockId,
-                attrs: updateAttrs
+                attrs: {
+                    "custom-supertags": newRawValue
+                }
             });
 
-            // Trigger tag_removed commands explicitly
-            console.log(`[Tag-Remove] Processing tag_removed event for tag "${tagToRemove}" on ${blockId}...`);
-            await supertagMonitor.processRemovedTag(blockId, tagToRemove);
+            // Trigger Supertag Removed Event
+            supertagMonitor.emit("tag_removed", { blockId, removedTag: tagToRemove });
 
-            // Re-render visually instantly
-            if (type === "page") {
+            // Re-render
+            if (scope === "doc") {
                 await this.renderDocumentTags(blockId, editorEl);
             } else {
-                const targetBlockEl = editorEl.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement;
-                if (targetBlockEl) {
-                    if (isTaskTag) {
-                        targetBlockEl.removeAttribute("custom-index-task");
-                    }
-                    targetBlockEl.setAttribute("custom-supertags", updatedTags.length > 0 ? JSON.stringify(updatedTags) : "");
-                    this.renderSingleBlockElement(targetBlockEl);
-                }
-                this.renderBlockTags(editorEl);
+                const blockEl = editorEl.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement;
+                if (blockEl) this.renderSingleBlockElement(blockEl);
             }
 
-            showMessage(`已移除超级标签: #${tagToRemove}`);
-        } catch (e) {
-            console.error("[Tag-Remove] Failed to remove tag:", tagToRemove, e);
+            showMessage(`已移除标签 #${tagToRemove}`, 2000, "info");
+        } catch (err) {
+            console.error("[SupertagRenderer] Failed to remove tag from block:", err);
             showMessage("移除标签失败", 3000, "error");
         }
+    }
+
+    private static escapeHtml(str: string): string {
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 }
