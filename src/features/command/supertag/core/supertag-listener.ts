@@ -368,34 +368,13 @@ export class SupertagMonitor {
                         targetConfig = dataMatches.find(c => c.avId === prefAvId) || targetConfig;
                     }
                 }
-            } else if (tagEnabled && requiresPersistence) {
-                const { isDataDbsInstantiated, getOrStoreDataDbDoc } = await import("../../data-db-management");
-                const isInstantiated = await isDataDbsInstantiated();
-
-                if (isInstantiated) {
-                    console.log(`[Supertag] No existing AV found for enabled tag #${cleanTag} (requiresPersistence=${requiresPersistence}). Instantiating new AV database...`);
-                    try {
-                        const newDb = await getOrStoreDataDbDoc(cleanTag);
-                        if (newDb.avId) {
-                            targetConfig = {
-                                typeName: cleanTag,
-                                avId: newDb.avId,
-                                blockId: newDb.docId,
-                                avName: cleanTag
-                            };
-                            this.dataRegistry = await getGlobalTypeConfigs();
-                        }
-                    } catch (instErr) {
-                        console.error(`[Supertag] Failed to auto-create AV database for #${cleanTag}:`, instErr);
-                    }
-                }
             }
 
             if (targetConfig) {
                 console.log(`[Supertag] Step 1: Binding block "${blockId}" as row in Layer 4 AV "${targetConfig.avName}" (${targetConfig.avId})...`);
                 await supertagBinder.applySupertag(blockId, cleanTag, targetConfig);
             } else {
-                console.log(`[Supertag] Step 1: No Layer 4 AV matching #${cleanTag} bound.`);
+                console.log(`[Supertag] Step 1: No Layer 4 AV matching #${cleanTag} found. Data will persist in block custom attributes.`);
             }
 
             console.log(`[Supertag] Step 2: Executing conditional trigger commands for #${cleanTag}...`);

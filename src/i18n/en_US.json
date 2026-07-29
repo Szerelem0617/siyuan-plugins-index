@@ -205,8 +205,13 @@
     "noContent": "No content in this category",
     "noContentData": "Databases in workspace will appear here (disabled by default)",
     "noContentCommand": "Tags bound to triggers & commands will appear here (disabled by default)",
-    "enableSuccess": "✓ Supertag #{tag} recommendation enabled",
-    "disableSuccess": "✗ Supertag #{tag} recommendation disabled",
-    "saveFailed": "Failed to save configuration: {error}"
+    "enableSuccess": "✓ Supertag #{tag} suggestion enabled",
+    "disableSuccess": "✗ Supertag #{tag} suggestion disabled",
+    "saveFailed": "Failed to save configuration: {error}",
+    "createDatabase": "Create Database",
+    "createDbSuccess": "✓ Database for #{tag} created successfully in data-dbs!",
+    "createDbFailed": "Failed to create database: {error}",
+    "notInstantiatedContent": "IndexOS command management system has not been instantiated yet. Cannot create database.\nWould you like to instantiate now?",
+    "instantiateNow": "Instantiate Now"
   }
 }

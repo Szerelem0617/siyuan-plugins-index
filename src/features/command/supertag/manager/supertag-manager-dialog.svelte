@@ -118,6 +118,10 @@
         loading = false;
     });
 
+    import { confirmDialog } from "../../../../shared/utils";
+    import { constructCommandStorage } from "../../construct-dir";
+    import { isDataDbsInstantiated, getOrStoreDataDbDoc } from "../../data-db-management";
+
     async function handlePrefChange(typeName: string, avId: string) {
         supertagBinder.setPref(typeName, avId);
     }
@@ -133,6 +137,63 @@
         } catch (e: any) {
             console.error("Failed to toggle supertag state:", e);
             showMessage(`保存配置失败: ${e.message || e}`, 5000, "error");
+        }
+    }
+
+    async function handleCreateDb(group: TagGroup) {
+        try {
+            const isInstantiated = await isDataDbsInstantiated();
+            if (!isInstantiated) {
+                confirmDialog(
+                    i18n.initSystemDB || "实例化",
+                    i18n.supertagManager?.notInstantiatedContent || "未实例化 IndexOS 命令管理系统，无法创建数据库。是否立即实例化？",
+                    async () => {
+                        try {
+                            showMessage("⏳ 正在实例化系统存储库...", 5000);
+                            await constructCommandStorage();
+                            showMessage("✓ 系统实例化完成，正在为标签创建数据库...", 3000);
+                            await executeCreateDb(group);
+                        } catch (err: any) {
+                            console.error("Instantiation failed:", err);
+                            showMessage(`系统实例化失败: ${err.message || err}`, 5000, "error");
+                        }
+                    },
+                    undefined,
+                    i18n.supertagManager?.instantiateNow || "立即实例化"
+                );
+                return;
+            }
+
+            await executeCreateDb(group);
+        } catch (e: any) {
+            console.error("Create DB failed:", e);
+            showMessage(`创建数据库失败: ${e.message || e}`, 5000, "error");
+        }
+    }
+
+    async function executeCreateDb(group: TagGroup) {
+        showMessage(`⏳ 正在为 #${group.typeName} 在 data-dbs 中创建数据库...`, 3000);
+        const res = await getOrStoreDataDbDoc(group.typeName);
+        if (res && res.avId) {
+            const newConfig: TypeConfig = {
+                typeName: group.typeName,
+                avId: res.avId,
+                blockId: res.docId,
+                avName: group.typeName
+            };
+            group.dataConfigs.push(newConfig);
+            group.selectedAvId = res.avId;
+
+            // Make sure group appears in data tab too
+            if (!dataComponents.some(d => d.typeName === group.typeName)) {
+                dataComponents.push(group);
+            }
+            dataComponents = [...dataComponents];
+            commandComponents = [...commandComponents];
+
+            showMessage(`✓ 成功为 #${group.typeName} 创建数据库！`);
+        } else {
+            showMessage(`创建数据库失败`, 5000, "error");
         }
     }
 
@@ -324,6 +385,17 @@
                                     >
                                         <svg style="width: 11px; height: 11px;"><use xlink:href="#iconFocus"></use></svg>
                                         <span>{i18n.supertagManager.locate}</span>
+                                    </button>
+                                </div>
+                            {:else if activeTab === "command"}
+                                <div class="fn__flex" style="align-items: center; gap: 6px;">
+                                    <button
+                                        class="b3-button b3-button--outline"
+                                        style="font-size: 11px; padding: 2px 8px; line-height: 1.2; display: inline-flex; align-items: center; gap: 4px;"
+                                        on:click={() => handleCreateDb(group)}
+                                    >
+                                        <svg style="width: 11px; height: 11px;"><use xlink:href="#iconAdd"></use></svg>
+                                        <span>{i18n.supertagManager.createDatabase || "创建数据库"}</span>
                                     </button>
                                 </div>
                             {/if}

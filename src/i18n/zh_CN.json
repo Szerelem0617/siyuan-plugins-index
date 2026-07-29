@@ -206,6 +206,11 @@
     "noContentCommand": "触发器与命令绑定的标签将在此显示（默认未开启）",
     "enableSuccess": "✓ 超级标签 #{tag} 推荐已启用",
     "disableSuccess": "✗ 超级标签 #{tag} 推荐已禁用",
-    "saveFailed": "保存配置失败: {error}"
+    "saveFailed": "保存配置失败: {error}",
+    "createDatabase": "创建数据库",
+    "createDbSuccess": "✓ 成功为 #{tag} 在 data-dbs 中创建数据库！",
+    "createDbFailed": "创建数据库失败: {error}",
+    "notInstantiatedContent": "检测到 IndexOS 命令管理系统尚未实例化，无法创建数据库。\n是否立即进行系统实例化？",
+    "instantiateNow": "立即实例化"
   }
 }
