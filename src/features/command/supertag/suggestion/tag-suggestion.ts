@@ -250,62 +250,68 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
     const hintEl = protyle.hint?.element as HTMLElement;
     if (!hintEl) return;
 
-    console.log("[IndexOS-Supertag-Debug] Native hint element:", hintEl, "Classes:", hintEl.className, "InnerHTML snippet:", hintEl.innerHTML.substring(0, 100));
-
     if (!blockSupertagsPanel) {
         blockSupertagsPanel = document.createElement("div");
         blockSupertagsPanel.className = "indexos-block-supertags-panel indexos-weak-floating-panel b3-list b3-list--background";
-        blockSupertagsPanel.style.cssText = "position: fixed; width: 240px; max-height: 420px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border: 1px solid var(--b3-border-color); border-left: 2px solid var(--indexos-accent-sky, #38BDF8); border-radius: 6px; box-shadow: var(--b3-dialog-shadow), 0 0 8px rgba(56, 189, 248, 0.15); z-index: 9999; box-sizing: border-box;";
+        blockSupertagsPanel.style.cssText = "position: fixed; max-height: 420px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; z-index: 9999; box-sizing: border-box;";
         document.body.appendChild(blockSupertagsPanel);
     }
 
     const rect = hintEl.getBoundingClientRect();
-    const panelWidth = 240;
     const windowHeight = window.innerHeight;
     const windowWidth = window.innerWidth;
 
-    let left = rect.left - panelWidth - 6;
-    if (left < 0) {
-        left = rect.right + 6;
-    }
-    if (left + panelWidth > windowWidth) {
-        left = Math.max(0, windowWidth - panelWidth - 6);
-    }
+    const nativeWidth = rect.width || hintEl.offsetWidth || 400;
+    const totalWidth = Math.max(nativeWidth, 400);
+    const halfWidth = Math.floor(totalWidth / 2);
 
-    // Render content first
+    hintEl.style.width = `${halfWidth}px`;
+    hintEl.style.maxWidth = `${halfWidth}px`;
+    blockSupertagsPanel.style.width = `${halfWidth}px`;
+
+    const hintRect = hintEl.getBoundingClientRect();
+    const panelLeft = hintRect.right + 4;
+
     blockSupertagsPanel.style.display = "flex";
     blockSupertagsPanel.style.height = "auto";
     renderSupertagsInBlockPanel(blockSupertagsPanel, query, protyle);
 
-    // Use estimated panel height (280px min) for overflow check since DOM may not have reflowed yet
     const measuredHeight = blockSupertagsPanel.offsetHeight;
     const estimatedHeight = measuredHeight > 50 ? measuredHeight : 280;
 
-    // Check if panel would overflow below viewport
-    const isOverflowBottom = (rect.top + estimatedHeight) > (windowHeight - 16);
+    const isOverflowBottom = (hintRect.top + estimatedHeight) > (windowHeight - 16);
 
-    // Reset both top/bottom before setting new position
     blockSupertagsPanel.style.top = "";
     blockSupertagsPanel.style.bottom = "";
 
     if (isOverflowBottom) {
-        // Anchor panel BOTTOM to hint element BOTTOM — panel grows upward
-        const bottomOffset = windowHeight - rect.bottom;
+        const bottomOffset = windowHeight - hintRect.bottom;
         blockSupertagsPanel.style.bottom = `${Math.max(8, bottomOffset)}px`;
     } else {
-        // Normal: align panel top with hint top
-        blockSupertagsPanel.style.top = `${rect.top}px`;
+        blockSupertagsPanel.style.top = `${hintRect.top}px`;
     }
 
-    blockSupertagsPanel.style.left = `${Math.max(6, left)}px`;
+    let finalLeft = panelLeft;
+    if (finalLeft + halfWidth > windowWidth - 8) {
+        finalLeft = hintRect.left - halfWidth - 4;
+    }
+    if (finalLeft < 6) {
+        finalLeft = 6;
+    }
 
-    console.log(`[TagSuggestion-Debug] hintRect: top=${rect.top.toFixed(1)}, bottom=${rect.bottom.toFixed(1)}, measuredH=${measuredHeight}, estH=${estimatedHeight}, winH=${windowHeight}, overflow=${isOverflowBottom}`);
+    blockSupertagsPanel.style.left = `${finalLeft}px`;
 }
 
 function hideBlockSupertagsPanel() {
     if (blockSupertagsPanel) {
         blockSupertagsPanel.style.display = "none";
     }
+    // Restore native hint panel width
+    const hintEls = document.querySelectorAll(".protyle-hint") as NodeListOf<HTMLElement>;
+    hintEls.forEach(el => {
+        el.style.width = "";
+        el.style.maxWidth = "";
+    });
 }
 
 export function bindProtyleHintExtend(protyle: any) {

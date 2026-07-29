@@ -406,14 +406,8 @@ html body .b3-list::-webkit-scrollbar-thumb:hover {
     text-overflow: ellipsis !important;
 }
 
-/* ─── Supertag 极客工业风组件规范 (.indexos-supertag-chip & 编辑器内标签重塑) ─── */
-.indexos-supertag-chip,
-html body .protyle-wysiwyg span[data-type*="tag"],
-html body .protyle-wysiwyg span[data-type*="NodeTag"],
-html body .protyle-wysiwyg [data-type*="tag"],
-html body .protyle-wysiwyg [data-type*="NodeTag"],
-html body span[data-type="tag"],
-html body span[data-type="NodeTag"] {
+/* ─── Supertag 极客工业风组件规范 (仅限插件自有胶囊 .indexos-supertag-chip) ─── */
+.indexos-supertag-chip {
     display: inline-flex !important;
     align-items: center !important;
     gap: 4px !important;
@@ -426,41 +420,13 @@ html body span[data-type="NodeTag"] {
     font-size: 0.9em !important;
     font-weight: 600 !important;
     transition: all 0.15s ease !important;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
 }
 
-.indexos-supertag-chip:hover,
-html body .protyle-wysiwyg span[data-type*="tag"]:hover,
-html body .protyle-wysiwyg span[data-type*="NodeTag"]:hover {
+.indexos-supertag-chip:hover {
     border-color: var(--indexos-accent-primary) !important;
     box-shadow: 0 0 6px var(--indexos-accent-glow) !important;
     transform: translateY(-1px) !important;
     color: var(--indexos-accent-primary) !important;
-}
-
-/* 思源原生 # 标签提示菜单强力重塑 (.protyle-hint) */
-html body .protyle-hint {
-    background-color: var(--indexos-bg-base) !important;
-    border: 1px solid var(--indexos-border-light) !important;
-    border-radius: 4px !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), 0 0 8px var(--indexos-accent-glow) !important;
-}
-
-html body .protyle-hint .b3-list-item {
-    background-color: var(--indexos-bg-container) !important;
-    color: var(--indexos-text-main) !important;
-    border-bottom: 1px solid var(--indexos-border-divider) !important;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    border-radius: 3px !important;
-    margin: 2px 4px !important;
-}
-
-html body .protyle-hint .b3-list-item--focus,
-html body .protyle-hint .b3-list-item:hover {
-    background-color: var(--indexos-weak-accent) !important;
-    color: var(--indexos-accent-primary) !important;
-    border-color: var(--indexos-accent-primary) !important;
 }
 
 /* Supertag 悬浮提示面板 (.indexos-block-supertags-panel) */
@@ -487,3 +453,4 @@ html body .protyle-hint .b3-list-item:hover {
     border-color: var(--indexos-accent-primary) !important;
     color: var(--indexos-accent-primary) !important;
 }
+
