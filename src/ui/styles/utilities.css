@@ -292,20 +292,23 @@
 /* ─── 极客工业风 Scrollbar 全局美化套件 (5px 超窄微条) ─── */
 .indexos-dialog ::-webkit-scrollbar,
 .indexos-management-panel ::-webkit-scrollbar,
-.indexos-weak-floating-panel ::-webkit-scrollbar {
+.indexos-weak-floating-panel ::-webkit-scrollbar,
+#siyuan-plugin-cmd-palette ::-webkit-scrollbar {
     width: 5px !important;
     height: 5px !important;
 }
 
 .indexos-dialog ::-webkit-scrollbar-track,
 .indexos-management-panel ::-webkit-scrollbar-track,
-.indexos-weak-floating-panel ::-webkit-scrollbar-track {
+.indexos-weak-floating-panel ::-webkit-scrollbar-track,
+#siyuan-plugin-cmd-palette ::-webkit-scrollbar-track {
     background: transparent !important;
 }
 
 .indexos-dialog ::-webkit-scrollbar-thumb,
 .indexos-management-panel ::-webkit-scrollbar-thumb,
-.indexos-weak-floating-panel ::-webkit-scrollbar-thumb {
+.indexos-weak-floating-panel ::-webkit-scrollbar-thumb,
+#siyuan-plugin-cmd-palette ::-webkit-scrollbar-thumb {
     background: var(--indexos-border-light) !important;
     border-radius: 3px !important;
     transition: background 0.2s ease !important;
@@ -313,7 +316,8 @@
 
 .indexos-dialog ::-webkit-scrollbar-thumb:hover,
 .indexos-management-panel ::-webkit-scrollbar-thumb:hover,
-.indexos-weak-floating-panel ::-webkit-scrollbar-thumb:hover {
+.indexos-weak-floating-panel ::-webkit-scrollbar-thumb:hover,
+#siyuan-plugin-cmd-palette ::-webkit-scrollbar-thumb:hover {
     background: var(--indexos-accent-primary) !important;
 }
 
@@ -326,4 +330,72 @@
 .indexos-weak-focus-item {
     border-left: 2px solid var(--indexos-accent-primary) !important;
     background-color: var(--indexos-weak-accent) !important;
+}
+
+/* ─── 二维网格命令面板 (2D Grid Command Palette) ─── */
+.indexos-palette-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    padding: 8px !important;
+    background-color: var(--indexos-bg-base) !important;
+}
+
+.indexos-palette-card {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 8px 10px !important;
+    background-color: var(--indexos-bg-container) !important;
+    border: 1px solid var(--indexos-border-light) !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    text-align: left !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+    transition: all 0.15s ease !important;
+    outline: none !important;
+    min-width: 0 !important;
+}
+
+.indexos-palette-card:hover,
+.indexos-palette-card.b3-list-item--focus {
+    background-color: var(--indexos-weak-accent) !important;
+    border-color: var(--indexos-accent-primary) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 8px var(--indexos-accent-glow) !important;
+}
+
+.indexos-palette-card .card-icon {
+    flex-shrink: 0 !important;
+    width: 16px !important;
+    height: 16px !important;
+    color: var(--indexos-accent-primary) !important;
+    fill: currentColor !important;
+}
+
+.indexos-palette-card .card-body {
+    flex: 1 !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+}
+
+.indexos-palette-card .card-title {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-weight: 600 !important;
+    font-size: 12px !important;
+    color: var(--indexos-text-main) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.indexos-palette-card .card-desc {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 10px !important;
+    color: var(--indexos-text-muted) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }

@@ -5,12 +5,8 @@
  *  - Listens to every "input" event on the wysiwyg editor via capture.
  *  - When ";;" (or fullwidth "；；") is detected at the end of the current
  *    text node, the palette element is shown near the cursor.
- *  - The user can type to filter, use ↑/↓ to navigate, Enter to execute,
- *    Escape to dismiss.
- *  - Selecting an item deletes the ";;" trigger text and calls the
- *    corresponding registered command via dispatchCommand.
- *  - The palette mirrors SiYuan's ".protyle-hint .b3-list" CSS classes so
- *    it automatically inherits the theme styling.
+ *  - 2D Grid Matrix Layout (No command ID display).
+ *  - 4-way direction keyboard navigation (↑↓←→), Enter to execute, Escape to dismiss.
  */
 
 import { dispatchCommand } from "../command-dispatcher";
@@ -32,6 +28,8 @@ let triggerTextNode: Text | null = null; // The text node that contains ";;"
 let isOpen = false;
 let inputListenerAttached = false;
 let keyListenerAttached = false;
+
+const GRID_COLS = 2; // 二维网格列数
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -73,11 +71,10 @@ export function destroyCommandPalette() {
 function ensurePaletteEl() {
     if (!paletteEl) {
         paletteEl = document.createElement("div");
-        // Reuse SiYuan's native hint classes for automatic theme-matching + weak style accent
-        paletteEl.className = "protyle-hint indexos-weak-floating-panel b3-list b3-list--background fn__none";
+        paletteEl.className = "protyle-hint indexos-weak-floating-panel fn__none";
         paletteEl.id = "siyuan-plugin-cmd-palette";
         paletteEl.setAttribute("data-close", "false");
-        paletteEl.style.cssText = "position:fixed;z-index:9999;min-width:320px;max-width:560px;max-height:min(402px,40vh);overflow-y:auto;border-left: 2px solid var(--indexos-accent-sky, #38BDF8);box-shadow: var(--b3-dialog-shadow), 0 0 8px rgba(56, 189, 248, 0.15);";
+        paletteEl.style.cssText = "position:fixed;z-index:9999;width:480px;max-width:90vw;max-height:min(420px,50vh);overflow-y:auto;background:var(--indexos-bg-base);border:1px solid var(--indexos-border-light);border-radius:6px;box-shadow:0 16px 48px rgba(0,0,0,0.18), 0 0 12px var(--indexos-accent-glow);padding:0;";
         document.body.appendChild(paletteEl);
 
         // Click handler for list items
@@ -153,10 +150,18 @@ function onEditorKeydown(e: KeyboardEvent) {
         return;
     }
 
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    // 2D Matrix Grid Directional Navigation
+    if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         e.stopPropagation();
-        navigateItems(e.key === "ArrowDown" ? 1 : -1);
+
+        let delta = 0;
+        if (e.key === "ArrowDown") delta = GRID_COLS;
+        else if (e.key === "ArrowUp") delta = -GRID_COLS;
+        else if (e.key === "ArrowRight") delta = 1;
+        else if (e.key === "ArrowLeft") delta = -1;
+
+        navigateItems2D(delta);
         return;
     }
 
@@ -207,39 +212,46 @@ function renderList(query: string) {
         : registeredCommands;
 
     if (filteredCommands.length === 0) {
-        paletteEl.innerHTML = `<div class="b3-list-item b3-list-item--two" style="padding: 8px 12px; color: var(--b3-theme-on-surface-light);">没有匹配的快捷命令 (请在 Command-DB 的 "UI 入口" 列勾选 "快捷命令")</div>`;
+        paletteEl.innerHTML = `<div style="padding: 12px; font-family: ui-monospace, monospace; font-size: 12px; color: var(--indexos-text-muted); text-align: center;">没有匹配的快捷命令</div>`;
         paletteEl.classList.remove("fn__none");
         return;
     }
 
-    const header = `<div style="padding: 4px 12px 4px; font-size:11px; color:var(--b3-theme-on-surface-light); border-bottom: 1px solid var(--b3-border-color);">
-        <strong>插件命令</strong>  <span style="opacity:0.6">↑↓ 选择   Enter 执行   Esc 关闭</span>
+    const header = `<div style="padding: 8px 12px 6px; font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; color: var(--indexos-text-muted); border-bottom: 1px solid var(--indexos-border-light); display: flex; justify-content: space-between; align-items: center; text-transform: uppercase; letter-spacing: 0.08em; background: var(--indexos-bg-surface);">
+        <span>COMMAND PALETTE</span>
+        <span style="font-size: 10px; opacity: 0.7; font-weight: normal;">↑↓←→ 导航  Enter 执行  Esc 关闭</span>
     </div>`;
 
-    const items = filteredCommands.map((cmd, idx) => `
-        <button class="b3-list-item b3-list-item--two${idx === 0 ? " b3-list-item--focus" : ""}"
+    const itemsHtml = filteredCommands.map((cmd, idx) => `
+        <button class="indexos-palette-card${idx === 0 ? " b3-list-item--focus" : ""}"
                 data-cmd-id="${cmd.id}"
-                style="width:100%;text-align:left;">
-            <div class="b3-list-item__first">
-                <svg class="b3-list-item__graphic"><use xlink:href="#iconPlay"></use></svg>
-                <span class="b3-list-item__text">${escapeHtml(cmd.label)}</span>
-                <span class="b3-list-item__meta">${escapeHtml(cmd.commandId)}</span>
+                title="${escapeHtml(cmd.label)}">
+            <svg class="card-icon"><use xlink:href="#iconPlay"></use></svg>
+            <div class="card-body">
+                <div class="card-title">${escapeHtml(cmd.label)}</div>
+                ${cmd.description ? `<div class="card-desc">${escapeHtml(cmd.description)}</div>` : `<div class="card-desc" style="opacity:0.4;">快捷命令</div>`}
             </div>
-            ${cmd.description ? `<div class="b3-list-item__meta b3-list-item__showall">${escapeHtml(cmd.description)}</div>` : ""}
         </button>
     `).join("");
 
-    paletteEl.innerHTML = header + items;
+    const gridWrapper = `<div class="indexos-palette-grid">${itemsHtml}</div>`;
+
+    paletteEl.innerHTML = header + gridWrapper;
     paletteEl.classList.remove("fn__none");
 }
 
-function navigateItems(direction: 1 | -1) {
+function navigateItems2D(delta: number) {
     if (!paletteEl) return;
     const items = Array.from(paletteEl.querySelectorAll("button[data-cmd-id]")) as HTMLElement[];
     if (items.length === 0) return;
     const currentIdx = items.findIndex(el => el.classList.contains("b3-list-item--focus"));
-    items[currentIdx]?.classList.remove("b3-list-item--focus");
-    const nextIdx = (currentIdx + direction + items.length) % items.length;
+    const startIdx = currentIdx >= 0 ? currentIdx : 0;
+    
+    items[startIdx]?.classList.remove("b3-list-item--focus");
+    let nextIdx = startIdx + delta;
+    if (nextIdx < 0) nextIdx = items.length - 1;
+    if (nextIdx >= items.length) nextIdx = 0;
+
     items[nextIdx].classList.add("b3-list-item--focus");
     items[nextIdx].scrollIntoView({ block: "nearest" });
 }
