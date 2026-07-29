@@ -212,6 +212,10 @@
     "createDbSuccess": "✓ Database for #{tag} created successfully in data-dbs!",
     "createDbFailed": "Failed to create database: {error}",
     "notInstantiatedContent": "IndexOS command management system has not been instantiated yet. Cannot create database.\nWould you like to instantiate now?",
-    "instantiateNow": "Instantiate Now"
+    "instantiateNow": "Instantiate Now",
+    "enableAll": "Enable All",
+    "disableAll": "Disable All",
+    "allEnabledMsg": "✓ Enabled all tag suggestions in current category",
+    "allDisabledMsg": "✗ Disabled all tag suggestions in current category"
   }
 }

@@ -89,18 +89,19 @@
             const hasData = dataMap.has(name);
             const hasLogic = logicMap.has(name);
             const pref = supertagBinder.getPref(name);
+            const validPref = (pref && pref !== "enabled" && pref !== "disabled") ? pref : "";
 
             const group: TagGroup = {
                 typeName: name,
                 dataConfigs: dataMap.get(name) || [],
                 logicConfigs: logicMap.get(name) || [],
-                selectedAvId: pref || dataMap.get(name)?.[0]?.avId || "",
+                selectedAvId: validPref || dataMap.get(name)?.[0]?.avId || "",
             };
 
             if (hasLogic) {
                 tempCmdComp.push(group);
-            }
-            if (hasData) {
+            } else if (hasData) {
+                // 仅当非命令 tag 时，才展示在数据 tag 列表中，避免重复显示
                 tempDataComp.push(group);
             }
         });
@@ -123,7 +124,9 @@
     import { isDataDbsInstantiated, getOrStoreDataDbDoc } from "../../data-db-management";
 
     async function handlePrefChange(typeName: string, avId: string) {
-        supertagBinder.setPref(typeName, avId);
+        if (avId && avId !== "enabled" && avId !== "disabled") {
+            supertagBinder.setPref(typeName, avId);
+        }
     }
 
     async function handleToggleEnable(group: TagGroup, checked: boolean) {
@@ -137,6 +140,26 @@
         } catch (e: any) {
             console.error("Failed to toggle supertag state:", e);
             showMessage(`保存配置失败: ${e.message || e}`, 5000, "error");
+        }
+    }
+
+    function handleToggleAll(enable: boolean) {
+        try {
+            const targetList = activeTab === "data" ? dataComponents : commandComponents;
+            targetList.forEach((group) => {
+                supertagBinder.setPref(group.typeName, enable ? "enabled" : "disabled");
+            });
+
+            commandComponents = [...commandComponents];
+            dataComponents = [...dataComponents];
+
+            const msg = enable
+                ? (i18n.supertagManager?.allEnabledMsg || "✓ 已一键开启当前分类下所有 Tag 推荐")
+                : (i18n.supertagManager?.allDisabledMsg || "✗ 已一键关闭当前分类下所有 Tag 推荐");
+            showMessage(msg);
+        } catch (e: any) {
+            console.error("Failed to toggle all supertags:", e);
+            showMessage(`一键操作失败: ${e.message || e}`, 5000, "error");
         }
     }
 
@@ -279,7 +302,7 @@
                 <!-- Header row -->
                 <div
                     class="b3-list-item b3-list-item--hide-action"
-                    style="cursor: default; pointer-events: none; background: transparent; padding: 4px 12px;"
+                    style="cursor: default; background: transparent; padding: 4px 12px; align-items: center;"
                 >
                     <span
                         class="b3-list-item__text"
@@ -291,11 +314,29 @@
                         style="font-weight: bold; opacity: 0.6; flex: 3.2;"
                         >{i18n.supertagManager.colBinding}</span
                     >
-                    <span
-                        class="b3-list-item__text"
-                        style="font-weight: bold; opacity: 0.6; flex: 1.0; text-align: right;"
-                        >{i18n.supertagManager.colStatus}</span
+                    <div
+                        class="b3-list-item__text fn__flex"
+                        style="font-weight: bold; opacity: 0.8; flex: 1.8; justify-content: flex-end; align-items: center; gap: 4px;"
                     >
+                        <span style="opacity: 0.6; margin-right: 2px;">{i18n.supertagManager.colStatus}</span>
+                        <button
+                            class="b3-button b3-button--text"
+                            style="font-size: 10px; padding: 1px 4px; line-height: 1;"
+                            title={i18n.supertagManager.enableAll || "一键开启"}
+                            on:click={() => handleToggleAll(true)}
+                        >
+                            {i18n.supertagManager.enableAll || "全开"}
+                        </button>
+                        <span style="opacity: 0.3;">/</span>
+                        <button
+                            class="b3-button b3-button--text"
+                            style="font-size: 10px; padding: 1px 4px; line-height: 1; color: var(--b3-theme-error);"
+                            title={i18n.supertagManager.disableAll || "一键关闭"}
+                            on:click={() => handleToggleAll(false)}
+                        >
+                            {i18n.supertagManager.disableAll || "全关"}
+                        </button>
+                    </div>
                 </div>
 
                 {#each currentList as group}
@@ -425,7 +466,7 @@
                         <!-- Status Column -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 1.0; justify-content: flex-end; align-items: center;"
+                            style="flex: 1.8; justify-content: flex-end; align-items: center;"
                         >
                             <label class="fn__flex" style="align-items: center; cursor: pointer;">
                                 <input
