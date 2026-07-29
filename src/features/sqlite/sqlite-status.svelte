@@ -277,7 +277,7 @@
     });
 </script>
 
-<div class="av-explorer-panel indexos-management-panel fn__flex-column" style="padding: 16px; height: 100%; display: flex; flex-direction: column; min-height: 480px;">
+<div class="av-explorer-panel indexos-management-panel fn__flex-column" style="padding: 16px; height: 100%; display: flex; flex-direction: column; min-height: 0; box-sizing: border-box; overflow: hidden;">
     <!-- Tab Bar -->
     <div class="fn__flex" style="gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--b3-border-color); align-items: center;">
         <button

@@ -1,39 +1,76 @@
 /* src/ui/styles/tokens.css
- * IndexOS CSS Design System - Design Tokens
+ * IndexOS CSS Design System - Dual Theme Design Tokens
  */
 
-:root {
-    /* Color System: Dark Titanium Slate */
+/* ─── 默认浅色主题：极客工业风规范 (Geek Tech Light Industrial Theme) ─── */
+:root,
+html[data-theme-mode="light"] {
+    /* 核心背景 */
+    --indexos-bg-base: #EBF2F7;                    /* 1. 弹窗大背景：冰灰蓝底色，拉开对比沉降感 */
+    --indexos-bg-surface: #F8FAFC;                 /* 云雾白：侧边栏与导航区域 */
+    --indexos-bg-container: #FFFFFF;               /* 2. 列表主容器卡片：纯白背景提亮！ */
+    --indexos-bg-card: #FFFFFF;                    /* 纯白卡片面板 */
+    --indexos-bg-card-hover: #F0F7FF;              /* 碧落浅色 Hover 衬底 */
+    --indexos-bg-highlight: #EBF5FE;               /* 碧落浅色：用于 Active Tab 胶囊与选中衬底 */
+
+    /* 文字色彩 */
+    --indexos-text-main: #0F243B;                  /* 深海蓝黑：皇家蓝极暗衍生色，替代纯黑，清晰舒适 */
+    --indexos-text-muted: #5A7A95;                 /* 石墨蓝灰：代码行号、等宽 Tech Label */
+    --indexos-text-accent: #28517F;                /* 皇家蓝原色 */
+
+    /* 品牌高光 */
+    --indexos-accent-primary: #28517F;             /* 皇家蓝原色：Primary 按钮、选中指示线、焦点框 */
+    --indexos-accent-hover: #1E40AF;               /* 皇家蓝 Hover 态 */
+    --indexos-accent-sky: #3B82F6;                 /* 电光蓝：Glow 高光 */
+    --indexos-accent-neon: #3B82F6;                
+    --indexos-accent-glow: rgba(40, 81, 127, 0.20);
+
+    /* 边框 */
+    --indexos-border-subtle: rgba(40, 81, 127, 0.18); /* 皇家蓝 18% 透明度精密微边框 */
+    --indexos-border-glow: 1px solid rgba(40, 81, 127, 0.35);
+
+    /* 状态信号灯 */
+    --indexos-status-success: #059669;
+    --indexos-status-warning: #D97706;
+    --indexos-status-error: #DC2626;
+
+    /* 弱 Style */
+    --indexos-weak-accent: #EBF5FE;                
+    --indexos-weak-border: rgba(40, 81, 127, 0.25);
+}
+
+/* ─── 深色主题：Dark Titanium 钛蓝赛博风 (Dark Theme) ─── */
+html[data-theme-mode="dark"] {
+    /* 核心背景 */
     --indexos-bg-base: #0F172A;
     --indexos-bg-surface: #1E293B;
-    --indexos-bg-surface-hover: #334155;
+    --indexos-bg-container: #1E293B;
+    --indexos-bg-card: #1E293B;
+    --indexos-bg-card-hover: #334155;
+    --indexos-bg-highlight: rgba(56, 189, 248, 0.15);
 
-    /* Text Colors */
+    /* 文字色彩 */
     --indexos-text-main: #F8FAFC;
-    --indexos-text-muted: #64748B;
+    --indexos-text-muted: #94A3B8;
     --indexos-text-accent: #38BDF8;
 
-    /* Neon Accents */
+    /* 品牌高光 */
+    --indexos-accent-primary: #38BDF8;
+    --indexos-accent-hover: #0EA5E9;
     --indexos-accent-sky: #38BDF8;
     --indexos-accent-neon: #0EA5E9;
     --indexos-accent-glow: rgba(56, 189, 248, 0.4);
 
-    /* Status Lights */
+    /* 边框 */
+    --indexos-border-subtle: rgba(255, 255, 255, 0.1);
+    --indexos-border-glow: 1px solid rgba(56, 189, 248, 0.3);
+
+    /* 状态信号灯 */
     --indexos-status-success: #10B981;
     --indexos-status-warning: #F59E0B;
     --indexos-status-error: #EF4444;
 
-    /* Geometry & Borders */
-    --indexos-radius-sm: 2px;
-    --indexos-radius-md: 4px;
-    --indexos-border-glow: 1px solid rgba(56, 189, 248, 0.3);
-    --indexos-border-subtle: 1px solid rgba(255, 255, 255, 0.1);
-
-    /* Gradients */
-    --indexos-gradient-titanium: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%);
-    --indexos-gradient-sky: linear-gradient(135deg, #38BDF8 0%, #0EA5E9 100%);
-
-    /* Interactive Soft Touch (Weak Style for Native Integration) */
+    /* 弱 Style */
     --indexos-weak-accent: rgba(56, 189, 248, 0.15);
     --indexos-weak-border: rgba(56, 189, 248, 0.3);
 }

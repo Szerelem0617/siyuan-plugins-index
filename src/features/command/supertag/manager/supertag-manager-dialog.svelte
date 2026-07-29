@@ -233,7 +233,7 @@
     <!-- Tabs Header -->
     <div
         class="indexos-tab-bar layout-tab-bar fn__flex"
-        style="flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); align-items: center; justify-content: space-between; background: #0F172A !important;"
+        style="flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--indexos-border-subtle); align-items: center; justify-content: space-between; background: var(--indexos-bg-base) !important;"
     >
         <div class="fn__flex">
             <div
@@ -298,7 +298,7 @@
                 </p>
             </div>
         {:else}
-            <div class="b3-list b3-list--background">
+            <div class="tag-list-container b3-list b3-list--background">
                 <!-- Header row -->
                 <div
                     class="b3-list-item b3-list-item--hide-action"
@@ -485,7 +485,7 @@
 
     <div class="b3-dialog__action">
         <button
-            class="b3-button b3-button--cancel"
+            class="b3-button b3-button--primary btn-primary"
             on:click={() => dialog.destroy()}>{i18n.confirm}</button
         >
     </div>
@@ -496,30 +496,30 @@
         padding: 8px 12px;
         display: flex;
         align-items: center;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid var(--indexos-border-subtle);
         min-height: 48px;
-        color: #F8FAFC;
+        color: var(--indexos-text-main);
         background: transparent;
     }
     .b3-list-item:last-child {
         border-bottom: none;
     }
     :global(.indexos-tab-bar) {
-        background: #0F172A !important;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        background: var(--indexos-bg-base) !important;
+        border-bottom: 1px solid var(--indexos-border-subtle) !important;
     }
     :global(.indexos-tab-bar .item) {
         cursor: pointer;
         padding: 8px 16px;
         position: relative;
-        color: #94A3B8 !important;
+        color: var(--indexos-text-muted) !important;
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
         border-radius: 0 !important;
     }
     :global(.indexos-tab-bar .item.item--focus) {
-        color: #38BDF8 !important;
+        color: var(--indexos-accent-primary) !important;
         font-weight: 600 !important;
         background: transparent !important;
         border: none !important;
@@ -532,13 +532,13 @@
         left: 0;
         right: 0;
         height: 2px;
-        background-color: #38BDF8 !important;
-        box-shadow: 0 0 8px #38BDF8 !important;
+        background-color: var(--indexos-accent-primary) !important;
+        box-shadow: 0 0 8px var(--indexos-accent-glow) !important;
     }
     .b3-dialog__action {
         padding: 8px 16px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        background: #0F172A;
+        border-top: 1px solid var(--indexos-border-subtle);
+        background: var(--indexos-bg-base);
         display: flex;
         justify-content: flex-end;
     }
