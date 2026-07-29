@@ -1,0 +1,6 @@
+/* src/ui/styles/index.css
+ * Entry stylesheet for IndexOS design system
+ */
+
+@import "./tokens.css";
+@import "./utilities.css";

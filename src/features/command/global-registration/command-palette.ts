@@ -73,11 +73,11 @@ export function destroyCommandPalette() {
 function ensurePaletteEl() {
     if (!paletteEl) {
         paletteEl = document.createElement("div");
-        // Reuse SiYuan's native hint classes for automatic theme-matching
-        paletteEl.className = "protyle-hint b3-list b3-list--background fn__none";
+        // Reuse SiYuan's native hint classes for automatic theme-matching + weak style accent
+        paletteEl.className = "protyle-hint indexos-weak-floating-panel b3-list b3-list--background fn__none";
         paletteEl.id = "siyuan-plugin-cmd-palette";
         paletteEl.setAttribute("data-close", "false");
-        paletteEl.style.cssText = "position:fixed;z-index:9999;min-width:320px;max-width:560px;max-height:min(402px,40vh);overflow-y:auto;";
+        paletteEl.style.cssText = "position:fixed;z-index:9999;min-width:320px;max-width:560px;max-height:min(402px,40vh);overflow-y:auto;border-left: 2px solid var(--indexos-accent-sky, #38BDF8);box-shadow: var(--b3-dialog-shadow), 0 0 8px rgba(56, 189, 248, 0.15);";
         document.body.appendChild(paletteEl);
 
         // Click handler for list items

@@ -1,0 +1,39 @@
+/* src/ui/styles/tokens.css
+ * IndexOS CSS Design System - Design Tokens
+ */
+
+:root {
+    /* Color System: Dark Titanium Slate */
+    --indexos-bg-base: #0F172A;
+    --indexos-bg-surface: #1E293B;
+    --indexos-bg-surface-hover: #334155;
+
+    /* Text Colors */
+    --indexos-text-main: #F8FAFC;
+    --indexos-text-muted: #64748B;
+    --indexos-text-accent: #38BDF8;
+
+    /* Neon Accents */
+    --indexos-accent-sky: #38BDF8;
+    --indexos-accent-neon: #0EA5E9;
+    --indexos-accent-glow: rgba(56, 189, 248, 0.4);
+
+    /* Status Lights */
+    --indexos-status-success: #10B981;
+    --indexos-status-warning: #F59E0B;
+    --indexos-status-error: #EF4444;
+
+    /* Geometry & Borders */
+    --indexos-radius-sm: 2px;
+    --indexos-radius-md: 4px;
+    --indexos-border-glow: 1px solid rgba(56, 189, 248, 0.3);
+    --indexos-border-subtle: 1px solid rgba(255, 255, 255, 0.1);
+
+    /* Gradients */
+    --indexos-gradient-titanium: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%);
+    --indexos-gradient-sky: linear-gradient(135deg, #38BDF8 0%, #0EA5E9 100%);
+
+    /* Interactive Soft Touch (Weak Style for Native Integration) */
+    --indexos-weak-accent: rgba(56, 189, 248, 0.15);
+    --indexos-weak-border: rgba(56, 189, 248, 0.3);
+}

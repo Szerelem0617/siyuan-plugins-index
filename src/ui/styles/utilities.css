@@ -1,0 +1,172 @@
+/* src/ui/styles/utilities.css
+ * IndexOS Utility Classes & Geek Tech Design Guidelines
+ */
+
+/* ─── 强 Style 对话框：Dark Titanium 钛蓝赛博极客风 (全域沉浸覆盖) ─── */
+.indexos-dialog .b3-dialog__container {
+    background: #0F172A !important;
+    color: #F8FAFC !important;
+    border: 1px solid rgba(56, 189, 248, 0.3) !important;
+    border-radius: 6px !important;
+    overflow: hidden !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7), 0 0 16px rgba(56, 189, 248, 0.15) !important;
+}
+
+/* 顶部标题栏 */
+.indexos-dialog .b3-dialog__header {
+    background: #0F172A !important;
+    color: #F8FAFC !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    font-weight: 600 !important;
+    font-family: var(--b3-font-family-code, monospace);
+    font-size: 13px !important;
+    padding: 12px 16px !important;
+}
+
+.indexos-dialog .b3-dialog__header .b3-dialog__action {
+    color: #64748B !important;
+}
+.indexos-dialog .b3-dialog__header .b3-dialog__action:hover {
+    color: #38BDF8 !important;
+}
+
+/* 弹窗 Body 容器 */
+.indexos-dialog .b3-dialog__body {
+    background: #0F172A !important;
+    color: #F8FAFC !important;
+    padding: 0 !important;
+}
+
+/* 底部操作区 */
+.indexos-dialog .b3-dialog__action {
+    background: #0F172A !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    padding: 10px 16px !important;
+}
+
+/* 强 Style 按钮通用重构 */
+.indexos-dialog .b3-button {
+    background: #1E293B !important;
+    color: #F8FAFC !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 4px !important;
+    transition: all 0.2s ease !important;
+}
+
+.indexos-dialog .b3-button:hover {
+    background: #334155 !important;
+    border-color: #38BDF8 !important;
+    color: #38BDF8 !important;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.3) !important;
+}
+
+.indexos-dialog .b3-button--text {
+    background: transparent !important;
+    border: none !important;
+    color: #38BDF8 !important;
+}
+
+.indexos-dialog .b3-button--outline {
+    background: transparent !important;
+    border: 1px solid rgba(56, 189, 248, 0.4) !important;
+    color: #38BDF8 !important;
+}
+
+/* 页签 (Tab Header) 强 Style 调适 */
+.indexos-dialog .layout-tab-bar,
+.indexos-management-panel .layout-tab-bar {
+    background: #0F172A !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.indexos-dialog .layout-tab-bar .item,
+.indexos-management-panel .layout-tab-bar .item {
+    background: transparent !important;
+    color: #94A3B8 !important;
+    border-radius: 0 !important;
+}
+
+.indexos-dialog .layout-tab-bar .item.item--focus,
+.indexos-management-panel .layout-tab-bar .item.item--focus {
+    color: #38BDF8 !important;
+    font-weight: 600 !important;
+}
+
+.indexos-dialog .layout-tab-bar .item--focus::after,
+.indexos-management-panel .layout-tab-bar .item--focus::after {
+    background-color: #38BDF8 !important;
+    box-shadow: 0 0 8px #38BDF8 !important;
+}
+
+.indexos-dialog .tab-btn {
+    color: #94A3B8 !important;
+    background: transparent !important;
+}
+
+.indexos-dialog .tab-btn.active {
+    color: #38BDF8 !important;
+    border-bottom-color: #38BDF8 !important;
+}
+
+/* 列表项与 Chip 强 Style 调适 */
+.indexos-dialog .b3-list-item {
+    background: transparent !important;
+    color: #F8FAFC !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.indexos-dialog .b3-chip {
+    background: rgba(56, 189, 248, 0.15) !important;
+    color: #38BDF8 !important;
+    border: 1px solid rgba(56, 189, 248, 0.3) !important;
+}
+
+/* 卡片 (av-card & cmd-item-card) 强 Style 钛合金面板调适 */
+.indexos-dialog .av-card,
+.indexos-dialog .cmd-item-card {
+    background: #1E293B !important;
+    color: #F8FAFC !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+.indexos-dialog .av-card:hover,
+.indexos-dialog .cmd-item-card:hover {
+    border-color: #38BDF8 !important;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.25) !important;
+    transform: translateY(-1px);
+}
+
+.indexos-dialog .av-card__name,
+.indexos-dialog .cmd-name-label {
+    color: #F8FAFC !important;
+}
+
+.indexos-dialog .av-card__table,
+.indexos-dialog .av-card__id,
+.indexos-dialog .av-card__meta {
+    color: #94A3B8 !important;
+}
+
+/* 下拉选择框 Select 与输入框 */
+.indexos-dialog select.b3-select,
+.indexos-dialog input.b3-text-field {
+    background: #1E293B !important;
+    color: #F8FAFC !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+
+/* ─── 弱 Style 效果（适用于编辑器交互界面如 supertag suggestion / 快捷命令面板） ───
+ * 特点：100% 尊重思源本身主题配色，但在左侧与微光光晕出融入 Sky Blue 插件特征
+ */
+.indexos-weak-floating-panel {
+    border-left: 2px solid var(--indexos-accent-sky, #38BDF8) !important;
+    box-shadow: var(--b3-dialog-shadow), 0 0 8px rgba(56, 189, 248, 0.15) !important;
+}
+
+.indexos-weak-focus-item {
+    border-left: 2px solid var(--indexos-accent-sky, #38BDF8) !important;
+    background-color: var(--indexos-weak-accent, rgba(56, 189, 248, 0.15)) !important;
+}

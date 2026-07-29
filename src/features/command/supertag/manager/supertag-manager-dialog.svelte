@@ -227,13 +227,13 @@
 </script>
 
 <div
-    class="fn__flex-1 fn__flex-column"
+    class="fn__flex-1 fn__flex-column indexos-management-panel"
     style="height: 100%; display: flex; flex-direction: column;"
 >
     <!-- Tabs Header -->
     <div
-        class="layout-tab-bar fn__flex"
-        style="flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--b3-border-color); align-items: center; justify-content: space-between;"
+        class="indexos-tab-bar layout-tab-bar fn__flex"
+        style="flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); align-items: center; justify-content: space-between; background: #0F172A !important;"
     >
         <div class="fn__flex">
             <div
@@ -496,24 +496,50 @@
         padding: 8px 12px;
         display: flex;
         align-items: center;
-        border-bottom: 1px solid var(--b3-border-color);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         min-height: 48px;
+        color: #F8FAFC;
+        background: transparent;
     }
     .b3-list-item:last-child {
         border-bottom: none;
     }
-    .layout-tab-bar .item {
+    :global(.indexos-tab-bar) {
+        background: #0F172A !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+    :global(.indexos-tab-bar .item) {
         cursor: pointer;
         padding: 8px 16px;
         position: relative;
+        color: #94A3B8 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
     }
-    .layout-tab-bar .item--focus::after {
+    :global(.indexos-tab-bar .item.item--focus) {
+        color: #38BDF8 !important;
+        font-weight: 600 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    :global(.indexos-tab-bar .item--focus::after) {
         content: "";
         position: absolute;
         bottom: 0;
         left: 0;
         right: 0;
         height: 2px;
-        background-color: var(--b3-theme-primary);
+        background-color: #38BDF8 !important;
+        box-shadow: 0 0 8px #38BDF8 !important;
+    }
+    .b3-dialog__action {
+        padding: 8px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        background: #0F172A;
+        display: flex;
+        justify-content: flex-end;
     }
 </style>

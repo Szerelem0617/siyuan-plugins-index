@@ -87,6 +87,7 @@ export class SupertagManager {
             width: "720px",
             height: "520px",
         });
+        dialog.element.classList.add("indexos-dialog");
 
         new SupertagManagerDialog({
             target: dialog.element.querySelector("#supertag-manager-container"),

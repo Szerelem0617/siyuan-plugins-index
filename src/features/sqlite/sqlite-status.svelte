@@ -277,7 +277,7 @@
     });
 </script>
 
-<div class="av-explorer-panel fn__flex-column" style="padding: 16px; background: var(--b3-theme-background); color: var(--b3-theme-on-background); height: 100%; display: flex; flex-direction: column; min-height: 480px;">
+<div class="av-explorer-panel indexos-management-panel fn__flex-column" style="padding: 16px; height: 100%; display: flex; flex-direction: column; min-height: 480px;">
     <!-- Tab Bar -->
     <div class="fn__flex" style="gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--b3-border-color); align-items: center;">
         <button
@@ -593,11 +593,12 @@
         border-radius: 8px;
         padding: 10px 12px;
         background: var(--b3-theme-surface);
+        color: var(--b3-theme-on-surface);
         transition: border-color 0.15s, box-shadow 0.15s;
     }
     .av-card:hover {
-        border-color: var(--b3-theme-primary-lighter);
-        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        border-color: var(--b3-theme-primary);
+        box-shadow: var(--b3-point-shadow);
     }
     .av-card.synced {
         border-left: 3px solid #10b981;
@@ -609,8 +610,9 @@
         margin-bottom: 4px;
     }
     .av-card__name {
-        font-weight: 500;
+        font-weight: 600;
         font-size: 13px;
+        color: var(--b3-theme-on-surface);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -618,13 +620,15 @@
     }
     .av-card__status {
         font-size: 10px;
-        opacity: 0.6;
+        color: var(--b3-theme-on-surface-light);
+        opacity: 0.8;
         white-space: nowrap;
     }
-    .av-card__status.ready { color: #10b981; opacity: 1; }
+    .av-card__status.ready { color: #10b981; opacity: 1; font-weight: 500; }
     .av-card__table {
-        font-family: monospace;
+        font-family: var(--b3-font-family-code, monospace);
         font-size: 10px;
+        color: var(--b3-theme-on-surface);
         opacity: 0.75;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -632,9 +636,10 @@
         margin-bottom: 2px;
     }
     .av-card__id {
-        font-family: monospace;
+        font-family: var(--b3-font-family-code, monospace);
         font-size: 9px;
-        opacity: 0.35;
+        color: var(--b3-theme-on-surface-light);
+        opacity: 0.7;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -642,7 +647,8 @@
     }
     .av-card__meta {
         font-size: 10px;
-        opacity: 0.45;
+        color: var(--b3-theme-on-surface-light);
+        opacity: 0.8;
         margin-bottom: 4px;
     }
     .av-card__actions {

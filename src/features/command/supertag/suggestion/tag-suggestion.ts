@@ -252,8 +252,8 @@ function showBlockSupertagsPanel(protyle: any, query: string) {
 
     if (!blockSupertagsPanel) {
         blockSupertagsPanel = document.createElement("div");
-        blockSupertagsPanel.className = "indexos-block-supertags-panel b3-list b3-list--background";
-        blockSupertagsPanel.style.cssText = "position: fixed; width: 240px; max-height: 420px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border: 1px solid var(--b3-border-color); border-radius: 6px; box-shadow: var(--b3-dialog-shadow); z-index: 9999; box-sizing: border-box;";
+        blockSupertagsPanel.className = "indexos-block-supertags-panel indexos-weak-floating-panel b3-list b3-list--background";
+        blockSupertagsPanel.style.cssText = "position: fixed; width: 240px; max-height: 420px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; background: var(--b3-theme-background); border: 1px solid var(--b3-border-color); border-left: 2px solid var(--indexos-accent-sky, #38BDF8); border-radius: 6px; box-shadow: var(--b3-dialog-shadow), 0 0 8px rgba(56, 189, 248, 0.15); z-index: 9999; box-sizing: border-box;";
         document.body.appendChild(blockSupertagsPanel);
     }
 

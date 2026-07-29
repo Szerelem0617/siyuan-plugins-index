@@ -1,6 +1,7 @@
 // IndexOS Plugin Entry
 import { Plugin, Dialog } from "siyuan";
 import { setI18n, setPlugin } from "./shared/utils";
+import "./ui/styles/index.css";
 import { createDialog, initTopbar } from "./ui/topbar";
 import { settings, CONFIG } from "./core/settings";
 import { buildDoc as buildDocNew } from "./features/builder/menu";
@@ -329,6 +330,7 @@ export default class IndexPlugin extends Plugin {
             width: "850px",
             height: "650px",
         });
+        dialog.element.classList.add("indexos-dialog");
 
         const container = dialog.element.querySelector("#sqlite-status-container");
         if (container) {
