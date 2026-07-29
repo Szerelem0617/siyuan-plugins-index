@@ -72,27 +72,34 @@
     color: #38BDF8 !important;
 }
 
-/* 页签 (Tab Header) 强 Style 调适 */
+/* 页签 (Tab Header & .config__tab) 强 Style 调适 */
 .indexos-dialog .layout-tab-bar,
+.indexos-dialog .config__tab,
 .indexos-management-panel .layout-tab-bar {
     background: #0F172A !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .indexos-dialog .layout-tab-bar .item,
+.indexos-dialog .config__tab .item,
 .indexos-management-panel .layout-tab-bar .item {
     background: transparent !important;
     color: #94A3B8 !important;
     border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 .indexos-dialog .layout-tab-bar .item.item--focus,
+.indexos-dialog .config__tab .item.item--focus,
 .indexos-management-panel .layout-tab-bar .item.item--focus {
     color: #38BDF8 !important;
     font-weight: 600 !important;
+    background: transparent !important;
 }
 
 .indexos-dialog .layout-tab-bar .item--focus::after,
+.indexos-dialog .config__tab .item--focus::after,
 .indexos-management-panel .layout-tab-bar .item--focus::after {
     background-color: #38BDF8 !important;
     box-shadow: 0 0 8px #38BDF8 !important;
@@ -149,14 +156,76 @@
     color: #94A3B8 !important;
 }
 
-/* 下拉选择框 Select 与输入框 */
-.indexos-dialog select.b3-select,
+/* ─── 设置面板 (#index-settings & .config__panel) 彻底消灭白底与低对比度文字 ─── */
+.indexos-dialog #index-settings,
+.indexos-dialog .config__panel,
+.indexos-dialog .b3-dialog__content,
+.indexos-dialog .fn__flex-1 {
+    background: #0F172A !important;
+    color: #F8FAFC !important;
+}
+
+.indexos-dialog .config__panel div,
+.indexos-dialog .config__panel label,
+.indexos-dialog .config__panel span,
+.indexos-dialog #index-settings div,
+.indexos-dialog #index-settings label,
+.indexos-dialog #index-settings span {
+    color: #F8FAFC;
+}
+
+.indexos-dialog .config__item {
+    background: #0F172A !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #F8FAFC !important;
+    padding: 14px 16px !important;
+}
+
+/* 属性名称与描述说明 */
+.indexos-dialog .config__item .fn__flex-1 > div:first-child,
+.indexos-dialog .b3-label {
+    color: #F8FAFC !important;
+    font-weight: 500 !important;
+    font-size: 13px !important;
+}
+
+.indexos-dialog .config__item .b3-label__text,
+.indexos-dialog .b3-label__text {
+    color: #94A3B8 !important;
+    font-size: 12px !important;
+}
+
+/* 表单控件 (Select, Textfield, Slider) 强 Style 调适 */
+.indexos-dialog select.b3-select {
+    background: #1E293B !important;
+    color: #F8FAFC !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 4px !important;
+    padding: 6px 12px !important;
+    outline: none !important;
+}
+
+.indexos-dialog select.b3-select:focus {
+    border-color: #38BDF8 !important;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.3) !important;
+}
+
+.indexos-dialog select.b3-select option {
+    background: #1E293B !important;
+    color: #F8FAFC !important;
+}
+
 .indexos-dialog input.b3-text-field {
     background: #1E293B !important;
     color: #F8FAFC !important;
     border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 4px !important;
+    padding: 6px 10px !important;
 }
 
+.indexos-dialog input.b3-slider {
+    accent-color: #38BDF8 !important;
+}
 
 /* ─── 弱 Style 效果（适用于编辑器交互界面如 supertag suggestion / 快捷命令面板） ───
  * 特点：100% 尊重思源本身主题配色，但在左侧与微光光晕出融入 Sky Blue 插件特征

@@ -421,6 +421,7 @@ export async function openDbConfigDialog(avId: string, blockId: string) {
         width: "600px",
         height: "600px",
     });
+    dialog.element.classList.add("indexos-dialog");
 
     new DbConfigDialog({
         target: dialog.element.querySelector("#db-config-container"),

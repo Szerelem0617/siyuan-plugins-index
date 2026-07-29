@@ -347,13 +347,13 @@
     <div style="flex: 1; overflow-y: auto; overflow-x: hidden;">
         {#if activeTab === "type"}
             <div class="config-section" style="padding: 4px;">
-                <div style="background: var(--b3-theme-surface); padding: 12px; border-radius: 6px; border: 1px solid var(--b3-border-color); margin-bottom: 16px;">
-                    <div style="font-weight: bold; font-size: 13px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                <div style="background: #1E293B; padding: 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 16px; color: #F8FAFC;">
+                    <div style="font-weight: bold; font-size: 13px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; color: #F8FAFC;">
                         🏷️ 超级标签名称为：
-                        <span class="b3-chip b3-chip--primary" style="font-family: monospace;">#{dbName.toLowerCase() || '表名'}</span>
+                        <span class="b3-chip b3-chip--primary" style="font-family: monospace; background: rgba(56, 189, 248, 0.15); color: #38BDF8; border: 1px solid rgba(56, 189, 248, 0.3);">#{dbName.toLowerCase() || '表名'}</span>
                     </div>
-                    <div class="b3-label__text" style="font-size: 12px; opacity: 0.8; line-height: 1.4;">
-                        当启用该 Supertag 后，向任意块添加标签 <code style="color: #4ec9b0;">#{dbName.toLowerCase() || '表名'}</code> 将会自动把该块作为行录入到本数据库中。您可以在「超级标签管理」面板中一键开启/关闭各 Supertag。
+                    <div class="b3-label__text" style="font-size: 12px; color: #94A3B8; line-height: 1.4;">
+                        当启用该 Supertag 后，向任意块添加标签 <code style="color: #38BDF8; background: rgba(56, 189, 248, 0.1); padding: 1px 4px; border-radius: 3px;">#{dbName.toLowerCase() || '表名'}</code> 将会自动把该块作为行录入到本数据库中。您可以在「超级标签管理」面板中一键开启/关闭各 Supertag。
                     </div>
                 </div>
 

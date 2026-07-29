@@ -120,6 +120,7 @@ export async function createDialog() {
         width: "70%",
         height: "70%",
     });
+    dialog.element.classList.add("indexos-dialog");
 
     let div: HTMLDivElement = dialog.element.querySelector(`#${settingsDialog}`);
 
