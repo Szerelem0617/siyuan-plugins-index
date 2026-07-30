@@ -599,25 +599,43 @@ export async function runQuery(sql: string, params?: any[], options?: DDLOptions
         const cleanName = rawName.replace(/["'\`]/g, "").trim();
         const avID = resolveTableAvId(cleanName);
         if (avID && avID.length >= 15) {
-            const lastSync = tableSyncTimes.get(avID) || 0;
-            if (Date.now() - lastSync > TTL_MS) {
-                try {
-                    const instRes = await instantiateAV(avID, true);
-                    if (instRes && !instRes.success) {
-                        console.error(`[SQLiteManager] Failed to instantiate table ${cleanName}:`, instRes.message);
-                    } else {
-                        tableSyncTimes.set(avID, Date.now());
-                    }
-                } catch (e) {
-                    console.error(`[SQLiteManager] Failed to auto-instantiate table ${cleanName}:`, e);
+            try {
+                const instRes = await instantiateAV(avID, true);
+                if (instRes && !instRes.success) {
+                    console.error(`[SQLiteManager] Failed to instantiate table ${cleanName}:`, instRes.message);
+                } else {
+                    tableSyncTimes.set(avID, Date.now());
                 }
+            } catch (e) {
+                console.error(`[SQLiteManager] Failed to auto-instantiate table ${cleanName}:`, e);
             }
         }
     }
 
     const { db } = await getSqliteEngine();
     const res = db.exec(processedSql, params);
-    return res.length > 0 ? { columns: res[0].columns, values: res[0].values } : { columns: [], values: [] };
+    if (res.length > 0) {
+        return { columns: res[0].columns, values: res[0].values };
+    }
+
+    // 0-row fallback: If SELECT returned empty results, query PRAGMA table_info to retrieve column schemas
+    for (const rawName of tableNameMatches) {
+        const cleanName = rawName.replace(/["'\`]/g, "").trim();
+        if (cleanName.startsWith("av_")) {
+            try {
+                const tableInfo = db.exec(`PRAGMA table_info("${cleanName}")`);
+                if (tableInfo.length > 0 && tableInfo[0].values) {
+                    const cols = tableInfo[0].values.map((v: any) => String(v[1]));
+                    console.log(`[SQLiteManager] Retrieved PRAGMA columns for empty table ${cleanName}:`, cols);
+                    return { columns: cols, values: [] };
+                }
+            } catch (e) {
+                console.error(`[SQLiteManager] PRAGMA table_info failed for ${cleanName}:`, e);
+            }
+        }
+    }
+
+    return { columns: [], values: [] };
 }
 
 export async function executeWritableSql(sql: string, options?: DDLOptions): Promise<any> {

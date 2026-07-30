@@ -13,10 +13,6 @@
 
     let avBlocks: any[] = [];
     let loading = true;
-    let syncStatus: Record<string, string> = {};
-    let instantiatedIds = new Set<string>();
-    let syncMeta: Record<string, { updated: string; rowCount: number; colCount: number }> = {};
-    let batchProcessing = false;
     
     // SQL Console
     let sqlInput = "SELECT * FROM ";
@@ -29,11 +25,6 @@
     let showSavedQueries = false;
     let saveQueryName = "";
 
-    // Schema Panel
-    let showSchema = false;
-    let selectedSchemaAvId = "";
-    let schemaColumns: AVColumnSchema[] = [];
-
     // Export
     let showExportMenu = false;
     
@@ -43,14 +34,10 @@
     // Tabs
     let activeTab: "databases" | "console" | "commands" = "databases";
 
-
-
     async function init() {
         loading = true;
         try {
             const rawBlocks = await fetchAllAVBlocks();
-            instantiatedIds = await getInstantiatedIds();
-            syncMeta = await getSyncMetadata();
             savedQueries = await getSavedQueries();
             
             // Group by avId to deduplicate and count mirrors
@@ -107,15 +94,6 @@
             });
             
             avBlocks = tempBlocks;
-            
-            avBlocks.forEach(b => {
-                if (instantiatedIds.has(b.avId)) {
-                    const meta = syncMeta[b.avId];
-                    syncStatus[b.avId] = meta
-                        ? `✓ ${meta.rowCount}r × ${meta.colCount}c`
-                        : "Ready";
-                }
-            });
         } catch (e) {
             console.error("Init failed", e);
         } finally {
@@ -124,27 +102,19 @@
     }
 
     async function executeSQL() {
+        console.log("[IndexOS-SQL-Debug] executeSQL triggered with SQL:", sqlInput);
         queryError = "";
         showExportMenu = false;
+        queryResult = null; // 强行重置触发 Svelte 重新渲染
 
         try {
-            queryResult = await runQuery(sqlInput);
+            const res = await runQuery(sqlInput);
+            console.log("[IndexOS-SQL-Debug] runQuery execution result:", res);
+            queryResult = res;
             copyStatus = "Copy";
-            
-            // Refresh instantiated IDs list in UI after execution
-            instantiatedIds = await getInstantiatedIds();
-            syncMeta = await getSyncMetadata();
-            avBlocks.forEach(b => {
-                if (instantiatedIds.has(b.avId)) {
-                    const meta = syncMeta[b.avId];
-                    syncStatus[b.avId] = meta
-                        ? `✓ ${meta.rowCount}r × ${meta.colCount}c`
-                        : "Ready";
-                }
-            });
-            syncStatus = syncStatus;
         } catch (e: any) {
-            queryError = e.message;
+            console.error("[IndexOS-SQL-Debug] executeSQL failed with error:", e);
+            queryError = e.message || String(e);
             queryResult = null;
         }
     }
@@ -186,34 +156,10 @@
     }
 
     function loadQuery(sql: string) {
+        console.log("[IndexOS-SQL-Debug] loadQuery clicked, loading SQL:", sql);
         sqlInput = sql;
         showSavedQueries = false;
-    }
-
-    async function viewSchema(avId: string) {
-        selectedSchemaAvId = avId;
-        let cols = await getAVSchema(avId);
-        if (cols.length === 0) {
-            syncStatus[avId] = "⟳ Loading...";
-            syncStatus = syncStatus;
-            try {
-                const res = await instantiateAV(avId, true);
-                if (res.success) {
-                    cols = await getAVSchema(avId);
-                    instantiatedIds.add(avId);
-                    instantiatedIds = instantiatedIds;
-                    syncMeta = await getSyncMetadata();
-                    syncStatus[avId] = `✓ ${res.rowCount} rows`;
-                } else {
-                    syncStatus[avId] = "✗ " + res.message;
-                }
-            } catch (e) {
-                syncStatus[avId] = "✗ Error";
-            }
-            syncStatus = syncStatus;
-        }
-        schemaColumns = cols;
-        showSchema = true;
+        executeSQL();
     }
 
     function getTypeIcon(type: string): string {
@@ -249,8 +195,13 @@
     }
 
     function useSqlForAv(avId: string) {
-        sqlInput = `SELECT * FROM ${avIdToTableName(avId)} LIMIT 20`;
+        const tableName = avIdToTableName(avId);
+        console.log("[IndexOS-SQL-Debug] useSqlForAv clicked, avId:", avId, "tableName:", tableName);
+        sqlInput = `SELECT * FROM ${tableName} LIMIT 20`;
         activeTab = "console";
+        setTimeout(() => {
+            executeSQL();
+        }, 50);
     }
 
     function locateAv(block: any) {
@@ -302,15 +253,6 @@
             命令管理
         </button>
         <div style="flex: 1;"></div>
-        <button 
-            class="b3-button b3-button--text" 
-            style="font-size: 11px; padding: 2px 6px; display: flex; align-items: center; gap: 4px; border: none; background: none; color: var(--b3-theme-on-surface-light); cursor: pointer;" 
-            on:click={init} 
-            disabled={loading}
-        >
-            <svg style="width: 12px; height: 12px; fill: currentColor; margin-right: 2px;"><use xlink:href="#iconRefresh"></use></svg>
-            {loading ? "扫描中..." : "刷新扫描"}
-        </button>
     </div>
 
     <!-- Tab Content: Command Control -->
@@ -324,33 +266,30 @@
     {#if activeTab === "databases"}
         <div class="fn__flex-1" style="overflow-y: auto; min-height: 0;">
             {#if loading}
-                <div style="text-align: center; padding: 40px; opacity: 0.4;">Scanning...</div>
+                <div style="text-align: center; padding: 40px; opacity: 0.4;">正在扫描数据库...</div>
             {:else if avBlocks.length === 0}
-                <div style="text-align: center; padding: 40px; opacity: 0.4;">No AV blocks found</div>
+                <div style="text-align: center; padding: 40px; opacity: 0.4;">未发现数据库块</div>
             {:else}
                 <div class="av-grid">
                     {#each avBlocks as block}
-                        <div class="av-card" class:synced={instantiatedIds.has(block.avId)}>
+                        <div class="av-card">
                             <div class="av-card__header">
                                 <span class="av-card__name" class:duplicate-name-warning={block.isDuplicateName} title={block.name}>
                                     {block.name}
                                     {#if block.mirrorCount > 1}
-                                        <span class="av-card__mirrors-badge" style="font-size: 10px; color: var(--b3-theme-primary); font-weight: normal; margin-left: 4px; background: rgba(92, 184, 92, 0.15); padding: 1px 4px; border-radius: 3px;" title="This database is referenced by {block.mirrorCount} blocks (mirrors).">
-                                            {block.mirrorCount} 镜像
+                                        <span class="indexos-tag-badge" style="font-size: 10px; margin-left: 4px;" title="此数据库在 {block.mirrorCount} 个块中被引用（镜像）。">
+                                            <span class="badge-dot"></span>{block.mirrorCount} 镜像
                                         </span>
                                     {/if}
                                     {#if block.isUnnamed}
-                                        <span class="av-card__duplicate-badge" style="font-size: 10px; color: #f59e0b; font-weight: normal; margin-left: 4px; background: rgba(245, 158, 11, 0.15); padding: 1px 4px; border-radius: 3px;" title="该数据库未命名。请在界面上重命名以支持基于表名的 SQL 查询。">
-                                            ⚠️ 数据库未命名
+                                        <span class="indexos-tag-badge indexos-tag-badge--duplicate" style="font-size: 10px; margin-left: 4px;" title="该数据库未命名。请在界面上重命名以支持基于表名的 SQL 查询。">
+                                            <span class="badge-dot"></span>未命名
                                         </span>
                                     {:else if block.isDuplicateName}
-                                        <span class="av-card__duplicate-badge" style="font-size: 10px; color: #ef4444; font-weight: normal; margin-left: 4px; background: rgba(239, 68, 68, 0.15); padding: 1px 4px; border-radius: 3px;" title="Multiple databases share this name. SQL queries using this name will throw an error.">
-                                            ⚠️ 同名冲突
+                                        <span class="indexos-tag-badge indexos-tag-badge--duplicate" style="font-size: 10px; margin-left: 4px;" title="多个数据库共享此名称，可能导致 SQL 表名冲突。">
+                                            <span class="badge-dot"></span>同名冲突
                                         </span>
                                     {/if}
-                                </span>
-                                <span class="av-card__status" class:ready={instantiatedIds.has(block.avId)}>
-                                    {syncStatus[block.avId] || "Pending"}
                                 </span>
                             </div>
                             <div class="av-card__table" title="SQLite Table Name: {avIdToTableName(block.avId)}">
@@ -359,72 +298,15 @@
                             <div class="av-card__id" title="AV ID: {block.avId}">
                                 AV ID: {block.avId}
                             </div>
-                            {#if syncMeta[block.avId]}
-                                <div class="av-card__meta">
-                                    Last: {formatTimestamp(syncMeta[block.avId].updated)}
-                                </div>
-                            {/if}
-                            <div class="av-card__actions">
-                                <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => useSqlForAv(block.avId)}>Query</button>
-                                <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => viewSchema(block.avId)}>Schema</button>
-                                <button class="b3-button b3-button--text" style="font-size: 10px;" on:click={() => locateAv(block)}>Locate</button>
+                            <div class="av-card__actions" style="margin-top: 8px; display: flex; gap: 6px; justify-content: flex-end;">
+                                <button class="indexos-btn-bordered" style="font-size: 10px; padding: 2px 6px;" on:click={() => useSqlForAv(block.avId)}>Query</button>
+                                <button class="indexos-btn-bordered" style="font-size: 10px; padding: 2px 6px;" on:click={() => locateAv(block)}>Locate</button>
                             </div>
                         </div>
                     {/each}
                 </div>
             {/if}
         </div>
-
-        <!-- Schema Modal -->
-        {#if showSchema}
-            <div 
-                class="schema-overlay" 
-                role="button" 
-                tabindex="-1" 
-                on:click|self={() => showSchema = false}
-                on:keydown|self={(e) => { if (e.key === 'Escape') showSchema = false; }}
-            >
-                <div class="schema-modal">
-                    <div class="fn__flex" style="align-items: center; margin-bottom: 12px;">
-                        <h3 style="margin: 0; font-size: 14px; flex: 1; display: flex; align-items: center; gap: 6px;">
-                            <span>Schema: {avIdToTableName(selectedSchemaAvId)}</span>
-                            <span style="opacity: 0.4; font-size: 10px; font-weight: normal; font-family: monospace;">({selectedSchemaAvId})</span>
-                        </h3>
-                        <button class="b3-button b3-button--text" style="font-size: 11px;" on:click={() => showSchema = false}>✕</button>
-                    </div>
-                    {#if schemaColumns.length === 0}
-                        <div style="opacity: 0.4; text-align: center; padding: 20px;">No schema data</div>
-                    {:else}
-                        <table class="schema-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 24px;"></th>
-                                    <th>Column</th>
-                                    <th>AV Name</th>
-                                    <th>Type</th>
-                                    <th>Access</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {#each schemaColumns as col}
-                                    <tr>
-                                        <td style="text-align: center; font-size: 12px;">{getTypeIcon(col.keyType)}</td>
-                                        <td><code>{col.colName}</code></td>
-                                        <td style="opacity: 0.7;">{col.keyName}</td>
-                                        <td><span class="type-badge">{col.keyType}</span></td>
-                                        <td>
-                                            <span class="access-badge" class:writable={col.writable} class:readonly={!col.writable}>
-                                                {col.writable ? "RW" : "RO"}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                {/each}
-                            </tbody>
-                        </table>
-                    {/if}
-                </div>
-            </div>
-        {/if}
     {/if}
 
     <!-- Tab Content: SQL Console -->
@@ -494,13 +376,13 @@
             {/if}
 
             <!-- Results Toolbar -->
-            {#if queryResult && queryResult.values.length > 0}
+            {#if queryResult && (queryResult.values.length > 0 || queryResult.columns.length > 0)}
                 <div class="fn__flex" style="gap: 6px; margin-bottom: 6px; align-items: center;">
-                    <span style="font-size: 11px; opacity: 0.5;">{queryResult.values.length} rows × {queryResult.columns.length} cols</span>
+                    <span style="font-size: 11px; opacity: 0.7; font-weight: 500; font-family: monospace;">{queryResult.values.length} rows × {queryResult.columns.length} cols</span>
                     <div style="flex: 1;"></div>
-                    <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 2px 8px;" on:click={copyResults}>{copyStatus}</button>
+                    <button class="indexos-btn-bordered" style="font-size: 10px; padding: 2px 8px;" on:click={copyResults}>{copyStatus}</button>
                     <div style="position: relative;">
-                        <button class="b3-button b3-button--outline" style="font-size: 10px; padding: 2px 8px;" on:click={() => showExportMenu = !showExportMenu}>↓ Export</button>
+                        <button class="indexos-btn-bordered" style="font-size: 10px; padding: 2px 8px;" on:click={() => showExportMenu = !showExportMenu}>↓ Export</button>
                         {#if showExportMenu}
                             <div class="export-menu">
                                 <button class="export-menu__item" on:click={handleExportCSV}>📄 CSV File</button>
@@ -512,8 +394,8 @@
             {/if}
 
             <!-- Results Table -->
-            <div class="result-viewer fn__flex-1" style="min-height: 150px;">
-                {#if queryResult && queryResult.values.length > 0}
+            <div class="result-viewer fn__flex-1" style="min-height: 150px; overflow: auto;">
+                {#if queryResult && (queryResult.columns.length > 0 || queryResult.values.length > 0)}
                     <table class="result-table">
                         <thead>
                             <tr>
@@ -540,8 +422,19 @@
                             {/each}
                         </tbody>
                     </table>
+                    {#if queryResult.values.length === 0}
+                        <div class="empty-result" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 12px; gap: 8px; text-align: center;">
+                            <svg style="width: 28px; height: 28px; opacity: 0.3; color: var(--indexos-accent-primary);"><use xlink:href="#iconDatabase"></use></svg>
+                            <div style="font-weight: 600; font-size: 12px; color: var(--b3-theme-on-background);">该数据库已解析结构 ({queryResult.columns.length} 列)，但当前暂无行数据 (0 行)</div>
+                            <div style="font-size: 11px; opacity: 0.5;">请在页面数据库视图中为该数据库添加记录内容</div>
+                        </div>
+                    {/if}
                 {:else if queryResult}
-                    <div class="empty-result">Query returned 0 rows</div>
+                    <div class="empty-result" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 8px; padding: 24px 12px; box-sizing: border-box; text-align: center;">
+                        <svg style="width: 32px; height: 32px; opacity: 0.3; color: var(--indexos-accent-primary);"><use xlink:href="#iconDatabase"></use></svg>
+                        <div style="font-weight: 600; font-size: 13px; color: var(--b3-theme-on-background);">查询已执行完成，但当前数据库暂无记录 (0 行 / 0 列)</div>
+                        <div style="font-size: 11px; opacity: 0.5; max-width: 360px; line-height: 1.4;">提示：若这是刚在思源笔记中创建的数据库，请先在页面数据库视图中添加条目或属性内容。</div>
+                    </div>
                 {:else}
                     <div class="empty-result">
                         <div style="text-align: center;">
@@ -645,15 +538,9 @@
         white-space: nowrap;
         margin-bottom: 4px;
     }
-    .av-card__meta {
-        font-size: 10px;
-        color: var(--b3-theme-on-surface-light);
-        opacity: 0.8;
-        margin-bottom: 4px;
-    }
     .av-card__actions {
         display: flex;
-        gap: 2px;
+        gap: 6px;
         justify-content: flex-end;
     }
 
@@ -779,75 +666,6 @@
     }
     .export-menu__item:hover {
         background: var(--b3-theme-background-hover);
-    }
-
-    /* ─── Schema & Changelog Modals ─── */
-    .schema-overlay {
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
-    }
-    .schema-modal {
-        background: var(--b3-theme-background);
-        border: 1px solid var(--b3-border-color);
-        border-radius: 10px;
-        padding: 16px;
-        max-width: 560px;
-        width: 90%;
-        max-height: 60vh;
-        overflow-y: auto;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-    }
-    .schema-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 11px;
-    }
-    .schema-table th {
-        padding: 6px 8px;
-        text-align: left;
-        font-weight: 500;
-        border-bottom: 2px solid var(--b3-border-color);
-        font-size: 10px;
-        text-transform: uppercase;
-        opacity: 0.6;
-    }
-    .schema-table td {
-        padding: 5px 8px;
-        border-bottom: 1px solid var(--b3-border-color);
-    }
-    .schema-table code {
-        font-size: 11px;
-        background: rgba(100,100,100,0.15);
-        padding: 1px 4px;
-        border-radius: 3px;
-    }
-    .type-badge {
-        display: inline-block;
-        font-size: 10px;
-        padding: 1px 6px;
-        border-radius: 3px;
-        background: rgba(78, 201, 176, 0.15);
-        color: #4ec9b0;
-    }
-    .access-badge {
-        display: inline-block;
-        font-size: 9px;
-        padding: 1px 5px;
-        border-radius: 3px;
-        font-weight: 600;
-    }
-    .access-badge.writable {
-        background: rgba(16, 185, 129, 0.15);
-        color: #10b981;
-    }
-    .access-badge.readonly {
-        background: rgba(239, 68, 68, 0.1);
-        color: #ef4444;
     }
 
 

@@ -75,8 +75,9 @@
         <!-- 顶部操作栏 -->
         <div style="flex-shrink: 0;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                <button class="b3-button b3-button--outline" style="font-size: 11px; padding: 3px 10px; font-weight: 500;" on:click={handleInitSystem}>
-                    🗄️ 实例化
+                <button class="indexos-btn-bordered" style="font-size: 11px; padding: 4px 10px;" on:click={handleInitSystem}>
+                    <svg style="width: 12px; height: 12px; fill: currentColor; margin-right: 2px;"><use xlink:href="#iconDatabase"></use></svg>
+                    <span>实例化</span>
                 </button>
             </div>
             <div style="font-size: 11px; opacity: 0.6; line-height: 1.4; color: var(--b3-theme-on-surface-light);">
