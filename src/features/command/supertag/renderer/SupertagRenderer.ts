@@ -211,7 +211,7 @@ export class SupertagRenderer {
             box-sizing: border-box;
         `;
         
-        pill.innerText = isCompleted ? "☑ 已完成" : "☐ 待办";
+        pill.innerText = isCompleted ? "☑ 完成" : "☐ 待办";
 
         const toggleTask = async (e: Event) => {
             e.preventDefault();
@@ -220,10 +220,14 @@ export class SupertagRenderer {
             console.log(`[Supertag-Pill-Debug] Clicked task checkbox pill on block "${blockId}". Toggling status: ${status} -> ${newStatus}`);
 
             try {
-                // Update DOM immediately for instant UI feedback
-                blockId === editorEl.querySelector(".protyle-title")?.getAttribute("data-node-id")
-                    ? editorEl.querySelector(".protyle-title")?.setAttribute("custom-index-task", newStatus)
-                    : editorEl.querySelector(`[data-node-id="${blockId}"]`)?.setAttribute("custom-index-task", newStatus);
+                // Update DOM immediately for instant UI feedback with safe null-checks
+                const titleNode = editorEl?.querySelector?.(".protyle-title");
+                if (titleNode && titleNode.getAttribute("data-node-id") === blockId) {
+                    titleNode.setAttribute("custom-index-task", newStatus);
+                } else {
+                    const node = editorEl?.querySelector?.(`[data-node-id="${blockId}"]`) || document.querySelector(`[data-node-id="${blockId}"]`);
+                    if (node) node.setAttribute("custom-index-task", newStatus);
+                }
 
                 // Update backend attribute
                 await post("/api/attr/setBlockAttrs", {
@@ -235,15 +239,16 @@ export class SupertagRenderer {
 
                 // Trigger task completed event if transitioned to completed
                 if (newStatus === "completed") {
-                    supertagMonitor.emit("task_completed", { blockId });
+                    await supertagMonitor.processTaskCompleted(blockId);
                 }
 
                 // Re-render
-                if (editorEl.querySelector(".protyle-title")?.getAttribute("data-node-id") === blockId) {
-                    await this.renderDocumentTags(blockId, editorEl);
+                const titleNodeAfter = editorEl?.querySelector?.(".protyle-title");
+                if (titleNodeAfter && titleNodeAfter.getAttribute("data-node-id") === blockId) {
+                    await SupertagRenderer.renderDocumentTags(blockId, editorEl);
                 } else {
-                    const block = editorEl.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement;
-                    if (block) this.renderSingleBlockElement(block);
+                    const block = (editorEl?.querySelector?.(`[data-node-id="${blockId}"]`) || document.querySelector(`[data-node-id="${blockId}"]`)) as HTMLElement;
+                    if (block) SupertagRenderer.renderSingleBlockElement(block);
                 }
             } catch (err) {
                 console.error("[SupertagRenderer] Failed to toggle virtual task status:", err);

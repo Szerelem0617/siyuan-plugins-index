@@ -408,6 +408,12 @@ export class SupertagMonitor {
         }
     }
 
+    public emit(event: string, data: any) {
+        if (event === "task_completed" && data?.blockId) {
+            void this.processTaskCompleted(data.blockId);
+        }
+    }
+
     public async processTaskCompleted(blockId: string) {
         try {
             console.log(`[Supertag] Triggering task_completed event for block "${blockId}"...`);
