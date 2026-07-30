@@ -519,3 +519,67 @@ button.b3-select {
     background-image: none !important;
 }
 
+/* ─── 不可交互标注（无边框，前置彩色 Dot） ─── */
+.indexos-tag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    line-height: 1;
+    color: var(--indexos-text-muted);
+    user-select: none;
+    padding: 2px 0;
+}
+
+.indexos-tag-badge .badge-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: var(--indexos-text-muted);
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.indexos-tag-badge--builtin .badge-dot {
+    background-color: var(--indexos-accent-sky);
+}
+
+.indexos-tag-badge--duplicate {
+    color: var(--indexos-status-warning);
+}
+
+.indexos-tag-badge--duplicate .badge-dot {
+    background-color: var(--indexos-status-warning);
+}
+
+/* ─── 可交互命令按钮（带框，悬浮微阴影与高光响应） ─── */
+.indexos-btn-bordered {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    border-radius: 3px;
+    border: 1px solid var(--indexos-border-light);
+    background: var(--indexos-bg-container);
+    color: var(--indexos-text-main);
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0, 0, 0.2, 1);
+    user-select: none;
+    box-sizing: border-box;
+}
+
+.indexos-btn-bordered:hover {
+    border-color: var(--indexos-accent-primary);
+    color: var(--indexos-accent-primary);
+    background: var(--indexos-bg-highlight);
+    box-shadow: 0 2px 6px var(--indexos-accent-glow);
+}
+
+.indexos-btn-bordered:active {
+    transform: translateY(1px);
+}
+
+
