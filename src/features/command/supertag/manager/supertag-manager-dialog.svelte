@@ -117,8 +117,68 @@
         commandComponents = tempCmdComp.sort(sorter);
         dataComponents = tempDataComp.sort(sorter);
 
+        await enrichDuplicateDbNames([...dataComponents, ...commandComponents]);
+        dataComponents = [...dataComponents];
+        commandComponents = [...commandComponents];
+
         loading = false;
     });
+
+    async function enrichDuplicateDbNames(groups: TagGroup[]) {
+        for (const g of groups) {
+            if (!g.dataConfigs || g.dataConfigs.length <= 1) continue;
+
+            const blockIds = g.dataConfigs.map(c => c.blockId || c.avId).filter(Boolean);
+            if (blockIds.length === 0) continue;
+
+            try {
+                const stmt = `SELECT b.id, d.content as doc_title, d.hpath, b.created, b.updated FROM blocks b LEFT JOIN blocks d ON b.root_id = d.id WHERE b.id IN ('${blockIds.join("','")}')`;
+                const res = await post("/api/query/sql", { stmt });
+                const rows = (res && Array.isArray(res)) ? res : (res?.data || []);
+
+                const infoMap = new Map<string, { docTitle: string; created: string }>();
+                if (Array.isArray(rows)) {
+                    rows.forEach((r: any) => {
+                        let title = r.doc_title || "";
+                        if (!title && r.hpath) {
+                            const parts = r.hpath.split("/").filter(Boolean);
+                            title = parts[parts.length - 1] || "";
+                        }
+                        if (!title) title = "未命名页";
+                        infoMap.set(r.id, { docTitle: title, created: r.created || "" });
+                    });
+                }
+
+                // 1. 统计当前组内每个 docTitle 出现的频次
+                const docCountMap = new Map<string, number>();
+                g.dataConfigs.forEach(cfg => {
+                    const info = infoMap.get(cfg.blockId || cfg.avId);
+                    const docTitle = info ? info.docTitle : (cfg.avName || "未知页");
+                    docCountMap.set(docTitle, (docCountMap.get(docTitle) || 0) + 1);
+                });
+
+                // 2. 按组内出现顺序生成 displayName
+                const docIndexMap = new Map<string, number>();
+                g.dataConfigs.forEach(cfg => {
+                    const info = infoMap.get(cfg.blockId || cfg.avId);
+                    const docTitle = info ? info.docTitle : (cfg.avName || "未知页");
+                    const count = docCountMap.get(docTitle) || 1;
+
+                    if (count > 1) {
+                        // 同一页面有多个重名数据库：加上 .1, .2 后缀
+                        const currentIndex = (docIndexMap.get(docTitle) || 0) + 1;
+                        docIndexMap.set(docTitle, currentIndex);
+                        (cfg as any).displayName = `${docTitle}.${currentIndex}`;
+                    } else {
+                        // 不同页面：直接显示页面名称
+                        (cfg as any).displayName = docTitle;
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to enrich duplicate db names:", e);
+            }
+        }
+    }
 
     import { confirmDialog } from "../../../../shared/utils";
     import { constructCommandStorage } from "../../construct-dir";
@@ -212,10 +272,11 @@
             group.dataConfigs.push(newConfig);
             group.selectedAvId = res.avId;
 
-            // Make sure group appears in data tab too
-            if (!dataComponents.some(d => d.typeName === group.typeName)) {
+            // 仅当非命令 tag 时才加入数据 tag 列表，避免命令 tag 在数据 tag 界面重复显示
+            if (group.logicConfigs.length === 0 && !dataComponents.some(d => d.typeName === group.typeName)) {
                 dataComponents.push(group);
             }
+            await enrichDuplicateDbNames([group]);
             dataComponents = [...dataComponents];
             commandComponents = [...commandComponents];
 
@@ -307,21 +368,23 @@
                 <!-- Header row -->
                 <div
                     class="b3-list-item b3-list-item--hide-action"
-                    style="cursor: default; background: transparent; padding: 4px 12px; align-items: center;"
+                    style="cursor: default; background: transparent; padding: 6px 16px; align-items: center;"
                 >
-                    <span
-                        class="b3-list-item__text"
-                        style="font-weight: bold; opacity: 0.6; flex: 1.8;"
-                        >{i18n.supertagManager.colTag}</span
-                    >
-                    <span
-                        class="b3-list-item__text"
-                        style="font-weight: bold; opacity: 0.6; flex: 3.2;"
-                        >{i18n.supertagManager.colBinding}</span
-                    >
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.8; flex: 1.8; justify-content: flex-end; align-items: center; gap: 6px;"
+                        style="font-weight: bold; opacity: 0.6; flex: 2; align-items: center;"
+                    >
+                        <span>{i18n.supertagManager.colTag}</span>
+                    </div>
+                    <div
+                        class="b3-list-item__text fn__flex"
+                        style="font-weight: bold; opacity: 0.6; flex: 4.5; align-items: center;"
+                    >
+                        <span>{i18n.supertagManager.colBinding}</span>
+                    </div>
+                    <div
+                        class="b3-list-item__text fn__flex"
+                        style="font-weight: bold; opacity: 0.8; flex: 1.5; justify-content: flex-end; align-items: center; gap: 6px;"
                     >
                         <span style="opacity: 0.6; font-size: 11px;">{i18n.supertagManager.colStatus || "启用"}</span>
                         <button
@@ -338,24 +401,24 @@
                 {#each currentList as group}
                     {@const isLogic = group.logicConfigs.length > 0}
                     {@const isEnabled = supertagBinder.getPref(group.typeName) !== "disabled"}
-                    <div class="b3-list-item">
-                        <svg
-                            class="b3-list-item__graphic"
-                            style="color: var(--indexos-accent-primary);"
-                            ><use xlink:href="#iconTags"></use></svg
-                        >
-
+                    <div class="b3-list-item" style="display: flex; align-items: center; padding: 10px 16px; min-height: 48px; box-sizing: border-box;">
                         <!-- Tag Name Column -->
                         <div
-                            class="b3-list-item__text fn__flex-column"
-                            style="flex: 1.8; justify-content: center; gap: 4px;"
+                            class="b3-list-item__text fn__flex"
+                            style="flex: 2; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
                         >
-                            <span style="font-weight: 600; font-family: ui-monospace, monospace; line-height: 1.2; word-break: break-all;">{group.typeName}</span>
+                            <svg
+                                class="b3-list-item__graphic"
+                                style="color: var(--indexos-accent-primary); width: 14px; height: 14px; flex-shrink: 0; margin: 0;"
+                                ><use xlink:href="#iconTags"></use></svg
+                            >
+                            <span style="font-weight: 600; font-family: ui-monospace, monospace; line-height: 1.2; word-break: break-all; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{group.typeName}</span>
                             
-                            <!-- 不可操作的标签标志：独创无边框冷灰 Dot 样式 -->
+                            <!-- 不可操作的标签标志：无边框 Dot 样式 -->
                             {#if BUILTIN_SUPERTAGS.has(group.typeName.toLowerCase())}
                                 <span
                                     class="indexos-tag-badge indexos-tag-badge--builtin"
+                                    style="flex-shrink: 0;"
                                     title={i18n.supertagManager.builtinTooltip}
                                 >
                                     <span class="badge-dot"></span>{i18n.supertagManager.builtinTag}
@@ -365,29 +428,29 @@
 
                         <!-- Details Column -->
                         <div
-                            class="b3-list-item__text fn__flex-column"
-                            style="flex: 3.2; gap: 4px;"
+                            class="b3-list-item__text fn__flex"
+                            style="flex: 4.5; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
                         >
                             {#if group.dataConfigs.length > 0}
                                 <div
                                     class="fn__flex"
-                                    style="align-items: center; gap: 6px; flex-wrap: wrap;"
+                                    style="align-items: center; gap: 8px; width: 100%;"
                                 >
                                     <svg
-                                        style="width: 12px; height: 12px; opacity: 0.5; color: var(--indexos-accent-primary);"
+                                        style="width: 12px; height: 12px; opacity: 0.5; color: var(--indexos-accent-primary); flex-shrink: 0;"
                                         ><use xlink:href="#iconDatabase"
                                         ></use></svg
                                     >
                                     {#if group.dataConfigs.length > 1}
-                                        <!-- IndexOS 极致优雅 100% 匹配 Popover 下拉框按钮 -->
+                                        <!-- 重名数据库显示所在页面和块序号，如 测试页面.12 -->
                                         <button
                                             class="b3-select fn__flex"
-                                            style="align-items: center; justify-content: space-between; min-width: 130px; max-width: 190px; height: 26px; font-size: 11px; padding: 2px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.2s ease;"
+                                            style="align-items: center; justify-content: space-between; min-width: 130px; max-width: 220px; height: 26px; font-size: 11px; padding: 2px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.2s ease;"
                                             on:click={(e) => openIndexDropdown({
                                                 event: e,
                                                 options: group.dataConfigs.map(c => ({
                                                     value: c.avId,
-                                                    label: c.avName || "DB: " + c.avId.substring(0, 6)
+                                                    label: c.displayName || c.avName || "DB: " + c.avId.substring(0, 6)
                                                 })),
                                                 selectedValue: group.selectedAvId,
                                                 onSelect: (val) => {
@@ -399,19 +462,19 @@
                                             })}
                                         >
                                             <span style="font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                                {group.dataConfigs.find(c => c.avId === group.selectedAvId)?.avName || ("DB: " + group.selectedAvId.substring(0, 6))}
+                                                {group.dataConfigs.find(c => c.avId === group.selectedAvId)?.displayName || group.dataConfigs.find(c => c.avId === group.selectedAvId)?.avName || ("DB: " + group.selectedAvId.substring(0, 6))}
                                             </span>
                                             <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.6; flex-shrink: 0; margin-left: 6px; fill: currentColor;"><use xlink:href="#iconDown"></use></svg>
                                         </button>
 
-                                        <!-- 不可操作的重名标记：独创琥珀警示 Dot 样式 -->
-                                        <span class="indexos-tag-badge indexos-tag-badge--duplicate">
+                                        <!-- 不可操作的重名标记：琥珀警示 Dot 样式 -->
+                                        <span class="indexos-tag-badge indexos-tag-badge--duplicate" style="flex-shrink: 0;">
                                             <span class="badge-dot"></span>{i18n.supertagManager.duplicateName}
                                         </span>
                                     {:else}
                                         <span
-                                            style="font-size: 12px; opacity: 0.9; font-family: ui-monospace, monospace;"
-                                            >{group.dataConfigs[0].avName ||
+                                            style="font-size: 12px; opacity: 0.9; font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                                            >{group.dataConfigs[0].displayName || group.dataConfigs[0].avName ||
                                                 "DB: " +
                                                     group.dataConfigs[0].avId.substring(
                                                         0,
@@ -423,7 +486,7 @@
                                     <!-- 可点击框体按钮：定位 -->
                                     <button
                                         class="indexos-btn-bordered"
-                                        style="font-size: 11px; padding: 2px 6px;"
+                                        style="font-size: 11px; padding: 2px 6px; flex-shrink: 0;"
                                         title={i18n.supertagManager.locateTitle}
                                         on:click={() => locateAv(group.selectedAvId || group.dataConfigs[0]?.avId)}
                                     >
@@ -443,23 +506,19 @@
                                     </button>
                                 </div>
                             {/if}
-
-
                         </div>
 
                         <!-- Status Column -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 1.8; justify-content: flex-end; align-items: center;"
+                            style="flex: 1.5; justify-content: flex-end; align-items: center;"
                         >
-                            <label class="fn__flex" style="align-items: center; cursor: pointer;">
-                                <input
-                                    type="checkbox"
-                                    class="b3-switch"
-                                    checked={isEnabled}
-                                    on:change={(e) => handleToggleEnable(group, e.target.checked)}
-                                />
-                            </label>
+                            <input
+                                class="b3-switch"
+                                type="checkbox"
+                                checked={isEnabled}
+                                on:change={(e) => handleToggleEnable(group, e.currentTarget.checked)}
+                            />
                         </div>
                     </div>
                 {/each}
