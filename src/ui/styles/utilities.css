@@ -454,3 +454,68 @@ html body .b3-list::-webkit-scrollbar-thumb:hover {
     color: var(--indexos-accent-primary) !important;
 }
 
+/* ─── IndexOS Custom Fixed Dropdown Panel ─── */
+.indexos-dropdown-panel {
+    box-sizing: border-box !important;
+    background: var(--indexos-bg-container);
+    border: 1px solid var(--indexos-border-light);
+    border-radius: 3px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 8px var(--indexos-accent-glow);
+    padding: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    animation: indexos-dropdown-in 0.12s ease-out;
+    scrollbar-width: thin;
+    scrollbar-color: var(--indexos-border-light) transparent;
+}
+
+.indexos-dropdown-panel.is-flip {
+    animation: indexos-dropdown-in-flip 0.12s ease-out;
+}
+
+@keyframes indexos-dropdown-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes indexos-dropdown-in-flip {
+    from { opacity: 0; transform: translateY(4px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.indexos-dropdown-item {
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 2px;
+    cursor: pointer;
+    color: var(--indexos-text-main);
+    transition: background-color 0.1s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.indexos-dropdown-item:hover {
+    background: var(--indexos-bg-highlight);
+}
+
+.indexos-dropdown-item.is-selected {
+    color: var(--indexos-accent-primary);
+    font-weight: 600;
+    background: var(--indexos-accent-badge-bg);
+}
+
+/* 触发按钮激活态箭头旋转 */
+.b3-select.is-active .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.dropdown-arrow {
+    transition: transform 0.2s ease;
+}
+
+/* 覆盖 SiYuan 原生 b3-select 的背景箭头（避免双箭头） */
+button.b3-select {
+    background-image: none !important;
+}
+

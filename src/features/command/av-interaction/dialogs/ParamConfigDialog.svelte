@@ -10,6 +10,7 @@
     export let onSave: (updated: Record<string, any>) => Promise<void>;
 
     import { commandRegistry } from "../../registry/command-registry";
+    import { openIndexDropdown } from "../../../../ui/components/index-dropdown";
 
     let activeTab: "input" | "output" = "input";
     let values: Record<string, any> = {};
@@ -136,11 +137,23 @@
 
                         {#if param.type === "enum"}
                             <div class="b3-form__icon fn__block">
-                                <select class="b3-select fn__block" bind:value={values[param.key]}>
-                                    {#each param.values || [] as option}
-                                        <option value={option}>{option}</option>
-                                    {/each}
-                                </select>
+                                <button
+                                    class="b3-select fn__block fn__flex"
+                                    style="align-items: center; justify-content: space-between; width: 100%; height: 28px; padding: 4px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.15s ease;"
+                                    on:click={(e) => openIndexDropdown({
+                                        event: e,
+                                        options: (param.values || []).map(val => ({ value: String(val), label: String(val) })),
+                                        selectedValue: String(values[param.key]),
+                                        onSelect: (val) => {
+                                            values[param.key] = val;
+                                        }
+                                    })}
+                                >
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        {values[param.key] || ""}
+                                    </span>
+                                    <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.5; flex-shrink: 0; margin-left: 4px;"><use xlink:href="#iconDown"></use></svg>
+                                </button>
                             </div>
                         {:else}
                             <input 

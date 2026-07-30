@@ -4,6 +4,7 @@
     import { i18n } from "../../../shared/utils";
     import SettingItem from "../setting-item.svelte";
     import { settings } from "../../../core/settings";
+    import { openIndexDropdown } from "../index-dropdown";
 
     export let onSave = function () {};
 
@@ -31,6 +32,9 @@
     //         toNotebookId,
     //     );
     // };
+
+    $: dropdownOptions = notebooks.map(n => ({ value: n.id, label: n.name }));
+    $: selectedLabel = dropdownOptions.find(o => o.value === toNotebookId)?.label || (notebooks.length > 0 ? "" : i18n.loading + "...");
 
     onMount(async () => {
         const res = await client.lsNotebooks();
@@ -60,18 +64,24 @@
                 </div>
             </div>
             <span class="fn__space" />
-            <select
+            <button
                 id="notebook-get"
-                class="b3-select fn__flex-center fn__size200"
-                bind:value={toNotebookId}
+                class="b3-select fn__flex-center fn__size200 fn__flex"
+                style="align-items: center; justify-content: space-between; height: 28px; padding: 4px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.15s ease;"
+                on:click={(e) => openIndexDropdown({
+                    event: e,
+                    options: dropdownOptions,
+                    selectedValue: toNotebookId,
+                    onSelect: (val) => {
+                        toNotebookId = val;
+                    }
+                })}
             >
-                <!-- on:change={notebookChange} -->
-                {#each notebooks as notebook}
-                    <option value={notebook.id}>{notebook.name}</option>
-                {:else}
-                    <option value="0">{i18n.loading}...</option>
-                {/each}
-            </select>
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    {selectedLabel}
+                </span>
+                <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.5; flex-shrink: 0; margin-left: 4px;"><use xlink:href="#iconDown"></use></svg>
+            </button>
         </label>
         <SettingItem
             type="range"

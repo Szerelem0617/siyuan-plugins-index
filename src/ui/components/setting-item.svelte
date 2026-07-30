@@ -1,4 +1,5 @@
 <script>
+    import { openIndexDropdown } from "../components/index-dropdown";
     import { settings } from "../../core/settings";
 
     export let type; // 设置项目类型
@@ -15,6 +16,12 @@
             detail: { key: settingKey, value: settingValue }
         }));
     }
+
+    $: dropdownOptions = Array.isArray(content.options)
+        ? content.options.map(opt => ({ value: String(opt.value), label: opt.label }))
+        : Object.entries(content.options || {}).map(([key, text]) => ({ value: key, label: String(text) }));
+
+    $: selectedLabel = dropdownOptions.find(opt => opt.value === String(settingValue))?.label || settingValue;
 </script>
 
 <label class="fn__flex b3-label config__item">
@@ -50,22 +57,25 @@
             on:change={updateSetting}
         />
     {:else if type === "select"}
-        <select
-            class="b3-select fn__flex-center fn__size200"
+        <button
+            class="b3-select fn__flex fn__size200 fn__flex-center"
+            style="align-items: center; justify-content: space-between; height: 28px; padding: 4px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.15s ease;"
             id={settingKey}
-            bind:value={settingValue}
-            on:change={updateSetting}
+            on:click={(e) => openIndexDropdown({
+                event: e,
+                options: dropdownOptions,
+                selectedValue: String(settingValue),
+                onSelect: (val) => {
+                    settingValue = val;
+                    updateSetting();
+                }
+            })}
         >
-            {#if Array.isArray(content.options)}
-                {#each content.options as option}
-                    <option value={option.value}>{option.label}</option>
-                {/each}
-            {:else}
-                {#each Object.entries(content.options) as [key, text]}
-                    <option value={key}>{text}</option>
-                {/each}
-            {/if}
-        </select>
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                {selectedLabel}
+            </span>
+            <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.5; flex-shrink: 0; margin-left: 4px;"><use xlink:href="#iconDown"></use></svg>
+        </button>
     {:else if type === "button"}
         <button
             class="b3-button b3-button--outline fn__size200 fn__flex-center"

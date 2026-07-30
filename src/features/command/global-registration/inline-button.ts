@@ -3,6 +3,7 @@ import { commandRegistry } from "../registry/command-registry";
 import { showMessage, Dialog } from "siyuan";
 import { isDevInitSysEnabled, DEV_ENABLE_INIT_SYS, SUPERTAG_REGISTRY, COMMAND_REGISTRY } from "../registration";
 import { refreshSupertagRegistry } from "../utils/sync-service";
+import { openIndexDropdown } from "../../../ui/components/index-dropdown";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Protocol helpers
@@ -314,13 +315,19 @@ export function handleBtnPaste(event: CustomEvent) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function openButtonConfigurationDialog(targetRange: Range) {
-    let optionsHtml = availableInlineCommands.map(cmd =>
-        `<option value="${cmd.id}">${cmd.label} (${cmd.commandId})</option>`
-    ).join("");
+    const dropdownOptions = availableInlineCommands.map(cmd => ({
+        value: cmd.id,
+        label: `${cmd.label} (${cmd.commandId})`
+    }));
 
-    if (!optionsHtml) {
-        optionsHtml = `<option value="">没有关联行内按钮入口的命令，请在 Command-DB 的 "UI 入口" 列勾选</option>`;
+    if (dropdownOptions.length === 0) {
+        dropdownOptions.push({
+            value: "",
+            label: "没有关联行内按钮入口的命令，请在 Command-DB 的 'UI 入口' 列勾选"
+        });
     }
+
+    let selectedValue = dropdownOptions[0].value;
 
     const dialog = new Dialog({
         title: "配置智能按钮",
@@ -331,9 +338,12 @@ function openButtonConfigurationDialog(targetRange: Range) {
                         选择要绑定的功能：
                         <div class="b3-label__text">列表来源于 Command-DB 勾选的 Inline Button</div>
                     </div>
-                    <select class="b3-select" id="btn-action-select" style="width: 200px;">
-                        ${optionsHtml}
-                    </select>
+                    <button class="b3-select fn__flex" id="btn-action-select" style="width: 200px; align-items: center; justify-content: space-between; height: 28px; padding: 4px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.15s ease;">
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            ${dropdownOptions[0].label}
+                        </span>
+                        <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.5; flex-shrink: 0; margin-left: 4px;"><use xlink:href="#iconDown"></use></svg>
+                    </button>
                 </div>
                 <div class="fn__flex b3-label">
                     <div class="fn__flex-1">定制按钮显示名称（选填）:</div>
@@ -353,12 +363,30 @@ function openButtonConfigurationDialog(targetRange: Range) {
     });
     dialog.element.classList.add("indexos-dialog");
 
+    const selectBtn = dialog.element.querySelector("#btn-action-select") as HTMLElement;
+    if (selectBtn) {
+        selectBtn.addEventListener("click", (e) => {
+            openIndexDropdown({
+                event: e,
+                options: dropdownOptions,
+                selectedValue: selectedValue,
+                onSelect: (val) => {
+                    selectedValue = val;
+                    const textSpan = selectBtn.querySelector("span");
+                    if (textSpan) {
+                        const matched = dropdownOptions.find(o => o.value === val);
+                        textSpan.textContent = matched ? matched.label : val;
+                    }
+                }
+            });
+        });
+    }
+
     dialog.element.querySelector("#btn-config-confirm")?.addEventListener("click", () => {
-        const selectEl = dialog.element.querySelector("#btn-action-select") as HTMLSelectElement;
         const customLabelEl = dialog.element.querySelector("#btn-custom-label") as HTMLInputElement;
         const customParamEl = dialog.element.querySelector("#btn-custom-param") as HTMLInputElement;
 
-        const selectedId = selectEl.value;
+        const selectedId = selectedValue;
         const targetCmd = availableInlineCommands.find(c => c.id === selectedId);
 
         if (!targetCmd) {

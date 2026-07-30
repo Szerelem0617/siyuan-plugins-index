@@ -12,6 +12,7 @@
     } from "../../registration";
 
     import { BUILTIN_SUPERTAGS } from "../../indexos/seed-data";
+    import { openIndexDropdown } from "../../../../ui/components/index-dropdown";
     import { openTab } from "siyuan";
     import { plugin } from "../../../../shared/utils";
 
@@ -380,27 +381,29 @@
                                         ></use></svg
                                     >
                                     {#if group.dataConfigs.length > 1}
-                                        <select
-                                            class="b3-select"
-                                            style="max-width: 180px; height: 22px; padding: 0 4px; font-size: 11px;"
-                                            bind:value={group.selectedAvId}
-                                            on:change={() =>
-                                                handlePrefChange(
-                                                    group.typeName,
-                                                    group.selectedAvId,
-                                                )}
+                                        <button
+                                            class="b3-select fn__flex"
+                                            style="align-items: center; justify-content: space-between; min-width: 130px; max-width: 190px; height: 24px; font-size: 11px; padding: 2px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.15s ease;"
+                                            on:click={(e) => openIndexDropdown({
+                                                event: e,
+                                                options: group.dataConfigs.map(c => ({
+                                                    value: c.avId,
+                                                    label: c.avName || "DB: " + c.avId.substring(0, 6)
+                                                })),
+                                                selectedValue: group.selectedAvId,
+                                                onSelect: (val) => {
+                                                    group.selectedAvId = val;
+                                                    handlePrefChange(group.typeName, val);
+                                                    dataComponents = [...dataComponents];
+                                                    commandComponents = [...commandComponents];
+                                                }
+                                            })}
                                         >
-                                            {#each group.dataConfigs as cfg}
-                                                <option value={cfg.avId}
-                                                    >{cfg.avName ||
-                                                        "DB: " +
-                                                            cfg.avId.substring(
-                                                                0,
-                                                                6,
-                                                            )}</option
-                                                >
-                                            {/each}
-                                        </select>
+                                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                {group.dataConfigs.find(c => c.avId === group.selectedAvId)?.avName || "DB: " + group.selectedAvId.substring(0, 6)}
+                                            </span>
+                                            <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.5; flex-shrink: 0; margin-left: 4px;"><use xlink:href="#iconDown"></use></svg>
+                                        </button>
                                         <span
                                             class="b3-chip b3-chip--warning b3-chip--small"
                                             style="margin-left:4px;">{i18n.supertagManager.duplicateName}</span

@@ -7,6 +7,7 @@
     import type { DbConfig, IDBTypeMapping } from "./types";
     import { showMessage } from "siyuan";
     import { i18n } from "../../../shared/utils";
+    import { openIndexDropdown } from "../../../ui/components/index-dropdown";
 
     export let avId: string;
     export let blockId: string;
@@ -187,6 +188,13 @@
         if (c.isSystem) return false;
         return true;
     });
+
+    $: typeFieldOptions = [
+        { value: "", label: "-- 选择用于细分类型的列 --" },
+        ...pinnedColumns.map(col => ({ value: col.id, label: `📍 ${col.name} (${i18n.dbConfig.systemProps || "系统属性"})` })),
+        ...normalColumns.map(col => ({ value: col.id, label: `${col.name} (${i18n.dbConfig.columns || "自定义属性"})` }))
+    ];
+    $: typeFieldLabel = typeFieldOptions.find(o => o.value === typeFieldId)?.label || "-- 选择用于细分类型的列 --";
     import { executeWritableSql, runQuery } from "../../sqlite/sqlite-manager";
     import { post } from "../../../shared/api-client/request";
     import FieldsConfigDialog from "./FieldsConfigDialog.svelte";
@@ -316,6 +324,18 @@
             }
         });
     }
+
+    $: modeOptions = [
+        { value: "none", label: i18n.dbConfig.modeNone || "不继承" },
+        { value: "weak", label: i18n.dbConfig.modeWeak || "弱继承" },
+        { value: "strong", label: i18n.dbConfig.modeStrong || "强继承" }
+    ];
+
+    function getModeLabel(mode: string) {
+        if (mode === "weak") return i18n.dbConfig.modeWeak || "弱继承";
+        if (mode === "strong") return i18n.dbConfig.modeStrong || "强继承";
+        return i18n.dbConfig.modeNone || "不继承";
+    }
 </script>
 
 <div
@@ -364,30 +384,25 @@
                 <label class="b3-label" style="font-weight: bold; margin-bottom: 8px; display: block;">
                     配置细分类型映射 (可选)
                     <div class="b3-form__icon" style="margin-top: 6px;">
-                        <select
-                            class="b3-select fn__block"
-                            bind:value={typeFieldId}
-                            on:change={() => {
-                                typeMappings = [];
-                                onTypeFieldChange();
-                            }}
+                        <button
+                            class="b3-select fn__block fn__flex"
+                            style="align-items: center; justify-content: space-between; width: 100%; height: 28px; padding: 4px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.15s ease;"
+                            on:click={(e) => openIndexDropdown({
+                                event: e,
+                                options: typeFieldOptions,
+                                selectedValue: typeFieldId,
+                                onSelect: (val) => {
+                                    typeFieldId = val;
+                                    typeMappings = [];
+                                    onTypeFieldChange();
+                                }
+                            })}
                         >
-                            <option value="">-- 选择用于细分类型的列 --</option>
-
-                            <optgroup label={i18n.dbConfig.systemProps}>
-                                {#each pinnedColumns as col}
-                                    <option value={col.id}>
-                                        📍 {col.name}
-                                    </option>
-                                    {/each}
-                            </optgroup>
-
-                            <optgroup label={i18n.dbConfig.columns}>
-                                {#each normalColumns as col}
-                                    <option value={col.id}>{col.name}</option>
-                                    {/each}
-                            </optgroup>
-                        </select>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                {typeFieldLabel}
+                            </span>
+                            <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.5; flex-shrink: 0; margin-left: 4px;"><use xlink:href="#iconDown"></use></svg>
+                        </button>
                     </div>
                 </label>
 
@@ -467,21 +482,24 @@
                                 {item.col.type}
                             </div>
                         </div>
-                        <select
-                            class="b3-select"
-                            style="width: 140px;"
-                            bind:value={item.mode}
+                        <button
+                            class="b3-select fn__flex"
+                            style="align-items: center; justify-content: space-between; width: 140px; height: 26px; padding: 2px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.15s ease;"
+                            on:click={(e) => openIndexDropdown({
+                                event: e,
+                                options: modeOptions,
+                                selectedValue: item.mode,
+                                onSelect: (val) => {
+                                    item.mode = val;
+                                    inheritanceList = [...inheritanceList];
+                                }
+                            })}
                         >
-                            <option value="none"
-                                >{i18n.dbConfig.modeNone}</option
-                            >
-                            <option value="weak"
-                                >{i18n.dbConfig.modeWeak}</option
-                            >
-                            <option value="strong"
-                                >{i18n.dbConfig.modeStrong}</option
-                            >
-                        </select>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                {getModeLabel(item.mode)}
+                            </span>
+                            <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.5; flex-shrink: 0; margin-left: 4px;"><use xlink:href="#iconDown"></use></svg>
+                        </button>
                     </div>
                 {/each}
             </div>
