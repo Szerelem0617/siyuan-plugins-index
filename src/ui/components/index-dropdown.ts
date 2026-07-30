@@ -18,8 +18,9 @@ export interface DropdownOption {
 let activePanel: HTMLElement | null = null;
 let activeCleanup: (() => void) | null = null;
 
-function closeActiveDropdown() {
+export function closeActiveDropdown() {
     if (activePanel) {
+        console.log("[IndexOS-Debug] Closing active custom dropdown panel.");
         activePanel.remove();
         activePanel = null;
     }
@@ -35,8 +36,19 @@ export function openIndexDropdown(opts: {
     selectedValue?: string;
     onSelect: (value: string) => void;
 }) {
-    // 若点击的是同一个触发器且面板已打开，关闭并返回
+    console.log("[IndexOS-Debug] openIndexDropdown triggered:", {
+        target: opts.event.currentTarget,
+        selectedValue: opts.selectedValue,
+        optionsCount: opts.options.length
+    });
+
     const trigger = opts.event.currentTarget as HTMLElement;
+    if (!trigger) {
+        console.warn("[IndexOS-Debug] openIndexDropdown failed: trigger element is null");
+        return;
+    }
+
+    // 若点击的是同一个触发器且面板已打开，关闭并返回
     if (activePanel && trigger.classList.contains("is-active")) {
         closeActiveDropdown();
         trigger.classList.remove("is-active");
@@ -76,6 +88,7 @@ export function openIndexDropdown(opts: {
         }
         item.textContent = opt.label;
         item.addEventListener("click", (e) => {
+            console.log("[IndexOS-Debug] Dropdown option selected:", opt);
             e.stopPropagation();
             e.preventDefault();
             opts.onSelect(opt.value);
@@ -107,18 +120,20 @@ export function openIndexDropdown(opts: {
         panel.style.left = (window.innerWidth - panelRect.width - 8) + "px";
     }
 
-    // 6. 外部点击关闭（延迟绑定避免当前 click 事件冒泡触发）
+    // 6. 外部点击关闭：使用常规冒泡阶段 (false)，绝对不抢占/干扰思源本体原生的捕获阶段！
     const onDocClick = (e: MouseEvent) => {
-        if (!panel.contains(e.target as Node) && !trigger.contains(e.target as Node)) {
+        if (panel && !panel.contains(e.target as Node) && !trigger.contains(e.target as Node)) {
+            console.log("[IndexOS-Debug] Outside click, closing custom dropdown.");
             trigger.classList.remove("is-active");
             closeActiveDropdown();
         }
     };
-    setTimeout(() => document.addEventListener("click", onDocClick, true), 0);
+    setTimeout(() => document.addEventListener("click", onDocClick, false), 0);
 
     // 7. Escape 关闭
     const onKeydown = (e: KeyboardEvent) => {
         if (e.key === "Escape") {
+            console.log("[IndexOS-Debug] Escape pressed, closing custom dropdown.");
             trigger.classList.remove("is-active");
             closeActiveDropdown();
         }
@@ -126,7 +141,7 @@ export function openIndexDropdown(opts: {
     document.addEventListener("keydown", onKeydown);
 
     activeCleanup = () => {
-        document.removeEventListener("click", onDocClick, true);
+        document.removeEventListener("click", onDocClick, false);
         document.removeEventListener("keydown", onKeydown);
     };
 }
