@@ -4,6 +4,7 @@ import { ATTR_LINKED_AV } from "../../../shared/constants";
 import { getOutermostList, getBlockAttribute } from "../../../shared/utils/dom-utils";
 import { openDbConfigDialog } from "../av-setting/db-config";
 import { i18n } from "../../../shared/utils";
+import { addPluginMenuItem } from "../../../shared/utils/menu-utils";
 
 /**
  * Data 功能的块菜单回调 (针对列表块)
@@ -20,7 +21,8 @@ export function addDataMenuItems({ detail }: any) {
     if (blockType === "NodeAttributeView") {
         const avId = blockElement.getAttribute("data-av-id") || blockElement.querySelector(".av")?.getAttribute("data-av-id");
         if (avId) {
-            menu.addItem({
+            addPluginMenuItem(menu, {
+                id: "indexos-db-config",
                 icon: "iconSettings",
                 label: i18n.dbConfig.dialogTitle,
                 click: () => openDbConfigDialog(avId, blockId)
@@ -39,7 +41,8 @@ export function addDataMenuItems({ detail }: any) {
 
     // 1. 创建数据库 (仅当点击的就是最外层列表块时显示)
     if (blockType === "NodeList" && blockId === outermostId) {
-        menu.addItem({
+        addPluginMenuItem(menu, {
+            id: "indexos-create-db",
             icon: "iconDatabase",
             label: i18n.dataMenu.createDatabase,
             click: () => createDatabaseWithBlocks([blockId])
@@ -56,7 +59,8 @@ export function addDataMenuItems({ detail }: any) {
     attrNames.forEach(name => attrMap[name] = outermostList.getAttribute(name));
 
     if (linkedAv) {
-        menu.addItem({
+        addPluginMenuItem(menu, {
+            id: "indexos-db-focus",
             icon: "iconFilter",
             label: i18n.dataMenu.dbFocus,
             submenu: [

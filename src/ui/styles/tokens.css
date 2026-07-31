@@ -4,12 +4,13 @@
 
 :root {
     /* ==========================================
-     * 🏛️ IndexOS 品牌视觉基因：Index Ice Tint (茵冰蓝材质)
-     * 源自 Index 银蓝发色：高明度、极清透冷调
+     * 🏛️ IndexOS 品牌视觉基因：Index Blue (茵蒂克丝蓝 #A1C4E6)
+     * #A1C4E6 命名为茵蒂克丝蓝 (Index Blue)；#DCEEFA 改回极浅冰蓝 (Index Ice Base)
      * ========================================== */
-    --indexos-ice-base: #DCEEFA;      /* 极浅冰蓝 (主要材质衬底/选中态) */
-    --indexos-ice-highlight: #F2F8FF; /* 冰高光 (卡片提亮/ Hover 衬底) */
-    --indexos-ice-shadow: #A1C4E6;    /* 灰天蓝 (微边框/次要图标/冷阴影) */
+    --indexos-index-blue: #A1C4E6;     /* 茵蒂克丝蓝 (Index Blue - 专属用于边框/侧边指示线) */
+    --indexos-ice-base: #DCEEFA;       /* 极浅冰蓝 (主要材质衬底/选中态) */
+    --indexos-ice-highlight: #F2F8FF;  /* 冰高光 (卡片提亮/ Hover 衬底) */
+    --indexos-ice-shadow: #A1C4E6;     /* 茵蒂克丝蓝阴影线 (边框/侧边指示线) */
 }
 
 /* ─── 1. ☀️ LIGHT MODE (Industrial Geek Tech 浅色控制台) ─── */

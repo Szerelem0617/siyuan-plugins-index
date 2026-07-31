@@ -555,7 +555,7 @@ button.b3-select {
     background-color: var(--indexos-status-warning);
 }
 
-/* ─── 侧边栏超级标签管理入口：纯净静态冰蓝框 ─── */
+/* ─── 侧边栏超级标签管理入口：纯净静态灰天蓝框 (#A1C4E6) ─── */
 #supertag-management,
 #supertag-management.indexos-btn-bordered {
     animation: none !important;
@@ -582,22 +582,21 @@ button.b3-select {
     font-weight: 500 !important;
     line-height: 1.3 !important;
     border-radius: 3px !important;
-    border: 1px solid var(--indexos-ice-shadow, #A1C4E6) !important;
+    border: 1px solid #7DB3E0 !important;
     background: linear-gradient(
         125deg,
-        rgba(255, 255, 255, 0.82) 0%,
-        rgba(224, 242, 254, 0.42) 38%,
-        rgba(186, 230, 253, 0.58) 75%,
-        rgba(147, 197, 253, 0.35) 100%
+        rgba(220, 238, 250, 0.75) 0%,
+        rgba(186, 230, 253, 0.75) 45%,
+        rgba(147, 197, 253, 0.65) 100%
     ) !important;
     backdrop-filter: blur(8px) saturate(140%) !important;
     -webkit-backdrop-filter: blur(8px) saturate(140%) !important;
-    color: var(--indexos-text-main) !important;
+    color: #032B45 !important;
     text-decoration: none !important;
     cursor: pointer !important;
     overflow: hidden !important;
     vertical-align: middle !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    box-shadow: 0 1px 3px rgba(0, 122, 204, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.8) !important;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
@@ -609,4 +608,27 @@ button.b3-select {
 
 .indexos-command-btn:active {
     transform: scale(0.97) !important;
+}
+
+/* ─── 插件专属右键/块菜单项标志性左侧灰天蓝指示线 (#A1C4E6，排除一级选项[data-id="plugin"]) ─── */
+.b3-menu__item.indexos-menu-item:not([data-id="plugin"]),
+.b3-menu__item[data-id^="indexos-"]:not([data-id="plugin"]),
+.b3-menu__item:has(.indexos-menu-icon):not([data-id="plugin"]) {
+    position: relative !important;
+    border-left: 3px solid #A1C4E6 !important;
+    box-shadow: inset 3px 0 6px -2px rgba(161, 196, 230, 0.5) !important;
+    transition: all 0.15s ease !important;
+}
+
+html[data-theme-mode="dark"] .b3-menu__item.indexos-menu-item:not([data-id="plugin"]),
+html[data-theme-mode="dark"] .b3-menu__item[data-id^="indexos-"]:not([data-id="plugin"]),
+html[data-theme-mode="dark"] .b3-menu__item:has(.indexos-menu-icon):not([data-id="plugin"]),
+body[data-theme-mode="dark"] .b3-menu__item.indexos-menu-item:not([data-id="plugin"]),
+body[data-theme-mode="dark"] .b3-menu__item[data-id^="indexos-"]:not([data-id="plugin"]),
+body[data-theme-mode="dark"] .b3-menu__item:has(.indexos-menu-icon):not([data-id="plugin"]),
+.theme-dark .b3-menu__item.indexos-menu-item:not([data-id="plugin"]),
+.theme-dark .b3-menu__item[data-id^="indexos-"]:not([data-id="plugin"]),
+.theme-dark .b3-menu__item:has(.indexos-menu-icon):not([data-id="plugin"]) {
+    border-left-color: #A1C4E6 !important;
+    box-shadow: inset 3px 0 8px -2px rgba(161, 196, 230, 0.6) !important;
 }

@@ -5,6 +5,7 @@ import { getOutermostList } from "../../shared/utils/dom-utils";
 import { confirmTransformation } from "../../shared/utils/transformation-utils";
 import { i18n } from "../../shared/utils";
 import { transformToTree } from "./transformation";
+import { addPluginMenuItem } from "../../shared/utils/menu-utils";
 
 /**
  * 块标菜单回调
@@ -29,13 +30,15 @@ export function buildDoc({ detail }: any) {
     // Add Smart Selector menu items
     menu.addSeparator();
 
-    menu.addItem({
+    addPluginMenuItem(menu, {
+        id: "indexos-build-doc",
         icon: "iconLeft",
         label: i18n.builderMenu.buildDoc,
         click: () => syncManager(blockId, blockType, "PUSH_TO_DOC")
     });
 
-    menu.addItem({
+    addPluginMenuItem(menu, {
+        id: "indexos-build-heading",
         icon: "iconDown",
         label: i18n.builderMenu.buildHeading,
         click: () => syncManager(blockId, blockType, "PUSH_TO_BOTTOM")

@@ -35,10 +35,14 @@ export function encodeBtnHref(payload: BtnPayload): string {
 
 /** 从 siyuan:// URL 解析 payload */
 export function decodeBtnHref(href: string): BtnPayload | null {
-    if (!href.includes("siyuan-plugins-index") && !href.startsWith(PROTOCOL) && !href.startsWith("siyuan-btn://")) return null;
+    if (!href) return null;
+    // 严格精准判断：必须以前缀协议开头，防止普通的 GitHub 地址/文件路径误触
+    if (!href.startsWith(PROTOCOL) && !href.startsWith("siyuan://plugins/siyuan-plugins-index/") && !href.startsWith("siyuan-btn://")) {
+        return null;
+    }
     let rest = href;
     if (href.startsWith(PROTOCOL)) rest = href.slice(PROTOCOL.length);
-    else if (href.includes("siyuan-plugins-index/")) rest = href.slice(href.indexOf("siyuan-plugins-index/") + "siyuan-plugins-index/".length);
+    else if (href.startsWith("siyuan://plugins/siyuan-plugins-index/")) rest = href.slice("siyuan://plugins/siyuan-plugins-index/".length);
     else if (href.startsWith("siyuan-btn://")) rest = href.slice("siyuan-btn://".length);
 
     if (rest.startsWith("exec/")) {
@@ -89,14 +93,14 @@ function injectButtonCSS() {
             }
         }
 
-        /* ─── 0. 通用单色号变量基准 (Single Color Code System) ─── */
-        span[data-type~="a"][data-href*="siyuan-plugins-index"],
+        /* ─── 0. 通用单色号变量基准 (茵蒂克丝蓝 #DCEEFA) ─── */
+        span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
         span[data-type~="a"][data-href^="siyuan-btn://"] {
-            --btn-color: #BAE6FD;
+            --btn-color: #DCEEFA;
         }
 
-        /* ─── 1. ☀️ 浅色模式：水润冰蓝 (极光冰晶 Glassmorphism) ─── */
-        span[data-type~="a"][data-href*="siyuan-plugins-index"],
+        /* ─── 1. ☀️ 浅色模式：水润冰蓝 (极光冰晶 Glassmorphism 加深版) ─── */
+        span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
         span[data-type~="a"][data-href^="siyuan-btn://"] {
             position: relative !important;
             display: inline-flex !important;
@@ -108,21 +112,20 @@ function injectButtonCSS() {
             font-weight: 600 !important;
             line-height: 1.3 !important;
             border-radius: 3px !important;
-            border: 1px solid color-mix(in srgb, var(--btn-color) 65%, #0284C7 35%) !important;
+            border: 1px solid color-mix(in srgb, var(--btn-color) 40%, #007ACC 60%) !important;
             background: linear-gradient(
                 125deg,
-                rgba(255, 255, 255, 0.85) 0%,
-                color-mix(in srgb, var(--btn-color) 35%, #FFFFFF 65%) 38%,
-                color-mix(in srgb, var(--btn-color) 65%, #FFFFFF 35%) 75%,
-                var(--btn-color) 100%
+                color-mix(in srgb, var(--btn-color) 50%, #FFFFFF 50%) 0%,
+                color-mix(in srgb, var(--btn-color) 75%, #007ACC 25%) 50%,
+                color-mix(in srgb, var(--btn-color) 85%, #0284C7 15%) 100%
             ) !important;
             backdrop-filter: blur(8px) saturate(140%) !important;
             -webkit-backdrop-filter: blur(8px) saturate(140%) !important;
-            color: color-mix(in srgb, var(--btn-color) 20%, #0F172A 80%) !important;
+            color: #032B45 !important;
             box-shadow:
-                inset 0 1px 1px rgba(255, 255, 255, 0.95),
-                inset 0 -1px 2px color-mix(in srgb, var(--btn-color) 40%, transparent 60%),
-                0 2px 6px rgba(14, 165, 233, 0.08) !important;
+                inset 0 1px 1px rgba(255, 255, 255, 0.9),
+                inset 0 -1px 2px color-mix(in srgb, var(--btn-color) 60%, #007ACC 40%),
+                0 2px 6px rgba(0, 122, 204, 0.15) !important;
             cursor: pointer !important;
             overflow: hidden !important;
             vertical-align: middle !important;
@@ -134,7 +137,7 @@ function injectButtonCSS() {
         }
 
         /* 45度斜角纯净晶透扫光切线 (::before) */
-        span[data-type~="a"][data-href*="siyuan-plugins-index"]::before,
+        span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]::before,
         span[data-type~="a"][data-href^="siyuan-btn://"]::before {
             content: "" !important;
             position: absolute !important;
@@ -159,7 +162,7 @@ function injectButtonCSS() {
         }
 
         /* 悬停 (Hover) 触发单次快速划过 + 全息发光 */
-        span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
+        span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover,
         span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
             border-color: color-mix(in srgb, var(--btn-color) 80%, #0284C7 20%) !important;
             color: color-mix(in srgb, var(--btn-color) 30%, #0284C7 70%) !important;
@@ -170,19 +173,18 @@ function injectButtonCSS() {
             transform: translateY(-1px) !important;
         }
 
-        span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover::before,
+        span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover::before,
         span[data-type~="a"][data-href^="siyuan-btn://"]:hover::before {
             animation: indexos-hover-sweep 0.75s ease-out 1 !important;
         }
 
-        /* ─── 2. 🌙 深色模式：单色号混黑压暗 (color-mix 35% Base + 65% Black/Dark) ─── */
-        html[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"],
+        /* ─── 2. 🌙 深色模式：单色号混黑压暗 (color-mix 32% Base + 68% Black/Dark) ─── */
+        html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
         html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"],
-        body[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"],
+        body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
         body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"],
-        .theme-dark span[data-type~="a"][data-href*="siyuan-plugins-index"],
+        .theme-dark span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
         .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"] {
-            /* 一个色号 Code，深色下自动混入 68% 暗色，舒适护眼不闪瞎 */
             background: color-mix(in srgb, var(--btn-color) 32%, #0F172A 68%) !important;
             border-color: color-mix(in srgb, var(--btn-color) 45%, #0F172A 55%) !important;
             color: color-mix(in srgb, var(--btn-color) 85%, #FFFFFF 15%) !important;
@@ -190,11 +192,11 @@ function injectButtonCSS() {
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
         }
 
-        html[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
+        html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover,
         html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]:hover,
-        body[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
+        body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover,
         body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]:hover,
-        .theme-dark span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
+        .theme-dark span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover,
         .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
             background: color-mix(in srgb, var(--btn-color) 45%, #0F172A 55%) !important;
             color: #FFFFFF !important;
@@ -203,9 +205,9 @@ function injectButtonCSS() {
         }
 
         /* Detached commands styling (contains parameters) */
-        span[data-type~="a"][data-href*="siyuan-plugins-index"][data-href*="?p="],
+        span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"][data-href*="?p="],
         span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="] {
-            border-color: var(--indexos-ice-shadow, #8BBBE5) !important;
+            border-color: var(--indexos-ice-shadow, #DCEEFA) !important;
             color: var(--indexos-text-main, #0F172A) !important;
         }
     `;

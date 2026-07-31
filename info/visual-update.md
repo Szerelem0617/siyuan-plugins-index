@@ -6,11 +6,12 @@
 
 ## 🎨 一、 极客视觉设计规范 (Geek Tech Design System)
 
-### 1. Index Ice Tint (茵冰蓝材质视觉基因)
-源自 Index 银蓝发色高极客质感：高明度（High Brightness）、极清透冷调（Cool Slate Tint）。作为 IndexOS 的次级背景、极客透光衬底、Hover 高光与特种数据节点边框：
+### 1. Index Blue (茵蒂克丝蓝 `#A1C4E6` 视觉基因)
+`#A1C4E6` 正式命名为 **茵蒂克丝蓝 (Index Blue)**，作为全插件边框微构件、指示立线条的标志色号；`#DCEEFA` 改回 **极浅冰蓝 (Index Ice Tint)** 用于透光材质衬底：
+* **`--indexos-index-blue`**: `#A1C4E6` (茵蒂克丝蓝 - 标志性边框线/超级标签管理框/块菜单指示线)
 * **`--indexos-ice-base`**: `#DCEEFA` (极浅冰蓝 - 主要材质衬底/选中态/胶囊标签衬底)
 * **`--indexos-ice-highlight`**: `#F2F8FF` (冰高光 - 卡片提亮/ Hover 衬底)
-* **`--indexos-ice-shadow`**: `#A1C4E6` (灰天蓝 - 微边框/超级标签管理入口框/冷阴影)
+* **`--indexos-ice-shadow`**: `#A1C4E6` (茵蒂克丝蓝边框阴影线)
 
 ### 2. 1:1 镜面对称 Token 体系 (Mirrored Dual-Theme Architecture)
 

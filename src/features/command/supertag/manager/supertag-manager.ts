@@ -48,9 +48,9 @@ export class SupertagManager {
             const blockIcons = panel.querySelector('.block__icons');
             if (blockIcons && !panel.querySelector('#supertag-management')) {
                 const html = `
-                <div id="supertag-management" class="b3-list-item indexos-btn-bordered" style="margin: 6px 8px 4px; padding: 6px 12px; width: calc(100% - 16px); box-sizing: border-box; justify-content: center; background: transparent !important; border: 1px solid var(--indexos-ice-shadow) !important; border-radius: 4px; cursor: pointer; transition: all 0.15s ease;">
-                    <svg class="b3-list-item__graphic" style="color: var(--indexos-accent-primary); width: 13px; height: 13px; flex-shrink: 0; margin-right: 6px;"><use xlink:href="#iconSettings"></use></svg>
-                    <span class="b3-list-item__text" style="font-weight: 600; font-size: 12px; color: var(--indexos-accent-primary); flex: none;">
+                <div id="supertag-management" class="b3-list-item indexos-btn-bordered" style="margin: 6px 8px 4px; padding: 6px 12px; width: calc(100% - 16px); box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: transparent !important; border: 1px solid var(--indexos-index-blue, #A1C4E6) !important; border-radius: 4px; cursor: pointer; transition: all 0.15s ease;">
+                    <svg class="b3-list-item__graphic" style="color: var(--indexos-text-main, #0F243B) !important; fill: currentColor !important; width: 14px; height: 14px; flex-shrink: 0; margin-right: 6px;"><use xlink:href="#iconSettings"></use></svg>
+                    <span class="b3-list-item__text" style="font-weight: 600; font-size: 12px; color: var(--indexos-text-main, #0F243B) !important; flex: none;">
                         ${i18n.supertagManager.title}
                     </span>
                 </div>`;
