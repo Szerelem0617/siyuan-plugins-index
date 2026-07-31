@@ -34,8 +34,11 @@
 /* 弹窗 Body 容器与内衬防溢出 */
 .indexos-dialog .b3-dialog__container,
 .indexos-dialog .b3-dialog__body,
+.indexos-dialog .b3-dialog__content,
+.indexos-dialog #db-config-container,
 .indexos-dialog #sqlite-status-container,
-.indexos-dialog #supertag-manager-container {
+.indexos-dialog #supertag-manager-container,
+.indexos-dialog #fields-config-container {
     background: var(--indexos-bg-base) !important;
     color: var(--indexos-text-main) !important;
     padding: 0 !important;
@@ -552,34 +555,57 @@ button.b3-select {
     background-color: var(--indexos-status-warning);
 }
 
-/* ─── 可交互命令按钮（带框，悬浮微阴影与高光响应） ─── */
-.indexos-btn-bordered {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1.2;
-    border-radius: 3px;
-    border: 1px solid var(--indexos-border-light);
-    background: var(--indexos-bg-container);
-    color: var(--indexos-text-main);
-    cursor: pointer;
-    transition: all 0.15s cubic-bezier(0, 0, 0.2, 1);
-    user-select: none;
-    box-sizing: border-box;
+/* ─── 侧边栏超级标签管理入口：纯净静态冰蓝框 ─── */
+#supertag-management,
+#supertag-management.indexos-btn-bordered {
+    animation: none !important;
+    background: var(--indexos-weak-accent) !important;
+    border: 1px solid var(--indexos-ice-shadow, #A1C4E6) !important;
+    box-shadow: none !important;
 }
 
-.indexos-btn-bordered:hover {
-    border-color: var(--indexos-accent-primary);
-    color: var(--indexos-accent-primary);
-    background: var(--indexos-bg-highlight);
-    box-shadow: 0 2px 6px var(--indexos-accent-glow);
+#supertag-management::after,
+#supertag-management.indexos-btn-bordered::after {
+    display: none !important;
 }
 
-.indexos-btn-bordered:active {
-    transform: translateY(1px);
+/* ─── 智能按钮基础类 ─── */
+.indexos-command-btn {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    padding: 3px 9px !important;
+    margin: 0 3px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    line-height: 1.3 !important;
+    border-radius: 4px !important;
+    border: 1px solid var(--indexos-ice-shadow, #A1C4E6) !important;
+    background: linear-gradient(
+        90deg,
+        var(--indexos-bg-card, #ffffff) 0%,
+        var(--indexos-ice-base, #DCEEFA) 50%,
+        var(--indexos-bg-card, #ffffff) 100%
+    ) !important;
+    background-size: 200% 100% !important;
+    animation: indexos-ice-btn-flow 2.5s ease infinite !important;
+    color: var(--indexos-text-main) !important;
+    text-decoration: none !important;
+    cursor: pointer !important;
+    overflow: hidden !important;
+    vertical-align: middle !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
+.indexos-command-btn:hover {
+    border-color: var(--indexos-accent-primary, #007acc) !important;
+    color: var(--indexos-accent-primary, #007acc) !important;
+    box-shadow: 0 0 10px var(--indexos-accent-glow), 0 2px 6px rgba(0, 0, 0, 0.05) !important;
+}
 
+.indexos-command-btn:active {
+    transform: scale(0.97) !important;
+}

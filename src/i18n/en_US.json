@@ -132,7 +132,7 @@
     "transformFail": "Transformation Failed"
   },
   "dbConfig": {
-    "dialogTitle": "Database Advanced Settings",
+    "dialogTitle": "Database Settings",
     "tabType": "Type Settings",
     "tabInheritance": "Inheritance Settings",
     "modeSingle": "Single Class",

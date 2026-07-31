@@ -6,20 +6,26 @@
 
 ## 🎨 一、 极客视觉设计规范 (Geek Tech Design System)
 
-### 1. 1:1 镜面对称 Token 体系 (Mirrored Dual-Theme Architecture)
+### 1. Index Ice Tint (茵冰蓝材质视觉基因)
+源自 Index 银蓝发色高极客质感：高明度（High Brightness）、极清透冷调（Cool Slate Tint）。作为 IndexOS 的次级背景、极客透光衬底、Hover 高光与特种数据节点边框：
+* **`--indexos-ice-base`**: `#DCEEFA` (极浅冰蓝 - 主要材质衬底/选中态/胶囊标签衬底)
+* **`--indexos-ice-highlight`**: `#F2F8FF` (冰高光 - 卡片提亮/ Hover 衬底)
+* **`--indexos-ice-shadow`**: `#A1C4E6` (灰天蓝 - 微边框/超级标签管理入口框/冷阴影)
+
+### 2. 1:1 镜面对称 Token 体系 (Mirrored Dual-Theme Architecture)
 
 #### ☀️ LIGHT MODE (Industrial Geek Tech 浅色控制台)
 * **弹窗/页面大底色 (`--indexos-bg-base`)**: `#EBF2F7`（灰蓝沉降底层）
 * **次级面板 (`--indexos-bg-surface`)**: `#F4F8FA`
 * **核心数据列表卡片 (`--indexos-bg-container`)**: `#FFFFFF`（纯白提亮）
-* **选中行 / Hover 衬底 (`--indexos-bg-highlight`)**: `#F0F7FF`
-* **1px 皇家蓝微边框 (`--indexos-border-light`)**: `rgba(40, 81, 127, 0.15)`
-* **单行分割线 (`--indexos-border-divider`)**: `rgba(40, 81, 127, 0.08)`
+* **选中行 / Hover 衬底 (`--indexos-bg-highlight`)**: `var(--indexos-ice-highlight)` (`#F2F8FF` 冰高光)
+* **1px 冰蓝精致微边框 (`--indexos-border-light`)**: `rgba(161, 196, 230, 0.45)`
+* **单行分割线 (`--indexos-border-divider`)**: `rgba(161, 196, 230, 0.20)`
 * **主文本 (`--indexos-text-main`)**: `#0F243B`（深海蓝黑）
 * **次要文本 / Monospace 表头 (`--indexos-text-muted`)**: `#5A7A95`（石墨灰蓝）
 * **Primary 按钮 / Active 指示 (`--indexos-accent-primary`)**: `#28517F`（皇家蓝原色）
 * **Primary 按钮文字 (`--indexos-btn-primary-text`)**: `#FFFFFF`（纯白字）
-* **Count 胶囊/标签衬底 (`--indexos-accent-badge-bg`)**: `#EBF5FE`
+* **Count 胶囊/标签衬底 (`--indexos-accent-badge-bg`)**: `var(--indexos-ice-base)` (`#DCEEFA`)
 * **Count 胶囊/标签文字 (`--indexos-accent-badge-text`)**: `#28517F`
 
 #### 🌙 DARK MODE (Dark Titanium Slate 深色钛蓝赛博)
@@ -27,13 +33,13 @@
 * **次级面板 (`--indexos-bg-surface`)**: `#0F172A`（Slate 钛蓝）
 * **核心数据列表卡片 (`--indexos-bg-container`)**: `#1E293B`（钛合金面板提亮 #1E293B）
 * **选中行 / Hover 深蓝微高光衬底 (`--indexos-bg-highlight`)**: `#2A3B53`
-* **1px 电光微亮边框 (`--indexos-border-light`)**: `rgba(56, 189, 248, 0.20)`
+* **1px 冰光霓虹微边框 (`--indexos-border-light`)**: `rgba(220, 238, 250, 0.18)`
 * **单行分割线 (`--indexos-border-divider`)**: `rgba(255, 255, 255, 0.08)`
 * **主文本 (`--indexos-text-main`)**: `#F8FAFC`（高纯度冷白）
-* **次要文本 / Monospace 表头 (`--indexos-text-muted`)**: `#94A3B8`（钛灰）
+* **次要文本 / Monospace 表头 (`--indexos-text-muted`)**: `var(--indexos-ice-shadow)` (`#A1C4E6` 冰蓝发色赛博冷感)
 * **Primary 按钮 / Active 指示 (`--indexos-accent-primary`)**: `#38BDF8`（Sky Blue 霓虹高光）
 * **Primary 按钮文字 (`--indexos-btn-primary-text`)**: `#0B1120`（钛深黑字，高对比度）
-* **Count 胶囊/标签衬底 (`--indexos-accent-badge-bg`)**: `rgba(56, 189, 248, 0.15)`
+* **Count 胶囊/标签衬底 (`--indexos-accent-badge-bg`)**: `rgba(220, 238, 250, 0.15)`
 * **Count 胶囊/标签文字 (`--indexos-accent-badge-text`)**: `#38BDF8`
 
 ---

@@ -48,7 +48,7 @@ export class SupertagManager {
             const blockIcons = panel.querySelector('.block__icons');
             if (blockIcons && !panel.querySelector('#supertag-management')) {
                 const html = `
-                <div id="supertag-management" class="b3-list-item indexos-btn-bordered" style="margin: 6px 8px 4px; padding: 6px 12px; width: calc(100% - 16px); box-sizing: border-box; justify-content: center; background: transparent !important; border: 1px solid var(--indexos-accent-primary) !important; border-radius: 4px; cursor: pointer; transition: all 0.15s ease;">
+                <div id="supertag-management" class="b3-list-item indexos-btn-bordered" style="margin: 6px 8px 4px; padding: 6px 12px; width: calc(100% - 16px); box-sizing: border-box; justify-content: center; background: transparent !important; border: 1px solid var(--indexos-ice-shadow) !important; border-radius: 4px; cursor: pointer; transition: all 0.15s ease;">
                     <svg class="b3-list-item__graphic" style="color: var(--indexos-accent-primary); width: 13px; height: 13px; flex-shrink: 0; margin-right: 6px;"><use xlink:href="#iconSettings"></use></svg>
                     <span class="b3-list-item__text" style="font-weight: 600; font-size: 12px; color: var(--indexos-accent-primary); flex: none;">
                         ${i18n.supertagManager.title}

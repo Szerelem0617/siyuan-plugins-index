@@ -7,6 +7,7 @@ import { formatDate, getAttrFromIAL, i18n } from "../../../shared/utils";
 import { SUPERTAG_REGISTRY } from "../../command/registration";
 import { fetchAllAVBlocks } from "../../sqlite/sqlite-data-fetcher";
 
+import { ATTR_LINKED_LIST } from "../../../shared/constants";
 export const ATTR_DB_CONFIG = "custom-index-db-config";
 
 export type { DbConfig, TypeConfig, IDBTypeMapping, InheritanceRule } from "./types";
@@ -148,20 +149,7 @@ export async function saveDbConfig(blockId: string, config: DbConfig) {
     }
 }
 
-export async function resetDbConfig(blockId: string, avId: string) {
-    try {
-        // Clear metadata
-        await client.setBlockAttrs({
-            id: blockId,
-            attrs: { [ATTR_DB_CONFIG]: "" }
-        });
 
-        window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
-        showMessage(i18n.dbConfig.resetSuccess);
-    } catch (e) {
-        console.error("Failed to reset DB config", e);
-    }
-}
 
 export async function setColumnWeakInheritance(avId: string, colId: string, avBlockId: string) {
     try {
@@ -267,7 +255,7 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
             const rawAvBlocks = await fetchAllAVBlocks();
             for (const b of rawAvBlocks) {
                 const targetAvId = b.avId;
-                if (!targetAvId || targetAvId === "Not Found" || processedAvIds.has(targetAvId)) continue;
+                if (!targetAvId || targetAvId === "Not Found") continue;
 
                 let dbName = b.name;
                 if (!dbName || dbName === "Unnamed Database" || dbName === "Unnamed") {
@@ -280,6 +268,34 @@ export async function getGlobalTypeConfigs(): Promise<TypeConfig[]> {
                 if (!dbName || dbName === "Unnamed Database" || dbName === "Unnamed") continue;
 
                 const cleanDbName = dbName.toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+
+                // Real-time check for sub-tags on the block
+                try {
+                    const blockConfig = await loadDbConfig(b.blockId);
+                    if (blockConfig && blockConfig.typeFieldId && blockConfig.typeMappings) {
+                        for (const m of blockConfig.typeMappings) {
+                            const subTagName = (m.name || "").trim();
+                            if (subTagName) {
+                                const fullSubTagName = `${cleanDbName}.${subTagName}`.toLowerCase();
+                                const subKey = `${targetAvId}_sub_${subTagName}`;
+                                if (!processedAvIds.has(subKey)) {
+                                    processedAvIds.add(subKey);
+                                    configs.push({
+                                        typeName: fullSubTagName,
+                                        avId: targetAvId,
+                                        blockId: b.blockId,
+                                        typeFieldId: blockConfig.typeFieldId,
+                                        mappedValue: m.value,
+                                        avName: dbName
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {}
+
+                if (processedAvIds.has(targetAvId)) continue;
+
                 if (cleanDbName && !SYSTEM_EXCLUDED.has(cleanDbName)) {
                     processedAvIds.add(targetAvId);
                     configs.push({
@@ -375,16 +391,23 @@ export async function scanColumnValues(blockId: string, colId: string, colName: 
     }
 }
 
-export async function openDbConfigDialog(avId: string, blockId: string) {
-    // blockId is the node ID bound to the AV (likely the database block itself or a parent)
-    // Actually, usually the AV is just a view, the "Database" is loosely defined. 
-    // But here we are storing config on the `blockId` passed from the event (avBlockID).
+export async function openDbConfigDialog(avId: string, blockId?: string) {
+    console.log("[IndexOS-DbConfig-Debug] openDbConfigDialog invoked with args:", { avId, blockId });
 
-    // We need column info for the UI
+    if (!blockId && avId) {
+        // Fallback if called with single parameter
+        blockId = avId;
+    }
+
+    if (!avId || !blockId) {
+        console.error("[IndexOS-DbConfig-Debug] Missing required avId or blockId:", { avId, blockId });
+        showMessage("无法打开数据库设置：缺少关键 ID 参数", 3000, "error");
+        return;
+    }
+
+    console.log(`[IndexOS-DbConfig-Debug] Fetching column schema and config for avId: ${avId}, blockId: ${blockId}`);
+    
     const colInfo = await getColIDMap(avId);
-    // colInfo: { nameToID: {...}, keyValues: [...] }
-    // We want a list of { id, name, type }
-
     const columns = [];
 
     // 1. Add AV Columns and check for pinned names
@@ -415,6 +438,17 @@ export async function openDbConfigDialog(avId: string, blockId: string) {
         dbName = renderRes?.name || renderRes?.view?.name || "";
     } catch (e) {}
 
+    // Check if the database block is bound to an index-linked-list (custom-index-linked-list)
+    let hasLinkedList = false;
+    try {
+        const attrs = await client.getBlockAttrs({ id: blockId });
+        const linkedListAttr = attrs[ATTR_LINKED_LIST] || attrs["custom-index-linked-list"] || "";
+        hasLinkedList = Boolean(linkedListAttr && linkedListAttr.trim().length > 0);
+        console.log(`[DbConfig] Checked custom-index-linked-list for block ${blockId}:`, hasLinkedList, linkedListAttr);
+    } catch (e) {
+        console.error(`[DbConfig] Failed to fetch block attrs for ${blockId}:`, e);
+    }
+
     const dialog = new Dialog({
         title: i18n.dbConfig.dialogTitle,
         content: `<div class="b3-dialog__content" id="db-config-container"></div>`,
@@ -431,7 +465,8 @@ export async function openDbConfigDialog(avId: string, blockId: string) {
             currentConfig,
             columns,
             dialog,
-            dbName
+            dbName,
+            hasLinkedList
         }
     });
 }

@@ -2,6 +2,16 @@
  * IndexOS Geek Tech Industrial - Dual Theme Mirroring Tokens Architecture
  */
 
+:root {
+    /* ==========================================
+     * 🏛️ IndexOS 品牌视觉基因：Index Ice Tint (茵冰蓝材质)
+     * 源自 Index 银蓝发色：高明度、极清透冷调
+     * ========================================== */
+    --indexos-ice-base: #DCEEFA;      /* 极浅冰蓝 (主要材质衬底/选中态) */
+    --indexos-ice-highlight: #F2F8FF; /* 冰高光 (卡片提亮/ Hover 衬底) */
+    --indexos-ice-shadow: #A1C4E6;    /* 灰天蓝 (微边框/次要图标/冷阴影) */
+}
+
 /* ─── 1. ☀️ LIGHT MODE (Industrial Geek Tech 浅色控制台) ─── */
 :root,
 html[data-theme-mode="light"],
@@ -11,14 +21,14 @@ html[data-theme-mode="light"],
     --indexos-bg-surface: #F4F8FA;                 /* 2. 次级面板/侧边栏 */
     --indexos-bg-container: #FFFFFF;               /* 3. 核心数据列表卡片 (纯白提亮) */
     --indexos-bg-card: #FFFFFF;                    /* 3. 纯白卡片面板 */
-    --indexos-bg-card-hover: #F0F7FF;              /* 4. Hover 卡片衬底 */
-    --indexos-bg-highlight: #F0F7FF;               /* 4. 选中行 / Hover 碧落浅色衬底 */
+    --indexos-bg-card-hover: var(--indexos-ice-highlight); /* 4. Hover 冰高光衬底 #F2F8FF */
+    --indexos-bg-highlight: var(--indexos-ice-highlight);  /* 4. 选中行 / Hover 冰高光衬底 #F2F8FF */
 
     /* 边框与微构件 (Borders) */
-    --indexos-border-light: rgba(40, 81, 127, 0.15);  /* 1px 皇家蓝微边框 */
-    --indexos-border-subtle: rgba(40, 81, 127, 0.15); /* 1px 皇家蓝微边框 */
-    --indexos-border-divider: rgba(40, 81, 127, 0.08);/* 列表单行分割线 */
-    --indexos-border-glow: 1px solid rgba(40, 81, 127, 0.35);
+    --indexos-border-light: rgba(161, 196, 230, 0.45);  /* 冰蓝精致微边框 (#A1C4E6) */
+    --indexos-border-subtle: rgba(161, 196, 230, 0.35); /* 冰蓝柔和边框 */
+    --indexos-border-divider: rgba(161, 196, 230, 0.20);/* 冰蓝单行分割线 */
+    --indexos-border-glow: 1px solid var(--indexos-ice-shadow);
 
     /* 文本与排版 (Typography) */
     --indexos-text-main: #0F243B;                  /* 主文本 (深海蓝黑) */
@@ -30,8 +40,8 @@ html[data-theme-mode="light"],
     --indexos-accent-hover: #1E40AF;               /* Hover 态 */
     --indexos-accent-sky: #3B82F6;                 /* 电光蓝 */
     --indexos-accent-glow: rgba(40, 81, 127, 0.20);
-    --indexos-accent-badge-bg: #EBF5FE;            /* Count 胶囊/标签碧落浅衬底 */
-    --indexos-accent-badge-text: #28517F;          /* Count 胶囊/标签皇家蓝文字 */
+    --indexos-accent-badge-bg: var(--indexos-ice-base); /* Count 胶囊/标签极浅冰蓝衬底 #DCEEFA */
+    --indexos-accent-badge-text: #28517F;          /* Count 胶囊/标签深蓝文字 */
     --indexos-btn-primary-text: #FFFFFF;           /* Primary 按钮纯白字 */
 
     /* 状态指示灯 (Status Indicators) */
@@ -40,8 +50,8 @@ html[data-theme-mode="light"],
     --indexos-status-error: #DC2626;
 
     /* 弱 Style (编辑器交互体验) */
-    --indexos-weak-accent: #EBF5FE;
-    --indexos-weak-border: rgba(40, 81, 127, 0.25);
+    --indexos-weak-accent: var(--indexos-ice-base);
+    --indexos-weak-border: rgba(161, 196, 230, 0.40);
 }
 
 /* ─── 2. 🌙 DARK MODE (Dark Titanium Slate 深色钛蓝赛博) ─── */
@@ -56,14 +66,14 @@ html[data-theme-mode="dark"],
     --indexos-bg-highlight: #2A3B53;               /* 4. 选中行 / Hover 深蓝微高光衬底 */
 
     /* 边框与微构件 (Borders) */
-    --indexos-border-light: rgba(56, 189, 248, 0.20); /* 1px 电光的微亮边框 */
-    --indexos-border-subtle: rgba(56, 189, 248, 0.20);/* 1px 电光的微亮边框 */
+    --indexos-border-light: rgba(220, 238, 250, 0.18); /* 1px 冰光霓虹微边框 */
+    --indexos-border-subtle: rgba(220, 238, 250, 0.18);/* 1px 冰光霓虹微边框 */
     --indexos-border-divider: rgba(255, 255, 255, 0.08);/* 列表单行分割线 */
-    --indexos-border-glow: 1px solid rgba(56, 189, 248, 0.35);
+    --indexos-border-glow: 1px solid rgba(220, 238, 250, 0.35);
 
     /* 文本与排版 (Typography) */
     --indexos-text-main: #F8FAFC;                  /* 主文本 (高纯度冷白) */
-    --indexos-text-muted: #94A3B8;                 /* 次要文本 / Monospace 表头 (钛灰) */
+    --indexos-text-muted: var(--indexos-ice-shadow);/* 次要文本改用冰蓝暗部 #A1C4E6，极具赛博冷感 */
     --indexos-text-accent: #38BDF8;                /* 焦点高亮 */
 
     /* 核心高光与交互 (Accent & Interaction) */
@@ -71,7 +81,7 @@ html[data-theme-mode="dark"],
     --indexos-accent-hover: #0EA5E9;               /* Hover 态 */
     --indexos-accent-sky: #38BDF8;
     --indexos-accent-glow: rgba(56, 189, 248, 0.40);
-    --indexos-accent-badge-bg: rgba(56, 189, 248, 0.15); /* Count 胶囊/标签微发光衬底 */
+    --indexos-accent-badge-bg: rgba(220, 238, 250, 0.15); /* Count 胶囊/标签冰蓝发光衬底 */
     --indexos-accent-badge-text: #38BDF8;          /* Count 胶囊/标签高光文字 */
     --indexos-btn-primary-text: #0B1120;           /* Primary 按钮黑字 (高对比度) */
 

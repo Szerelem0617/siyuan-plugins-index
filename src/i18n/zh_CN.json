@@ -131,7 +131,7 @@
     "transformFail": "转换失败"
   },
   "dbConfig": {
-    "dialogTitle": "数据库高级设置",
+    "dialogTitle": "数据库设置",
     "tabType": "类型设置",
     "tabInheritance": "继承设置",
     "modeSingle": "一表一类",

@@ -70,42 +70,141 @@ function injectButtonCSS() {
     const style = document.createElement("style");
     style.id = "siyuan-plugin-btn-css";
     style.innerHTML = `
+        /* 核心 60fps GPU 绝对平滑扫光切线 keyframes */
+        @keyframes indexos-laser-sweep {
+            0% {
+                transform: translateX(-150%) skewX(-20deg);
+            }
+            60%, 100% {
+                transform: translateX(250%) skewX(-20deg);
+            }
+        }
+
+        @keyframes indexos-hover-sweep {
+            0% {
+                transform: translateX(-150%) skewX(-20deg);
+            }
+            100% {
+                transform: translateX(250%) skewX(-20deg);
+            }
+        }
+
+        /* ─── 1. ☀️ 浅色模式：经典晶透冰蓝反光 (背景加深，高对比醒目) ─── */
         span[data-type~="a"][data-href*="siyuan-plugins-index"],
         span[data-type~="a"][data-href^="siyuan-btn://"] {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2px 8px;
-            margin: 0 4px;
-            border: 1px solid var(--b3-border-color, #d1d5db);
-            background-color: var(--b3-theme-background-light, #ffffff);
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
-            line-height: inherit;
-            color: var(--b3-theme-on-background, #374151);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            transition: all 0.2s;
-            vertical-align: middle;
-            user-select: none;
-            text-decoration: none;
+            position: relative !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 3px 10px !important;
+            margin: 0 4px !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            line-height: 1.3 !important;
+            border-radius: 6px !important;
+            border: 1px solid var(--indexos-ice-shadow, #8BBBE5) !important;
+            background: linear-gradient(135deg, #D5E8F8 0%, #B8DCF5 60%, #CCE5F8 100%) !important;
+            color: var(--indexos-text-main, #0B192C) !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+            cursor: pointer !important;
+            overflow: hidden !important;
+            vertical-align: middle !important;
+            user-select: none !important;
+            text-decoration: none !important;
+            isolation: isolate !important;
+            z-index: 1 !important;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
+
+        /* 45度斜角纯净晶透扫光切线 (::before) */
+        span[data-type~="a"][data-href*="siyuan-plugins-index"]::before,
+        span[data-type~="a"][data-href^="siyuan-btn://"]::before {
+            content: "" !important;
+            position: absolute !important;
+            top: -50% !important;
+            left: -100% !important;
+            width: 100% !important;
+            height: 200% !important;
+            background: linear-gradient(
+                45deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0) 30%,
+                rgba(255, 255, 255, 0.5) 45%,
+                rgba(255, 255, 255, 0.98) 50%,
+                rgba(255, 255, 255, 0.5) 55%,
+                rgba(255, 255, 255, 0) 70%,
+                transparent 100%
+            ) !important;
+            animation: indexos-laser-sweep 3.2s ease-in-out infinite !important;
+            pointer-events: none !important;
+            z-index: -1 !important;
+            will-change: transform !important;
+        }
+
+        /* 悬停 (Hover) 参考特效 4：触发单次快速划过 + 背景深化 + 全息阴影 */
         span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
         span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
-            background-color: var(--b3-theme-hover, #f3f4f6);
-            border-color: var(--b3-border-color-hover, #9ca3af);
+            border-color: #0284C7 !important;
+            color: #0284C7 !important;
+            background: linear-gradient(135deg, #C5E2F6 0%, #A6D4F3 60%, #BDE0F7 100%) !important;
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.45), inset 0 1px 2px rgba(255, 255, 255, 1) !important;
+            transform: translateY(-1px) !important;
         }
+
+        span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover::before,
+        span[data-type~="a"][data-href^="siyuan-btn://"]:hover::before {
+            animation: indexos-hover-sweep 0.75s ease-out 1 !important;
+        }
+
+        /* ─── 2. 🌙 深色模式：柔和不刺眼的全息暗晶流光 ─── */
+        html[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"],
+        html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"],
+        body[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"],
+        body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"],
+        .theme-dark span[data-type~="a"][data-href*="siyuan-plugins-index"],
+        .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"] {
+            background: #091224 !important;
+            border-color: rgba(56, 189, 248, 0.4) !important;
+            color: #38BDF8 !important;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.12) !important;
+        }
+
+        /* 深色模式扫光：降低亮度，半透明柔和电光蓝/浅冰蓝，绝不刺眼 */
+        html[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"]::before,
+        html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]::before,
+        body[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"]::before,
+        body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]::before,
+        .theme-dark span[data-type~="a"][data-href*="siyuan-plugins-index"]::before,
+        .theme-dark span[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]::before {
+            background: linear-gradient(
+                45deg,
+                transparent 0%,
+                rgba(56, 189, 248, 0) 30%,
+                rgba(56, 189, 248, 0.25) 45%,
+                rgba(186, 230, 253, 0.5) 50%,
+                rgba(56, 189, 248, 0.25) 55%,
+                rgba(56, 189, 248, 0) 70%,
+                transparent 100%
+            ) !important;
+        }
+
+        html[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
+        html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]:hover,
+        body[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
+        body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]:hover,
+        .theme-dark span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
+        .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
+            background: #0f1f3d !important;
+            color: #F0F9FF !important;
+            border-color: #BAE6FD !important;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.45) !important;
+        }
+
         /* Detached commands styling (contains parameters) */
         span[data-type~="a"][data-href*="siyuan-plugins-index"][data-href*="?p="],
         span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="] {
-            border-color: var(--b3-theme-secondary, #9065f4);
-            color: var(--b3-theme-secondary, #9065f4);
-            background-color: var(--b3-theme-background-light, #f5f3ff);
-        }
-        span[data-type~="a"][data-href*="siyuan-plugins-index"][data-href*="?p="]:hover,
-        span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="]:hover {
-            background-color: var(--b3-theme-hover, #ede9fe);
-            border-color: var(--b3-theme-secondary, #7c3aed);
+            border-color: var(--indexos-ice-shadow, #A1C4E6) !important;
+            color: var(--indexos-text-main, #374151) !important;
         }
     `;
     document.head.appendChild(style);

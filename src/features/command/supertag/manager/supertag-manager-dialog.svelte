@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig } from "../../../av/av-setting/db-config";
+    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig, openDbConfigDialog } from "../../../av/av-setting/db-config";
     import { type TypeConfig } from "../../../av/av-setting/types";
     import { i18n } from "../../../../shared/utils";
     import { supertagMonitor } from "../core/supertag-listener";
@@ -60,7 +60,8 @@
         });
     }
 
-    onMount(async () => {
+    async function loadData() {
+        loading = true;
         const scannedData = await getGlobalTypeConfigs();
         const logicData = SUPERTAG_REGISTRY;
 
@@ -122,6 +123,21 @@
         commandComponents = [...commandComponents];
 
         loading = false;
+    }
+
+    import { onDestroy } from "svelte";
+
+    onMount(() => {
+        loadData();
+        const handleRefresh = () => {
+            console.log("[SupertagManager] index-plugin-refresh-supertags event received! Reloading UI...");
+            loadData();
+        };
+        window.addEventListener("index-plugin-refresh-supertags", handleRefresh);
+
+        return () => {
+            window.removeEventListener("index-plugin-refresh-supertags", handleRefresh);
+        };
     });
 
     async function enrichDuplicateDbNames(groups: TagGroup[]) {
@@ -492,6 +508,29 @@
                                     >
                                         <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconFocus"></use></svg>
                                         <span>{i18n.supertagManager.locate}</span>
+                                    </button>
+
+                                    <!-- 可点击框体按钮：数据库设置 ⚙️ -->
+                                    <button
+                                        class="indexos-btn-bordered"
+                                        style="font-size: 11px; padding: 2px 6px; flex-shrink: 0;"
+                                        title="配置数据库设置"
+                                        on:click={() => {
+                                            const curConfig = group.dataConfigs.find(c => c.avId === (group.selectedAvId || group.dataConfigs[0]?.avId)) || group.dataConfigs[0];
+                                            console.log("[IndexOS-Supertag-Debug] ⚙️ Clicked for tag group:", group.typeName, "curConfig:", curConfig);
+                                            if (curConfig && curConfig.avId && curConfig.blockId) {
+                                                openDbConfigDialog(curConfig.avId, curConfig.blockId);
+                                            } else if (curConfig) {
+                                                const targetAvId = curConfig.avId || curConfig.blockId;
+                                                const targetBlockId = curConfig.blockId || curConfig.avId;
+                                                openDbConfigDialog(targetAvId, targetBlockId);
+                                            } else {
+                                                console.error("[IndexOS-Supertag-Debug] Cannot open DB settings: curConfig is undefined");
+                                            }
+                                        }}
+                                    >
+                                        <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconSettings"></use></svg>
+                                        <span>设置</span>
                                     </button>
                                 </div>
                             {:else if activeTab === "command"}

@@ -2,7 +2,6 @@
     import {
         saveDbConfig,
         syncInheritanceToDb,
-        resetDbConfig,
     } from "./db-config";
     import type { DbConfig, IDBTypeMapping } from "./types";
     import { showMessage } from "siyuan";
@@ -15,18 +14,12 @@
     export let columns: any[];
     export let dialog: any;
     export let dbName = "";
+    export let hasLinkedList = false;
 
     let activeTab = "type"; // type | inheritance
     let typeFieldId = currentConfig.typeFieldId || "";
     let typeMappings: IDBTypeMapping[] = currentConfig.typeMappings || [];
     let inheritanceRules = currentConfig.inheritanceRules || [];
-
-    const reset = async () => {
-        if (window.confirm(i18n.dbConfig.resetPrompt)) {
-            await resetDbConfig(blockId, avId);
-            dialog.destroy();
-        }
-    };
 
     // List of columns to exclude from Inheritance settings
     const inheritanceDenyList = new Set([
@@ -143,6 +136,8 @@
         typeMappings = newMappings;
     }
 
+    import { supertagMonitor } from "../../command/supertag/core/supertag-listener";
+
     const save = async () => {
         const activeMappings = typeMappings.filter((m) => m.name.trim() !== "");
 
@@ -158,6 +153,14 @@
         };
 
         await saveDbConfig(blockId, config);
+
+        // Trigger Supertag Manager UI & Monitor Refresh Immediately
+        window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
+        try {
+            supertagMonitor.scanSupertags();
+        } catch (e) {
+            console.error("[DbConfig] Failed to trigger supertag scan:", e);
+        }
 
         // Trigger Materialized Sync
         try {
@@ -181,6 +184,32 @@
         dialog.destroy();
     };
 
+    let customValue = "";
+    let customSubtag = "";
+
+    function handleAddCustomMapping() {
+        const val = customValue.trim();
+        const tag = customSubtag.trim();
+        if (!val) {
+            showMessage("请输入要绑定的属性值", 3000, "info");
+            return;
+        }
+        if (!tag) {
+            showMessage("请输入对应的 Sub-tag 名称", 3000, "info");
+            return;
+        }
+
+        const existingIdx = typeMappings.findIndex(m => m.value === val);
+        if (existingIdx >= 0) {
+            typeMappings[existingIdx].name = tag;
+        } else {
+            typeMappings = [...typeMappings, { value: val, name: tag }];
+        }
+        customValue = "";
+        customSubtag = "";
+        showMessage(`✓ 已添加映射: ${val} ➔ #${dbName.toLowerCase()}.${tag}`);
+    }
+
     $: pinnedColumns = columns.filter((c) => c.isPinned);
     $: normalColumns = columns.filter((c) => {
         if (c.isPinned) return false;
@@ -190,11 +219,11 @@
     });
 
     $: typeFieldOptions = [
-        { value: "", label: "-- 选择用于细分类型的列 --" },
+        { value: "", label: "-- 选择sub-tag的相关列 --" },
         ...pinnedColumns.map(col => ({ value: col.id, label: `📍 ${col.name} (${i18n.dbConfig.systemProps || "系统属性"})` })),
         ...normalColumns.map(col => ({ value: col.id, label: `${col.name} (${i18n.dbConfig.columns || "自定义属性"})` }))
     ];
-    $: typeFieldLabel = typeFieldOptions.find(o => o.value === typeFieldId)?.label || "-- 选择用于细分类型的列 --";
+    $: typeFieldLabel = typeFieldOptions.find(o => o.value === typeFieldId)?.label || "-- 选择sub-tag的相关列 --";
     import { executeWritableSql, runQuery } from "../../sqlite/sqlite-manager";
     import { post } from "../../../shared/api-client/request";
     import FieldsConfigDialog from "./FieldsConfigDialog.svelte";
@@ -340,49 +369,46 @@
 
 <div
     class="fn__flex-column"
-    style="height: 100%; padding: 12px; box-sizing: border-box;"
+    style="height: 100%; padding: 16px; box-sizing: border-box; background: var(--indexos-bg-base); color: var(--indexos-text-main);"
 >
-    <!-- Tabs -->
-    <div
-        class="fn__flex"
-        style="margin-bottom: 16px; border-bottom: 1px solid var(--b3-theme-surface-lighter); flex-shrink: 0;"
-    >
-        <button
-            class="b3-button b3-button--text {activeTab === 'type'
-                ? 'b3-button--primary'
-                : ''}"
-            on:click={() => (activeTab = "type")}
+    <!-- Tabs (只有绑定了 index-linked-list 时才渲染 Tabs 选择栏) -->
+    {#if hasLinkedList}
+        <div
+            class="fn__flex"
+            style="margin-bottom: 16px; border-bottom: 1px solid var(--indexos-border-divider); flex-shrink: 0;"
         >
-            {i18n.dbConfig.tabType}
-        </button>
-        <button
-            class="b3-button b3-button--text {activeTab === 'inheritance'
-                ? 'b3-button--primary'
-                : ''}"
-            on:click={() => (activeTab = "inheritance")}
-        >
-            {i18n.dbConfig.tabInheritance}
-        </button>
-    </div>
+            <button
+                class="b3-button b3-button--text {activeTab === 'type'
+                    ? 'b3-button--primary'
+                    : ''}"
+                on:click={() => (activeTab = "type")}
+            >
+                {i18n.dbConfig.tabType}
+            </button>
+            <button
+                class="b3-button b3-button--text {activeTab === 'inheritance'
+                    ? 'b3-button--primary'
+                    : ''}"
+                on:click={() => (activeTab = "inheritance")}
+            >
+                {i18n.dbConfig.tabInheritance}
+            </button>
+        </div>
+    {/if}
 
     <div style="flex: 1; overflow-y: auto; overflow-x: hidden;">
         {#if activeTab === "type"}
             <div class="config-section" style="padding: 4px;">
-                <div style="background: var(--indexos-bg-card); padding: 12px; border-radius: 6px; border: 1px solid var(--indexos-border-subtle); margin-bottom: 16px; color: var(--indexos-text-main);">
-                    <div style="font-weight: bold; font-size: 13px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; color: var(--indexos-text-main);">
-                        🏷️ 超级标签名称为：
-                        <span class="b3-chip b3-chip--primary" style="font-family: monospace; background: var(--indexos-weak-accent); color: var(--indexos-accent-primary); border: 1px solid var(--indexos-border-subtle);">#{dbName.toLowerCase() || '表名'}</span>
-                    </div>
-                    <div class="b3-label__text" style="font-size: 12px; color: var(--indexos-text-muted); line-height: 1.4;">
-                        当启用该 Supertag 后，向任意块添加标签 <code style="color: var(--indexos-accent-primary); background: var(--indexos-weak-accent); padding: 1px 4px; border-radius: 3px;">#{dbName.toLowerCase() || '表名'}</code> 将会自动把该块作为行录入到本数据库中。您可以在「超级标签管理」面板中一键开启/关闭各 Supertag。
+                <div style="background: var(--indexos-bg-card); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--indexos-border-subtle); margin-bottom: 12px; color: var(--indexos-text-main);">
+                    <div class="b3-label__text" style="font-size: 12px; color: var(--indexos-text-main); line-height: 1.5;">
+                        <div>当启用该 Supertag后，向任意块添加该Supertag将会自动把该块作为行录入到本数据库中。</div>
+                        <div style="margin-top: 4px; color: var(--indexos-text-muted);">如果配置了sub-tag，向任意块添加该sub-tag还会对一个属性进行赋值。</div>
                     </div>
                 </div>
 
-                <div class="fn__hr" style="margin-bottom: 16px;"></div>
-
                 <!-- Column selection for sub-type mappings -->
                 <label class="b3-label" style="font-weight: bold; margin-bottom: 8px; display: block;">
-                    配置细分类型映射 (可选)
+                    配置sub-tag
                     <div class="b3-form__icon" style="margin-top: 6px;">
                         <button
                             class="b3-select fn__block fn__flex"
@@ -408,11 +434,6 @@
 
                 {#if typeFieldId}
                     <div style="margin-top: 16px;">
-                        <div class="b3-label" style="font-weight: bold; margin-bottom: 8px;">
-                            细分值与 Sub-tag 映射配置
-                        </div>
-                        <div class="fn__hr" style="margin-bottom: 12px;"></div>
-                        
                         {#each typeMappings as map}
                             <div
                                 class="fn__flex"
@@ -451,19 +472,50 @@
                                         style="font-size: 10px; padding: 4px 8px; flex-shrink: 0;"
                                         on:click={() => handleConfigureFields(map)}
                                     >
-                                        ⚙️ 配置字段
+                                        ⚙️ 筛选字段
                                     </button>
                                 {/if}
                             </div>
                         {/each}
 
+                        <!-- 自定义填值与命名行 -->
+                        <div style="margin-top: 12px; padding: 10px; background: var(--indexos-bg-surface); border: 1px dashed var(--indexos-border-subtle); border-radius: 6px;">
+                            <div style="font-size: 11px; font-weight: bold; margin-bottom: 6px; color: var(--indexos-text-muted);">
+                                ➕ 手动自定义填值与命名新的 Sub-tag 映射
+                            </div>
+                            <div class="fn__flex" style="align-items: center; gap: 8px;">
+                                <input
+                                    class="b3-input fn__flex-1"
+                                    style="font-size: 11px;"
+                                    placeholder="输入要绑定的属性值 (如 高级)"
+                                    bind:value={customValue}
+                                />
+                                <span style="opacity: 0.5;">➔</span>
+                                <div class="fn__flex-1" style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="opacity: 0.7; font-family: monospace; font-size: 11px;">#{dbName.toLowerCase()}.</span>
+                                    <input
+                                        class="b3-input fn__flex-1"
+                                        style="font-family: monospace; font-size: 11px;"
+                                        placeholder="子标签名 (如 high)"
+                                        bind:value={customSubtag}
+                                    />
+                                </div>
+                                <button
+                                    class="indexos-btn-bordered"
+                                    style="font-size: 11px; padding: 4px 10px; flex-shrink: 0;"
+                                    on:click={handleAddCustomMapping}
+                                >
+                                    添加
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 {/if}
             </div>
         {/if}
 
-        {#if activeTab === "inheritance"}
-            <div class="config-section">
+        {#if activeTab === "inheritance" && hasLinkedList}
+            <div class="config-section" style="padding: 4px;">
                 {#each inheritanceList as item}
                     <div
                         class="fn__flex"
@@ -485,15 +537,17 @@
                         <button
                             class="b3-select fn__flex"
                             style="align-items: center; justify-content: space-between; width: 140px; height: 26px; padding: 2px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.15s ease;"
-                            on:click={(e) => openIndexDropdown({
-                                event: e,
-                                options: modeOptions,
-                                selectedValue: item.mode,
-                                onSelect: (val) => {
-                                    item.mode = val;
-                                    inheritanceList = [...inheritanceList];
-                                }
-                            })}
+                            on:click={(e) => {
+                                openIndexDropdown({
+                                    event: e,
+                                    options: modeOptions,
+                                    selectedValue: item.mode,
+                                    onSelect: (val) => {
+                                        item.mode = val;
+                                        inheritanceList = [...inheritanceList];
+                                    }
+                                });
+                            }}
                         >
                             <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                 {getModeLabel(item.mode)}
@@ -508,27 +562,15 @@
 
     <div
         class="fn__flex"
-        style="margin-top: 16px; justify-content: space-between; flex-shrink: 0;"
+        style="margin-top: 16px; justify-content: flex-end; gap: 8px; flex-shrink: 0;"
     >
-        <div class="fn__flex">
-            <button class="b3-button b3-button--cancel" on:click={reset}>
-                <svg
-                    class="b3-list-item__graphic"
-                    style="height: 14px; width: 14px; margin-right: 4px;"
-                    ><use xlink:href="#iconTrashcan"></use></svg
-                >
-                {i18n.dbConfig.reset}
-            </button>
-        </div>
-        <div class="fn__flex">
-            <button
-                class="b3-button b3-button--cancel"
-                on:click={() => dialog.destroy()}>{i18n.dbConfig.cancel}</button
-            >
-            <button class="b3-button" style="margin-left: 8px;" on:click={save}
-                >{i18n.dbConfig.save}</button
-            >
-        </div>
+        <button
+            class="b3-button b3-button--cancel"
+            on:click={() => dialog.destroy()}>{i18n.dbConfig.cancel}</button
+        >
+        <button class="b3-button" on:click={save}
+            >{i18n.dbConfig.save}</button
+        >
     </div>
 </div>
 
