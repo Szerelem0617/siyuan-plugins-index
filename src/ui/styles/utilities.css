@@ -581,16 +581,17 @@ button.b3-select {
     font-size: 12px !important;
     font-weight: 500 !important;
     line-height: 1.3 !important;
-    border-radius: 4px !important;
+    border-radius: 3px !important;
     border: 1px solid var(--indexos-ice-shadow, #A1C4E6) !important;
     background: linear-gradient(
-        90deg,
-        var(--indexos-bg-card, #ffffff) 0%,
-        var(--indexos-ice-base, #DCEEFA) 50%,
-        var(--indexos-bg-card, #ffffff) 100%
+        125deg,
+        rgba(255, 255, 255, 0.82) 0%,
+        rgba(224, 242, 254, 0.42) 38%,
+        rgba(186, 230, 253, 0.58) 75%,
+        rgba(147, 197, 253, 0.35) 100%
     ) !important;
-    background-size: 200% 100% !important;
-    animation: indexos-ice-btn-flow 2.5s ease infinite !important;
+    backdrop-filter: blur(8px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(140%) !important;
     color: var(--indexos-text-main) !important;
     text-decoration: none !important;
     cursor: pointer !important;

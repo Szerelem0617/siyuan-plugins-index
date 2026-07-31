@@ -89,7 +89,13 @@ function injectButtonCSS() {
             }
         }
 
-        /* ─── 1. ☀️ 浅色模式：经典晶透冰蓝反光 (背景加深，高对比醒目) ─── */
+        /* ─── 0. 通用单色号变量基准 (Single Color Code System) ─── */
+        span[data-type~="a"][data-href*="siyuan-plugins-index"],
+        span[data-type~="a"][data-href^="siyuan-btn://"] {
+            --btn-color: #BAE6FD;
+        }
+
+        /* ─── 1. ☀️ 浅色模式：水润冰蓝 (极光冰晶 Glassmorphism) ─── */
         span[data-type~="a"][data-href*="siyuan-plugins-index"],
         span[data-type~="a"][data-href^="siyuan-btn://"] {
             position: relative !important;
@@ -101,11 +107,22 @@ function injectButtonCSS() {
             font-size: 12px !important;
             font-weight: 600 !important;
             line-height: 1.3 !important;
-            border-radius: 6px !important;
-            border: 1px solid var(--indexos-ice-shadow, #8BBBE5) !important;
-            background: linear-gradient(135deg, #D5E8F8 0%, #B8DCF5 60%, #CCE5F8 100%) !important;
-            color: var(--indexos-text-main, #0B192C) !important;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+            border-radius: 3px !important;
+            border: 1px solid color-mix(in srgb, var(--btn-color) 65%, #0284C7 35%) !important;
+            background: linear-gradient(
+                125deg,
+                rgba(255, 255, 255, 0.85) 0%,
+                color-mix(in srgb, var(--btn-color) 35%, #FFFFFF 65%) 38%,
+                color-mix(in srgb, var(--btn-color) 65%, #FFFFFF 35%) 75%,
+                var(--btn-color) 100%
+            ) !important;
+            backdrop-filter: blur(8px) saturate(140%) !important;
+            -webkit-backdrop-filter: blur(8px) saturate(140%) !important;
+            color: color-mix(in srgb, var(--btn-color) 20%, #0F172A 80%) !important;
+            box-shadow:
+                inset 0 1px 1px rgba(255, 255, 255, 0.95),
+                inset 0 -1px 2px color-mix(in srgb, var(--btn-color) 40%, transparent 60%),
+                0 2px 6px rgba(14, 165, 233, 0.08) !important;
             cursor: pointer !important;
             overflow: hidden !important;
             vertical-align: middle !important;
@@ -129,9 +146,9 @@ function injectButtonCSS() {
                 45deg,
                 transparent 0%,
                 rgba(255, 255, 255, 0) 30%,
-                rgba(255, 255, 255, 0.5) 45%,
-                rgba(255, 255, 255, 0.98) 50%,
-                rgba(255, 255, 255, 0.5) 55%,
+                rgba(255, 255, 255, 0.45) 45%,
+                rgba(255, 255, 255, 0.95) 50%,
+                rgba(255, 255, 255, 0.45) 55%,
                 rgba(255, 255, 255, 0) 70%,
                 transparent 100%
             ) !important;
@@ -141,13 +158,15 @@ function injectButtonCSS() {
             will-change: transform !important;
         }
 
-        /* 悬停 (Hover) 参考特效 4：触发单次快速划过 + 背景深化 + 全息阴影 */
+        /* 悬停 (Hover) 触发单次快速划过 + 全息发光 */
         span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
         span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
-            border-color: #0284C7 !important;
-            color: #0284C7 !important;
-            background: linear-gradient(135deg, #C5E2F6 0%, #A6D4F3 60%, #BDE0F7 100%) !important;
-            box-shadow: 0 0 16px rgba(56, 189, 248, 0.45), inset 0 1px 2px rgba(255, 255, 255, 1) !important;
+            border-color: color-mix(in srgb, var(--btn-color) 80%, #0284C7 20%) !important;
+            color: color-mix(in srgb, var(--btn-color) 30%, #0284C7 70%) !important;
+            background: var(--btn-color) !important;
+            box-shadow:
+                inset 0 1px 2px rgba(255, 255, 255, 1),
+                0 0 16px color-mix(in srgb, var(--btn-color) 50%, transparent 50%) !important;
             transform: translateY(-1px) !important;
         }
 
@@ -156,36 +175,19 @@ function injectButtonCSS() {
             animation: indexos-hover-sweep 0.75s ease-out 1 !important;
         }
 
-        /* ─── 2. 🌙 深色模式：柔和不刺眼的全息暗晶流光 ─── */
+        /* ─── 2. 🌙 深色模式：单色号混黑压暗 (color-mix 35% Base + 65% Black/Dark) ─── */
         html[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"],
         html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"],
         body[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"],
         body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"],
         .theme-dark span[data-type~="a"][data-href*="siyuan-plugins-index"],
         .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"] {
-            background: #091224 !important;
-            border-color: rgba(56, 189, 248, 0.4) !important;
-            color: #38BDF8 !important;
-            box-shadow: 0 0 10px rgba(56, 189, 248, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.12) !important;
-        }
-
-        /* 深色模式扫光：降低亮度，半透明柔和电光蓝/浅冰蓝，绝不刺眼 */
-        html[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"]::before,
-        html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]::before,
-        body[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"]::before,
-        body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]::before,
-        .theme-dark span[data-type~="a"][data-href*="siyuan-plugins-index"]::before,
-        .theme-dark span[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]::before {
-            background: linear-gradient(
-                45deg,
-                transparent 0%,
-                rgba(56, 189, 248, 0) 30%,
-                rgba(56, 189, 248, 0.25) 45%,
-                rgba(186, 230, 253, 0.5) 50%,
-                rgba(56, 189, 248, 0.25) 55%,
-                rgba(56, 189, 248, 0) 70%,
-                transparent 100%
-            ) !important;
+            /* 一个色号 Code，深色下自动混入 68% 暗色，舒适护眼不闪瞎 */
+            background: color-mix(in srgb, var(--btn-color) 32%, #0F172A 68%) !important;
+            border-color: color-mix(in srgb, var(--btn-color) 45%, #0F172A 55%) !important;
+            color: color-mix(in srgb, var(--btn-color) 85%, #FFFFFF 15%) !important;
+            border-radius: 3px !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
         }
 
         html[data-theme-mode="dark"] span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
@@ -194,17 +196,17 @@ function injectButtonCSS() {
         body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]:hover,
         .theme-dark span[data-type~="a"][data-href*="siyuan-plugins-index"]:hover,
         .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
-            background: #0f1f3d !important;
-            color: #F0F9FF !important;
-            border-color: #BAE6FD !important;
-            box-shadow: 0 0 20px rgba(56, 189, 248, 0.45) !important;
+            background: color-mix(in srgb, var(--btn-color) 45%, #0F172A 55%) !important;
+            color: #FFFFFF !important;
+            border-color: color-mix(in srgb, var(--btn-color) 70%, #FFFFFF 30%) !important;
+            box-shadow: 0 0 14px color-mix(in srgb, var(--btn-color) 40%, transparent 60%) !important;
         }
 
         /* Detached commands styling (contains parameters) */
         span[data-type~="a"][data-href*="siyuan-plugins-index"][data-href*="?p="],
         span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="] {
-            border-color: var(--indexos-ice-shadow, #A1C4E6) !important;
-            color: var(--indexos-text-main, #374151) !important;
+            border-color: var(--indexos-ice-shadow, #8BBBE5) !important;
+            color: var(--indexos-text-main, #0F172A) !important;
         }
     `;
     document.head.appendChild(style);
@@ -228,8 +230,10 @@ export function updateInlineButtonList(buttonCmds: InlineButtonCmd[]) {
     availableInlineCommands = buttonCmds;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Slash command entry （/btn）
+export function getInlineButtonCommands(): InlineButtonCmd[] {
+    return availableInlineCommands;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getInlineButtonSlashCommand() {
@@ -243,7 +247,7 @@ export function getInlineButtonSlashCommand() {
             if (typeof protyle.insert === "function") protyle.insert("");
 
             const href = encodeBtnHref({ command: "sys.configure" });
-            const inlineDOM = `<span data-type="a" data-href="${href}">⚙️ 配置智能按钮</span>&#8203;`;
+            const inlineDOM = `<span data-type="a" data-href="${href}">⚙️ 配置命令按钮</span>&#8203;`;
 
             const selection = window.getSelection();
             let savedRange: Range | null = null;
@@ -429,7 +433,7 @@ function openButtonConfigurationDialog(targetRange: Range) {
     let selectedValue = dropdownOptions[0].value;
 
     const dialog = new Dialog({
-        title: "配置智能按钮",
+        title: "配置命令按钮",
         content: `
             <div class="b3-dialog__content">
                 <div class="fn__flex b3-label">
@@ -447,10 +451,6 @@ function openButtonConfigurationDialog(targetRange: Range) {
                 <div class="fn__flex b3-label">
                     <div class="fn__flex-1">定制按钮显示名称（选填）:</div>
                     <input class="b3-text-field" id="btn-custom-label" style="width: 200px;" placeholder="默认使用命令名">
-                </div>
-                <div class="fn__flex b3-label">
-                    <div class="fn__flex-1">附加运行参数（选填）:</div>
-                    <input class="b3-text-field" id="btn-custom-param" style="width: 200px;" placeholder="选填参数">
                 </div>
             </div>
             <div class="b3-dialog__action">
@@ -483,7 +483,6 @@ function openButtonConfigurationDialog(targetRange: Range) {
 
     dialog.element.querySelector("#btn-config-confirm")?.addEventListener("click", () => {
         const customLabelEl = dialog.element.querySelector("#btn-custom-label") as HTMLInputElement;
-        const customParamEl = dialog.element.querySelector("#btn-custom-param") as HTMLInputElement;
 
         const selectedId = selectedValue;
         const targetCmd = availableInlineCommands.find(c => c.id === selectedId);
@@ -494,7 +493,7 @@ function openButtonConfigurationDialog(targetRange: Range) {
         }
 
         const finalLabel = customLabelEl.value.trim() || targetCmd.label;
-        const finalParam = customParamEl.value.trim() || targetCmd.commandParam || undefined;
+        const finalParam = targetCmd.commandParam || undefined;
 
         // 使用命令 name（中文名）作为 URL 中的标识符，同时 ID 也可以
         // 为了最大稳定性，这里存的是命令 ID（可读性由显示文本保证）
@@ -540,7 +539,7 @@ function handleInlineButtonHover(event: MouseEvent) {
 
     let label = payload.command; // 兜底显示 command 字段
     if (payload.command === "sys.configure") {
-        label = "配置智能按钮";
+        label = "配置命令按钮";
     } else {
         const def = commandRegistry.findByNameOrId(payload.command);
         if (def) label = def.name;
