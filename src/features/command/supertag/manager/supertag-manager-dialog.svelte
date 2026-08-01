@@ -302,10 +302,7 @@
         }
     }
 
-    $: currentList =
-        activeTab === "data"
-            ? dataComponents
-            : commandComponents;
+    $: currentList = activeTab === "data" ? dataComponents : commandComponents;
 </script>
 
 <div
@@ -351,7 +348,7 @@
 
     <div
         class="b3-dialog__content fn__flex-1"
-        style="padding: 16px; overflow-y: auto;"
+        style="padding: 16px; overflow-y: auto; min-height: 0; flex: 1 1 0%;"
     >
         {#if loading}
             <div class="fn__flex-center" style="height: 100px;">
@@ -380,11 +377,11 @@
                 </p>
             </div>
         {:else}
-            <div class="tag-list-container b3-list b3-list--background">
+            <div class="tag-list-container b3-list b3-list--background" style="display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0;">
                 <!-- Header row -->
                 <div
                     class="b3-list-item b3-list-item--hide-action"
-                    style="cursor: default; background: transparent; padding: 6px 16px; align-items: center;"
+                    style="cursor: default; background: transparent; padding: 6px 16px; align-items: center; flex-shrink: 0;"
                 >
                     <div
                         class="b3-list-item__text fn__flex"
@@ -417,7 +414,7 @@
                 {#each currentList as group}
                     {@const isLogic = group.logicConfigs.length > 0}
                     {@const isEnabled = supertagBinder.getPref(group.typeName) !== "disabled"}
-                    <div class="b3-list-item" style="display: flex; align-items: center; padding: 10px 16px; min-height: 48px; box-sizing: border-box;">
+                    <div class="b3-list-item" style="display: flex; align-items: center; padding: 10px 16px; min-height: 48px; box-sizing: border-box; flex-shrink: 0;">
                         <!-- Tag Name Column -->
                         <div
                             class="b3-list-item__text fn__flex"
@@ -428,16 +425,16 @@
                                 style="color: var(--indexos-accent-primary); width: 14px; height: 14px; flex-shrink: 0; margin: 0;"
                                 ><use xlink:href="#iconTags"></use></svg
                             >
-                            <span style="font-weight: 600; font-family: ui-monospace, monospace; line-height: 1.2; word-break: break-all; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{group.typeName}</span>
+                            <span style="font-weight: 600; font-family: ui-monospace, monospace; line-height: 1.2; word-break: break-all; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; color: var(--indexos-text-main);">{group.typeName}</span>
                             
-                            <!-- 不可操作的标签标志：无边框 Dot 样式 -->
+                            <!-- 不可操作的标签标志：品牌浅色 Dot 样式 -->
                             {#if BUILTIN_SUPERTAGS.has(group.typeName.toLowerCase())}
                                 <span
                                     class="indexos-tag-badge indexos-tag-badge--builtin"
-                                    style="flex-shrink: 0;"
+                                    style="flex-shrink: 0; color: var(--indexos-text-muted) !important;"
                                     title={i18n.supertagManager.builtinTooltip}
                                 >
-                                    <span class="badge-dot"></span>{i18n.supertagManager.builtinTag}
+                                    <span class="badge-dot" style="background-color: var(--indexos-index-blue) !important;"></span>{i18n.supertagManager.builtinTag}
                                 </span>
                             {/if}
                         </div>
@@ -483,9 +480,9 @@
                                             <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.6; flex-shrink: 0; margin-left: 6px; fill: currentColor;"><use xlink:href="#iconDown"></use></svg>
                                         </button>
 
-                                        <!-- 不可操作的重名标记：琥珀警示 Dot 样式 -->
-                                        <span class="indexos-tag-badge indexos-tag-badge--duplicate" style="flex-shrink: 0;">
-                                            <span class="badge-dot"></span>{i18n.supertagManager.duplicateName}
+                                        <!-- 不可操作的重名标记：品牌特质 Dot 样式 (非橘黄色) -->
+                                        <span class="indexos-tag-badge indexos-tag-badge--duplicate" style="flex-shrink: 0; color: var(--indexos-text-muted) !important;">
+                                            <span class="badge-dot" style="background-color: var(--indexos-index-blue) !important;"></span>{i18n.supertagManager.duplicateName}
                                         </span>
                                     {:else}
                                         <span

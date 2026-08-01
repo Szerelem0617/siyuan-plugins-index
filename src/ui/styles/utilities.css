@@ -32,8 +32,20 @@
 }
 
 /* 弹窗 Body 容器与内衬防溢出与防第三方主题透色 */
-.indexos-dialog .b3-dialog__container,
-.indexos-dialog .b3-dialog__body,
+.indexos-dialog .b3-dialog__container {
+    display: flex !important;
+    flex-direction: column !important;
+    max-height: 90vh !important;
+}
+
+.indexos-dialog .b3-dialog__body {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
 .indexos-dialog .b3-dialog__content,
 .indexos-dialog #index-settings,
 .indexos-dialog .config__panel,
@@ -44,8 +56,16 @@
     background: var(--indexos-bg-base) !important;
     color: var(--indexos-text-main) !important;
     padding: 0 !important;
-    overflow: hidden !important; /* 彻底杜绝弹窗整体产生最右侧二次滚动条 */
     box-sizing: border-box !important;
+}
+
+.indexos-dialog #supertag-manager-container {
+    height: 100% !important;
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
 }
 
 /* 底部操作区 */
@@ -567,15 +587,15 @@ button.b3-select {
 }
 
 .indexos-tag-badge--builtin .badge-dot {
-    background-color: var(--indexos-accent-sky);
+    background-color: var(--indexos-accent-primary);
 }
 
 .indexos-tag-badge--duplicate {
-    color: var(--indexos-status-warning);
+    color: var(--indexos-text-muted);
 }
 
 .indexos-tag-badge--duplicate .badge-dot {
-    background-color: var(--indexos-status-warning);
+    background-color: var(--indexos-accent-primary);
 }
 
 /* ─── 侧边栏超级标签管理入口：纯净静态茵蒂克丝蓝框 (#A1C4E6) ─── */
@@ -685,7 +705,33 @@ body[data-theme-mode="dark"] .b3-menu__item:has(.indexos-menu-icon):not([data-id
     box-shadow: 0 0 8px rgba(0, 122, 204, 0.5) !important;
 }
 
-/* ─── Command-DB“添加条目”按钮本身：整体粗细相同(2px)的标志性茵蒂克丝蓝边框 ─── */
+/* ─── IndexOS 品牌精美边框按钮 (.indexos-btn-bordered) 通用规范 ─── */
+.indexos-btn-bordered {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    background: var(--indexos-weak-accent, rgba(220, 238, 250, 0.45)) !important;
+    color: var(--indexos-accent-primary, #28517F) !important;
+    border: 1px solid var(--indexos-index-blue, #A1C4E6) !important;
+    border-radius: 4px !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    padding: 3px 8px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 1px 2px rgba(161, 196, 230, 0.15) !important;
+}
+
+.indexos-btn-bordered:hover {
+    background: var(--indexos-ice-highlight, #F2F8FF) !important;
+    border-color: var(--indexos-accent-primary, #28517F) !important;
+    color: var(--indexos-accent-primary, #28517F) !important;
+    box-shadow: 0 2px 6px rgba(161, 196, 230, 0.35) !important;
+    transform: translateY(-1px);
+}
+
+/* ─── Command-DB“添加条目”按钮特化：2px 茵蒂克丝蓝边框 ─── */
 button[data-type="av-add-bottom"].indexos-btn-bordered,
 button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered {
     border: 2px solid var(--indexos-index-blue, #A1C4E6) !important;
@@ -697,6 +743,6 @@ button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered {
 
 button[data-type="av-add-bottom"].indexos-btn-bordered:hover,
 button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered:hover {
-    border-color: var(--indexos-accent-primary, #007ACC) !important;
-    box-shadow: 0 0 10px rgba(0, 122, 204, 0.35) !important;
+    border-color: var(--indexos-accent-primary, #28517F) !important;
+    box-shadow: 0 0 10px rgba(40, 81, 127, 0.35) !important;
 }
