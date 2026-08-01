@@ -31,10 +31,12 @@
     color: var(--indexos-accent-primary) !important;
 }
 
-/* 弹窗 Body 容器与内衬防溢出 */
+/* 弹窗 Body 容器与内衬防溢出与防第三方主题透色 */
 .indexos-dialog .b3-dialog__container,
 .indexos-dialog .b3-dialog__body,
 .indexos-dialog .b3-dialog__content,
+.indexos-dialog #index-settings,
+.indexos-dialog .config__panel,
 .indexos-dialog #db-config-container,
 .indexos-dialog #sqlite-status-container,
 .indexos-dialog #supertag-manager-container,
@@ -223,9 +225,11 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
 }
 
-/* ─── 设置面板 (#index-settings & .config__panel) 防溢出控制 ─── */
+/* ─── 设置面板 (#index-settings & .config__panel) 全面防透色控制 ─── */
 .indexos-dialog #index-settings,
-.indexos-dialog .config__panel {
+.indexos-dialog .config__panel,
+.indexos-dialog .config__panel > div,
+.indexos-dialog .config__tab {
     background: var(--indexos-bg-base) !important;
     color: var(--indexos-text-main) !important;
     overflow-x: hidden !important; 
@@ -236,13 +240,25 @@
     overflow: hidden !important;   
 }
 
+/* 各个设置项 Card 面板：彻底排除思源原生 b3-label 发黄/杂色透底 */
+.indexos-dialog label.b3-label,
+.indexos-dialog .b3-label.config__item,
 .indexos-dialog .config__item {
-    background: var(--indexos-bg-container) !important;
+    background: var(--indexos-bg-card, #FFFFFF) !important;
     border: 1px solid var(--indexos-border-light) !important;
     border-radius: 4px !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 10px !important;
     color: var(--indexos-text-main) !important;
     padding: 14px 16px !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+    transition: all 0.2s ease !important;
+}
+
+.indexos-dialog label.b3-label:hover,
+.indexos-dialog .b3-label.config__item:hover,
+.indexos-dialog .config__item:hover {
+    border-color: var(--indexos-index-blue) !important;
+    box-shadow: 0 2px 8px rgba(161, 196, 230, 0.25) !important;
 }
 
 /* 属性名称与描述说明 */
@@ -257,6 +273,13 @@
 .indexos-dialog .b3-label__text {
     color: var(--indexos-text-muted) !important;
     font-size: 12px !important;
+}
+
+/* 设置弹窗内的警告/提示区域防透色 */
+.indexos-dialog div[style*="background-color: var(--b3-theme-surface-lighter)"] {
+    background-color: var(--indexos-weak-accent, rgba(220, 238, 250, 0.4)) !important;
+    color: var(--indexos-text-main) !important;
+    border: 1px solid var(--indexos-border-light) !important;
 }
 
 /* 表单控件 (Select, Textfield, Slider) 工业化 */
@@ -555,13 +578,14 @@ button.b3-select {
     background-color: var(--indexos-status-warning);
 }
 
-/* ─── 侧边栏超级标签管理入口：纯净静态灰天蓝框 (#A1C4E6) ─── */
+/* ─── 侧边栏超级标签管理入口：纯净静态茵蒂克丝蓝框 (#A1C4E6) ─── */
 #supertag-management,
 #supertag-management.indexos-btn-bordered {
     animation: none !important;
     background: var(--indexos-weak-accent) !important;
-    border: 1px solid var(--indexos-ice-shadow, #A1C4E6) !important;
+    border: 1px solid var(--indexos-index-blue, #A1C4E6) !important;
     box-shadow: none !important;
+    transition: all 0.2s ease !important;
 }
 
 #supertag-management::after,
@@ -582,16 +606,16 @@ button.b3-select {
     font-weight: 500 !important;
     line-height: 1.3 !important;
     border-radius: 3px !important;
-    border: 1px solid #7DB3E0 !important;
+    border: 1px solid var(--indexos-index-blue, #A1C4E6) !important;
     background: linear-gradient(
         125deg,
-        rgba(220, 238, 250, 0.75) 0%,
-        rgba(186, 230, 253, 0.75) 45%,
-        rgba(147, 197, 253, 0.65) 100%
+        color-mix(in srgb, var(--indexos-ice-base, #DCEEFA) 80%, #FFFFFF 20%) 0%,
+        color-mix(in srgb, var(--indexos-index-blue, #A1C4E6) 70%, #FFFFFF 30%) 50%,
+        color-mix(in srgb, var(--indexos-index-blue, #A1C4E6) 85%, var(--indexos-accent-primary, #007ACC) 15%) 100%
     ) !important;
     backdrop-filter: blur(8px) saturate(140%) !important;
     -webkit-backdrop-filter: blur(8px) saturate(140%) !important;
-    color: #032B45 !important;
+    color: var(--indexos-text-main, #0F243B) !important;
     text-decoration: none !important;
     cursor: pointer !important;
     overflow: hidden !important;
@@ -631,4 +655,48 @@ body[data-theme-mode="dark"] .b3-menu__item:has(.indexos-menu-icon):not([data-id
 .theme-dark .b3-menu__item:has(.indexos-menu-icon):not([data-id="plugin"]) {
     border-left-color: #A1C4E6 !important;
     box-shadow: inset 3px 0 8px -2px rgba(161, 196, 230, 0.6) !important;
+}
+
+/* ─── 数据库/属性视图表头 (AV Headers)：仅针对 IndexOS 配置列挂载两端缩进不相连的蓝线 ─── */
+.av__row--header .av__cell.indexos-header-indicator,
+.av__row--header .av__cell--header.indexos-header-indicator {
+    position: relative !important;
+}
+
+.av__row--header .av__cell.indexos-header-indicator::after,
+.av__row--header .av__cell--header.indexos-header-indicator::after {
+    content: "" !important;
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    height: 2px !important;
+    background-color: var(--indexos-index-blue, #A1C4E6) !important;
+    box-shadow: 0 1px 3px rgba(161, 196, 230, 0.6) !important;
+    transition: all 0.2s ease !important;
+    pointer-events: none !important;
+}
+
+.av__row--header .av__cell.indexos-header-indicator:hover::after,
+.av__row--header .av__cell--header.indexos-header-indicator:hover::after {
+    background-color: var(--indexos-accent-primary, #007ACC) !important;
+    height: 3px !important;
+    box-shadow: 0 0 8px rgba(0, 122, 204, 0.5) !important;
+}
+
+/* ─── Command-DB“添加条目”按钮本身：整体粗细相同(2px)的标志性茵蒂克丝蓝边框 ─── */
+button[data-type="av-add-bottom"].indexos-btn-bordered,
+button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered {
+    border: 2px solid var(--indexos-index-blue, #A1C4E6) !important;
+    border-radius: 4px !important;
+    background: transparent !important;
+    box-shadow: 0 1px 4px rgba(161, 196, 230, 0.3) !important;
+    transition: all 0.2s ease !important;
+}
+
+button[data-type="av-add-bottom"].indexos-btn-bordered:hover,
+button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered:hover {
+    border-color: var(--indexos-accent-primary, #007ACC) !important;
+    box-shadow: 0 0 10px rgba(0, 122, 204, 0.35) !important;
 }

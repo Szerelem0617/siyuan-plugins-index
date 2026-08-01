@@ -1,5 +1,5 @@
 import { Dialog, showMessage } from "siyuan";
-import { getCommandAvId, COMMAND_REGISTRY } from "../registration";
+import { getCommandAvId, getTypeAvId, COMMAND_REGISTRY } from "../registration";
 import { encodeBtnHref } from "../global-registration/inline-button";
 import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
@@ -740,8 +740,11 @@ function hideTooltip() {
     }
 }
 
+import { initAvHeaderIndicators, destroyAvHeaderIndicators } from "../../av/hint";
+
 export function initHoverTooltipListener() {
     window.addEventListener("mouseover", handleAvMouseOver, true);
+    initAvHeaderIndicators();
 }
 
 export function destroyHoverTooltipListener() {
@@ -751,4 +754,5 @@ export function destroyHoverTooltipListener() {
         hoverTooltipEl.remove();
         hoverTooltipEl = null;
     }
+    destroyAvHeaderIndicators();
 }

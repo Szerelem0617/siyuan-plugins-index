@@ -93,13 +93,13 @@ function injectButtonCSS() {
             }
         }
 
-        /* ─── 0. 通用单色号变量基准 (茵蒂克丝蓝 #DCEEFA) ─── */
+        /* ─── 0. 通用单色号变量基准 (茵蒂克丝蓝 Token 驱动) ─── */
         span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
         span[data-type~="a"][data-href^="siyuan-btn://"] {
-            --btn-color: #DCEEFA;
+            --btn-color: var(--indexos-index-blue, #A1C4E6);
         }
 
-        /* ─── 1. ☀️ 浅色模式：水润冰蓝 (极光冰晶 Glassmorphism 加深版) ─── */
+        /* ─── 1. ☀️ 浅色模式：水润冰蓝 (标准 Token 驱动极光 Glassmorphism) ─── */
         span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
         span[data-type~="a"][data-href^="siyuan-btn://"] {
             position: relative !important;
@@ -112,19 +112,19 @@ function injectButtonCSS() {
             font-weight: 600 !important;
             line-height: 1.3 !important;
             border-radius: 3px !important;
-            border: 1px solid color-mix(in srgb, var(--btn-color) 40%, #007ACC 60%) !important;
+            border: 1px solid var(--indexos-index-blue, #A1C4E6) !important;
             background: linear-gradient(
                 125deg,
-                color-mix(in srgb, var(--btn-color) 50%, #FFFFFF 50%) 0%,
-                color-mix(in srgb, var(--btn-color) 75%, #007ACC 25%) 50%,
-                color-mix(in srgb, var(--btn-color) 85%, #0284C7 15%) 100%
+                color-mix(in srgb, var(--indexos-ice-base, #DCEEFA) 80%, #FFFFFF 20%) 0%,
+                color-mix(in srgb, var(--btn-color) 70%, #FFFFFF 30%) 50%,
+                color-mix(in srgb, var(--btn-color) 85%, var(--indexos-accent-primary, #007ACC) 15%) 100%
             ) !important;
             backdrop-filter: blur(8px) saturate(140%) !important;
             -webkit-backdrop-filter: blur(8px) saturate(140%) !important;
-            color: #032B45 !important;
+            color: var(--indexos-text-main, #0F243B) !important;
             box-shadow:
                 inset 0 1px 1px rgba(255, 255, 255, 0.9),
-                inset 0 -1px 2px color-mix(in srgb, var(--btn-color) 60%, #007ACC 40%),
+                inset 0 -1px 2px color-mix(in srgb, var(--btn-color) 60%, var(--indexos-accent-primary, #007ACC) 40%),
                 0 2px 6px rgba(0, 122, 204, 0.15) !important;
             cursor: pointer !important;
             overflow: hidden !important;
