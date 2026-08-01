@@ -1,0 +1,99 @@
+import { getCommandAvId, getTypeAvId } from "../../command/registration";
+
+let headerObserver: MutationObserver | null = null;
+
+/**
+ * 扫描并仅为 custom-index-command-db、custom-index-supertag-db 以及全库通用配置列 (icon/title-img/template) 挂载指示线与按钮边框
+ */
+export function scanAvIndicators() {
+    const commandAvId = getCommandAvId();
+    const typeAvId = getTypeAvId();
+
+    const avContainers = document.querySelectorAll('.av, .av__container, [data-av-id], [data-type="NodeAttributeView"]');
+    avContainers.forEach(avContainer => {
+        const avId = avContainer.getAttribute("data-av-id") || "";
+        
+        // 严谨判别属性：检查 custom-index-command-db 与 custom-index-supertag-db 属性
+        const isCommandDb = (
+            (commandAvId && avId === commandAvId) ||
+            avContainer.hasAttribute("custom-index-command-db") ||
+            !!avContainer.getAttribute("custom-index-command-db") ||
+            !!avContainer.querySelector('[custom-index-command-db]') ||
+            !!avContainer.closest('[custom-index-command-db]')
+        );
+        const isSupertagDb = (
+            (typeAvId && avId === typeAvId) ||
+            avContainer.hasAttribute("custom-index-supertag-db") ||
+            !!avContainer.getAttribute("custom-index-supertag-db") ||
+            !!avContainer.querySelector('[custom-index-supertag-db]') ||
+            !!avContainer.closest('[custom-index-supertag-db]')
+        );
+
+        // 1. 表头 Headers 处理
+        const headerCells = avContainer.querySelectorAll(".av__row--header .av__cell");
+        headerCells.forEach(cell => {
+            const txt = (cell.textContent || "").trim().toLowerCase();
+
+            // 对于 icon, title-img, template 列，无论处于任何数据库，也做标线指示
+            const isUniversalSpecialCol = (
+                txt === "icon" || txt === "图标" ||
+                txt === "title-img" || txt === "title_img" || txt === "titleimg" || txt === "文档图" || txt === "标题图" ||
+                txt === "template" || txt === "模板"
+            );
+
+            let isConfigurableCol = isUniversalSpecialCol;
+
+            if (isCommandDb) {
+                // Command-DB: 主键, Param Mapping, UI 入口
+                isConfigurableCol = isConfigurableCol || (
+                    txt.includes("主键") ||
+                    txt.includes("param mapping") ||
+                    txt.includes("ui 入口") ||
+                    cell.getAttribute("data-dtype") === "block"
+                );
+            } else if (isSupertagDb) {
+                // Supertag-DB: icon menu, conditional
+                isConfigurableCol = isConfigurableCol || (
+                    txt.includes("icon menu") ||
+                    txt.includes("conditional") ||
+                    txt.includes("条件") ||
+                    txt.includes("图标菜单")
+                );
+            }
+
+            if (isConfigurableCol) {
+                cell.classList.add("indexos-header-indicator");
+            } else {
+                cell.classList.remove("indexos-header-indicator");
+            }
+        });
+
+        // 2. “添加条目” 按钮处理 (仅 Command-DB 添加条目按钮绑定了拦截与配置功能)
+        const addButtons = avContainer.querySelectorAll('button[data-type="av-add-bottom"]');
+        addButtons.forEach(btn => {
+            if (isCommandDb) {
+                btn.classList.add("indexos-btn-bordered");
+            } else {
+                btn.classList.remove("indexos-btn-bordered");
+            }
+        });
+    });
+}
+
+export function initAvHeaderIndicators() {
+    scanAvIndicators();
+
+    if (!headerObserver) {
+        headerObserver = new MutationObserver(() => scanAvIndicators());
+        headerObserver.observe(document.body, { childList: true, subtree: true });
+    }
+}
+
+export function destroyAvHeaderIndicators() {
+    if (headerObserver) {
+        headerObserver.disconnect();
+        headerObserver = null;
+    }
+    document.querySelectorAll('.indexos-header-indicator').forEach(el => el.classList.remove('indexos-header-indicator'));
+    document.querySelectorAll('[data-type="av-add-bottom"]').forEach(el => el.classList.remove('indexos-btn-bordered'));
+}
