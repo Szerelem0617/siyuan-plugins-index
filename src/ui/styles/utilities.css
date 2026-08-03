@@ -335,40 +335,56 @@
     accent-color: var(--indexos-accent-primary) !important;
 }
 
-/* ─── 全局 4px 超窄极客微条 Scrollbar 全覆盖 ─── */
-html body *::-webkit-scrollbar,
-html body div::-webkit-scrollbar,
-html body section::-webkit-scrollbar,
-html body .protyle-hint::-webkit-scrollbar,
-html body .b3-list::-webkit-scrollbar {
+/* ─── 插件专用 4px 超窄极客微条 Scrollbar（仅限定于 IndexOS 插件对话框与浮窗） ─── */
+.indexos-dialog ::-webkit-scrollbar,
+.indexos-management-panel ::-webkit-scrollbar,
+.indexos-weak-floating-panel ::-webkit-scrollbar,
+.indexos-dropdown-panel::-webkit-scrollbar,
+#index-settings ::-webkit-scrollbar,
+#sqlite-status-container ::-webkit-scrollbar,
+#supertag-manager-container ::-webkit-scrollbar,
+#fields-config-container ::-webkit-scrollbar,
+#db-config-container ::-webkit-scrollbar {
     width: 4px !important;
     height: 4px !important;
 }
 
-html body *::-webkit-scrollbar-track,
-html body div::-webkit-scrollbar-track,
-html body section::-webkit-scrollbar-track,
-html body .protyle-hint::-webkit-scrollbar-track,
-html body .b3-list::-webkit-scrollbar-track {
+.indexos-dialog ::-webkit-scrollbar-track,
+.indexos-management-panel ::-webkit-scrollbar-track,
+.indexos-weak-floating-panel ::-webkit-scrollbar-track,
+.indexos-dropdown-panel::-webkit-scrollbar-track,
+#index-settings ::-webkit-scrollbar-track,
+#sqlite-status-container ::-webkit-scrollbar-track,
+#supertag-manager-container ::-webkit-scrollbar-track,
+#fields-config-container ::-webkit-scrollbar-track,
+#db-config-container ::-webkit-scrollbar-track {
     background: transparent !important;
     border-radius: 0 !important;
 }
 
-html body *::-webkit-scrollbar-thumb,
-html body div::-webkit-scrollbar-thumb,
-html body section::-webkit-scrollbar-thumb,
-html body .protyle-hint::-webkit-scrollbar-thumb,
-html body .b3-list::-webkit-scrollbar-thumb {
+.indexos-dialog ::-webkit-scrollbar-thumb,
+.indexos-management-panel ::-webkit-scrollbar-thumb,
+.indexos-weak-floating-panel ::-webkit-scrollbar-thumb,
+.indexos-dropdown-panel::-webkit-scrollbar-thumb,
+#index-settings ::-webkit-scrollbar-thumb,
+#sqlite-status-container ::-webkit-scrollbar-thumb,
+#supertag-manager-container ::-webkit-scrollbar-thumb,
+#fields-config-container ::-webkit-scrollbar-thumb,
+#db-config-container ::-webkit-scrollbar-thumb {
     background: var(--indexos-border-light) !important;
     border-radius: 2px !important;
     transition: all 0.2s ease !important;
 }
 
-html body *::-webkit-scrollbar-thumb:hover,
-html body div::-webkit-scrollbar-thumb:hover,
-html body section::-webkit-scrollbar-thumb:hover,
-html body .protyle-hint::-webkit-scrollbar-thumb:hover,
-html body .b3-list::-webkit-scrollbar-thumb:hover {
+.indexos-dialog ::-webkit-scrollbar-thumb:hover,
+.indexos-management-panel ::-webkit-scrollbar-thumb:hover,
+.indexos-weak-floating-panel ::-webkit-scrollbar-thumb:hover,
+.indexos-dropdown-panel::-webkit-scrollbar-thumb:hover,
+#index-settings ::-webkit-scrollbar-thumb:hover,
+#sqlite-status-container ::-webkit-scrollbar-thumb:hover,
+#supertag-manager-container ::-webkit-scrollbar-thumb:hover,
+#fields-config-container ::-webkit-scrollbar-thumb:hover,
+#db-config-container ::-webkit-scrollbar-thumb:hover {
     background: var(--indexos-accent-primary) !important;
     box-shadow: 0 0 6px var(--indexos-accent-glow) !important;
 }
