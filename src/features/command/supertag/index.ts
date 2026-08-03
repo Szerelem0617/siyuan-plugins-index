@@ -15,4 +15,4 @@ export { SupertagRenderer } from "./renderer/SupertagRenderer";
 export { initTagMenuInterceptor } from "./renderer/tag-menu-interceptor";
 
 export { supertagManager, SupertagManager } from "./manager/supertag-manager";
-export { initTagSuggestion, bindProtyleHintExtend, setTagSuggestionEnabled } from "./suggestion/tag-suggestion";
+export { initTagSuggestion, destroyTagSuggestion, setTagSuggestionEnabled } from "./suggestion/tag-suggestion";

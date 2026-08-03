@@ -19,7 +19,7 @@ import {
     supertagMonitor, 
     supertagManager, 
     initTagSuggestion, 
-    bindProtyleHintExtend, 
+    destroyTagSuggestion,
     setTagSuggestionEnabled,
     SupertagRenderer, 
     initTagMenuInterceptor 
@@ -110,7 +110,6 @@ export default class IndexPlugin extends Plugin {
             const protyle = event.detail.protyle;
             if (protyle) {
                 (window as any).activeProtyleInstance = protyle;
-                bindProtyleHintExtend(protyle);
                 SupertagRenderer.render(protyle);
             }
         });
@@ -118,7 +117,6 @@ export default class IndexPlugin extends Plugin {
             const protyle = event.detail.protyle;
             if (protyle) {
                 (window as any).activeProtyleInstance = protyle;
-                bindProtyleHintExtend(protyle);
                 SupertagRenderer.render(protyle);
             }
         });
@@ -224,6 +222,7 @@ export default class IndexPlugin extends Plugin {
             destroyHoverTooltipListener();
             destroyTopBarCommands();
         }
+        destroyTagSuggestion();
         this.eventBus.off("paste", handleBtnPaste);
         if (this.openUrlPluginHandler) {
             this.eventBus.off("open-siyuan-url-plugin", this.openUrlPluginHandler);
