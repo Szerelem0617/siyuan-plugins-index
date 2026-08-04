@@ -9,48 +9,72 @@ import { getParamColKeyId } from "./query-helper";
 import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDialog.svelte";
 import UIEntriesSelectorDialog from "./dialogs/UIEntriesSelectorDialog.svelte";
 import ParamConfigDialog from "./dialogs/ParamConfigDialog.svelte";
-import BackgroundTriggerDialog from "./dialogs/BackgroundTriggerDialog.svelte";
+import GlobalBackgroundEngineDialog from "./dialogs/GlobalBackgroundEngineDialog.svelte";
 import { backgroundScheduler } from "../background/background-scheduler";
+
+export function openGlobalAutomationDialog() {
+    const dialog = new Dialog({
+        title: "⚡ 全局后台自动化控制中心",
+        content: `<div class="b3-dialog__content" id="global-bg-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
+        width: "720px",
+        height: "560px"
+    });
+    dialog.element.classList.add("indexos-dialog");
+
+    new GlobalBackgroundEngineDialog({
+        target: dialog.element.querySelector("#global-bg-config-container")!,
+        props: { dialog }
+    });
+}
 
 export async function handleAvFooterClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
     
-    // Add debug logging
     const isAvElement = target.closest(".av") || target.closest(".av__container") || target.closest("[data-av-id]");
     if (isAvElement) {
-        console.log("[IndexOS-AV-Click] Click inside AV detected. Target:", target, "tagName:", target.tagName, "className:", target.className);
+        console.log("[IndexOS-AV-Click-Debug] Click inside AV detected.", {
+            tagName: target.tagName,
+            className: target.className,
+            dataType: target.getAttribute("data-type"),
+            ariaLabel: target.getAttribute("aria-label")
+        });
     }
 
     const avContainer = target.closest("[data-av-id]") || target.closest('[data-type="NodeAttributeView"]') || target.closest(".av__container") || target.closest(".av");
-    if (!avContainer) {
-        return;
-    }
-
-    const addBtn = target.closest('[data-type="av-add-bottom"]') || target.closest(".av__row--util");
-    if (!addBtn) {
-        // Double check if text content matches "添加条目"
-        const txt = target.textContent?.trim() || "";
-        if (!txt.includes("添加条目")) {
-            return;
-        }
-    }
-    if (!avContainer) {
-        console.warn("[IndexOS-AV-Click] Could not resolve avContainer for target.");
-        return;
-    }
+    if (!avContainer) return;
 
     const avId = avContainer.getAttribute("data-av-id") || "";
     const commandAvId = getCommandAvId();
-    console.log("[IndexOS-AV-Click] Click resolved avId:", avId, "commandAvId:", commandAvId);
+    console.log("[IndexOS-AV-Click-Debug] Click resolved avId:", avId, "commandAvId:", commandAvId);
 
     if (avId !== commandAvId) return;
 
-    // 拦截 command-db 的添加条目点击，防止默认生成空行
-    console.log("[IndexOS-AV-Click] Hijacking add item click on command-db!");
-    event.preventDefault();
-    event.stopPropagation();
+    // 1. 匹配“添加字段”按钮 (data-type="av-header-add" 或包含"添加字段"提示)
+    const addColBtn = target.closest('[data-type="av-header-add"]') || 
+                      target.closest('[data-type="av-add-column"]') || 
+                      target.closest('.av__col-add') || 
+                      target.closest('.av__header-add') ||
+                      target.closest('[aria-label="添加字段"]') ||
+                      target.closest('[aria-label="Add column"]');
+    const txt = target.textContent?.trim() || "";
 
-    await triggerRegistryCommandSelectorForInsert(avContainer, avId);
+    if (addColBtn || txt.includes("添加列") || txt.includes("添加字段")) {
+        console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Column (av-header-add)' click on command-db -> Opening Global Automation Dialog!", "color: #10b981; font-weight: bold;");
+        event.preventDefault();
+        event.stopPropagation();
+        openGlobalAutomationDialog();
+        return;
+    }
+
+    // 2. 匹配“添加条目”按钮
+    const addRowBtn = target.closest('[data-type="av-add-bottom"]') || target.closest(".av__row--util");
+    if (addRowBtn || txt.includes("添加条目")) {
+        console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Row (av-add-bottom)' click on command-db!", "color: #007acc; font-weight: bold;");
+        event.preventDefault();
+        event.stopPropagation();
+        await triggerRegistryCommandSelectorForInsert(avContainer, avId);
+        return;
+    }
 }
 
 async function triggerRegistryCommandSelectorForInsert(avContainer: Element, avId: string) {
@@ -406,48 +430,6 @@ export async function handleCommandDbAltClick(
                 }
             });
             return;
-        }
-
-        if (clickedKeyName === "后台执行" || clickedKeyName === "Background_Exec" || clickedKeyName === "Background Exec") {
-            // --- 行为 3: 弹窗配置后台定时/条件执行规则 ---
-            event.preventDefault();
-            event.stopPropagation();
-
-            let currentBgVal = "";
-            try {
-                const { db } = await getSqliteEngine();
-                const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-                const valRes = db.exec(`SELECT "${clickedColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
-                if (valRes.length > 0 && valRes[0].values.length > 0 && valRes[0].values[0][0]) {
-                    currentBgVal = String(valRes[0].values[0][0]);
-                }
-            } catch (e) {
-                const bgCell = rowEl.querySelector(`.av__cell[data-col-id="${colId}"]`) as HTMLElement;
-                currentBgVal = bgCell?.textContent?.trim() || "";
-            }
-
-            const dialog = new Dialog({
-                title: "配置后台执行规则 (Kernel 3.7+)",
-                content: `<div class="b3-dialog__content" id="bg-trigger-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-                width: "440px",
-                height: "480px"
-            });
-            dialog.element.classList.add("indexos-dialog");
-
-            new BackgroundTriggerDialog({
-                target: dialog.element.querySelector("#bg-trigger-config-container")!,
-                props: {
-                    dialog,
-                    commandName: cleanLabel,
-                    commandId: resolvedCommand,
-                    currentValue: currentBgVal,
-                    onSave: async (updatedVal: string) => {
-                        await updateCellValue(null, avId, rowId, colId, updatedVal);
-                        await backgroundScheduler.reloadTasks();
-                        showMessage("✓ 后台执行规则配置成功！");
-                    }
-                }
-            });
         }
     }
 }

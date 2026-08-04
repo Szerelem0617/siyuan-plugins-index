@@ -1,31 +1,42 @@
 /**
  * background-scheduler.ts
  *
- * 全局后台命令与循环执行调度中心 (Layer 2 守护进程)
+ * 全局后台命令与循环执行调度中心 (Layer 2 守护进程 - 集中管理版)
  *
  * 架构特性：
- *   1. 尊重思源 AV 实例化：已实例化时直接用 SQL 查询实例化后的 AV 视图表，清空实时销毁任务；
- *   2. 100% 依托思源 3.7+ 内核层次 (Kernel Mode) API 执行，零 DOM / 零 UI 编辑器依赖；
- *   3. 包含详尽的 Debug 日志输出与精准 Cron 周期解析。
+ *   1. 集中持久化：规则保存在 Command-DB 根节点的 custom-indexos-background-rules 自定义块属性中；
+ *   2. 随笔记云端原生同步与离线迁移，完全解耦于表格“列字段”；
+ *   3. 包含 Cron 周期工作流、Condition 事件观察者、System 极客沙盒模式；
+ *   4. 100% 依托思源 3.7+ 内核层次 (Kernel Mode) API 执行，零 DOM / 零 UI 编辑器依赖。
  */
 
 import { Plugin } from "siyuan";
-import { runQuery, getSqliteEngine, instantiateAV } from "../../sqlite/sqlite-manager";
+import { post } from "../../../shared/api-client/request";
+import { runQuery } from "../../sqlite/sqlite-manager";
 import { dispatchCommand, type CommandContext } from "../command-dispatcher";
 import { commandRegistry } from "../registry/command-registry";
-import { getCommandAvId } from "../registration";
+import { getCommandDocId, getCommandAvId } from "../registration";
 
-export interface ScheduledTaskState {
-    rowId: string;
-    commandId: string;
-    label: string;
-    ruleText: string;
-    triggerType: "cron" | "condition" | "system" | "none";
+export interface AutomationRule {
+    id: string;
+    name: string;
+    type: "cron" | "condition" | "system";
+    enabled: boolean;
     cronExpr?: string;
-    intervalMs: number;
+    commandIds?: string[];
+    eventType?: "block_content_changed" | "block_attribute_changed" | "doc_opened" | "task_completed";
     conditionExpr?: string;
+    boundCommands?: string[];
+    geekScript?: string;
+    tickRateMs?: number;
+}
+
+export interface ActiveTaskState {
+    ruleId: string;
+    ruleName: string;
+    rule: AutomationRule;
+    intervalMs: number;
     lastRunTime?: number;
-    nextRunTime?: number;
     status: "idle" | "running" | "error";
     lastError?: string;
 }
@@ -33,178 +44,127 @@ export interface ScheduledTaskState {
 class BackgroundScheduler {
     private plugin: Plugin | null = null;
     private timerId: any = null;
-    private taskStates: Map<string, ScheduledTaskState> = new Map();
+    private activeTasks: Map<string, ActiveTaskState> = new Map();
     private isRunning = false;
 
     public async init(plugin: Plugin) {
         this.plugin = plugin;
         this.stop();
-        console.log("%c[BackgroundScheduler-Debug] 🚀 Initializing scheduler under Kernel Mode...", "color: #007acc; font-weight: bold;");
+        console.log("%c[BackgroundScheduler-Debug] 🚀 Initializing Centralized Background Engine under Kernel Mode...", "color: #007acc; font-weight: bold;");
         await this.reloadTasks();
         
-        // 启动后台心跳守护进程 (每 10 秒一次 Kernel 周期巡检)
+        // 启动后台心跳守护进程 (每 5 秒一次 Kernel 巡检)
         this.timerId = setInterval(() => {
             this.tick().catch(e => console.error("[BackgroundScheduler-Debug] Tick error:", e));
-        }, 10000);
+        }, 5000);
 
-        console.log("%c[BackgroundScheduler-Debug] ✓ Scheduler active under Kernel Mode (Siyuan 3.7+).", "color: #10b981; font-weight: bold;");
-    }
-
-    public stop() {
-        if (this.timerId) {
-            clearInterval(this.timerId);
-            this.timerId = null;
-        }
-        this.taskStates.clear();
-        this.isRunning = false;
-        console.log("[BackgroundScheduler-Debug] Stopped.");
+        console.log("%c[BackgroundScheduler-Debug] ✓ Centralized Engine Active under Kernel Mode (Siyuan 3.7+).", "color: #10b981; font-weight: bold;");
     }
 
     public async reloadTasks() {
-        this.taskStates.clear();
+        let blockId = "";
         const commandAvId = getCommandAvId();
-        console.log(`[BackgroundScheduler-Debug] 🔄 Reloading tasks. Instantiated CommandAvID: "${commandAvId || "None (Using Backup)"}"`);
+
+        // 1. 尝试直接从 DOM 节点抓取 NodeAttributeView 的物理 data-node-id (真正的物理 Block ID)
+        if (commandAvId) {
+            const avEl = document.querySelector(`[data-av-id="${commandAvId}"]`);
+            if (avEl) {
+                const nodeId = avEl.getAttribute("data-node-id") || avEl.getAttribute("data-id");
+                if (nodeId && nodeId !== commandAvId) {
+                    blockId = nodeId;
+                }
+            }
+        }
+
+        // 2. 通过思源内核 API /api/query/sql 从 blocks 表查询 type = 'av' 对应的物理 Block ID
+        if (!blockId && commandAvId) {
+            try {
+                const res = await post("/api/query/sql", {
+                    stmt: `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${commandAvId}%' OR ial LIKE '%${commandAvId}%') LIMIT 1`
+                });
+                if (res && res.code === 0 && Array.isArray(res.data) && res.data.length > 0) {
+                    const realBlockId = String(res.data[0].id || "");
+                    if (realBlockId && realBlockId !== commandAvId) {
+                        blockId = realBlockId;
+                    }
+                }
+            } catch (_) {}
+        }
+
+        // 3. 从 attributes 表反查 custom-index-command-db 记录的物理 block_id
+        if (!blockId) {
+            try {
+                const res = await post("/api/query/sql", {
+                    stmt: `SELECT block_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`
+                });
+                if (res && res.code === 0 && Array.isArray(res.data) && res.data.length > 0) {
+                    const targetBlockId = String(res.data[0].block_id || "");
+                    if (targetBlockId && targetBlockId !== commandAvId) {
+                        blockId = targetBlockId;
+                    }
+                }
+            } catch (_) {}
+        }
+
+        if (!blockId) {
+            this.activeTasks.clear();
+            return;
+        }
 
         try {
-            let taskRows: { rowId: string; label: string; commandId: string; bgExecRule: string }[] = [];
+            const res = await post("/api/attr/getBlockAttrs", { id: blockId });
+            const rawJson = res?.["custom-indexos-background-rules"] || "[]";
+            const rules: AutomationRule[] = JSON.parse(rawJson);
 
-            if (commandAvId) {
-                // 1. 已实例化：先强同步实例化思源最新 AV 数据
-                try {
-                    await instantiateAV(commandAvId);
-                } catch (instErr) {
-                    console.warn("[BackgroundScheduler-Debug] Failed to instantiate AV before reload:", instErr);
+            const activeRuleIds = new Set<string>();
+
+            for (const r of rules) {
+                if (!r.enabled) continue;
+                activeRuleIds.add(r.id);
+
+                let intervalMs = 60000;
+                if (r.type === "cron" && r.cronExpr) {
+                    intervalMs = this.parseCronIntervalMs(r.cronExpr);
+                } else if (r.type === "system" && r.tickRateMs) {
+                    intervalMs = Math.max(1000, r.tickRateMs);
+                } else if (r.type === "condition") {
+                    intervalMs = 3000;
                 }
 
-                const { db } = await getSqliteEngine();
-                const tableName = `av_${commandAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+                const existingState = this.activeTasks.get(r.id);
+                this.activeTasks.set(r.id, {
+                    ruleId: r.id,
+                    ruleName: r.name,
+                    rule: r,
+                    intervalMs,
+                    lastRunTime: existingState?.lastRunTime,
+                    status: "idle"
+                });
+            }
 
-                // 查 Schema 寻找匹配列名
-                let bgCol = "Background_Exec";
-                let labelCol = "label";
-                let cmdIdCol = "Command_ID";
-
-                try {
-                    const bgColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name IN ('后台执行', 'Background_Exec')`, [commandAvId]);
-                    if (bgColRes.length > 0 && bgColRes[0].values.length > 0) bgCol = String(bgColRes[0].values[0][0]);
-
-                    const labelColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [commandAvId]);
-                    if (labelColRes.length > 0 && labelColRes[0].values.length > 0) labelCol = String(labelColRes[0].values[0][0]);
-
-                    const cmdIdColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name IN ('Command ID', 'Command_ID')`, [commandAvId]);
-                    if (cmdIdColRes.length > 0 && cmdIdColRes[0].values.length > 0) cmdIdCol = String(cmdIdColRes[0].values[0][0]);
-                } catch (_) {}
-
-                console.log(`[BackgroundScheduler-Debug] Querying instantiated AV table "${tableName}" (bgCol: "${bgCol}")...`);
-                const res = db.exec(`SELECT _itemID, "${labelCol}", "${cmdIdCol}", "${bgCol}" FROM ${tableName} WHERE "${bgCol}" IS NOT NULL AND "${bgCol}" != ''`);
-
-                if (res.length > 0 && res[0].values.length > 0) {
-                    for (const r of res[0].values) {
-                        taskRows.push({
-                            rowId: String(r[0]),
-                            label: String(r[1] || ""),
-                            commandId: String(r[2] || ""),
-                            bgExecRule: String(r[3] || "")
-                        });
-                    }
-                }
-            } else {
-                // 2. 未实例化：回退查询静态只读备份表 sys_command_db
-                console.log("[BackgroundScheduler-Debug] Uninstantiated mode. Querying static sys_command_db backup...");
-                const res = await runQuery(`SELECT rowID, label, Command_ID, Background_Exec FROM sys_command_db WHERE Background_Exec IS NOT NULL AND Background_Exec != ''`);
-                if (res && res.values) {
-                    for (const r of res.values) {
-                        taskRows.push({
-                            rowId: String(r[0]),
-                            label: String(r[1] || ""),
-                            commandId: String(r[2] || ""),
-                            bgExecRule: String(r[3] || "")
-                        });
-                    }
+            // 清理已删除的规则
+            for (const existingId of Array.from(this.activeTasks.keys())) {
+                if (!activeRuleIds.has(existingId)) {
+                    this.activeTasks.delete(existingId);
                 }
             }
 
-            console.log(`[BackgroundScheduler-Debug] Resolved ${taskRows.length} active background rule(s).`);
-            for (const row of taskRows) {
-                const { rowId, label, commandId, bgExecRule } = row;
-                if (!bgExecRule || !bgExecRule.trim()) continue;
-
-                const parsed = this.parseRule(bgExecRule);
-                console.log(`[BackgroundScheduler-Debug] Rule -> Label: "${label}" (${commandId}), Type: ${parsed.triggerType}, Cron: ${parsed.cronExpr}, IntervalMs: ${parsed.intervalMs}`);
-
-                if (parsed.triggerType !== "none") {
-                    this.taskStates.set(rowId, {
-                        rowId,
-                        commandId: commandId || "",
-                        label: label || commandId || "未知命令",
-                        ruleText: bgExecRule,
-                        triggerType: parsed.triggerType,
-                        cronExpr: parsed.cronExpr,
-                        intervalMs: parsed.intervalMs,
-                        conditionExpr: parsed.conditionExpr,
-                        status: "idle"
-                    });
-                }
-            }
-            console.log(`%c[BackgroundScheduler-Debug] Active task count in memory: ${this.taskStates.size}`, "color: #10b981; font-weight: bold;");
+            console.log(`%c[BackgroundScheduler-Debug] Active task count in memory: ${this.activeTasks.size}`, "color: #10b981; font-weight: bold;");
         } catch (e) {
-            console.error("[BackgroundScheduler-Debug] Failed to reload background tasks:", e);
+            console.error("[BackgroundScheduler-Debug] Failed to reload tasks from Block Attrs:", e);
         }
-    }
-
-    public getTaskStates(): ScheduledTaskState[] {
-        return Array.from(this.taskStates.values());
     }
 
     private parseCronIntervalMs(cronExpr: string): number {
         const expr = cronExpr.trim();
-        // 1. 匹配 */N * * * * (每 N 分钟)
         const minuteIntervalMatch = /^\*\/(\d+)/.exec(expr);
         if (minuteIntervalMatch) {
             const minutes = parseInt(minuteIntervalMatch[1], 10);
             return Math.max(1, minutes) * 60 * 1000;
         }
-
-        // 2. 匹配 0 * * * * (每小时整点)
-        if (expr.startsWith("0 *") || expr.startsWith("0 */1")) {
-            return 3600 * 1000;
-        }
-
-        // 3. 匹配 0 2 * * * (每天一次)
-        if (/^\d+\s+\d+\s+\*\s+\*\s+\*/.test(expr)) {
-            return 86400 * 1000;
-        }
-
-        // 默认保底时间: 60 秒 (1 分钟)
+        if (expr.startsWith("0 *") || expr.startsWith("0 */1")) return 3600 * 1000;
+        if (/^\d+\s+\d+\s+\*\s+\*\s+\*/.test(expr)) return 86400 * 1000;
         return 60 * 1000;
-    }
-
-    private parseRule(ruleText: string): { triggerType: "cron" | "condition" | "system" | "none"; cronExpr?: string; intervalMs: number; conditionExpr?: string } {
-        const text = ruleText.trim();
-        if (!text) return { triggerType: "none", intervalMs: 60000 };
-
-        const cronMatch = /\/\/\s*\[Cron:\s*([^\]]+)\]/i.exec(text);
-        if (cronMatch) {
-            const cronExpr = cronMatch[1].trim();
-            const intervalMs = this.parseCronIntervalMs(cronExpr);
-            return { triggerType: "cron", cronExpr, intervalMs };
-        }
-
-        const condMatch = /\/\/\s*\[Condition:\s*([^\]]+)\]/i.exec(text);
-        if (condMatch) {
-            const debounceMatch = /\(debounce:(\d+)\)/i.exec(text);
-            const intervalMs = debounceMatch ? parseInt(debounceMatch[1], 10) : 3000;
-            return { triggerType: "condition", conditionExpr: condMatch[1].trim(), intervalMs };
-        }
-
-        const sysMatch = /\/\/\s*\[System:\s*([^\]]+)\]/i.exec(text);
-        if (sysMatch) {
-            const tickMatch = /\(tick:(\d+)\)/i.exec(text);
-            const intervalMs = tickMatch ? parseInt(tickMatch[1], 10) : 5000;
-            return { triggerType: "system", conditionExpr: sysMatch[1].trim(), intervalMs };
-        }
-
-        return { triggerType: "none", intervalMs: 60000 };
     }
 
     private async tick() {
@@ -213,31 +173,12 @@ class BackgroundScheduler {
 
         const now = Date.now();
         try {
-            for (const task of this.taskStates.values()) {
-                if (task.status === "running") continue;
+            for (const state of this.activeTasks.values()) {
+                if (state.status === "running") continue;
 
-                let shouldExecute = false;
-                const elapsed = task.lastRunTime ? (now - task.lastRunTime) : Infinity;
-
-                if (task.triggerType === "cron") {
-                    console.log(`[BackgroundScheduler-Debug] Task "${task.label}" -> Interval: ${task.intervalMs}ms, Elapsed: ${elapsed === Infinity ? "First Run" : elapsed + "ms"}`);
-                    if (!task.lastRunTime || elapsed >= task.intervalMs) {
-                        shouldExecute = true;
-                    }
-                } else if (task.triggerType === "condition" && task.conditionExpr) {
-                    if (!task.lastRunTime || elapsed >= task.intervalMs) {
-                        try {
-                            const sqlRes = await runQuery(task.conditionExpr);
-                            if (sqlRes && sqlRes.values && sqlRes.values.length > 0) {
-                                shouldExecute = true;
-                            }
-                        } catch (_) {}
-                    }
-                }
-
-                if (shouldExecute) {
-                    console.log(`%c[BackgroundScheduler-Debug] ⏰ Executing "${task.label}" (${task.commandId})...`, "color: #007acc; font-weight: bold;");
-                    await this.executeTask(task);
+                const elapsed = state.lastRunTime ? (now - state.lastRunTime) : Infinity;
+                if (!state.lastRunTime || elapsed >= state.intervalMs) {
+                    await this.executeRule(state);
                 }
             }
         } finally {
@@ -245,30 +186,47 @@ class BackgroundScheduler {
         }
     }
 
-    public async executeTask(task: ScheduledTaskState) {
-        task.status = "running";
-        task.lastRunTime = Date.now();
+    private async executeRule(state: ActiveTaskState) {
+        state.status = "running";
+        state.lastRunTime = Date.now();
+
+        const rule = state.rule;
+        console.log(`[BackgroundScheduler-Debug] ⏰ Executing Centralized Rule: "${rule.name}" (${rule.type})`);
 
         try {
-            // 在思源 3.7+ Kernel 模式下构造无需 DOM 依赖的 Context
             const ctx: CommandContext = {
-                blockEl: document.createElement("div"), // 虚拟隔离节点
+                blockEl: document.createElement("div"),
                 protyleEl: null
             };
 
-            const cmdDef = commandRegistry.getCommand(task.commandId);
-            if (cmdDef) {
-                await dispatchCommand(task.commandId, {}, ctx);
-                task.status = "idle";
-                task.lastError = undefined;
-                console.log(`%c[BackgroundScheduler-Debug] ✓ Success: ${task.label}`, "color: #10b981; font-weight: bold;");
-            } else {
-                throw new Error(`Command '${task.commandId}' not found in registry.`);
+            if (rule.type === "cron" && rule.commandIds && rule.commandIds.length > 0) {
+                // 顺序执行 Cron 工作流中的命令 Pipeline
+                for (const cmdId of rule.commandIds) {
+                    console.log(`[BackgroundScheduler-Debug] Dispatching Workflow Command: ${cmdId}`);
+                    await dispatchCommand(cmdId, {}, ctx);
+                }
+            } else if (rule.type === "condition" && rule.boundCommands && rule.boundCommands.length > 0) {
+                for (const cmdId of rule.boundCommands) {
+                    console.log(`[BackgroundScheduler-Debug] Dispatching Condition Command: ${cmdId}`);
+                    await dispatchCommand(cmdId, {}, ctx);
+                }
+            } else if (rule.type === "system" && rule.geekScript) {
+                console.log(`[BackgroundScheduler-Debug] Executing System Geek Script for: "${rule.name}"`);
+                // 安全沙盒中执行 System 代码
+                const asyncFn = new Function("dispatch", "state", `return (async () => { ${rule.geekScript} })();`);
+                await asyncFn(
+                    (cmdId: string, params?: any) => dispatchCommand(cmdId, params || {}, ctx),
+                    { tickCount: Math.floor(Date.now() / 1000) }
+                );
             }
+
+            state.status = "idle";
+            state.lastError = undefined;
+            console.log(`%c[BackgroundScheduler-Debug] ✓ Execution Success for Rule: "${rule.name}"`, "color: #10b981; font-weight: bold;");
         } catch (err: any) {
-            task.status = "error";
-            task.lastError = err.message || String(err);
-            console.error(`[BackgroundScheduler-Debug] ❌ Failed: ${task.label}:`, err);
+            state.status = "error";
+            state.lastError = err.message || String(err);
+            console.error(`[BackgroundScheduler-Debug] ❌ Execution Failed for Rule "${rule.name}":`, err);
         }
     }
 }

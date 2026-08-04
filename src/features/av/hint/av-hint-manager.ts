@@ -68,8 +68,8 @@ export function scanAvIndicators() {
             }
         });
 
-        // 2. “添加条目” 按钮处理 (仅 Command-DB 添加条目按钮绑定了拦截与配置功能)
-        const addButtons = avContainer.querySelectorAll('button[data-type="av-add-bottom"]');
+        // 2. “添加条目” 与 “添加字段(+)” 按钮处理 (仅 Command-DB 绑定了 IndexOS 专属功能)
+        const addButtons = avContainer.querySelectorAll('button[data-type="av-add-bottom"], [data-type="av-header-add"], [data-type="av-add-column"]');
         addButtons.forEach(btn => {
             if (isCommandDb) {
                 btn.classList.add("indexos-btn-bordered");
@@ -95,5 +95,5 @@ export function destroyAvHeaderIndicators() {
         headerObserver = null;
     }
     document.querySelectorAll('.indexos-header-indicator').forEach(el => el.classList.remove('indexos-header-indicator'));
-    document.querySelectorAll('[data-type="av-add-bottom"]').forEach(el => el.classList.remove('indexos-btn-bordered'));
+    document.querySelectorAll('[data-type="av-add-bottom"], [data-type="av-header-add"], [data-type="av-add-column"]').forEach(el => el.classList.remove('indexos-btn-bordered'));
 }

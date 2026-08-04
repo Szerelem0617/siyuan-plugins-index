@@ -86,7 +86,7 @@ export async function constructCommandStorage() {
                 const keyMap = await createAvColumns(avId, COMMAND_DB_CONFIG.columns);
 
                 // Fetch seed data from SQLite sys_command_db
-                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, UI_Entries, Background_Exec FROM sys_command_db`);
+                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, UI_Entries FROM sys_command_db`);
 
                 // Insert seed items as detached rows
                 const addRows = seedRes.values.map(match => ({
@@ -105,7 +105,7 @@ export async function constructCommandStorage() {
 
                 const populateOps: any[] = [];
                 for (const match of seedRes.values) {
-                    const [rowID, labelVal, commandID, paramMapping, uiEntries, bgExec] = match;
+                    const [rowID, labelVal, commandID, paramMapping, uiEntries] = match;
                     
                     if (primaryKeyId) {
                         populateOps.push({

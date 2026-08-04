@@ -139,6 +139,9 @@ export async function updateCellValue(protyleInstance: any, avID: string, rowID:
                 transactions: [{ doOperations: [operation] }]
             });
         }
+        
+        // 广播 AV 单元格更新事件，即时通知 BackgroundScheduler 清除/重载后台任务
+        window.dispatchEvent(new CustomEvent("indexos-av-updated"));
         showMessage(`✅ 已保存: ${newValue.substring(0, 20)}${newValue.length > 20 ? '...' : ''}`, 3000);
     } catch (e: any) {
         console.error("Update Value Error", e);

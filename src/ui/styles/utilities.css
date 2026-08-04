@@ -747,8 +747,10 @@ body[data-theme-mode="dark"] .b3-menu__item:has(.indexos-menu-icon):not([data-id
     transform: translateY(-1px);
 }
 
-/* ─── Command-DB“添加条目”按钮特化：2px 茵蒂克丝蓝边框 ─── */
+/* ─── Command-DB“添加条目”与“添加字段”按钮特化：2px 茵蒂克丝蓝边框 ─── */
 button[data-type="av-add-bottom"].indexos-btn-bordered,
+[data-type="av-header-add"].indexos-btn-bordered,
+[data-type="av-add-column"].indexos-btn-bordered,
 button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered {
     border: 2px solid var(--indexos-index-blue, #A1C4E6) !important;
     border-radius: 4px !important;
@@ -758,6 +760,8 @@ button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered {
 }
 
 button[data-type="av-add-bottom"].indexos-btn-bordered:hover,
+[data-type="av-header-add"].indexos-btn-bordered:hover,
+[data-type="av-add-column"].indexos-btn-bordered:hover,
 button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered:hover {
     border-color: var(--indexos-accent-primary, #28517F) !important;
     box-shadow: 0 0 10px rgba(40, 81, 127, 0.35) !important;

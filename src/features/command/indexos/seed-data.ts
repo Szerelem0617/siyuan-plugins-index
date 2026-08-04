@@ -23,8 +23,7 @@ export const COMMAND_DB_CONFIG: DbPageConfig = {
     columns: [
         { name: "Command ID", type: "text", icon: "iconCode" },
         { name: "Param Mapping", type: "text", icon: "iconList" },
-        { name: "UI 入口", type: "mSelect", icon: "iconLayout" },
-        { name: "后台执行", type: "text", icon: "iconClock" }
+        { name: "UI 入口", type: "mSelect", icon: "iconLayout" }
     ]
 };
 
