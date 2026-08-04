@@ -172,6 +172,7 @@ class CommandRegistry {
             this.store.set(def.id, def);
             loaded++;
         }
+        this.loadUserCommandsFromStorage();
     }
 
     /**
@@ -257,21 +258,89 @@ class CommandRegistry {
     registerCommand(def: CommandDef): void {
         if (!def.id) throw new Error("[Registry] registerCommand: 'id' is required.");
         
-        const pluginName = def.meta?.plugin;
-        if (!pluginName || typeof pluginName !== "string") {
-            throw new Error(`[Registry] registerCommand: 'meta.plugin' is required and must be a string identifying the plugin.`);
-        }
+        const isUserCmd = def.id.startsWith("user.") || def.meta?.source === "user";
 
-        const expectedPrefix = `plugin.${pluginName}.`;
-        if (!def.id.startsWith(expectedPrefix)) {
-            throw new Error(`[Registry] registerCommand: Command ID "${def.id}" must start with "${expectedPrefix}" to follow the naming convention: plugin.[pluginName].[category].[action]`);
+        if (!isUserCmd) {
+            const pluginName = def.meta?.plugin;
+            if (!pluginName || typeof pluginName !== "string") {
+                throw new Error(`[Registry] registerCommand: 'meta.plugin' is required and must be a string identifying the plugin.`);
+            }
+
+            const expectedPrefix = `plugin.${pluginName}.`;
+            if (!def.id.startsWith(expectedPrefix)) {
+                throw new Error(`[Registry] registerCommand: Command ID "${def.id}" must start with "${expectedPrefix}" to follow naming conventions.`);
+            }
         }
 
         if (this.store.has(def.id)) {
             console.warn(`[Registry] Command "${def.id}" is being overwritten.`);
         }
         this.store.set(def.id, def);
-        console.log(`[Registry] Successfully registered command from plugin "${pluginName}":`, def.id, def.name);
+        console.log(`[Registry] Successfully registered command:`, def.id, def.name);
+    }
+
+    /**
+     * 注册用户自定义 user. 命令 (符合 Layer 1 Registry 规范)
+     */
+    registerUserCommand(userCmd: { id: string; name: string; description?: string; prompt?: string; icon?: string }): CommandDef {
+        let cleanId = userCmd.id.trim();
+        if (!cleanId.startsWith("user.")) {
+            cleanId = `user.${cleanId}`;
+        }
+
+        const cmdDef: CommandDef = {
+            id: cleanId,
+            name: userCmd.name,
+            description: userCmd.description || "",
+            prompt: userCmd.prompt || "",
+            dispatch: {
+                method: "custom",
+                executor: async (_params, ctx) => {
+                    console.log(`[UserCommand] Executing custom user command: ${cleanId}`, userCmd.prompt);
+                    const { showMessage } = await import("siyuan");
+                    showMessage(`🤖 执行自定义 User 命令: ${userCmd.name}`);
+                }
+            },
+            params: [],
+            constraints: { requiresFocus: false, uiOnly: false, schedulable: true },
+            meta: { scope: "global", category: "user", source: "user", plugin: "user", icon: userCmd.icon || "iconSparkles" }
+        };
+
+        this.registerCommand(cmdDef);
+        this.saveUserCommandsToStorage();
+        return cmdDef;
+    }
+
+    private saveUserCommandsToStorage() {
+        try {
+            const userCmds: any[] = [];
+            for (const [id, def] of this.store) {
+                if (id.startsWith("user.") || def.meta?.source === "user") {
+                    userCmds.push({
+                        id: def.id,
+                        name: def.name,
+                        description: def.description,
+                        prompt: def.prompt,
+                        icon: def.meta?.icon
+                    });
+                }
+            }
+            localStorage.setItem("indexos_custom_user_commands", JSON.stringify(userCmds));
+        } catch (_) {}
+    }
+
+    public loadUserCommandsFromStorage() {
+        try {
+            const raw = localStorage.getItem("indexos_custom_user_commands");
+            if (raw) {
+                const list = JSON.parse(raw);
+                if (Array.isArray(list)) {
+                    for (const item of list) {
+                        this.registerUserCommand(item);
+                    }
+                }
+            }
+        } catch (_) {}
     }
 
     /**

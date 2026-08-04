@@ -6,6 +6,25 @@ import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { getParamColKeyId } from "./query-helper";
 import { openConfigForCommand } from "./command-db-handler";
 import ConditionalTriggerDialog from "./dialogs/ConditionalTriggerDialog.svelte";
+import PresetSupertagImportDialog from "./dialogs/PresetSupertagImportDialog.svelte";
+
+export function openPresetSupertagImportDialog() {
+    const dialog = new Dialog({
+        title: "导入预设超级标签 (Preset Supertags)",
+        content: `<div id="preset-supertag-import-container"></div>`,
+        width: "480px",
+        destroyCallback: () => {}
+    });
+    dialog.element.classList.add("indexos-dialog");
+
+    new PresetSupertagImportDialog({
+        target: dialog.element.querySelector("#preset-supertag-import-container")!,
+        props: {
+            dialog,
+            onImported: () => {}
+        }
+    });
+}
 
 export async function handleTypeDbAltClick(
     event: MouseEvent,

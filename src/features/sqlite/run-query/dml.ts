@@ -149,8 +149,16 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                     const val = tuple[i];
                     const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
                     if (!colSchema) continue;
-                    // Primary block column or read-only system columns should be skipped without throwing error in UPSERT
-                    if (colSchema.keyType === "block" || !colSchema.writable) continue;
+                    if (colSchema.keyType === "block") {
+                        allUpdates.push({
+                            keyID: colSchema.keyId,
+                            itemID: existingItemID,
+                            value: { type: "block", block: { content: String(val || "") } }
+                        });
+                        continue;
+                    }
+
+                    if (!colSchema.writable) continue;
 
                     allUpdates.push({
                         keyID: colSchema.keyId,
@@ -196,7 +204,16 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                         console.warn(`[DML-UPSERT] Column "${colName}" not found in AV schema. Available columns: [${schema.map(c => `${c.colName}(${c.keyType})`).join(", ")}]`);
                         continue;
                     }
-                    if (colSchema.keyType === "block" || !colSchema.writable) continue;
+                    if (colSchema.keyType === "block") {
+                        allUpdates.push({
+                            keyID: colSchema.keyId,
+                            itemID: newRowID,
+                            value: { type: "block", block: { content: String(val || "") } }
+                        });
+                        continue;
+                    }
+
+                    if (!colSchema.writable) continue;
 
                     allUpdates.push({
                         keyID: colSchema.keyId,

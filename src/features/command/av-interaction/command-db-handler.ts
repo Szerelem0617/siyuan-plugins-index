@@ -45,7 +45,21 @@ export async function handleAvFooterClick(event: MouseEvent) {
 
     const avId = avContainer.getAttribute("data-av-id") || "";
     const commandAvId = getCommandAvId();
-    console.log("[IndexOS-AV-Click-Debug] Click resolved avId:", avId, "commandAvId:", commandAvId);
+    const typeAvId = getTypeAvId();
+    const txt = target.textContent?.trim() || "";
+
+    // 拦截 Supertag-DB 上的 Alt + Click 快捷导入预设 Supertag 按钮
+    if (avId === typeAvId) {
+        const addRowBtn = target.closest('[data-type="av-add-bottom"]') || target.closest(".av__row--util");
+        if ((addRowBtn || txt.includes("添加条目")) && event.altKey) {
+            console.log("%c[IndexOS-AV-Click-Debug] 🎯 Intercepted Alt+Click on Supertag-DB add row -> Opening Preset Import Dialog!", "color: #10b981; font-weight: bold;");
+            event.preventDefault();
+            event.stopPropagation();
+            const { openPresetSupertagImportDialog } = await import("./type-db-handler");
+            openPresetSupertagImportDialog();
+            return;
+        }
+    }
 
     if (avId !== commandAvId) return;
 
@@ -53,11 +67,7 @@ export async function handleAvFooterClick(event: MouseEvent) {
     const addColBtn = target.closest('[data-type="av-header-add"]') || 
                       target.closest('[data-type="av-add-column"]') || 
                       target.closest('.av__col-add') || 
-                      target.closest('.av__header-add') ||
-                      target.closest('[aria-label="添加字段"]') ||
-                      target.closest('[aria-label="Add column"]');
-    const txt = target.textContent?.trim() || "";
-
+                      target.closest('.av__header-add');
     if (addColBtn || txt.includes("添加列") || txt.includes("添加字段")) {
         console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Column (av-header-add)' click on command-db -> Opening Global Automation Dialog!", "color: #10b981; font-weight: bold;");
         event.preventDefault();

@@ -68,13 +68,17 @@ export function scanAvIndicators() {
             }
         });
 
-        // 2. “添加条目” 与 “添加字段(+)” 按钮处理 (仅 Command-DB 绑定了 IndexOS 专属功能)
+        // 2. “添加条目” 与 “添加字段(+)” 按钮处理 (仅 Command-DB 与 Supertag-DB 绑定了 IndexOS 专属功能)
         const addButtons = avContainer.querySelectorAll('button[data-type="av-add-bottom"], [data-type="av-header-add"], [data-type="av-add-column"]');
         addButtons.forEach(btn => {
             if (isCommandDb) {
                 btn.classList.add("indexos-btn-bordered");
+                btn.setAttribute("title", "点击打开全局后台自动化控制中心");
+            } else if (isSupertagDb && btn.getAttribute("data-type") === "av-add-bottom") {
+                btn.classList.add("indexos-btn-bordered", "supertag-btn-hint");
+                btn.setAttribute("title", "💡 Alt + Click: 快捷导入预设超级标签 (Supertag Presets)");
             } else {
-                btn.classList.remove("indexos-btn-bordered");
+                btn.classList.remove("indexos-btn-bordered", "supertag-btn-hint");
             }
         });
     });

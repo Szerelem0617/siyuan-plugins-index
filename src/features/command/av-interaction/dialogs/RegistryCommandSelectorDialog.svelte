@@ -1,4 +1,7 @@
 <script lang="ts">
+    import { Dialog } from "siyuan";
+    import CustomUserCommandDialog from "./CustomUserCommandDialog.svelte";
+
     export let commands: any[] = [];
     export let onSelect: (cmd: any) => void;
     
@@ -9,17 +12,42 @@
         (cmd.id || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (cmd.description || "").toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    function openCreateUserCommandDialog() {
+        const dialog = new Dialog({
+            title: "新建自定义 user. 命令",
+            content: `<div id="custom-user-cmd-container"></div>`,
+            width: "440px",
+            destroyCallback: () => {}
+        });
+        dialog.element.classList.add("indexos-dialog");
+
+        new CustomUserCommandDialog({
+            target: dialog.element.querySelector("#custom-user-cmd-container")!,
+            props: {
+                dialog,
+                onCreated: (newCmdId: string) => {
+                    onSelect({ id: newCmdId, name: newCmdId });
+                }
+            }
+        });
+    }
 </script>
 
 <div style="display: flex; flex-direction: column; height: 100%; padding: 12px; box-sizing: border-box; background: var(--b3-theme-background);">
-    <div style="margin-bottom: 12px; flex-shrink: 0;">
+    <div style="margin-bottom: 12px; flex-shrink: 0; display: flex; gap: 8px; align-items: center;">
         <input 
             type="text" 
-            class="b3-text-field fn__block" 
-            placeholder="搜索内置命令..." 
+            class="b3-text-field fn__flex-1" 
+            placeholder="搜索内置命令或 user. 命令..." 
             bind:value={searchQuery}
             style="padding: 6px 10px; font-size: 13px;"
         />
+        <button 
+            class="b3-button b3-button--outline" 
+            style="font-size: 11px; padding: 4px 8px; white-space: nowrap;"
+            on:click={openCreateUserCommandDialog}
+        >+ 自定义 user. 命令</button>
     </div>
     
     <div style="flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
