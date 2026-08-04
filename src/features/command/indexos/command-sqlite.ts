@@ -6,8 +6,12 @@ const TABLE_COMMANDS = "sys_command_db";
 const TABLE_TYPES = "sys_type_db";
 
 /**
- * Ensures the system tables exist in SQLite and populates them with default data if empty.
- * In this mode, SQLite IS the source of truth. No SiYuan documents are required.
+ * ⚠️【系统架构关键警告 - 只读模板与备份表 Read-Only System Backup Tables】
+ * 
+ * 1. TABLE_COMMANDS ("sys_command_db") 和 TABLE_TYPES ("sys_type_db") 是【只读系统模板与备份表】！
+ * 2. 这两张表仅用于系统初次启动时的默认种子数据与“未实例化”时的只读降级回退；
+ * 3. 当用户点击“实例化”后，真正被修改、配置、持久化的数据在思源【属性视图 (Attribute View / Command-DB / Supertag-DB)】中；
+ * 4. ⚠️ 严禁在运行时代码中手写 UPDATE / DELETE / INSERT 去修改这两张系统表！所有运行时写操作必须通过属性视图 AV 接口或 updateCellValue() 执行！
  */
 export async function initSystemTables() {
     const { db } = await getSqliteEngine();
@@ -29,8 +33,12 @@ export async function initSystemTables() {
         label TEXT,
         Command_ID TEXT,
         Param_Mapping TEXT,
-        UI_Entries TEXT
+        UI_Entries TEXT,
+        Background_Exec TEXT
     );`);
+    try {
+        db.run(`ALTER TABLE ${TABLE_COMMANDS} ADD COLUMN Background_Exec TEXT;`);
+    } catch (_) { /* ignore */ }
 
     // 2. Create Type Table aligned with sanitized AV Column names (Layer 3)
     db.run(`CREATE TABLE IF NOT EXISTS ${TABLE_TYPES} (
@@ -132,6 +140,8 @@ export async function initSystemTables() {
             db.run(`DELETE FROM ${TABLE_COMMANDS} WHERE Command_ID IN ('plugin.index.general.showMessage', 'siyuan.general.showMessage', 'plugin.index.effect.fireworks')`);
         } catch (_) { /* ignore */ }
 
+        const DEFAULT_TOAST_BG_EXEC = `// [Cron:*/1 * * * *] -> 执行 💬 消息提示\nif (triggerType === 'cron') {\n    await dispatch('siyuan.ui.toast');\n}`;
+
         // Ensure siyuan.ui.toast exists in TABLE_COMMANDS
         try {
             const checkExists = db.exec(`SELECT count(*) FROM ${TABLE_COMMANDS} WHERE Command_ID = 'siyuan.ui.toast'`);
@@ -146,10 +156,13 @@ export async function initSystemTables() {
                         if (s.uiEntries.includes("inline")) mapped.push("行内按钮");
                         if (s.uiEntries.includes("palette")) mapped.push("快捷命令");
                     }
-                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, UI_Entries) 
-                            VALUES (?, ?, ?, ?, ?)`, 
-                            [s.rowID, s.label, toastCmd.id, s.paramMapping || "", mapped.join(", ")]);
+                    db.run(`INSERT INTO ${TABLE_COMMANDS} (rowID, label, Command_ID, Param_Mapping, UI_Entries, Background_Exec) 
+                            VALUES (?, ?, ?, ?, ?, ?)`, 
+                            [s.rowID, s.label, toastCmd.id, s.paramMapping || "", mapped.join(", "), DEFAULT_TOAST_BG_EXEC]);
                 }
+            } else {
+                // 如果已存在但 Background_Exec 为空，自动升级填入默认参数
+                db.run(`UPDATE ${TABLE_COMMANDS} SET Background_Exec = ? WHERE Command_ID = 'siyuan.ui.toast' AND (Background_Exec IS NULL OR Background_Exec = '')`, [DEFAULT_TOAST_BG_EXEC]);
             }
         } catch (e) {
             console.error("[SQLite-Init] Failed to ensure siyuan.ui.toast seeded:", e);

@@ -102,11 +102,17 @@
                             class="cmd-item-card"
                             on:click={() => copyButtonLink(card)}
                         >
-                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
-                                <span class="cmd-name-label" style="font-weight: 500; font-size: 12px; color: var(--b3-theme-on-background); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                    {card.name}
-                                </span>
-                                <span class="copy-hint-icon" style="font-size: 12px; opacity: 0.3; transition: opacity 0.2s ease;">🔗</span>
+                            <div style="display: flex; flex-direction: column; width: 100%; gap: 6px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+                                    <span class="cmd-name-label" style="font-weight: 500; font-size: 12px; color: var(--b3-theme-on-background); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        {card.name}
+                                    </span>
+                                    <span class="copy-hint-icon" style="font-size: 12px; opacity: 0.3; transition: opacity 0.2s ease;">🔗</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; opacity: 0.6; font-family: monospace;">
+                                    <span>{card.id}</span>
+                                    <span style="color: var(--indexos-accent-primary);">Kernel 3.7+</span>
+                                </div>
                             </div>
                         </div>
                     {/each}

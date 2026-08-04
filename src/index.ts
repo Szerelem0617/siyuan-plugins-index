@@ -27,6 +27,7 @@ import {
 import { refreshTopBarCommands, handleTopBarEvents, destroyTopBarCommands } from "./features/command/global-registration/top-bar";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
+import { backgroundScheduler } from "./features/command/background/background-scheduler";
 import { initButtonLinkListener, destroyButtonLinkListener, initHoverTooltipListener, destroyHoverTooltipListener } from "./features/command/av-interaction";
 import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
 import { getSqliteEngine, runQuery, executeWritableSql, instantiateAV, registerFriendlyTableName } from "./features/sqlite/sqlite-manager";
@@ -135,6 +136,7 @@ export default class IndexPlugin extends Plugin {
         SupertagRenderer.initAutoObserver();
         await initTagSuggestion(this);
         initTagMenuInterceptor();
+        backgroundScheduler.init(this);
 
         // 监听设置变化事件，实现开发者模式开关实时刷新生效
         window.addEventListener("index-plugin-setting-changed", (e: CustomEvent) => {
@@ -223,6 +225,7 @@ export default class IndexPlugin extends Plugin {
             destroyTopBarCommands();
         }
         destroyTagSuggestion();
+        backgroundScheduler.stop();
         this.eventBus.off("paste", handleBtnPaste);
         if (this.openUrlPluginHandler) {
             this.eventBus.off("open-siyuan-url-plugin", this.openUrlPluginHandler);

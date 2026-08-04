@@ -9,6 +9,8 @@ import { getParamColKeyId } from "./query-helper";
 import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDialog.svelte";
 import UIEntriesSelectorDialog from "./dialogs/UIEntriesSelectorDialog.svelte";
 import ParamConfigDialog from "./dialogs/ParamConfigDialog.svelte";
+import BackgroundTriggerDialog from "./dialogs/BackgroundTriggerDialog.svelte";
+import { backgroundScheduler } from "../background/background-scheduler";
 
 export async function handleAvFooterClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
@@ -400,6 +402,49 @@ export async function handleCommandDbAltClick(
                     currentParams,
                     onSave: async (updated: Record<string, any>) => {
                         await updateCellValue(null, avId, rowId, paramColKeyId, JSON.stringify(updated, null, 2));
+                    }
+                }
+            });
+            return;
+        }
+
+        if (clickedKeyName === "后台执行" || clickedKeyName === "Background_Exec" || clickedKeyName === "Background Exec") {
+            // --- 行为 3: 弹窗配置后台定时/条件执行规则 ---
+            event.preventDefault();
+            event.stopPropagation();
+
+            let currentBgVal = "";
+            try {
+                const { db } = await getSqliteEngine();
+                const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+                const valRes = db.exec(`SELECT "${clickedColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+                if (valRes.length > 0 && valRes[0].values.length > 0 && valRes[0].values[0][0]) {
+                    currentBgVal = String(valRes[0].values[0][0]);
+                }
+            } catch (e) {
+                const bgCell = rowEl.querySelector(`.av__cell[data-col-id="${colId}"]`) as HTMLElement;
+                currentBgVal = bgCell?.textContent?.trim() || "";
+            }
+
+            const dialog = new Dialog({
+                title: "配置后台执行规则 (Kernel 3.7+)",
+                content: `<div class="b3-dialog__content" id="bg-trigger-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
+                width: "440px",
+                height: "480px"
+            });
+            dialog.element.classList.add("indexos-dialog");
+
+            new BackgroundTriggerDialog({
+                target: dialog.element.querySelector("#bg-trigger-config-container")!,
+                props: {
+                    dialog,
+                    commandName: cleanLabel,
+                    commandId: resolvedCommand,
+                    currentValue: currentBgVal,
+                    onSave: async (updatedVal: string) => {
+                        await updateCellValue(null, avId, rowId, colId, updatedVal);
+                        await backgroundScheduler.reloadTasks();
+                        showMessage("✓ 后台执行规则配置成功！");
                     }
                 }
             });
