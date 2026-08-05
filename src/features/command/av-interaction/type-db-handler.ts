@@ -3,7 +3,6 @@ import { getCommandAvId, COMMAND_BINDINGS } from "../registration";
 import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
-import { getParamColKeyId } from "./query-helper";
 import { openConfigForCommand } from "./command-db-handler";
 import ConditionalTriggerDialog from "./dialogs/ConditionalTriggerDialog.svelte";
 import PresetSupertagImportDialog from "./dialogs/PresetSupertagImportDialog.svelte";

@@ -38,7 +38,7 @@ export type CommandScope = "global" | "self" | "sibling" | "parent";
 /** 命令所属功能分类 */
 export type CommandCategory =
     | "navigation" | "view" | "edit"
-    | "clipboard" | "attribute" | "custom";
+    | "clipboard" | "attribute" | "custom" | "user";
 
 /** 命令可作用的思源块类型（建议性声明） */
 export type BlockTarget =
@@ -107,6 +107,9 @@ export interface CommandConstraints {
     requiresFocus: boolean;
     /** 执行环境：前端 (ui)、后端 (kernel)、双端通用 (universal) */
     environment: ExecutionEnvironment;
+    /** 旧版字段（已废弃）：前端 UI 专属 / 可调度标记。新代码请使用 environment。 */
+    uiOnly?: boolean;
+    schedulable?: boolean;
     /** 补充说明，供开发者阅读 */
     comment?: string;
 }
@@ -118,9 +121,11 @@ export interface CommandMeta {
     /** 功能分类 */
     category: CommandCategory;
     /** 命令来源 */
-    source: "builtin" | "plugin";
+    source: "builtin" | "plugin" | "user";
     /** source=plugin 时，记录插件名 */
     plugin?: string;
+    /** 用户命令的图标 */
+    icon?: string;
     /**
      * 如果该命令是 UI-only 且不可调度，这里指出功能等效的 API 版本 ID，
      * 供用户切换到 schedulable 替代方案时参考。
@@ -142,6 +147,10 @@ export interface CommandDef {
     name: string;
     /** 描述，面向用户说明这个命令做什么 */
     description?: string;
+    /** 用户命令的提示词（仅 user. 命令） */
+    prompt?: string;
+    /** 仅内置命令（commands.json）携带的默认参数配置 */
+    seed?: { paramMapping?: string };
     /** 调度配置 */
     dispatch: DispatchConfig;
     /** 参数 Schema 列表（顺序即调用顺序） */
@@ -299,14 +308,14 @@ class CommandRegistry {
             prompt: userCmd.prompt || "",
             dispatch: {
                 method: "custom",
-                executor: async (_params, ctx) => {
+                executor: async (_params, _ctx) => {
                     console.log(`[UserCommand] Executing custom user command: ${cleanId}`, userCmd.prompt);
                     const { showMessage } = await import("siyuan");
                     showMessage(`🤖 执行自定义 User 命令: ${userCmd.name}`);
                 }
             },
             params: [],
-            constraints: { requiresFocus: false, uiOnly: false, schedulable: true },
+            constraints: { requiresFocus: false, environment: "universal", uiOnly: false, schedulable: true },
             meta: { scope: "global", category: "user", source: "user", plugin: "user", icon: userCmd.icon || "iconSparkles" }
         };
 

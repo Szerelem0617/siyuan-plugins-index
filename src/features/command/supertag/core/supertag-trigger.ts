@@ -237,7 +237,6 @@ export async function triggerConditionalCommands(
             const context: CommandContext = {
                 blockEl,
                 protyleEl: protyle?.element || null,
-                protyle,
                 supertag: cleanTag,
                 vars: pipelineVars
             };

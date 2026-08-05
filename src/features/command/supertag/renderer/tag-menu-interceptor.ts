@@ -4,12 +4,9 @@ import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../../registration";
 import { SupertagRenderer } from "./SupertagRenderer";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
 
-// Visual indicator/badge texts to identify supertags in the list
-const BADGE_MARKER = "🐬";
-
 async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
     // 1. Close Siyuan's menu popover
-    window.siyuan.menus.menu?.remove();
+    (window.siyuan.menus.menu as any)?.remove?.();
 
     // 2. Fetch current page attributes
     const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });

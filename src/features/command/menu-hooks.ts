@@ -1,4 +1,3 @@
-import { type Protyle, type Menu } from "siyuan";
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
 import { addSupertagMenuOption } from "./utils/menu-helper";
 import { refreshSupertagRegistry } from "./utils/sync-service";

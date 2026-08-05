@@ -16,7 +16,7 @@ import { globalCommand, showMessage } from "siyuan";
 import { plugin } from "../../shared/utils";
 import { post } from "../../shared/api-client/request";
 import { commandRegistry } from "./registry/command-registry";
-import type { CommandDef, ParamSchema } from "./registry/command-registry";
+import type { CommandDef } from "./registry/command-registry";
 import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } from "./utils/context-extractor";
 export { getBlockId };
 import { renderTemplate, formatDate, formatTime } from "./utils/template-engine";
@@ -39,6 +39,10 @@ export interface DispatchResult {
     method: "keyboard" | "global" | "api" | "custom" | "unknown";
     detail: string;
     value?: any;
+    /** API 调用返回的原始响应 */
+    data?: unknown;
+    /** 新建/修改的块 ID（由 API 响应提取） */
+    id?: string;
     continue?: boolean;
     status?: "success" | "break" | "skip" | "retry" | "rollback" | "error";
 }
@@ -279,7 +283,7 @@ async function dispatchApi(
         // 支持处理在入参/出参配置对话框中用户自定义的 _outputMapping 别名映射
         if (params && typeof params._outputMapping === "object" && params._outputMapping !== null) {
             context.vars._outputMapping = params._outputMapping;
-            for (const [outKey, alias] of Object.entries(params._outputMapping as Record<string, string>)) {
+            for (const [, alias] of Object.entries(params._outputMapping as Record<string, string>)) {
                 if (alias) {
                     context.vars[alias] = extractedId;
                 }
@@ -304,13 +308,14 @@ async function dispatchCustom(
     console.log(`[Dispatcher] Custom command executor finished for: ${def.id}. Return value:`, result);
     
     if (result && typeof result === "object" && ("success" in result || "continue" in result || "status" in result)) {
+        const r = result as Record<string, any>;
         return {
-            success: result.success !== false,
+            success: r.success !== false,
             method: "custom",
             detail: def.id,
-            value: result.value,
-            continue: result.continue,
-            status: result.status,
+            value: r.value,
+            continue: r.continue,
+            status: r.status,
         };
     }
     
@@ -479,7 +484,7 @@ export function parseParam(raw: string | Record<string, unknown> | null | undefi
  */
 function dispatchByPrefix(
     commandId: string,
-    rawParam: string | null | undefined,
+    _rawParam: string | Record<string, unknown> | null | undefined,
     context: CommandContext
 ): DispatchResult {
     const prefix = commandId.split(".")[0];

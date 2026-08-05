@@ -1,5 +1,5 @@
 export async function triggerFireworks(
-    params: Record<string, unknown>,
+    _params: Record<string, unknown>,
     context: { blockEl: HTMLElement; protyleEl: HTMLElement | null; triggerEl?: HTMLElement }
 ) {
     // 1. Get position

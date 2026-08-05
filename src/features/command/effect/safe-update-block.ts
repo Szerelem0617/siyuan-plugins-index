@@ -19,7 +19,7 @@ export async function triggerSafeUpdateBlock(params: Record<string, unknown>, co
     let rawId = String(params?.id || params?.block_id || "").trim();
     let id = "";
 
-    const ctx = context || { blockEl: null as any, protyleEl: null };
+    const ctx: CommandContext = context || { blockEl: null as any, protyleEl: null, vars: {} };
     if (rawId) {
         id = await resolveTemplate(rawId, ctx);
     }

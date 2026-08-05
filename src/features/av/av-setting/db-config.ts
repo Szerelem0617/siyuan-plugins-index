@@ -4,7 +4,6 @@ import DbConfigDialog from "./db-config-dialog.svelte";
 import { getColIDMap, buildAvHierarchy, resolveInheritance, isValueEmpty } from "../../../shared/utils/av-utils";
 import { post } from "../../../shared/api-client/request";
 import { formatDate, getAttrFromIAL, i18n } from "../../../shared/utils";
-import { SUPERTAG_REGISTRY } from "../../command/registration";
 import { fetchAllAVBlocks } from "../../sqlite/sqlite-data-fetcher";
 
 import { ATTR_LINKED_LIST } from "../../../shared/constants";

@@ -1,7 +1,6 @@
 import { createDatabaseWithBlocks } from "./create-db";
 import { ATTR_LAST_SYNC, ATTR_LINKED_AV, ATTR_LINKED_AV_BLOCK } from "../../../shared/constants";
 import { loadDbConfig, syncInheritanceToDb } from "../av-setting/db-config";
-import { client } from "../../../shared/api-client";
 
 export async function autoUpdateListAVs(listBlock: any) {
     if (!listBlock.id) return;

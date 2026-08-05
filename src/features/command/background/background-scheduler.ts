@@ -13,8 +13,7 @@
 import { Plugin } from "siyuan";
 import { post } from "../../../shared/api-client/request";
 import { dispatchCommand, type CommandContext } from "../command-dispatcher";
-import { commandRegistry } from "../registry/command-registry";
-import { getCommandDocId, getCommandAvId } from "../registration";
+import { getCommandAvId } from "../registration";
 
 export interface AutomationTask {
     id: string;
@@ -33,13 +32,11 @@ export interface AutomationTask {
 }
 
 class BackgroundScheduler {
-    private plugin: Plugin | null = null;
     private timerId: any = null;
     private activeTasks: Map<string, AutomationTask> = new Map();
     private isRunning = false;
 
-    public async init(plugin: Plugin) {
-        this.plugin = plugin;
+    public async init(_plugin: Plugin) {
         this.stop();
         console.log("%c[BackgroundScheduler-Debug] 🚀 Initializing Centralized TS Script Engine under Kernel Mode...", "color: #007acc; font-weight: bold;");
         await this.reloadTasks();
@@ -279,7 +276,7 @@ class BackgroundScheduler {
                 for (const cmdId of task.boundCommands) {
                     console.log(`[BackgroundScheduler-Debug] Executing Pipeline Command: ${cmdId}`);
                     const res = await dispatchCommand(cmdId, {}, ctx);
-                    if (res === false) {
+                    if (res && res.success === false) {
                         console.log(`[BackgroundScheduler-Debug] Pipeline halted by false result at command: ${cmdId}`);
                         break;
                     }

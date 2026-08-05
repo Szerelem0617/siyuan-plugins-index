@@ -2,7 +2,7 @@ import { showMessage } from "siyuan";
 
 export async function triggerShowMessage(
     params: Record<string, any>,
-    context: any
+    _context: any
 ) {
     const message = params.message || "看到这条消息会有好运～";
     const timeout = params.timeout !== undefined && params.timeout !== "" ? Number(params.timeout) : 6000;

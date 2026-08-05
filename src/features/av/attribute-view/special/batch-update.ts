@@ -5,7 +5,7 @@ import { formatDate } from "../../../../shared/utils";
 /**
  * 批量更新当前视图中所有可见行的某一列值
  */
-export async function batchUpdateCellValue(protyleInstance: any, avID: string, colID: string, newValue: string, colType: string, avBlockID: string) {
+export async function batchUpdateCellValue(_protyleInstance: any, avID: string, colID: string, newValue: string, colType: string, avBlockID: string) {
     try {
         showMessage("⏳ 正在批量执行...", 3000);
         

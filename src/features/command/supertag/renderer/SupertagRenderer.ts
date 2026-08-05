@@ -5,7 +5,6 @@ import { globalSupertagsCache } from "../../registration";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
 
 export class SupertagRenderer {
-    private static renderedMap = new Map<string, string[]>();
     private static isObserverInit = false;
 
     /**

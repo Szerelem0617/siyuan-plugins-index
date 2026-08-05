@@ -1,5 +1,4 @@
 import { post } from "../../shared/api-client/request";
-import { client } from "../../shared/api-client";
 import { plugin } from "../../shared/utils";
 import { executeDML } from "./run-query/dml";
 import { executeDDL, type DDLOptions } from "./run-query/ddl";
@@ -10,7 +9,6 @@ export let instantiatedAvIdsCache: Set<string> = new Set();
 
 // ─── On-Demand Table TTL Cache ───
 export const tableSyncTimes = new Map<string, number>();
-const TTL_MS = 3000; // 3 seconds TTL
 
 // ─── Friendly Table Name Map ───
 export const friendlyTableNameMap = new Map<string, string[]>();
@@ -544,7 +542,6 @@ export async function runQuery(sql: string, params?: any[], options?: DDLOptions
     // Pattern: SELECT [fields] FROM _av_views WHERE av_id = 'xxxx'
     const viewsSelectMatch = processedSql.match(/^\s*SELECT\s+(.+?)\s+FROM\s+["`']?_av_views["`']?\s+WHERE\s+(av_id|table_name)\s*=\s*['"`]?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)['"`]?\s*;?\s*$/i);
     if (viewsSelectMatch) {
-        const fields = viewsSelectMatch[1].trim();
         const whereCol = viewsSelectMatch[2].trim().toLowerCase();
         let tableVal = viewsSelectMatch[3].trim();
         

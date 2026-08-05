@@ -17,7 +17,7 @@ function generateNodeId(): string {
     return `${yyyy}${mm}${dd}${hh}${min}${ss}-${rand}`;
 }
 
-export async function executeCreateView(processedSql: string, db: any, options?: any): Promise<any> {
+export async function executeCreateView(processedSql: string, db: any, _options?: any): Promise<any> {
     // Pattern: CREATE [KANBAN|GALLERY|TABLE] VIEW [viewName] AS SELECT ... FROM [tableName] [WHERE ...]
     const viewMatch = processedSql.match(/^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:(KANBAN|GALLERY|TABLE)\s+)?VIEW\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+AS\s+SELECT\s+.*?\s+FROM\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))(?:\s+WHERE\s+(.+))?\s*;?\s*$/is);
     if (!viewMatch) {

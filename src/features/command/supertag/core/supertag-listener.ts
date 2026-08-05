@@ -8,7 +8,7 @@ import { post } from "../../../../shared/api-client/request";
 import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../../registration";
 import { getGlobalTypeConfigs } from "../../../av/av-setting/db-config";
 import { type TypeConfig } from "../../../av/av-setting/types";
-import { parseSupertags, serializeSupertags, diffSupertags, cleanTagString, tagCache } from "./supertag-diff";
+import { parseSupertags, diffSupertags, cleanTagString, tagCache } from "./supertag-diff";
 import { supertagBinder } from "./supertag-binder";
 import { triggerConditionalCommands } from "./supertag-trigger";
 import { SupertagRenderer } from "../renderer/SupertagRenderer";
@@ -82,7 +82,7 @@ export class SupertagMonitor {
         }
     }
 
-    private isTagEnabled(tagName: string, isLogicTag: boolean = false): boolean {
+    private isTagEnabled(tagName: string, _isLogicTag: boolean = false): boolean {
         const pref = supertagBinder.getPref(tagName);
         if (pref === "disabled") return false;
         if (pref && pref !== "enabled" && pref !== "auto") return true;
@@ -139,7 +139,7 @@ export class SupertagMonitor {
         }
     }
 
-    public async processNativeTags(blockId: string, content: string, editorEl?: HTMLElement) {
+    public async processNativeTags(blockId: string, content: string, _editorEl?: HTMLElement) {
         try {
             if (!content || !content.includes('data-type="tag"') && !content.includes('data-type="NodeTag"')) {
                 return;
@@ -247,7 +247,7 @@ export class SupertagMonitor {
         }
     }
 
-    private extractTagsFromPayload(payload: any, action?: string, opId?: string): Set<string> | null {
+    private extractTagsFromPayload(payload: any, _action?: string, _opId?: string): Set<string> | null {
         if (!payload) return new Set<string>();
 
         if (typeof payload === "string" && payload.includes("<") && payload.includes(">")) {
@@ -316,47 +316,6 @@ export class SupertagMonitor {
             let dataMatches = this.dataRegistry.filter(c =>
                 this.isTagEnabled(c.typeName) && cleanTagString(c.typeName) === cleanTag
             );
-
-            const isLogicTag = SUPERTAG_REGISTRY.some(l => l.typeTag.toLowerCase() === cleanTag);
-            const tagEnabled = this.isTagEnabled(cleanTag, isLogicTag);
-
-            const boundCommands = SUPERTAG_REGISTRY.filter(l => l.typeTag.toLowerCase() === cleanTag);
-            const iconMenuCommands = boundCommands.filter(l => l.uiLocation === "IconMenu");
-            let requiresPersistence = !isLogicTag;
-
-            if (isLogicTag && iconMenuCommands.length > 0) {
-                let hasProducer = false;
-                let hasConsumer = false;
-
-                const hasVarRef = (obj: any): boolean => {
-                    if (typeof obj === "string") return /\{\{var\.[^}]+\}\}/.test(obj);
-                    if (Array.isArray(obj)) return obj.some(hasVarRef);
-                    if (typeof obj === "object" && obj !== null) {
-                        return Object.entries(obj).some(([k, v]) => k !== "_outputMapping" && hasVarRef(v));
-                    }
-                    return false;
-                };
-
-                for (const cmd of boundCommands) {
-                    const pm = cmd.paramMapping || "";
-                    if (pm.includes("_outputMapping")) {
-                        hasProducer = true;
-                    }
-                }
-
-                for (const cmd of iconMenuCommands) {
-                    const pm = cmd.paramMapping || "";
-                    try {
-                        const parsed = JSON.parse(pm);
-                        if (typeof parsed !== "object" || parsed === null) continue;
-                        if (hasVarRef(parsed)) {
-                            hasConsumer = true;
-                        }
-                    } catch {}
-                }
-
-                requiresPersistence = hasProducer && hasConsumer;
-            }
 
             let targetConfig: TypeConfig | null = null;
 

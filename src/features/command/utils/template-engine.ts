@@ -25,9 +25,9 @@ export function renderTemplate(
 
     // 1. Process explicit variable replacements (including key and attr:key if in Class Method Mode)
     for (const [key, value] of Object.entries(variables)) {
-        result = result.replaceAll(`{{${key}}}`, value);
+        result = result.split(`{{${key}}}`).join(value);
         if (isClassMethodMode) {
-            result = result.replaceAll(`{{attr:${key}}}`, value);
+            result = result.split(`{{attr:${key}}}`).join(value);
         }
     }
 
@@ -38,7 +38,7 @@ export function renderTemplate(
             const attrKey = match.slice(7, -2);
             // In Class Method mode, try matching from variables (handled above or fallback to variables[attrKey])
             const val = isClassMethodMode ? (variables[`attr:${attrKey}`] ?? variables[attrKey] ?? "") : "";
-            result = result.replaceAll(match, val);
+            result = result.split(match).join(val);
         }
     }
 

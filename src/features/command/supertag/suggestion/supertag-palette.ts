@@ -12,7 +12,6 @@ import { supertagBinder } from "../core/supertag-binder";
 import { settings } from "../../../../core/settings";
 
 let paletteEl: HTMLElement | null = null;
-let triggerTextNode: Text | null = null;
 let isOpen = false;
 let inputListenerAttached = false;
 let keyListenerAttached = false;
@@ -24,7 +23,7 @@ let activeProtyle: any = null;
 const TRIGGER_ASCII = "@";
 const TRIGGER_FULL = "＠";
 
-export function initSupertagPalette(plugin: Plugin) {
+export function initSupertagPalette(_plugin: Plugin) {
     ensurePaletteEl();
     if (!inputListenerAttached) {
         document.addEventListener("input", onEditorInput, true);
@@ -117,7 +116,6 @@ function onEditorInput(e: Event) {
         return;
     }
 
-    triggerTextNode = textNode;
     activeProtyle = (window as any).activeProtyleInstance;
     openPalette(queryText, range);
 }
@@ -181,7 +179,6 @@ async function openPalette(query: string, range: Range) {
 
 function closePalette() {
     isOpen = false;
-    triggerTextNode = null;
     currentTagList = [];
     selectedIndex = 0;
     if (paletteEl) {

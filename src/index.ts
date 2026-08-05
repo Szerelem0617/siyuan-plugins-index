@@ -10,7 +10,9 @@ import { addAVMenuItems, avEventHandler } from "./features/av/attribute-view/eve
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
-import { isDevInitSysEnabled, setCommandAvId, setTypeAvId, setCommandDocId, setTypeDocId, COMMAND_BINDINGS } from "./features/command/registration";
+import { isDevInitSysEnabled, COMMAND_BINDINGS } from "./features/command/registration";
+import { decodeBtnHref } from "./features/command/global-registration/inline-button";
+import type { CommandContext } from "./features/command/command-dispatcher";
 import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems } from "./features/command/menu-hooks";
 import { refreshSupertagRegistry, syncGlobalSupertagsCache } from "./features/command/utils/sync-service";
 import { commandRegistry } from "./features/command/registry/command-registry";

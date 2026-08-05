@@ -9,7 +9,6 @@ import {
     NOTEBOOK_ICON, 
     COMMAND_DB_CONFIG, 
     TYPE_DB_CONFIG, 
-    DATA_DBS_CONFIG,
     DEFAULT_RELATION_BINDINGS,
     ColumnMeta,
     DbPageConfig,

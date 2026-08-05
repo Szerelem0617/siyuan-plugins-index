@@ -55,11 +55,12 @@ export function confirmDialog(title: string, text: string, confirmCallback: () =
  * 替换字符串中的导致异常的字符
  */
 export function escapeHtml(unsafe: string) {
-    return unsafe.replaceAll('[', '\\\[')
-        .replaceAll(']', '\\\]')
-        .replaceAll('&#39;', '&apos;')
-        .replaceAll('\\', '&#92;')
-        .replaceAll('"', '&quot;'); // Added double quote escaping as per recent fixes
+    return unsafe
+        .split('[').join('\\[')
+        .split(']').join('\\]')
+        .split('&#39;').join('&apos;')
+        .split('\\').join('&#92;')
+        .split('"').join('&quot;'); // Added double quote escaping as per recent fixes
 }
 
 // 运行环境检测

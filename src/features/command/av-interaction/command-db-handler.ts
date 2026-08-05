@@ -10,7 +10,6 @@ import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDial
 import UIEntriesSelectorDialog from "./dialogs/UIEntriesSelectorDialog.svelte";
 import ParamConfigDialog from "./dialogs/ParamConfigDialog.svelte";
 import GlobalBackgroundEngineDialog from "./dialogs/GlobalBackgroundEngineDialog.svelte";
-import { backgroundScheduler } from "../background/background-scheduler";
 
 export function openGlobalAutomationDialog() {
     const dialog = new Dialog({
@@ -82,12 +81,12 @@ export async function handleAvFooterClick(event: MouseEvent) {
         console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Row (av-add-bottom)' click on command-db!", "color: #007acc; font-weight: bold;");
         event.preventDefault();
         event.stopPropagation();
-        await triggerRegistryCommandSelectorForInsert(avContainer, avId);
+        await triggerRegistryCommandSelectorForInsert(avId);
         return;
     }
 }
 
-async function triggerRegistryCommandSelectorForInsert(avContainer: Element, avId: string) {
+async function triggerRegistryCommandSelectorForInsert(avId: string) {
     let commands: any[] = [];
     try {
         // 先从内存注册表中获取全量已注册命令（包括动态注册的第三方插件命令）
@@ -478,7 +477,7 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
         }
 
         if (!cmdRowItemId) {
-            showMessage(`未在命令管理 (Command-DB) 中找到名称为 "${cleanLabel}" 的行，请先创建`, 3000, "warning");
+            showMessage(`未在命令管理 (Command-DB) 中找到名称为 "${cleanLabel}" 的行，请先创建`, 3000, "info");
             return;
         }
 

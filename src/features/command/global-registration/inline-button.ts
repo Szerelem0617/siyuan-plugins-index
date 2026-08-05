@@ -1,7 +1,7 @@
 import { dispatchCommand } from "../command-dispatcher";
 import { commandRegistry } from "../registry/command-registry";
 import { showMessage, Dialog } from "siyuan";
-import { isDevInitSysEnabled, DEV_ENABLE_INIT_SYS, SUPERTAG_REGISTRY, COMMAND_BINDINGS } from "../registration";
+import { isDevInitSysEnabled, SUPERTAG_REGISTRY, COMMAND_BINDINGS } from "../registration";
 import { refreshSupertagRegistry } from "../utils/sync-service";
 import { openIndexDropdown } from "../../../ui/components/index-dropdown";
 
