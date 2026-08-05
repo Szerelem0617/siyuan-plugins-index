@@ -288,11 +288,20 @@ function executeCommand(cmdId: string | null) {
     const cmd = registeredCommands.find(c => c.id === cmdId);
     if (!cmd) return;
 
+    // 先捕获真实块上下文（触发 ";;" 所在块的 data-node-id），再删除触发文本。
+    // 不能继续用 document.body：会让 {{block_id}} 解析为空，插入类命令会因缺少目标触发思源整页重载。
+    const blockEl = triggerTextNode
+        ? (triggerTextNode.parentElement?.closest("[data-node-id]") as HTMLElement | null)
+        : null;
+    const protyleEl = (blockEl?.closest(".protyle-content") as HTMLElement | null)
+        || (window as any).activeProtyleInstance?.element
+        || null;
+    const context = { blockEl: blockEl || document.body, protyleEl: protyleEl as HTMLElement | null };
+
     // Delete the ";;" trigger text before executing
     deleteTrigger();
 
-    const mockContext = { blockEl: document.body, protyleEl: null };
-    dispatchCommand(cmd.commandId, cmd.commandParam, mockContext as any);
+    dispatchCommand(cmd.commandId, cmd.commandParam, context as any);
     closePalette();
 }
 

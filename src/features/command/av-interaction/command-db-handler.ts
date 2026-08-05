@@ -141,17 +141,21 @@ async function triggerRegistryCommandSelectorForInsert(avId: string) {
     });
     dialog.element.classList.add("indexos-dialog");
 
-    new RegistryCommandSelectorDialog({
-        target: document.getElementById("registry-command-selector-dialog")!,
-        props: {
-            dialog,
-            commands,
-            onSelect: async (cmd: any) => {
-                dialog.destroy();
-                await insertCommandIntoAv(avId, cmd);
+        new RegistryCommandSelectorDialog({
+            target: document.getElementById("registry-command-selector-dialog")!,
+            props: {
+                dialog,
+                commands,
+                onSelect: async (cmd: any) => {
+                    dialog.destroy();
+                    await insertCommandIntoAv(avId, cmd);
+                },
+                onPipelineCreated: () => {
+                    // 复合命令行已由 createPipelineRow 创建并注册，直接关闭选择器
+                    dialog.destroy();
+                }
             }
-        }
-    });
+        });
 }
 
 async function insertCommandIntoAv(avId: string, cmd: any) {

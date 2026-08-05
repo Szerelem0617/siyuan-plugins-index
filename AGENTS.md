@@ -18,6 +18,8 @@
   思源 AV 为唯一数据源；删除系统库文档即回到未实例化。
 - **没有 SQLite 种子表**（`sys_command_db` / `sys_type_db` 已删除，不要重建，不要在运行时写）。
 - 命名：`CommandDef`（Layer 1 命令定义）≠ `CommandBinding`（Layer 2 绑定行，`COMMAND_BINDINGS`）。
+- 参数优先级：#1 pipeline 人为规划 > #2 pipeline 自动赋予 > #3 command-db 配置 > 变量解析内嵌；#5 seed/registry 仅作初始模板。统一解析入口 `resolveCommandParams()`。
+- 命令 Pipeline（复合命令）设计见 `docs/pipeline-design.md`；实现位于 `src/features/command/pipeline/`（types / engine / manager）。
 
 ## 本地环境
 

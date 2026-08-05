@@ -24,7 +24,8 @@ export async function executeTsScript(scriptText: string, context: CommandContex
 
         const dispatch = async (commandId: string, params?: any) => {
             console.log(`[Supertag-TS-Dispatch] Executing dispatch("${commandId}") on event "${eventName}"`);
-            const res = await dispatchCommand(commandId, params, context);
+            // TS 脚本参数 = #1 Pipeline 人为规划（最高优先级）
+            const res = await dispatchCommand(commandId, null, context, { manual: params || {} });
             if (res && res.id) {
                 if (!context.vars) context.vars = {};
                 context.vars.createdblock = res.id;

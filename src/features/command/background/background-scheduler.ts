@@ -285,7 +285,7 @@ class BackgroundScheduler {
                 // 纯极客 JS 沙盒脚本动态执行
                 const asyncFn = new Function("dispatch", "state", `return (async () => { ${task.scriptBlock} })();`);
                 await asyncFn(
-                    (cmdId: string, params?: any) => dispatchCommand(cmdId, params || {}, ctx),
+                    (cmdId: string, params?: any) => dispatchCommand(cmdId, null, ctx, { manual: params || {} }),
                     { tickCount: Math.floor(Date.now() / 1000) }
                 );
             }

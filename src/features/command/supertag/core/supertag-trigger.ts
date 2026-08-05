@@ -8,7 +8,7 @@ import { post } from "../../../../shared/api-client/request";
 import { SUPERTAG_REGISTRY, COMMAND_BINDINGS, getTypeAvId } from "../../registration";
 import { getSqliteEngine } from "../../../sqlite/sqlite-manager";
 import { getSeedConditionalScript } from "../../indexos/seed-data";
-import { dispatchCommand, parseParam, type CommandContext } from "../../command-dispatcher";
+import { dispatchCommand, type CommandContext } from "../../command-dispatcher";
 import { executeTsScript } from "./supertag-sandbox";
 
 export interface TriggerCommandRef {
@@ -267,15 +267,14 @@ export async function triggerConditionalCommands(
                         const cmdInfo = COMMAND_BINDINGS[cmdLabel];
                         const commandRef = cmdInfo?.commandRef || cmdLabel;
                         
-                        const baseParamMapping = cmdInfo?.paramMapping || "";
-                        const baseParams = parseParam(baseParamMapping);
-                        const inlineArgs = cmdObj.args || {};
-                        const mergedParams = Object.assign({}, baseParams, inlineArgs);
-
-                        console.log(`[Supertag-Trigger] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId} with merged params:`, mergedParams);
+                        console.log(`[Supertag-Trigger] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId} [manual=${Object.keys(cmdObj.args || {}).length}, commandDb=${cmdInfo?.paramMapping ? 1 : 0}]`);
 
                         try {
-                            const dispatchRes = await dispatchCommand(commandRef, mergedParams, context);
+                            // #1 pipeline 脚本内联参数 > #3 Command-DB paramMapping
+                            const dispatchRes = await dispatchCommand(commandRef, null, context, {
+                                manual: cmdObj.args || {},
+                                commandDb: cmdInfo?.paramMapping || ""
+                            });
                             if (!dispatchRes.success || dispatchRes.continue === false || dispatchRes.value === false || dispatchRes.status === "break") {
                                 console.log(`[Supertag-Trigger] Pipeline execution halted: Command "${cmdLabel}" returned break, false, or failed.`);
                                 break;

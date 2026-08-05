@@ -74,7 +74,19 @@ stateDiagram-v2
 - 超标签触发：`src/features/command/supertag/core/supertag-trigger.ts`
 - SQLite 引擎 / AV 镜像：`src/features/sqlite/sqlite-manager.ts`
 
-## 7. 工程约定
+## 7. 参数优先级（命令 Pipeline）
+
+运行时参数来源按优先级**逐键合并**（后覆盖前）：
+
+1. **#1 Pipeline 人为规划参数**：调用方显式传入（TS 脚本 `dispatch()` 参数、结构化 pipeline 中 `命令名(参数)` 的 args）。当前以自由文本/脚本形式存在，未来提供显式参数 UI。
+2. **#2 Pipeline 自动赋予参数**：前序步骤自动产出的变量（当前通过 `context.vars` + `{{var.x}}` 占位符实现；`sources.auto` 字段预留给引擎自动映射）。
+3. **#3 Command-DB 配置参数**：Command-DB "Param Mapping" 列，**唯一持久化配置源**——未放入 Command-DB 的参数无法被使用。
+4. **变量解析（内嵌）**：所有字符串参数值统一解析 `{{date}}/{{time}}/{{block_id}}/{{root_id}}/{{parent_id}}/{{attr:KEY}}/{{var.x}}` 及 Layer 4 数据库列值。
+5. **#5 Registry 默认值**：`commands.json` 的 `params[].default` 与 `seed.paramMapping` 仅作为 Command-DB 的初始模板（种子），**不参与运行时优先级**。
+
+实现：`resolveCommandParams()` / `mergeParamSources()`（`command-dispatcher.ts`），所有命令分发入口统一走它。
+
+## 8. 工程约定
 
 - `npx tsc --noEmit` 必须**零错误**（已清理至零，请保持）。
 - `npm run build` 必须通过（含 svelte 编译）。

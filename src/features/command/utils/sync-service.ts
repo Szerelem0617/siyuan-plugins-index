@@ -4,6 +4,7 @@ import { getSqliteEngine, runQuery, checkTableExists, instantiateAV, tableNameTo
 import { initSystemTables } from "../indexos/command-sqlite";
 import { getSeedCommandRows, getSeedSupertagRows } from "../indexos/seed-data";
 import { commandRegistry } from "../registry/command-registry";
+import { syncPipelinesFromCommandDb } from "../pipeline/manager";
 import { parseSupertags } from "./supertag-helper";
 import { 
     isDevInitSysEnabled,
@@ -448,6 +449,8 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             }
         }
         setSupertagRegistry(newRegistry);
+        // 加载并注册复合命令（Pipeline）
+        await syncPipelinesFromCommandDb();
         return true;
     } catch (e) {
         return false;

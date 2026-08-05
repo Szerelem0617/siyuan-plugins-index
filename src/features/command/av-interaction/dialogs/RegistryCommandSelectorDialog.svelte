@@ -1,9 +1,12 @@
 <script lang="ts">
     import { Dialog } from "siyuan";
     import CustomUserCommandDialog from "./CustomUserCommandDialog.svelte";
+    import PipelineEditorDialog from "../../pipeline/PipelineEditorDialog.svelte";
 
     export let commands: any[] = [];
     export let onSelect: (cmd: any) => void;
+    /** 复合命令创建成功后的回调（由调用方关闭选择器） */
+    export let onPipelineCreated: ((rowId: string, name: string) => void) | undefined = undefined;
     
     let searchQuery = "";
     
@@ -32,6 +35,26 @@
             }
         });
     }
+
+    function openCreatePipelineDialog() {
+        const dialog = new Dialog({
+            title: "创建复合命令 (Pipeline)",
+            content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
+            width: "560px",
+            height: "640px"
+        });
+        dialog.element.classList.add("indexos-dialog");
+
+        new PipelineEditorDialog({
+            target: dialog.element.querySelector("#pipeline-editor-container")!,
+            props: {
+                dialog,
+                onCreated: (rowId: string, name: string) => {
+                    onPipelineCreated?.(rowId, name);
+                }
+            }
+        });
+    }
 </script>
 
 <div style="display: flex; flex-direction: column; height: 100%; padding: 12px; box-sizing: border-box; background: var(--b3-theme-background);">
@@ -48,6 +71,11 @@
             style="font-size: 11px; padding: 4px 8px; white-space: nowrap;"
             on:click={openCreateUserCommandDialog}
         >+ 自定义 user. 命令</button>
+        <button 
+            class="b3-button b3-button--outline" 
+            style="font-size: 11px; padding: 4px 8px; white-space: nowrap;"
+            on:click={openCreatePipelineDialog}
+        >+ 创建复合命令</button>
     </div>
     
     <div style="flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">

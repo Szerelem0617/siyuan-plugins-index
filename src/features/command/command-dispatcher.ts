@@ -61,7 +61,8 @@ export interface DispatchResult {
 export async function dispatchCommand(
     commandId: string,
     rawParam: string | Record<string, unknown> | null | undefined,
-    context: CommandContext
+    context: CommandContext,
+    sources?: ParamSources
 ): Promise<DispatchResult> {
 
     if (!context.vars) {
@@ -96,7 +97,10 @@ export async function dispatchCommand(
     }
 
     // 3. 构建参数
-    const resolvedParams = await buildParams(def, rawParam, context);
+    // 统一参数解析：#1 manual > #2 auto > #3 commandDb > 变量解析内嵌 > #5 schema 默认值
+    const resolvedParams = sources
+        ? await resolveCommandParams(def, sources, context)
+        : await resolveCommandParams(def, { commandDb: rawParam }, context);
 
     console.log(`[Dispatcher] Executing command "${commandId}" via method "${def.dispatch.method}". Params:`, resolvedParams);
 
@@ -252,7 +256,25 @@ async function dispatchApi(
     // 自动注入 id（如果 params 里没有且有 context.blockEl）
     const body: Record<string, unknown> = { ...params };
     if (!body.id && context.blockEl) {
-        body.id = context.blockEl.getAttribute("data-node-id") ?? undefined;
+        const autoId = context.blockEl.getAttribute("data-node-id") ?? undefined;
+        if (autoId) {
+            console.log(`[Dispatcher] api 命令 ${def.id} 未提供 id，自动注入上下文块 ID ${autoId}（如需显式，请用 {{block_id}}）`);
+        }
+        body.id = autoId;
+    }
+
+    // 插入类命令必须提供目标（parentID/previousID/nextID）。
+    // 缺失时思源内核 doInsert 找不到 block tree 会广播 "reloadui"，导致整个界面重载。
+    const insertEndpoints = new Set(["/api/block/insertBlock", "/api/block/prependBlock", "/api/block/appendBlock"]);
+    if (insertEndpoints.has(endpoint) && !body.parentID && !body.previousID && !body.nextID) {
+        const blockId = context.blockEl?.getAttribute("data-node-id") || "";
+        if (blockId) {
+            body.previousID = blockId;
+            console.log(`[Dispatcher] ${def.id} 未提供插入目标，自动注入 previousID=${blockId}（触发块）`);
+        } else {
+            console.error(`[Dispatcher] ${def.id} 缺少插入目标（parentID/previousID/nextID），已阻止请求，避免触发思源 UI 重载`);
+            return { success: false, method: "api", detail: "缺少插入目标：请提供 parentID / previousID / nextID，或使用 {{block_id}} 占位符" };
+        }
     }
 
     const apiRes = await post(endpoint, body);
@@ -329,58 +351,69 @@ async function dispatchCustom(
     };
 }
 // ─────────────────────────────────────────────────────────────────────────────
-// Param resolution（静态参 / 注入参 / 模板参）
+// 统一参数解析（优先级：#1 Pipeline 人为规划 > #2 Pipeline 自动赋予 >
+//                #3 Command-DB 配置 > 变量解析内嵌；#5 seed/registry 仅作默认模板）
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** 参数来源。优先级：#1 manual > #2 auto > #3 commandDb */
+export interface ParamSources {
+    /** #1 Pipeline 人为规划参数（显式/脚本传参，最高优先级） */
+    manual?: Record<string, unknown>;
+    /** #2 Pipeline 自动赋予参数（当前通过 context.vars + {{var.x}} 实现，此字段预留给引擎自动映射） */
+    auto?: Record<string, unknown>;
+    /** #3 Command-DB 持久化配置（paramMapping 列，JSON 字符串或对象） */
+    commandDb?: string | Record<string, unknown> | null;
+}
+
+/** 按优先级逐键合并各来源（后者覆盖前者） */
+export function mergeParamSources(sources: ParamSources): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...parseParam(sources.commandDb) };
+    if (sources.auto) Object.assign(merged, sources.auto);
+    if (sources.manual) Object.assign(merged, sources.manual);
+    return merged;
+}
+
 /**
- * 按照命令 def 中的 params schema，依次处理每个参数：
- *   - injected → 从 context 中提取
- *   - template → 替换 {{占位符}}
- *   - static   → 从 rawParam JSON 中取值
+ * 统一参数解析入口：
+ *   1. mergeParamSources 按 #1 > #2 > #3 逐键合并；
+ *   2. schema 缺省值兜底（#5 seed/registry 仅作模板，不参与优先级）；
+ *   3. 所有字符串值统一做占位符解析（#4 变量解析内嵌；template 模式强制转字符串）；
+ *   4. 剔除空字符串，防止传给思源 API 时空值字段校验失败。
  */
-async function buildParams(
+export async function resolveCommandParams(
     def: CommandDef,
-    rawParam: string | Record<string, unknown> | null | undefined,
+    sources: ParamSources,
     context: CommandContext
 ): Promise<Record<string, unknown>> {
-
-    // 先解析用户在 AV 里填写的静态/模板参数
-    const userParams = parseParam(rawParam);
-
+    const raw = mergeParamSources(sources);
     const result: Record<string, unknown> = {};
 
     for (const schema of def.params) {
-        switch (schema.paramMode) {
-
-            case "template": {
-                const raw = String(userParams[schema.key] ?? schema.default ?? "");
-                result[schema.key] = await resolveTemplate(raw, context);
-                break;
-            }
-
-            case "static":
-                result[schema.key] = userParams[schema.key] ?? schema.default;
-                break;
-
-            case "interactive":
-                // 交互参在执行链里专门处理（Step 3+ 再实现），先跳过
-                result[schema.key] = userParams[schema.key] ?? schema.default;
-                break;
+        const value = raw[schema.key] ?? schema.default;
+        if (schema.paramMode === "template") {
+            result[schema.key] = await resolveTemplate(String(value ?? ""), context);
+        } else if (typeof value === "string") {
+            result[schema.key] = await resolveTemplate(value, context);
+        } else {
+            result[schema.key] = value;
         }
     }
 
-    // 把用户填写的但 schema 中没有定义的额外字段也合并进来（灵活扩展）
-    for (const [k, v] of Object.entries(userParams)) {
-        if (!(k in result)) result[k] = v;
+    // 用户填写的但 schema 中没有定义的额外字段也合并进来（灵活扩展），字符串同样做占位符解析
+    for (const [k, v] of Object.entries(raw)) {
+        if (!(k in result)) {
+            result[k] = typeof v === "string" ? await resolveTemplate(v, context) : v;
+        }
     }
 
-    // 剔除所有空字符串属性，防止传给思源 API 时因为空值字段校验失败
+    // 剔除所有空字符串属性
     for (const key of Object.keys(result)) {
         if (result[key] === "") {
             delete result[key];
         }
     }
 
+    console.log(`[ParamResolver] ${def.id}: manual=${Object.keys(sources.manual || {}).length} auto=${Object.keys(sources.auto || {}).length} commandDb=${sources.commandDb ? 1 : 0} -> resolved`, result);
     return result;
 }
 

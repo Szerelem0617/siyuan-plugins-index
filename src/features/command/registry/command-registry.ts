@@ -378,6 +378,16 @@ class CommandRegistry {
         return this.store.get(baseId);
     }
 
+    /**
+     * 注销命令（复合命令刷新 / 插件卸载用）。
+     */
+    unregisterCommand(id: string): void {
+        const baseId = id.replace(/-\d+$/, "");
+        if (this.store.delete(baseId)) {
+            console.log(`[Registry] Unregistered command: ${baseId}`);
+        }
+    }
+
     /** 检查某个命令 ID 是否存在于注册表中 */
     hasCommand(id: string): boolean {
         const baseId = id.replace(/-\d+$/, "");
