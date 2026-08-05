@@ -10,7 +10,7 @@ import { addAVMenuItems, avEventHandler } from "./features/av/attribute-view/eve
 import { updateIndex, execAutoUpdate } from "./events/protyle-event";
 import { initEmojiEvent, removeEmojiEvent } from "./events/emoji-event";
 import { addSlash } from "./core/slash";
-import { isDevInitSysEnabled, setCommandAvId, setTypeAvId, setCommandDocId, setTypeDocId, COMMAND_REGISTRY } from "./features/command/registration";
+import { isDevInitSysEnabled, setCommandAvId, setTypeAvId, setCommandDocId, setTypeDocId, COMMAND_BINDINGS } from "./features/command/registration";
 import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems } from "./features/command/menu-hooks";
 import { refreshSupertagRegistry, syncGlobalSupertagsCache } from "./features/command/utils/sync-service";
 import { commandRegistry } from "./features/command/registry/command-registry";
@@ -161,7 +161,7 @@ export default class IndexPlugin extends Plugin {
                 console.log("[IndexOS] Received open-siyuan-url-plugin event:", url);
                 const payload = decodeBtnHref(url);
                 if (payload && payload.command) {
-                    const commandRef = COMMAND_REGISTRY[payload.command]?.commandRef || payload.command;
+                    const commandRef = COMMAND_BINDINGS[payload.command]?.commandRef || payload.command;
                     const activeProtyle = (window as any).activeProtyleInstance;
                     const blockEl = activeProtyle?.element?.querySelector(".protyle-wysiwyg--select") || document.activeElement;
                     const context: CommandContext = {

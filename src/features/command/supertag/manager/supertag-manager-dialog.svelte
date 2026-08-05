@@ -253,13 +253,13 @@
                     i18n.supertagManager?.notInstantiatedContent || "未实例化 IndexOS 命令管理系统，无法创建数据库。是否立即实例化？",
                     async () => {
                         try {
-                            showMessage("⏳ 正在实例化系统存储库...", 5000);
+                            showMessage("⏳ 正在将数据存储到思源...", 5000);
                             await constructCommandStorage();
-                            showMessage("✓ 系统实例化完成，正在为标签创建数据库...", 3000);
+                            showMessage("✓ 数据已存储到思源，正在为标签创建数据库...", 3000);
                             await executeCreateDb(group);
                         } catch (err: any) {
                             console.error("Instantiation failed:", err);
-                            showMessage(`系统实例化失败: ${err.message || err}`, 5000, "error");
+                            showMessage(`存储到思源失败: ${err.message || err}`, 5000, "error");
                         }
                     },
                     undefined,

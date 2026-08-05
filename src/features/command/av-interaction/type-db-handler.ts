@@ -1,5 +1,5 @@
 import { Dialog, showMessage } from "siyuan";
-import { getCommandAvId, COMMAND_REGISTRY } from "../registration";
+import { getCommandAvId, COMMAND_BINDINGS } from "../registration";
 import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
@@ -75,10 +75,10 @@ export async function handleTypeDbAltClick(
 
     const matchedCmds: { label: string; cmdDef: any }[] = [];
     for (const label of cleanLabels) {
-        let cmdInfo = COMMAND_REGISTRY[label];
+        let cmdInfo = COMMAND_BINDINGS[label];
         if (!cmdInfo) {
-            const foundKey = Object.keys(COMMAND_REGISTRY).find(k => label.includes(k) || k.includes(label));
-            if (foundKey) cmdInfo = COMMAND_REGISTRY[foundKey];
+            const foundKey = Object.keys(COMMAND_BINDINGS).find(k => label.includes(k) || k.includes(label));
+            if (foundKey) cmdInfo = COMMAND_BINDINGS[foundKey];
         }
         const commandRef = cmdInfo?.commandRef || label;
         const cmdDef = commandRegistry.findByNameOrId(label) || commandRegistry.getCommand(commandRef);
@@ -188,7 +188,7 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
             if (cmdsQuery.length > 0 && cmdsQuery[0].values.length > 0) {
                 cmdsQuery[0].values.forEach((row: any) => {
                     const label = String(row[1] || "").trim();
-                    const cmdInfo = COMMAND_REGISTRY[label];
+                    const cmdInfo = COMMAND_BINDINGS[label];
                     boundCommands.push({
                         rowId: String(row[0]),
                         label: label,

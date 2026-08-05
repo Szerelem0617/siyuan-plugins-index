@@ -16,7 +16,7 @@ How to enable: Go to Plugin Settings -> Database -> Check **Developer Mode**. On
 
 - **`/Insert Command Button`**: Type `/Insert Command Button` (or `/插入命令按钮`) in the editor to quickly insert an interactive command button.
 - **Database & SQL Management**: Centrally manage Attribute View databases across the workspace, and use the [SQL Console for real-time querying & data manipulation](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/docs/guide-sqlite.md).
-- **Commands & Supertag Binding**: Click "Instantiate Database" in the console palette to bind commands with specific Supertags and unlock advanced configurations.
+- **Commands & Supertag Binding**: Click "Save Data to SiYuan" in the console palette to bind commands with specific Supertags and unlock advanced configurations.
 - Experimental features may contain breaking changes before reaching the v2.0.0 stable release. Please use with caution in production environments.
 
 # [Changelog](https://github.com/Szerelem0617/siyuan-plugins-index/blob/main/CHANGELOG.md)

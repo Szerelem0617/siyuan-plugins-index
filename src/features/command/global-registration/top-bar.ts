@@ -9,6 +9,7 @@ import { getSqliteEngine, runQuery, instantiateAV, checkTableExists, tableNameTo
 import { getCommandAvId, getTypeAvId, getCommandDocId, getTypeDocId } from "../registration";
 import { getTargetTablesInfo, refreshSupertagRegistry } from "../utils/sync-service";
 import { initSystemTables } from "../indexos/command-sqlite";
+import { getSeedCommandRows } from "../indexos/seed-data";
 
 export interface TopBarCommand {
     id: string;
@@ -30,13 +31,48 @@ export async function refreshTopBarCommands() {
     try {
         const { db } = await getSqliteEngine();
         if (db) {
-            const success = await refreshTopBarFromSqlite();
-            if (success) return;
+            const { isInitialized } = await getTargetTablesInfo();
+            if (isInitialized) {
+                const success = await refreshTopBarFromSqlite();
+                if (success) return;
+            } else {
+                refreshTopBarFromSeed();
+                return;
+            }
         }
     } catch (e) {
         console.warn("[TopBar] SQLite not ready, falling back to API refresh", e);
     }
     await refreshTopBarFromApi();
+}
+
+/**
+ * 未实例化路径：从种子常量构建顶栏 / 行内按钮 / 快捷命令列表。
+ */
+function refreshTopBarFromSeed() {
+    const newTopBars: TopBarCommand[] = [];
+    const newInlineBtns: InlineButtonCmd[] = [];
+    const newPaletteCmds: PaletteCommand[] = [];
+
+    for (const row of getSeedCommandRows()) {
+        if (!row.commandID || !row.label) continue;
+        const cmdDef = commandRegistry.getCommand(row.commandID);
+        const requiresParams = (cmdDef && cmdDef.params && cmdDef.params.length > 0) ? "true" : "false";
+        const hasEntry = (type: string) => row.uiEntries.includes(type);
+
+        if (hasEntry("顶栏")) {
+            newTopBars.push({ id: row.rowID, label: row.label, commandId: row.commandID, commandParam: row.paramMapping, requiresParams });
+        }
+        if (hasEntry("行内按钮")) {
+            newInlineBtns.push({ id: row.rowID, label: row.label, commandId: row.commandID, commandParam: row.paramMapping, requiresParams });
+        }
+        if (hasEntry("快捷命令")) {
+            newPaletteCmds.push({ id: row.rowID, label: row.label, commandId: row.commandID, commandParam: row.paramMapping, requiresParams });
+        }
+    }
+
+    applyTopBarUpdates(newTopBars, newInlineBtns, newPaletteCmds);
+    console.log(`[TopBar] Loaded ${newTopBars.length} topbars, ${newInlineBtns.length} inline buttons, ${newPaletteCmds.length} palette commands from seed data.`);
 }
 
 /**

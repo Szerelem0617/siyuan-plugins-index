@@ -3,7 +3,7 @@ import { client } from "../../shared/api-client";
 import { showMessage } from "siyuan";
 import { sleep } from "../../shared/utils";
 import { setCommandAvId, setTypeAvId, setCommandDocId, setTypeDocId } from "./registration";
-import { getSqliteEngine, runQuery, instantiateAV, saveDatabaseToDisk } from "../sqlite/sqlite-manager";
+import { instantiateAV } from "../sqlite/sqlite-manager";
 import { 
     NOTEBOOK_NAME, 
     NOTEBOOK_ICON, 
@@ -12,7 +12,9 @@ import {
     DATA_DBS_CONFIG,
     DEFAULT_RELATION_BINDINGS,
     ColumnMeta,
-    DbPageConfig
+    DbPageConfig,
+    getSeedCommandRows,
+    getSeedSupertagRows
 } from "./indexos/seed-data";
 import { getOrCreateDataDbsParentDoc, getOrStoreDataDbDoc } from "./data-db-management";
 export { getOrStoreDataDbDoc };
@@ -85,12 +87,12 @@ export async function constructCommandStorage() {
             async (avId) => {
                 const keyMap = await createAvColumns(avId, COMMAND_DB_CONFIG.columns);
 
-                // Fetch seed data from SQLite sys_command_db
-                const seedRes = await runQuery(`SELECT rowID, label, Command_ID, Param_Mapping, UI_Entries FROM sys_command_db`);
+                // 从种子常量读取 Layer 2 默认行（不再依赖 SQLite 种子表）
+                const seedRows = getSeedCommandRows();
 
                 // Insert seed items as detached rows
-                const addRows = seedRes.values.map(match => ({
-                    itemID: match[0],
+                const addRows = seedRows.map(row => ({
+                    itemID: row.rowID,
                     id: "",
                     isDetached: true
                 }));
@@ -104,23 +106,21 @@ export async function constructCommandStorage() {
                 const primaryKeyId = await getAvPrimaryKeyColId(avId);
 
                 const populateOps: any[] = [];
-                for (const match of seedRes.values) {
-                    const [rowID, labelVal, commandID, paramMapping, uiEntries] = match;
-                    
+                for (const row of seedRows) {
                     if (primaryKeyId) {
                         populateOps.push({
                             keyID: primaryKeyId,
-                            itemID: rowID,
-                            value: { type: "block", block: { content: String(labelVal || "") } }
+                            itemID: row.rowID,
+                            value: { type: "block", block: { content: String(row.label || "") } }
                         });
                     }
 
-                    populateOps.push({ keyID: keyMap["Command ID"], itemID: rowID, value: { type: "text", text: { content: String(commandID || "") } } });
-                    populateOps.push({ keyID: keyMap["Param Mapping"], itemID: rowID, value: { type: "text", text: { content: String(paramMapping || "") } } });
-                    const entriesList = String(uiEntries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    populateOps.push({ keyID: keyMap["Command ID"], itemID: row.rowID, value: { type: "text", text: { content: String(row.commandID || "") } } });
+                    populateOps.push({ keyID: keyMap["Param Mapping"], itemID: row.rowID, value: { type: "text", text: { content: String(row.paramMapping || "") } } });
+                    const entriesList = String(row.uiEntries || "").split(",").map(s => s.trim()).filter(Boolean);
                     populateOps.push({
                         keyID: keyMap["UI 入口"],
-                        itemID: rowID,
+                        itemID: row.rowID,
                         value: {
                             type: "mSelect",
                             mSelect: entriesList.map(name => ({ content: name }))
@@ -146,18 +146,12 @@ export async function constructCommandStorage() {
 
                 const keyMap = await createAvColumns(avId, TYPE_DB_CONFIG.columns);
 
-                // Fetch seed data from SQLite sys_type_db
-                const checkCols = await runQuery(`PRAGMA table_info(sys_type_db)`);
-                const colNames = checkCols?.values?.map((c: any) => c[1]) || [];
-                const querySql = colNames.includes("Icon_Menu") 
-                    ? `SELECT rowID, supertag, Icon_Menu, Conditional FROM sys_type_db`
-                    : `SELECT rowID, supertag, Block_Icon_Menu, Conditional FROM sys_type_db`;
-                
-                const seedRes = await runQuery(querySql);
+                // 从种子常量读取 Layer 3 默认行（不再依赖 SQLite 种子表）
+                const seedRows = getSeedSupertagRows();
 
                 // Insert seed items as detached rows
-                const addRows = seedRes.values.map(match => ({
-                    itemID: match[0],
+                const addRows = seedRows.map(row => ({
+                    itemID: row.rowID,
                     id: "",
                     isDetached: true
                 }));
@@ -171,21 +165,26 @@ export async function constructCommandStorage() {
                 const primaryKeyId = await getAvPrimaryKeyColId(avId);
 
                 const populateOps: any[] = [];
-                for (const match of seedRes.values) {
-                    const [rowID, supertag, iconMenuVal, conditional] = match;
+                for (const row of seedRows) {
                     // 主键标签统一剥离 # 并且不转大写，全小写 (无 backwards capability)
-                    const cleanSupertag = String(supertag || "").replace(/^#/, "").trim().toLowerCase();
+                    const cleanSupertag = String(row.supertag || "").replace(/^#/, "").trim().toLowerCase();
                     
                     if (primaryKeyId) {
                         populateOps.push({
                             keyID: primaryKeyId,
-                            itemID: rowID,
+                            itemID: row.rowID,
                             value: { type: "block", block: { content: cleanSupertag } }
                         });
                     }
 
-                    populateOps.push({ keyID: keyMap["Icon Menu"], itemID: rowID, value: { type: "text", text: { content: String(iconMenuVal || "") } } });
-                    populateOps.push({ keyID: keyMap["Conditional"], itemID: rowID, value: { type: "text", text: { content: String(conditional || "") } } });
+                    // 自动清洗与纠错：将旧有中文指令名转换为绝对 Command ID
+                    let cleanIconMenuVal = String(row.iconMenu || "").trim();
+                    if (cleanIconMenuVal.includes("安全更新")) {
+                        cleanIconMenuVal = "plugin-index.command.safeUpdateBlock";
+                    }
+
+                    populateOps.push({ keyID: keyMap["Icon Menu"], itemID: row.rowID, value: { type: "text", text: { content: cleanIconMenuVal } } });
+                    populateOps.push({ keyID: keyMap["Conditional"], itemID: row.rowID, value: { type: "text", text: { content: String(row.conditional || "") } } });
                 }
 
                 if (populateOps.length > 0) {
@@ -209,12 +208,6 @@ export async function constructCommandStorage() {
             // Sync the newly created AVs into SQLite av_ tables
             await instantiateAV(commandDb.avId, true);
             await instantiateAV(typeDb.avId, true);
-
-            // Clean up the seed tables in SQLite to avoid duplicate data
-            const { db } = await getSqliteEngine();
-            db.run(`DROP TABLE IF EXISTS sys_command_db;`);
-            db.run(`DROP TABLE IF EXISTS sys_type_db;`);
-            await saveDatabaseToDisk();
         }
 
         showMessage(`[IndexOS] 系统存储库初始化完成！`, 3000);
@@ -507,16 +500,11 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
             continue;
         }
 
-        // 1. Populate Icon Menu text column with command friendly labels
+        // 1. Populate Icon Menu text column with exact Command IDs (NOT friendly Chinese label)
         if (iconMenuKey) {
-            const validCommandNames: string[] = [];
+            const validCommandIds: string[] = [];
             for (const cmdId of binding.iconMenuCmdIds) {
-                const cmdRowId = commandMap[cmdId];
-                if (cmdRowId) {
-                    const row = commandRows.find((r: any) => r.id === cmdRowId);
-                    const label = row ? (row.cells[0]?.value?.block?.content || row.cells[0]?.value?.mText?.content || row.cells[0]?.value?.text?.content || "").trim() : "";
-                    if (label) validCommandNames.push(label);
-                }
+                if (cmdId) validCommandIds.push(cmdId);
             }
             batchValues.push({
                 keyID: iconMenuKey.id,
@@ -524,7 +512,7 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
                 value: {
                     type: "text",
                     text: {
-                        content: validCommandNames.join(", ")
+                        content: validCommandIds.join(", ")
                     }
                 }
             });

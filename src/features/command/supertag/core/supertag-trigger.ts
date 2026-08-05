@@ -5,8 +5,9 @@
  */
 
 import { post } from "../../../../shared/api-client/request";
-import { SUPERTAG_REGISTRY, COMMAND_REGISTRY, getTypeAvId } from "../../registration";
+import { SUPERTAG_REGISTRY, COMMAND_BINDINGS, getTypeAvId } from "../../registration";
 import { getSqliteEngine } from "../../../sqlite/sqlite-manager";
+import { getSeedConditionalScript } from "../../indexos/seed-data";
 import { dispatchCommand, parseParam, type CommandContext } from "../../command-dispatcher";
 import { executeTsScript } from "./supertag-sandbox";
 
@@ -181,19 +182,12 @@ export async function triggerConditionalCommands(
             }
         }
 
-        // 兜底 1：直接从系统 SQLite 引擎表 sys_type_db 查询该 Supertag 的 Conditional 脚本定义
-        if (!conditionalVal) {
-            try {
-                const { db } = await getSqliteEngine();
-                const sysRes = db.exec(`SELECT Conditional FROM sys_type_db WHERE LOWER(supertag) = '#${cleanTag}' OR LOWER(supertag) = '${cleanTag}'`);
-                if (sysRes && sysRes.length > 0 && sysRes[0].values.length > 0) {
-                    conditionalVal = String(sysRes[0].values[0][0] || "").trim();
-                    if (conditionalVal) {
-                        console.log(`[Supertag-Trigger] Found conditional script in sys_type_db for #${cleanTag}`);
-                    }
-                }
-            } catch (sysErr) {
-                console.warn("[Supertag-Trigger] Failed to query sys_type_db:", sysErr);
+        // 兜底 1：未实例化时（找不到 Type-DB AV）从种子常量读取 Conditional 脚本。
+        // 已实例化后种子不再参与任何运行时路径。
+        if (!conditionalVal && !typeAvId) {
+            conditionalVal = getSeedConditionalScript(cleanTag);
+            if (conditionalVal) {
+                console.log(`[Supertag-Trigger] Found conditional script in seed data for #${cleanTag}`);
             }
         }
 
@@ -271,7 +265,7 @@ export async function triggerConditionalCommands(
 
                     for (const cmdObj of targetRule.commands) {
                         const cmdLabel = cmdObj.labelOrId;
-                        const cmdInfo = COMMAND_REGISTRY[cmdLabel];
+                        const cmdInfo = COMMAND_BINDINGS[cmdLabel];
                         const commandRef = cmdInfo?.commandRef || cmdLabel;
                         
                         const baseParamMapping = cmdInfo?.paramMapping || "";

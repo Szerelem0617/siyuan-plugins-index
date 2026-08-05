@@ -648,9 +648,9 @@ export async function executeWritableSql(sql: string, options?: DDLOptions): Pro
     const isDelete = /^\s*DELETE\b/i.test(processedSql);
     const isReplace = /^\s*(?:REPLACE|UPSERT)\b/i.test(processedSql);
     
-    // 🛡️ 防护规则：禁止写操作作用于只读系统模板表 (sys_command_db / sys_type_db / sys_registry_db)
-    if (/sys_command_db|sys_type_db|sys_registry_db/i.test(processedSql)) {
-        throw new Error("⚠️ 拒绝写操作：sys_command_db 与 sys_type_db 为系统只读模板备份表！严禁直接写修改。请在实例化后的 Command-DB / Supertag-DB 属性视图中进行编辑。");
+    // 🛡️ 防护规则：禁止写操作作用于系统注册表 (sys_registry_db)
+    if (/sys_registry_db/i.test(processedSql)) {
+        throw new Error("⚠️ 拒绝写操作：sys_registry_db 为系统注册表，严禁直接写修改。");
     }
     
     if (isUpdate || isInsert || isDelete || isReplace) {

@@ -6,6 +6,7 @@
     import { commandRegistry } from "../../command/registry/command-registry";
     import { encodeBtnHref } from "../../command/global-registration/inline-button";
     import { openGlobalAutomationDialog } from "../../command/av-interaction/command-db-handler";
+    import { i18n } from "../../../shared/utils";
 
     let loading = true;
 
@@ -37,14 +38,14 @@
 
     async function handleInitSystem() {
         try {
-            showMessage("正在从默认模版实例化系统 Command-DB 与 Type-DB...", 3000, "info");
+            showMessage("正在从默认模板将数据存储到思源...", 3000, "info");
             await constructCommandStorage();
             await refreshSupertagRegistry();
-            showMessage("✓ 系统数据库与初始化规则实例化完成！", 3000, "info");
+            showMessage("✓ 数据已存储到思源，可自行修改配置！", 3000, "info");
             await loadData();
         } catch (e: any) {
             console.error("System init failed", e);
-            showMessage(`实例化失败: ${e.message}`, 5000, "error");
+            showMessage(`存储失败: ${e.message}`, 5000, "error");
         }
     }
 
@@ -78,14 +79,14 @@
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                 <button class="indexos-btn-bordered" style="font-size: 11px; padding: 4px 10px;" on:click={handleInitSystem}>
                     <svg style="width: 12px; height: 12px; fill: currentColor; margin-right: 2px;"><use xlink:href="#iconDatabase"></use></svg>
-                    <span>实例化</span>
+                    <span>{i18n.initSystemDB}</span>
                 </button>
                 <button class="indexos-btn-bordered" style="font-size: 11px; padding: 4px 10px; color: var(--indexos-accent-primary);" on:click={openGlobalAutomationDialog}>
                     <span>⚡ 全局后台自动化配置</span>
                 </button>
             </div>
             <div style="font-size: 11px; opacity: 0.6; line-height: 1.4; color: var(--b3-theme-on-surface-light);">
-                进行实例化后可以对命令以及命令 tag 进行客制化配置，可以通过 Alt + Click 数据库单元格来进行参数配置。
+                {i18n.initSystemDBHint}
             </div>
         </div>
 

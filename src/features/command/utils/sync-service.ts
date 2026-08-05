@@ -2,6 +2,8 @@ import { post } from "../../../shared/api-client/request";
 import { client } from "../../../shared/api-client";
 import { getSqliteEngine, runQuery, checkTableExists, instantiateAV, tableNameToAvId, registerFriendlyTableName } from "../../sqlite/sqlite-manager";
 import { initSystemTables } from "../indexos/command-sqlite";
+import { getSeedCommandRows, getSeedSupertagRows } from "../indexos/seed-data";
+import { commandRegistry } from "../registry/command-registry";
 import { parseSupertags } from "./supertag-helper";
 import { 
     isDevInitSysEnabled,
@@ -13,10 +15,10 @@ import {
     setTypeAvId,
     setCommandDocId,
     setTypeDocId,
-    setCommandRegistry,
+    setCommandBindings,
     setSupertagRegistry,
     globalSupertagsCache,
-    type CommandDef,
+    type CommandBinding,
     type SupertagCommand
 } from "../registration";
 
@@ -47,7 +49,8 @@ export async function syncGlobalSupertagsCache() {
 
 /**
  * Dynamically resolves active table names and primary key column names.
- * Falls back to sys_command_db / sys_type_db if Siyuan AVs are not initialized.
+ * 已实例化：返回思源 AV 对应的 av_* 镜像表名。
+ * 未实例化：返回空表名，调用方应改走 seed-data.ts 种子常量（不再有 SQLite 种子表）。
  */
 export async function getTargetTablesInfo() {
     let cmdAvId = getCommandAvId();
@@ -152,8 +155,8 @@ export async function getTargetTablesInfo() {
     }
 
     return {
-        commandsTable: "sys_command_db",
-        typesTable: "sys_type_db",
+        commandsTable: "",
+        typesTable: "",
         commandLabelCol: "label",
         typeSupertagCol: "supertag",
         isInitialized: false
@@ -169,18 +172,20 @@ export async function refreshSupertagRegistry() {
         try {
             const { db } = await getSqliteEngine();
             if (db) {
-                // Force re-instantiation of our system AV tables so SQLite is guaranteed to be fully in sync with Siyuan AV updates
                 await getTargetTablesInfo();
                 const cmdAvId = getCommandAvId();
                 const tAvId = getTypeAvId();
-                if (cmdAvId) {
+                if (cmdAvId && tAvId) {
+                    // 已实例化：从思源 AV 刷新（经 av_ SQLite 镜像）
                     await instantiateAV(cmdAvId, true);
-                }
-                if (tAvId) {
                     await instantiateAV(tAvId, true);
+                    const success = await refreshRegistryFromSqlite();
+                    if (success) return;
+                } else {
+                    // 未实例化：直接读种子常量（seed-data.ts），无 SQLite 种子表
+                    refreshRegistryFromSeed();
+                    return;
                 }
-                const success = await refreshRegistryFromSqlite();
-                if (success) return;
             }
         } catch (e) {
             console.warn("[Supertag] SQLite sync/refresh failed, falling back to API refresh", e);
@@ -190,8 +195,71 @@ export async function refreshSupertagRegistry() {
 }
 
 /**
+ * 未实例化路径：从 seed-data.ts 常量构建 Layer 2/3 注册表。
+ * 解析规则与 refreshRegistryFromSqlite 保持一致
+ * （Icon Menu 精确/模糊匹配 + Conditional 脚本 dispatch 引用 + 兜底注册标签）。
+ */
+function refreshRegistryFromSeed() {
+    const newCommandBindings: Record<string, CommandBinding> = {};
+    for (const row of getSeedCommandRows()) {
+        const label = row.label.trim();
+        if (label && row.commandID) {
+            newCommandBindings[label] = {
+                methodName: label,
+                commandRef: row.commandID.trim(),
+                paramMapping: row.paramMapping.trim()
+            };
+        }
+    }
+    setCommandBindings(newCommandBindings);
+
+    const newRegistry: SupertagCommand[] = [];
+    for (const row of getSeedSupertagRows()) {
+        const cleanTag = row.supertag.replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
+        if (!cleanTag) continue;
+
+        const findBinding = (token: string) => {
+            const lower = token.toLowerCase();
+            return Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower)
+                || Object.values(newCommandBindings).find(b => b.methodName.toLowerCase() === lower);
+        };
+
+        // 1. Icon Menu 文本列：命令需要注入到 UI 菜单
+        if (row.iconMenu) {
+            for (const cmdToken of row.iconMenu.split(/[,，]/).map(s => s.trim()).filter(Boolean)) {
+                const cmdInfo = findBinding(cmdToken);
+                if (cmdInfo && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu")) {
+                    newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, paramMapping: cmdInfo.paramMapping, uiLocation: "IconMenu" });
+                }
+            }
+        }
+
+        // 2. Conditional 脚本中的 dispatch 引用：标记为 BoundOnly
+        if (row.conditional) {
+            const matches = String(row.conditional).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
+            for (const m of matches) {
+                const cmdRef = m[1];
+                const foundCmd = Object.values(newCommandBindings).find(c => c.commandRef === cmdRef);
+                if (foundCmd
+                    && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef && r.uiLocation === "IconMenu")
+                    && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef)) {
+                    newRegistry.push({ typeTag: cleanTag, methodName: foundCmd.methodName, commandRef: foundCmd.commandRef, paramMapping: foundCmd.paramMapping, uiLocation: "BoundOnly" });
+                }
+            }
+        }
+
+        // 3. 确保标签本身已注册（即使没有绑定任何命令）
+        if (!newRegistry.some(r => r.typeTag === cleanTag)) {
+            newRegistry.push({ typeTag: cleanTag, methodName: "", commandRef: "", paramMapping: "", uiLocation: "IconMenu" });
+        }
+    }
+    setSupertagRegistry(newRegistry);
+    console.log(`[Supertag] Registry loaded from seed data: ${Object.keys(newCommandBindings).length} commands, ${newRegistry.length} supertags.`);
+}
+
+/**
  * 从 SQLite 引擎刷新注册表 (核心内置数据库逻辑)
- * SQLite 现在是 Source of Truth，不再依赖思源文档
+ * 已实例化路径：从 av_* 镜像表刷新（数据源是思源 AV，SQLite 仅为查询镜像）。
  */
 async function refreshRegistryFromSqlite(): Promise<boolean> {
     try {
@@ -221,7 +289,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         const cmdRes = await runQuery(`SELECT rowID, "${commandLabelCol}", Command_ID, Param_Mapping FROM ${commandsTable}`);
         if (!cmdRes || !cmdRes.values) return false;
 
-        const newCommandRegistry: Record<string, CommandDef> = {};
+        const newCommandBindings: Record<string, CommandBinding> = {};
         const cmdByRowId: Record<string, { methodName: string, commandRef: string, paramMapping: string }> = {};
 
         for (const row of cmdRes.values) {
@@ -235,11 +303,11 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                     commandRef: String(cmdId).trim(),
                     paramMapping: String(param || "").trim()
                 };
-                newCommandRegistry[String(label).trim()] = cmdInfo;
+                newCommandBindings[String(label).trim()] = cmdInfo;
                 cmdByRowId[rowID] = cmdInfo;
             }
         }
-        setCommandRegistry(newCommandRegistry);
+        setCommandBindings(newCommandBindings);
 
         // 2. Query relation column name for '绑定命令' in Type-DB
         const { db } = await getSqliteEngine();
@@ -285,10 +353,20 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                 // 1. 优先解析 Icon Menu 文本列：这些命令明确需要注入到 UI 菜单
                 if (iconMenuText) {
                     const mappedCmds = String(iconMenuText).split(/[,，]/).map(s => s.trim()).filter(Boolean);
-                    for (const cmdName of mappedCmds) {
-                        const cmdNameLower = cmdName.toLowerCase();
-                        const foundKey = Object.keys(newCommandRegistry).find(k => k.toLowerCase().includes(cmdNameLower));
-                        const cmdInfo = foundKey ? newCommandRegistry[foundKey] : undefined;
+                    for (const cmdToken of mappedCmds) {
+                        const tokenLower = cmdToken.toLowerCase();
+                        // 1. 优先精确定位 Command ID (如 plugin-index.command.safeUpdateBlock)
+                        let foundCmdDef = commandRegistry.getCommand(cmdToken) || commandRegistry.findByNameOrId(cmdToken);
+                        
+                        let cmdInfo: { methodName: string, commandRef: string, paramMapping: string } | undefined;
+                        if (foundCmdDef) {
+                            const foundKey = Object.keys(newCommandBindings).find(k => newCommandBindings[k].commandRef === foundCmdDef.id || k.toLowerCase() === foundCmdDef.name.toLowerCase());
+                            cmdInfo = foundKey ? newCommandBindings[foundKey] : { methodName: foundCmdDef.name, commandRef: foundCmdDef.id, paramMapping: "" };
+                        } else {
+                            const foundKey = Object.keys(newCommandBindings).find(k => k.toLowerCase().includes(tokenLower) || newCommandBindings[k].commandRef.toLowerCase().includes(tokenLower));
+                            cmdInfo = foundKey ? newCommandBindings[foundKey] : undefined;
+                        }
+
                         if (cmdInfo) {
                             const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
                             if (!exists) {
@@ -338,7 +416,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                     const matches = String(conditionalText).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
                     for (const m of matches) {
                         const cmdRef = m[1];
-                        const foundCmd = Object.values(newCommandRegistry).find(c => c.commandRef === cmdRef);
+                        const foundCmd = Object.values(newCommandBindings).find(c => c.commandRef === cmdRef);
                         if (foundCmd) {
                             const inIconMenu = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef && r.uiLocation === "IconMenu");
                             if (!inIconMenu) {
@@ -386,7 +464,7 @@ async function refreshRegistryFromApi() {
         const cmdDocs = await post("/api/query/sql", { stmt: cmdSql });
         const cmdByRowId: Record<string, { methodName: string, commandRef: string, paramMapping: string }> = {};
 
-        const newCommandRegistry: Record<string, CommandDef> = {};
+        const newCommandBindings: Record<string, CommandBinding> = {};
 
         if (cmdDocs && cmdDocs.length > 0) {
             const docId = cmdDocs[0].root_id;
@@ -421,11 +499,11 @@ async function refreshRegistryFromApi() {
                                 commandRef: cmdId.trim(),
                                 paramMapping: paramMapping.trim()
                             };
-                            newCommandRegistry[pk.trim()] = cmdInfo;
+                            newCommandBindings[pk.trim()] = cmdInfo;
                             cmdByRowId[row.id] = cmdInfo;
                         }
                     }
-                    setCommandRegistry(newCommandRegistry);
+                    setCommandBindings(newCommandBindings);
                 }
             }
         }
@@ -484,8 +562,8 @@ async function refreshRegistryFromApi() {
                     const mappedCmds = String(iconMenuRaw).split(/[,，]/).map(s => s.trim()).filter(Boolean);
                     for (const cmdName of mappedCmds) {
                         const cmdNameLower = cmdName.toLowerCase();
-                        const foundKey = Object.keys(newCommandRegistry).find(k => k.toLowerCase().includes(cmdNameLower));
-                        const cmdInfo = foundKey ? newCommandRegistry[foundKey] : undefined;
+                        const foundKey = Object.keys(newCommandBindings).find(k => k.toLowerCase().includes(cmdNameLower));
+                        const cmdInfo = foundKey ? newCommandBindings[foundKey] : undefined;
                         if (cmdInfo) {
                             const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
                             if (!exists) {

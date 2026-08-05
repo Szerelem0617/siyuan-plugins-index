@@ -1,4 +1,10 @@
 # 更新日志
+- Unreleased
+  - 重构：删除 SQLite 种子表（sys_command_db / sys_type_db），种子数据统一为 seed-data.ts 的 TS 常量
+  - 重构：未实例化时直接读种子常量；将数据存到思源后以思源 AV 为唯一数据源，删除后自动回到种子模式
+  - 重构：统一命名 CommandDef → CommandBinding、COMMAND_REGISTRY → COMMAND_BINDINGS，消除 Layer 1/2 混淆
+  - UI：操作文案改为“将数据存到思源”，补充“卸载插件后数据不丢失”说明
+  - 兼容：Icon Menu 优先精确匹配 Command ID，旧中文命令名自动清洗为绝对 ID
 - v1.10.4
   - 超级标签从用#键呼出改为用@键呼出
   - 修复了插件滚动条风格作用范围太广的问题

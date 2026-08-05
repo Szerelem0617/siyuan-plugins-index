@@ -37,10 +37,9 @@
   SELECT * FROM "av_20260721140000_5z3to31";
   ```
 - **系统内置表**：
-  实例化系统数据库后，可以查询 Layer 1/2/3 内存表：
-  - `sys_registry_db`：已注册的命令库
-  - `sys_command_db`：Layer 2 命令编排表
-  - `sys_type_db`：Layer 3 超级标签绑定表
+  - `sys_registry_db`：Layer 1 已注册的命令库（commands.json 的查询镜像）
+  - Layer 2/3 数据在“将数据存到思源”后存储于思源属性视图（command-db / supertag-db），
+    通过对应的 `av_*` 表查询；未存储时系统直接读取插件内置种子数据，无 SQLite 表。
 
 ### 2. 常用查询示例
 ```sql

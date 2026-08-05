@@ -1,7 +1,7 @@
 import { dispatchCommand } from "../command-dispatcher";
 import { commandRegistry } from "../registry/command-registry";
 import { showMessage, Dialog } from "siyuan";
-import { isDevInitSysEnabled, DEV_ENABLE_INIT_SYS, SUPERTAG_REGISTRY, COMMAND_REGISTRY } from "../registration";
+import { isDevInitSysEnabled, DEV_ENABLE_INIT_SYS, SUPERTAG_REGISTRY, COMMAND_BINDINGS } from "../registration";
 import { refreshSupertagRegistry } from "../utils/sync-service";
 import { openIndexDropdown } from "../../../ui/components/index-dropdown";
 
@@ -359,8 +359,8 @@ export async function handleInlineButtonClick(event: MouseEvent) {
 
         // Priority 2: Use mapping defined for the command globally in Command-DB
         if (paramMapping === null) {
-            // Look up by command ID in COMMAND_REGISTRY
-            const cmdConfig = Object.values(COMMAND_REGISTRY).find(c => c.commandRef === def.id);
+            // Look up by command ID in COMMAND_BINDINGS
+            const cmdConfig = Object.values(COMMAND_BINDINGS).find(c => c.commandRef === def.id);
             if (cmdConfig) {
                 paramMapping = cmdConfig.paramMapping;
                 console.log(`[InlineButton-Debug] Found global command mapping:`, paramMapping);

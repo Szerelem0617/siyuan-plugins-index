@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { COMMAND_REGISTRY } from "../../registration";
+    import { COMMAND_BINDINGS } from "../../registration";
 
     export let dialog: any;
     export let supertag: string;
@@ -105,7 +105,7 @@
         const argsStr = refOrLabel.includes("(") ? refOrLabel.slice(refOrLabel.indexOf("(")) : "";
         const bound = boundCommands.find(c => c.commandRef === base || c.label === base);
         if (bound) return bound.label + argsStr;
-        for (const [lbl, def] of Object.entries(COMMAND_REGISTRY)) {
+        for (const [lbl, def] of Object.entries(COMMAND_BINDINGS)) {
             if (def.commandRef === base || lbl === base) {
                 return lbl + argsStr;
             }
@@ -264,7 +264,7 @@
                     const matchArgs = cmdItem.match(/^([^(]+)\((.*)\)$/);
                     const label = matchArgs ? matchArgs[1].trim() : cmdItem.trim();
                     const boundCmd = boundCommands.find(c => c.label === label);
-                    const cmdRef = boundCmd?.commandRef || COMMAND_REGISTRY[label]?.commandRef || label;
+                    const cmdRef = boundCmd?.commandRef || COMMAND_BINDINGS[label]?.commandRef || label;
 
                     if (matchArgs) {
                         const argsStr = matchArgs[2].trim();
@@ -442,4 +442,3 @@
         background-color: var(--b3-theme-background-hover) !important;
     }
 </style>
-

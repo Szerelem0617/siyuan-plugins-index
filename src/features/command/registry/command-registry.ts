@@ -9,6 +9,10 @@
  *   3. 提供 getCommand() 供 Dispatcher 查询命令的执行方式和约束。
  *
  * 不负责：执行命令、渲染 UI、读写 AV 数据库。
+ *
+ * 注意：本文件的 CommandDef 是 Layer 1 命令定义；
+ * Layer 2 的绑定行（label → commandRef）见 registration.ts 的
+ * CommandBinding / COMMAND_BINDINGS，两者勿混用。
  */
 
 import commandsData from "./commands.json";

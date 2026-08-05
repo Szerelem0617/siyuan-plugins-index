@@ -1,5 +1,5 @@
 import { Dialog, showMessage } from "siyuan";
-import { getCommandAvId, getTypeAvId, COMMAND_REGISTRY } from "../registration";
+import { getCommandAvId, getTypeAvId, COMMAND_BINDINGS } from "../registration";
 import { encodeBtnHref } from "../global-registration/inline-button";
 import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
@@ -177,14 +177,7 @@ async function insertCommandIntoAv(avId: string, cmd: any) {
                 console.log("[IndexOS-Duplicate-Debug] Extracted existingIds from live AV:", existingIds);
             }
         } catch (e) {
-            console.error("[FooterClick] Live AV query failed, falling back to SQLite:", e);
-            try {
-                const existRes = db.exec(`SELECT Command_ID FROM sys_command_db`);
-                if (existRes.length > 0 && existRes[0].values.length > 0) {
-                    existingIds = existRes[0].values.map(row => String(row[0] || ""));
-                }
-                console.log("[IndexOS-Duplicate-Debug] Fallback SQLite existingIds:", existingIds);
-            } catch (_) {}
+            console.error("[FooterClick] Live AV query failed:", e);
         }
 
         const baseId = cmd.id;
@@ -287,13 +280,13 @@ export async function handleCommandDbAltClick(
     if (!cleanLabel) return;
 
     // 查找对应的 Command 定义
-    let cmdInfo = COMMAND_REGISTRY[cleanLabel];
+    let cmdInfo = COMMAND_BINDINGS[cleanLabel];
     if (!cmdInfo) {
-        const foundKey = Object.keys(COMMAND_REGISTRY).find(k => 
+        const foundKey = Object.keys(COMMAND_BINDINGS).find(k => 
             cleanLabel.includes(k) || k.includes(cleanLabel)
         );
         if (foundKey) {
-            cmdInfo = COMMAND_REGISTRY[foundKey];
+            cmdInfo = COMMAND_BINDINGS[foundKey];
         }
     }
     const resolvedCommand = cmdInfo?.commandRef || targetCommand || cleanLabel;
