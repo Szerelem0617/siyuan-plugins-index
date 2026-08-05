@@ -326,10 +326,12 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
     });
     dialog.element.classList.add("indexos-dialog");
 
+    console.log(`[IconMenu-Dialog] openIconMenuSelector avId=${avId} rowId=${rowId} supertag="${supertagLabel}" currentIconMenuVal="${currentIconMenuVal}" boundRows=${boundCommandRowIds.length} selectable=${selectableCommands.length}`);
+
     const IconMenuConfigDialog = (await import("./dialogs/IconMenuConfigDialog.svelte")).default;
 
     new IconMenuConfigDialog({
-        target: document.getElementById("icon-menu-config-dialog")!,
+        target: dialog.element.querySelector("#icon-menu-config-dialog")!,
         props: {
             dialog,
             supertag: supertagLabel,

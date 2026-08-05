@@ -46,6 +46,28 @@
     overflow: hidden !important;
 }
 
+/* ─── 全局防透色：插件弹窗内把思源主题变量映射为 IndexOS Token ───
+ * 组件内联样式大量引用 var(--b3-theme-*)，若不映射会透出用户主题颜色。
+ * 在该作用域内重定义这些变量，使插件弹窗整体使用 IndexOS 设计令牌，
+ * 同时保证背景不透明（theme 变量被映射为不透明的 IndexOS 底色）。
+ */
+.indexos-dialog {
+    --b3-theme-background: var(--indexos-bg-base) !important;
+    --b3-theme-surface: var(--indexos-bg-container) !important;
+    --b3-theme-surface-lighter: var(--indexos-bg-card) !important;
+    --b3-theme-background-hover: var(--indexos-bg-highlight) !important;
+    --b3-theme-on-background: var(--indexos-text-main) !important;
+    --b3-theme-on-surface: var(--indexos-text-main) !important;
+    --b3-theme-on-surface-light: var(--indexos-text-muted) !important;
+    --b3-theme-primary: var(--indexos-accent-primary) !important;
+    --b3-border-color: var(--indexos-border-light) !important;
+}
+
+/* body 也铺不透明底色，防止任何缝隙透出主题（容器本身已不透明） */
+.indexos-dialog .b3-dialog__body {
+    background: var(--indexos-bg-base) !important;
+}
+
 .indexos-dialog .b3-dialog__content,
 .indexos-dialog #index-settings,
 .indexos-dialog .config__panel,

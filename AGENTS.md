@@ -19,6 +19,14 @@
 - **没有 SQLite 种子表**（`sys_command_db` / `sys_type_db` 已删除，不要重建，不要在运行时写）。
 - 命名：`CommandDef`（Layer 1 命令定义）≠ `CommandBinding`（Layer 2 绑定行，`COMMAND_BINDINGS`）。
 
+## 本地环境
+
+- 思源源码在本地可查（Dialog 等组件实现、样式均可直接读源码确认）：
+  `/Users/feng/Desktop/Git-cloned/siyuan`
+  - Dialog 组件实现：`app/src/dialog/index.ts`
+  - Dialog 样式：`app/src/assets/scss/component/_dialog.scss`
+- 插件 CSS 设计令牌（`--indexos-*`）定义在 `src/ui/styles/tokens.css`，弹窗类样式在 `src/ui/styles/utilities.css`。
+
 ## 工程命令
 
 - 类型检查：`npx tsc --noEmit`（必须零错误）
