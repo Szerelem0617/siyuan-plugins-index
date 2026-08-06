@@ -27,23 +27,37 @@ export interface RuleCommand {
 export interface RuleScript {
     name: string;
     commands: RuleCommand[];
+    /** Conditional 用：触发事件列表（空 = 不限） */
+    events?: string[];
 }
 
-/** 生成规则脚本 */
+/** 生成规则脚本；events 非空时生成事件守卫（Conditional 用） */
 export function generateRuleScript(
     name: string,
-    commands: { commandRef: string; params: Record<string, unknown> }[]
+    commands: { commandRef: string; params: Record<string, unknown> }[],
+    events?: string[]
 ): string {
     const lines = commands.map(cmd => {
         const paramsText = JSON.stringify(cmd.params || {}, null, 2);
         return `    await dispatch(${JSON.stringify(cmd.commandRef)}, ${paramsText});`;
     });
-    return [
-        `// 名称: ${name}`,
-        `async ({ dispatch, state, eventName }) => {`,
-        ...lines,
-        `}`
-    ].join("\n");
+    const head: string[] = [];
+    if (name.trim()) head.push(`// 名称: ${name}`);
+    if (events && events.length > 0) head.push(`// 事件: ${events.join(", ")}`);
+    const body = events && events.length > 0
+        ? [
+            `async ({ dispatch, state, eventName }) => {`,
+            `    if (${JSON.stringify(events)}.includes(eventName)) {`,
+            ...lines.map(l => `        ${l.trim()}`),
+            `    }`,
+            `}`
+        ]
+        : [
+            `async ({ dispatch, state, eventName }) => {`,
+            ...lines,
+            `}`
+        ];
+    return [...head, ...body].join("\n");
 }
 
 /**
@@ -55,6 +69,10 @@ export function parseRuleScript(text: string): RuleScript | null {
 
     const nameMatch = text.match(/\/\/\s*名称\s*:\s*(.+)/);
     const name = nameMatch ? nameMatch[1].trim() : "";
+    const eventsMatch = text.match(/\/\/\s*事件\s*:\s*(.+)/);
+    const events = eventsMatch
+        ? eventsMatch[1].split(/[,，]/).map(s => s.trim()).filter(Boolean)
+        : undefined;
 
     const commands: RuleCommand[] = [];
     const scanRe = /dispatch\(\s*["']([^"']+)["']\s*,\s*/g;
@@ -94,5 +112,5 @@ export function parseRuleScript(text: string): RuleScript | null {
     }
 
     if (commands.length === 0) return null;
-    return { name, commands };
+    return { name, commands, events };
 }

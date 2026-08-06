@@ -12,6 +12,8 @@ import { parseSupertags, diffSupertags, cleanTagString, tagCache } from "./super
 import { supertagBinder } from "./supertag-binder";
 import { triggerConditionalCommands } from "./supertag-trigger";
 import { SupertagRenderer } from "../renderer/SupertagRenderer";
+import { commandRegistry } from "../../registry/command-registry";
+import { encodeBtnHref } from "../../global-registration/inline-button";
 
 export class SupertagMonitor {
     private dataRegistry: TypeConfig[] = [];
@@ -338,9 +340,49 @@ export class SupertagMonitor {
 
             console.log(`[Supertag] Step 2: Executing conditional trigger commands for #${cleanTag}...`);
             await triggerConditionalCommands(blockId, cleanTag, "tag_created");
+            await this.ensureCommandButtons(blockId, cleanTag);
         } catch (e) {
             console.error("[Supertag] Failed to process new tag:", blockId, e);
         }
+    }
+
+    /**
+     * 若该超标签配置了 Button 命令，在块下方新建一个段落块，内含命令按钮。
+     * 通过块属性 custom-index-buttons 去重（已有按钮段落则跳过）。
+     */
+    private async ensureCommandButtons(blockId: string, tag: string) {
+        const cleanTag = tag.replace(/^#/, "").trim().toLowerCase();
+        const buttonEntries = SUPERTAG_REGISTRY.filter(l =>
+            l.typeTag.toLowerCase() === cleanTag && l.uiLocation === "Button" && l.commandRef
+        );
+        if (buttonEntries.length === 0) return;
+
+        try {
+            const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+            if (attrsRes?.data?.["custom-index-buttons"]) {
+                console.log(`[Supertag] 块 ${blockId} 已有命令按钮段落，跳过`);
+                return;
+            }
+        } catch { /* ignore */ }
+
+        const buttonsMd = buttonEntries.map(e => {
+            const cmdDef = commandRegistry.getCommand(e.commandRef);
+            const label = cmdDef?.name || e.commandRef;
+            const href = encodeBtnHref({ command: e.commandRef, param: e.paramMapping || undefined });
+            return `[⚡ ${label}](${href})`;
+        }).join(" ");
+
+        const res = await post("/api/block/insertBlock", {
+            previousID: blockId,
+            dataType: "markdown",
+            data: buttonsMd
+        });
+        const tx = Array.isArray(res) ? res : ((res as any)?.data || res);
+        const newBlockId = Array.isArray(tx) ? tx[0]?.doOperations?.[0]?.id : (tx as any)?.id;
+        if (newBlockId) {
+            await post("/api/attr/setBlockAttrs", { id: blockId, attrs: { "custom-index-buttons": newBlockId } });
+        }
+        console.log(`[Supertag] 已为 #${cleanTag} 在块下方创建命令按钮段落 (${buttonEntries.length} 个按钮)`);
     }
 
     public async processRemovedTag(blockId: string, tag: string) {

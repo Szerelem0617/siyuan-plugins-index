@@ -57,7 +57,7 @@ export function scanAvIndicators() {
                     txt.includes("icon menu") ||
                     txt.includes("conditional") ||
                     txt.includes("条件") ||
-                    txt.includes("图标菜单")
+                    txt.includes("图标菜单") || txt.includes("Icon Menu") || txt.includes("Icon menu & button")
                 );
             }
 

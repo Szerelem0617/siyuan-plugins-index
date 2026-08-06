@@ -5,6 +5,8 @@
     import { getCommandAvId } from "../../registration";
     import { commandRegistry } from "../../registry/command-registry";
     import { backgroundScheduler } from "../../background/background-scheduler";
+    import CommandSequenceEditor from "../../pipeline/CommandSequenceEditor.svelte";
+    import { generateRuleScript, parseRuleScript } from "../../pipeline/script-dsl";
 
     export let dialog: any;
 
@@ -17,6 +19,7 @@
         commandIds?: string[];
         eventType?: "block_content_changed" | "block_attribute_changed" | "doc_opened" | "task_completed";
         boundCommands?: string[];
+        commandParams?: Record<string, Record<string, string>>;
         geekScript?: string;
         tickRateMs?: number;
     }
@@ -110,21 +113,29 @@
         if (!r) return "";
         let lines = [`// ── Rule: ${r.name}`];
 
+        const compileDispatchLines = (ids: string[]): string[] => {
+            return (ids || []).map(cmdId => {
+                const params = r.commandParams?.[cmdId] || {};
+                const hasParams = Object.keys(params).length > 0;
+                return hasParams
+                    ? `await dispatch("${cmdId}", ${JSON.stringify(params)});`
+                    : `await dispatch("${cmdId}");`;
+            });
+        };
+
         if (r.type === "cron") {
             lines.push(`// [Cron: ${r.cronExpr || "0 2 * * *"}]`);
-            if (r.commandIds && r.commandIds.length > 0) {
-                for (const cmdId of r.commandIds) {
-                    lines.push(`await dispatch("${cmdId}");`);
-                }
+            const dispatchLines = compileDispatchLines(r.commandIds || []);
+            if (dispatchLines.length > 0) {
+                lines.push(...dispatchLines);
             } else {
                 lines.push(`// await dispatch("example.command");`);
             }
         } else if (r.type === "condition") {
             lines.push(`// [Condition: event: ${r.eventType || "block_content_changed"}]`);
-            if (r.boundCommands && r.boundCommands.length > 0) {
-                for (const cmdId of r.boundCommands) {
-                    lines.push(`await dispatch("${cmdId}");`);
-                }
+            const dispatchLines = compileDispatchLines(r.boundCommands || []);
+            if (dispatchLines.length > 0) {
+                lines.push(...dispatchLines);
             } else {
                 lines.push(`// await dispatch("example.command");`);
             }
@@ -138,6 +149,49 @@
         }
 
         return lines.join("\n");
+    }
+
+    /** 从规则脚本块中提取 dispatch 命令与参数 */
+    function extractCommands(fullText: string): { ids: string[]; params: Record<string, Record<string, string>> } {
+        const ids: string[] = [];
+        const params: Record<string, Record<string, string>> = {};
+        const re = /dispatch\s*\(\s*["']([^"']+)["']\s*(?:,\s*(\{[\s\S]*?\}))?\s*\)/g;
+        let m;
+        while ((m = re.exec(fullText)) !== null) {
+            const id = m[1];
+            ids.push(id);
+            if (m[2]) {
+                try {
+                    const parsed = JSON.parse(m[2]) as Record<string, unknown>;
+                    const clean: Record<string, string> = {};
+                    for (const [k, v] of Object.entries(parsed)) clean[k] = String(v);
+                    params[id] = clean;
+                } catch { /* ignore */ }
+            }
+        }
+        return { ids, params };
+    }
+
+    /** 当前规则的命令序列脚本（喂给 CommandSequenceEditor） */
+    function ruleSequenceScript(r: AutomationRule): string {
+        const ids = r.type === "cron" ? (r.commandIds || []) : (r.boundCommands || []);
+        return generateRuleScript("", ids.map(id => ({ commandRef: id, params: r.commandParams?.[id] || {} })));
+    }
+
+    /** 编辑器脚本变化 → 同步回规则 */
+    function applyRuleScript(r: AutomationRule, script: string) {
+        const rule = parseRuleScript(script);
+        const ids = rule ? rule.commands.map(c => c.commandRef) : [];
+        const params: Record<string, Record<string, string>> = {};
+        if (rule) {
+            for (const c of rule.commands) params[c.commandRef] = { ...c.params };
+        }
+        if (r.type === "cron") {
+            r.commandIds = ids;
+        } else {
+            r.boundCommands = ids;
+        }
+        r.commandParams = params;
     }
 
     // 将全量规则合并编译为完整 TS 脚本
@@ -177,19 +231,15 @@
             // 1. Cron
             const cronMatch = /\/\/\s*\[Cron:\s*([^\]]+)\]/i.exec(fullText);
             if (cronMatch) {
-                const commandIds: string[] = [];
-                const dispatchRegex = /dispatch\s*\(\s*["']([^"']+)["']/g;
-                let m;
-                while ((m = dispatchRegex.exec(fullText)) !== null) {
-                    commandIds.push(m[1]);
-                }
+                const { ids: commandIds, params: commandParams } = extractCommands(fullText);
                 parsedRules.push({
                     id: "rule_" + Date.now() + "_" + index,
                     name: ruleName,
                     type: "cron",
                     enabled: true,
                     cronExpr: cronMatch[1].trim(),
-                    commandIds
+                    commandIds,
+                    commandParams
                 });
                 continue;
             }
@@ -199,12 +249,7 @@
             if (condMatch) {
                 const evMatch = /event:\s*([^\]\)]+)/i.exec(condMatch[1] || fullText);
 
-                const boundCommands: string[] = [];
-                const dispatchRegex = /dispatch\s*\(\s*["']([^"']+)["']/g;
-                let m;
-                while ((m = dispatchRegex.exec(fullText)) !== null) {
-                    boundCommands.push(m[1]);
-                }
+                const { ids: boundCommands, params: commandParams } = extractCommands(fullText);
 
                 parsedRules.push({
                     id: "rule_" + Date.now() + "_" + index,
@@ -212,6 +257,7 @@
                     type: "condition",
                     enabled: true,
                     boundCommands,
+                    commandParams,
                     eventType: (evMatch ? evMatch[1].trim() : "block_content_changed") as any
                 });
                 continue;
@@ -462,38 +508,14 @@
                             </select>
                             <input type="text" class="b3-text-field" bind:value={activeRule.cronExpr} placeholder="表达式: 0 2 * * *" />
 
-                            <div style="font-weight: 600; margin-top: 6px; color: var(--b3-theme-on-background);">顺序构建 Pipeline 命令管道 (勾选后显示 1, 2, 3... 序号):</div>
-                            <div style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; padding-right: 2px;">
-                                {#each availableCommands as cmd}
-                                    {@const selIndex = findPipelineIndex(activeRule.commandIds, cmd.id)}
-                                    <!-- svelte-ignore a11y-click-events-have-key-events -->
-                                    <!-- svelte-ignore a11y-no-static-element-interactions -->
-                                    <div
-                                        style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 4px; cursor: pointer; border: 1px solid {selIndex > -1 ? 'var(--b3-theme-primary)' : 'var(--b3-border-color)'}; background-color: {selIndex > -1 ? 'var(--b3-theme-background-hover)' : 'transparent'}; transition: all 0.1s ease;"
-                                        on:click={() => togglePipelineSelection(activeRule, "commandIds", cmd.id)}
-                                    >
-                                        <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                                            <input
-                                                type="checkbox"
-                                                class="b3-checkbox"
-                                                checked={selIndex > -1}
-                                                on:click|stopPropagation={() => togglePipelineSelection(activeRule, "commandIds", cmd.id)}
-                                            />
-                                            <span style="font-size: 12px; font-weight: {selIndex > -1 ? 'bold' : 'normal'}; color: var(--b3-theme-on-surface); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-                                                {cmd.name} <span style="opacity: 0.5; font-weight: normal; font-family: monospace;">({cmd.id})</span>
-                                            </span>
-                                        </div>
-
-                                        {#if selIndex > -1}
-                                            <span
-                                                style="background-color: var(--b3-theme-primary); color: var(--b3-theme-on-primary); font-size: 10px; font-weight: bold; height: 18px; width: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"
-                                                title="第 {selIndex + 1} 个顺序执行"
-                                            >
-                                                {selIndex + 1}
-                                            </span>
-                                        {/if}
-                                    </div>
-                                {/each}
+                            <div style="font-weight: 600; margin-top: 6px; color: var(--b3-theme-on-background);">命令序列（勾选并按 ⚙ 配置入参）:</div>
+                            <div style="height: 360px; display: flex; border: 1px solid var(--b3-border-color); border-radius: 6px; padding: 8px;">
+                                <CommandSequenceEditor
+                                    key={selectedRuleId}
+                                    initialScript={ruleSequenceScript(activeRule)}
+                                    showName={false}
+                                    onScriptChange={s => applyRuleScript(activeRule, s)}
+                                />
                             </div>
                         </div>
                     {:else if activeTab === "condition"}
@@ -506,38 +528,14 @@
                                 {/each}
                             </select>
 
-                            <div style="font-weight: 600; margin-top: 4px; color: var(--b3-theme-on-background);">顺序构建 Pipeline 命令管道 (按顺序勾选，若前置命令返回 false 将阻断后续):</div>
-                            <div style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; padding-right: 2px;">
-                                {#each availableCommands as cmd}
-                                    {@const selIndex = findPipelineIndex(activeRule.boundCommands, cmd.id)}
-                                    <!-- svelte-ignore a11y-click-events-have-key-events -->
-                                    <!-- svelte-ignore a11y-no-static-element-interactions -->
-                                    <div
-                                        style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 4px; cursor: pointer; border: 1px solid {selIndex > -1 ? 'var(--b3-theme-primary)' : 'var(--b3-border-color)'}; background-color: {selIndex > -1 ? 'var(--b3-theme-background-hover)' : 'transparent'}; transition: all 0.1s ease;"
-                                        on:click={() => togglePipelineSelection(activeRule, "boundCommands", cmd.id)}
-                                    >
-                                        <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                                            <input
-                                                type="checkbox"
-                                                class="b3-checkbox"
-                                                checked={selIndex > -1}
-                                                on:click|stopPropagation={() => togglePipelineSelection(activeRule, "boundCommands", cmd.id)}
-                                            />
-                                            <span style="font-size: 12px; font-weight: {selIndex > -1 ? 'bold' : 'normal'}; color: var(--b3-theme-on-surface); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-                                                {cmd.name} <span style="opacity: 0.5; font-weight: normal; font-family: monospace;">({cmd.id})</span>
-                                            </span>
-                                        </div>
-
-                                        {#if selIndex > -1}
-                                            <span
-                                                style="background-color: var(--b3-theme-primary); color: var(--b3-theme-on-primary); font-size: 10px; font-weight: bold; height: 18px; width: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"
-                                                title="第 {selIndex + 1} 个顺序执行"
-                                            >
-                                                {selIndex + 1}
-                                            </span>
-                                        {/if}
-                                    </div>
-                                {/each}
+                            <div style="font-weight: 600; margin-top: 4px; color: var(--b3-theme-on-background);">命令序列（勾选并按 ⚙ 配置入参）:</div>
+                            <div style="height: 360px; display: flex; border: 1px solid var(--b3-border-color); border-radius: 6px; padding: 8px;">
+                                <CommandSequenceEditor
+                                    key={selectedRuleId}
+                                    initialScript={ruleSequenceScript(activeRule)}
+                                    showName={false}
+                                    onScriptChange={s => applyRuleScript(activeRule, s)}
+                                />
                             </div>
                         </div>
                     {:else if activeTab === "system"}

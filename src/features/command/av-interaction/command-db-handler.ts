@@ -621,7 +621,7 @@ async function handleAvMouseOver(event: MouseEvent) {
             if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
                 const keyName = checkColRes[0].values[0][0];
                 clickedColName = checkColRes[0].values[0][1];
-                if (keyName === "Icon Menu" || keyName === "图标菜单") {
+                if (keyName === "Icon Menu" || keyName === "Icon menu & button" || keyName === "图标菜单") {
                     isIconMenuHover = true;
                 }
             }

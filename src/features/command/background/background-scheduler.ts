@@ -22,6 +22,7 @@ export interface AutomationTask {
     enabled: boolean;
     cronExpr?: string;
     boundCommands?: string[];
+    commandParams?: Record<string, Record<string, string>>;
     eventType?: string;
     tickRateMs?: number;
     scriptBlock: string;
@@ -143,6 +144,26 @@ class BackgroundScheduler {
         const tasks: AutomationTask[] = [];
         if (!script || !script.trim()) return tasks;
 
+        const extractDispatchCommands = (fullText: string): { ids: string[]; params: Record<string, Record<string, string>> } => {
+            const ids: string[] = [];
+            const params: Record<string, Record<string, string>> = {};
+            const re = /dispatch\s*\(\s*["']([^"']+)["']\s*(?:,\s*(\{[\s\S]*?\}))?\s*\)/g;
+            let m;
+            while ((m = re.exec(fullText)) !== null) {
+                const id = m[1];
+                ids.push(id);
+                if (m[2]) {
+                    try {
+                        const parsed = JSON.parse(m[2]) as Record<string, unknown>;
+                        const clean: Record<string, string> = {};
+                        for (const [k, v] of Object.entries(parsed)) clean[k] = String(v);
+                        params[id] = clean;
+                    } catch { /* ignore */ }
+                }
+            }
+            return { ids, params };
+        };
+
         const blocks = script.split(/\/\/\s*── Rule:/i);
         let taskIndex = 0;
 
@@ -161,12 +182,7 @@ class BackgroundScheduler {
             const cronMatch = /\/\/\s*\[Cron:\s*([^\]]+)\]/i.exec(fullText);
             if (cronMatch) {
                 const cronExpr = cronMatch[1].trim();
-                const boundCommands: string[] = [];
-                const dispatchRegex = /dispatch\s*\(\s*["']([^"']+)["']/g;
-                let m;
-                while ((m = dispatchRegex.exec(fullText)) !== null) {
-                    boundCommands.push(m[1]);
-                }
+                const { ids: boundCommands, params: commandParams } = extractDispatchCommands(fullText);
                 tasks.push({
                     id: `task_cron_${taskIndex}_${cronExpr}`,
                     name: ruleName,
@@ -174,6 +190,7 @@ class BackgroundScheduler {
                     enabled: true,
                     cronExpr,
                     boundCommands,
+                    commandParams,
                     intervalMs: this.parseCronIntervalMs(cronExpr),
                     scriptBlock: fullText,
                     status: "idle"
@@ -185,12 +202,7 @@ class BackgroundScheduler {
             const condMatch = /\/\/\s*\[Condition:\s*([^\]]*)\]/i.exec(fullText);
             if (condMatch) {
                 const evMatch = /event:\s*([^\]\)]+)/i.exec(condMatch[1] || fullText);
-                const boundCommands: string[] = [];
-                const dispatchRegex = /dispatch\s*\(\s*["']([^"']+)["']/g;
-                let m;
-                while ((m = dispatchRegex.exec(fullText)) !== null) {
-                    boundCommands.push(m[1]);
-                }
+                const { ids: boundCommands, params: commandParams } = extractDispatchCommands(fullText);
 
                 tasks.push({
                     id: `task_cond_${taskIndex}`,
@@ -198,6 +210,7 @@ class BackgroundScheduler {
                     type: "condition",
                     enabled: true,
                     boundCommands,
+                    commandParams,
                     eventType: evMatch ? evMatch[1].trim() : "block_content_changed",
                     intervalMs: 3000,
                     scriptBlock: fullText,
@@ -275,7 +288,7 @@ class BackgroundScheduler {
             if (task.boundCommands && task.boundCommands.length > 0) {
                 for (const cmdId of task.boundCommands) {
                     console.log(`[BackgroundScheduler-Debug] Executing Pipeline Command: ${cmdId}`);
-                    const res = await dispatchCommand(cmdId, {}, ctx);
+                    const res = await dispatchCommand(cmdId, task.commandParams?.[cmdId] || {}, ctx);
                     if (res && res.success === false) {
                         console.log(`[BackgroundScheduler-Debug] Pipeline halted by false result at command: ${cmdId}`);
                         break;

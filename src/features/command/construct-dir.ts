@@ -182,7 +182,7 @@ export async function constructCommandStorage() {
                         cleanIconMenuVal = "plugin-index.command.safeUpdateBlock";
                     }
 
-                    populateOps.push({ keyID: keyMap["Icon Menu"], itemID: row.rowID, value: { type: "text", text: { content: cleanIconMenuVal } } });
+                    populateOps.push({ keyID: keyMap["Icon menu & button"], itemID: row.rowID, value: { type: "text", text: { content: cleanIconMenuVal } } });
                     populateOps.push({ keyID: keyMap["Conditional"], itemID: row.rowID, value: { type: "text", text: { content: String(row.conditional || "") } } });
                 }
 
@@ -487,7 +487,7 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
 
     const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
     const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
-    const iconMenuKey = typeKeys.find((k: any) => k.name === "Icon Menu");
+    const iconMenuKey = typeKeys.find((k: any) => k.name === "Icon Menu" || k.name === "Icon menu & button" || k.name === "图标菜单");
     const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
 
     const batchValues: any[] = [];

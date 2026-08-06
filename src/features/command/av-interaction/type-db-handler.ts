@@ -48,7 +48,7 @@ export async function handleTypeDbAltClick(
             clickedColName = checkColRes[0].values[0][1];
             if (keyName === "Conditional" || keyName === "触发器" || keyName === "On Create" || keyName === "创建时") {
                 isConditionalCol = true;
-            } else if (keyName === "Icon Menu" || keyName === "图标菜单" || keyName === "绑定命令") {
+            } else if (keyName === "Icon Menu" || keyName === "Icon menu & button" || keyName === "图标菜单" || keyName === "绑定命令") {
                 isIconMenuCol = true;
             }
         }
@@ -201,8 +201,8 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
         const dialog = new Dialog({
             title: "配置条件触发器 (Conditional Triggers)",
             content: `<div class="b3-dialog__content" id="conditional-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-            width: "420px",
-            height: "520px"
+            width: "720px",
+            height: "640px"
         });
         dialog.element.classList.add("indexos-dialog");
 
@@ -319,10 +319,10 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
     }
 
     const dialog = new Dialog({
-        title: `配置图标菜单`,
+        title: `配置 Icon menu & Button`,
         content: `<div id="icon-menu-config-dialog" style="height: 100%;"></div>`,
-        width: "420px",
-        height: "450px"
+        width: "560px",
+        height: "560px"
     });
     dialog.element.classList.add("indexos-dialog");
 

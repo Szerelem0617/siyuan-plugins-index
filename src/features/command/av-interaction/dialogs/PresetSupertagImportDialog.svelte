@@ -55,7 +55,7 @@
             const iconMenuCmd = preset.defaultCommands || "";
             const conditionalScript = preset.defaultConditional || "";
 
-            const sql = `INSERT INTO "supertag-db" ("主键", "Icon Menu", "Conditional") VALUES ('${cleanTag}', '${iconMenuCmd}', '${conditionalScript}') ON CONFLICT("主键") DO UPDATE SET "Icon Menu" = EXCLUDED."Icon Menu", "Conditional" = EXCLUDED."Conditional"`;
+            const sql = `INSERT INTO "supertag-db" ("主键", "Icon menu & button", "Conditional") VALUES ('${cleanTag}', '${iconMenuCmd}', '${conditionalScript}') ON CONFLICT("主键") DO UPDATE SET "Icon menu & button" = EXCLUDED."Icon menu & button", "Conditional" = EXCLUDED."Conditional"`;
             await runQuery(sql);
 
             showMessage(`✓ 成功导入超级标签: #${cleanTag}`);
