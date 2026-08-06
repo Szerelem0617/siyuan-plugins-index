@@ -1,19 +1,29 @@
 <script lang="ts">
+    import { onMount } from "svelte";
     import { Dialog, showMessage } from "siyuan";
     import { commandRegistry } from "./registry/command-registry";
     import {
-        loadEntryConfig, saveEntryConfig, ENTRY_POSITIONS, BLOCK_TYPES,
+        loadEntryConfig, saveEntryConfig, resolveEntryConfigBlockId, ENTRY_POSITIONS, BLOCK_TYPES,
         type EntryConfig, type BlockMenuEntry
     } from "./entry-config";
     import { refreshTopBarCommands } from "./global-registration/top-bar";
 
     export let dialog: Dialog;
 
-    let cfg: EntryConfig = loadEntryConfig();
+    let cfg: EntryConfig | null = null;
+    let loading = true;
+    let isInstantiated = false;
     let activePos = "顶栏右";
     let searchQuery = "";
     let editingTypes: string | null = null; // 块菜单：正在配类型的命令 id
     let saving = false;
+
+    onMount(async () => {
+        isInstantiated = !!(await resolveEntryConfigBlockId());
+        cfg = await loadEntryConfig();
+        loading = false;
+        console.log(`[EntryConfig] 已加载（实例化=${isInstantiated}）`, cfg);
+    });
 
     $: commands = commandRegistry
         .getAllCommands()
@@ -26,7 +36,7 @@
         || cmd.id.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    $: entries = cfg.positions[activePos] || [];
+    $: entries = cfg ? (cfg.positions[activePos] || []) : [];
     $: selectedMap = Object.fromEntries(entries.map(e => [typeof e === "string" ? e : e.id, true]));
 
     function toggle(id: string) {
@@ -57,6 +67,11 @@
     }
 
     async function handleSave() {
+        if (!cfg) return;
+        if (!isInstantiated) {
+            showMessage("未实例化状态下不能保存：请先将数据存到思源", 3000, "error");
+            return;
+        }
         saving = true;
         try {
             await saveEntryConfig(cfg);
@@ -73,7 +88,15 @@
 <div class="fn__flex-column" style="height: 100%; padding: 16px; box-sizing: border-box; gap: 10px;">
     <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); flex-shrink: 0;">🧭 入口配置（位置 → 命令）</div>
 
-    <div style="display: flex; gap: 12px; flex: 1; min-height: 0;">
+    {#if loading}
+        <div style="text-align: center; padding: 40px; opacity: 0.6; font-size: 12px;">加载中...</div>
+    {:else if cfg}
+        {#if !isInstantiated}
+            <div style="font-size: 11px; padding: 6px 10px; border-radius: 5px; background: rgba(240, 173, 78, 0.12); color: var(--indexos-text-warn, #e6a23c); flex-shrink: 0;">
+                ⓘ 当前为未实例化状态，显示种子默认配置（只读）。请先“将数据存到思源”，入口配置会保存在 Command-DB 数据库块属性中。
+            </div>
+        {/if}
+        <div style="display: flex; gap: 12px; flex: 1; min-height: 0;">
         <!-- 左：位置列表 -->
         <div style="width: 150px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; border-right: 1px solid var(--indexos-border-divider, rgba(161,196,230,0.2)); padding-right: 8px;">
             {#each ENTRY_POSITIONS as pos}
@@ -137,10 +160,11 @@
                 <div style="font-size: 10px; color: var(--indexos-text-muted); flex-shrink: 0;">块菜单命令默认出现在所有块类型上；点"⚙ 类型"可限定只出现在某些块。</div>
             {/if}
         </div>
-    </div>
+        </div>
 
-    <div class="fn__flex" style="justify-content: flex-end; gap: 8px; flex-shrink: 0;">
-        <button class="b3-button b3-button--cancel" on:click={() => dialog.destroy()}>取消</button>
-        <button class="b3-button b3-button--text" on:click={handleSave} disabled={saving}>保存并刷新</button>
-    </div>
+        <div class="fn__flex" style="justify-content: flex-end; gap: 8px; flex-shrink: 0;">
+            <button class="b3-button b3-button--cancel" on:click={() => dialog.destroy()}>取消</button>
+            <button class="b3-button b3-button--text" on:click={handleSave} disabled={saving || !isInstantiated}>保存并刷新</button>
+        </div>
+    {/if}
 </div>

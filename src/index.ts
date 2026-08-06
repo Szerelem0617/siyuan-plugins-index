@@ -14,7 +14,6 @@ import { isDevInitSysEnabled, COMMAND_BINDINGS } from "./features/command/regist
 import { decodeBtnHref } from "./features/command/global-registration/inline-button";
 import type { CommandContext } from "./features/command/command-dispatcher";
 import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems, addBlockEntryMenuItems, addPageEntryMenuItems, addEditorEntryMenuItems } from "./features/command/menu-hooks";
-import { initEntryConfig } from "./features/command/entry-config";
 import { refreshSupertagRegistry, syncGlobalSupertagsCache } from "./features/command/utils/sync-service";
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { dispatchCommand } from "./features/command/command-dispatcher";
@@ -92,7 +91,6 @@ export default class IndexPlugin extends Plugin {
 
         this.init();
         await settings.initData();
-        await initEntryConfig();
         addSlash(); // Rebuild slash items after settings are loaded
         await initTopbar();
 

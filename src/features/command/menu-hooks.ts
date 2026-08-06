@@ -247,8 +247,8 @@ function addMenuEntry(
     return true;
 }
 
-function addEntryMenuSection(detail: any, position: "块菜单" | "页面菜单" | "编辑器菜单") {
-    const cfg = loadEntryConfig();
+async function addEntryMenuSection(detail: any, position: "块菜单" | "页面菜单" | "编辑器菜单") {
+    const cfg = await loadEntryConfig();
     const entries = position === "块菜单"
         ? blockMenuEntries(cfg)
         : positionCommands(cfg, position).map(id => ({ id }) as BlockMenuEntry);
@@ -278,14 +278,14 @@ function addEntryMenuSection(detail: any, position: "块菜单" | "页面菜单"
     console.log(`[EntryMenu] ${position} 注入 ${added} 个命令`);
 }
 
-export function addBlockEntryMenuItems({ detail }: any) {
-    addEntryMenuSection(detail, "块菜单");
+export async function addBlockEntryMenuItems({ detail }: any) {
+    await addEntryMenuSection(detail, "块菜单");
 }
 
-export function addPageEntryMenuItems({ detail }: any) {
-    addEntryMenuSection(detail, "页面菜单");
+export async function addPageEntryMenuItems({ detail }: any) {
+    await addEntryMenuSection(detail, "页面菜单");
 }
 
-export function addEditorEntryMenuItems({ detail }: any) {
-    addEntryMenuSection(detail, "编辑器菜单");
+export async function addEditorEntryMenuItems({ detail }: any) {
+    await addEntryMenuSection(detail, "编辑器菜单");
 }

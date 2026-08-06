@@ -4,7 +4,7 @@ import { showMessage } from "siyuan";
 import { sleep } from "../../shared/utils";
 import { setCommandAvId, setTypeAvId, setCommandDocId, setTypeDocId } from "./registration";
 import { instantiateAV } from "../sqlite/sqlite-manager";
-import { 
+import {
     NOTEBOOK_NAME, 
     NOTEBOOK_ICON, 
     COMMAND_DB_CONFIG, 
@@ -15,6 +15,7 @@ import {
     getSeedCommandRows,
     getSeedSupertagRows
 } from "./indexos/seed-data";
+import { DEFAULT_ENTRY_CONFIG, ENTRY_CONFIG_KEY } from "./entry-config";
 import { getOrCreateDataDbsParentDoc, getOrStoreDataDbDoc } from "./data-db-management";
 export { getOrStoreDataDbDoc };
 
@@ -123,6 +124,14 @@ export async function constructCommandStorage() {
                 }
             }
         );
+
+        // 入口配置随库实例化：默认配置写入 Command-DB 数据库块 custom attributes
+        if (commandDb?.blockId) {
+            await post("/api/attr/setBlockAttrs", {
+                id: commandDb.blockId,
+                attrs: { [ENTRY_CONFIG_KEY]: JSON.stringify(DEFAULT_ENTRY_CONFIG) }
+            });
+        }
 
         // 3. Init Type-DB
         const typeDb = await initDbDoc(
@@ -544,7 +553,7 @@ async function initDbDoc(
     notebookId: string,
     config: DbPageConfig,
     initColsCallback: (avId: string) => Promise<void>
-): Promise<{ docId: string; avId: string }> {
+): Promise<{ docId: string; avId: string; blockId: string }> {
     // 0. Check via attributes first
     const sql = `SELECT root_id FROM attributes WHERE name = '${config.attrName}' LIMIT 1`;
     const existingDocs = await post("/api/query/sql", { stmt: sql });
@@ -556,12 +565,14 @@ async function initDbDoc(
         const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
         const avRes = await post("/api/query/sql", { stmt: avSql });
         if (avRes && avRes.length > 0) {
+            const avBlockId = avRes[0].id;
             const domRes = await client.getBlockDOM({ id: avRes[0].id });
             const html = domRes.data?.dom || "";
             const match = html.match(/data-av-id="([^"]+)"/);
-            avId = match ? match[1] : avRes[0].id;
+            avId = match ? match[1] : avBlockId;
+            return { docId, avId, blockId: avBlockId };
         }
-        return { docId, avId };
+        return { docId, avId, blockId: "" };
     }
 
     // 1. Get or Create Document
@@ -674,5 +685,5 @@ async function initDbDoc(
             }
         }
     }
-    return { docId: docId || "", avId };
+    return { docId: docId || "", avId, blockId: avBlockId || docId || "" };
 }

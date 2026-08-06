@@ -75,10 +75,10 @@ function syncNativeCommands(ids: string[]) {
         if (registeredNativeCommands.has(id)) continue;
         const meta = commandMeta(id);
         try {
-            const callback = () => {
+            const callback = async () => {
                 // 原生命令注册后无法在会话内注销（思源插件 API 无 removeCommand），
                 // 执行前检查是否仍在配置中，避免执行已移除的过期命令
-                const current = positionCommands(loadEntryConfig(), "命令面板");
+                const current = positionCommands(await loadEntryConfig(), "命令面板");
                 if (!current.includes(id)) {
                     console.log(`[TopBar] 命令 ${id} 已从『命令面板』移除，忽略执行`);
                     return;
@@ -101,7 +101,7 @@ function syncNativeCommands(ids: string[]) {
 /** 从全局入口配置刷新所有注册面 */
 export async function refreshTopBarCommands() {
     if (!plugin) return;
-    const cfg = loadEntryConfig();
+    const cfg = await loadEntryConfig();
 
     const newTopBars: TopBarCommand[] = [];
     const newStatusBars: TopBarCommand[] = [];

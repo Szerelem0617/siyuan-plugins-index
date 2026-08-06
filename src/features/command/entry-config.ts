@@ -1,13 +1,17 @@
 /**
  * entry-config.ts
- * 全局入口配置（方案 B）：位置 → 命令列表，存插件数据（data/storage/petal/...，随工作空间同步）。
+ * 全局入口配置（方案 B）：位置 → 命令列表。
+ * 与后台规则一致，配置存 Command-DB 数据库块的 custom attributes
+ * （custom-indexos-entry-config），随数据在思源内，卸载插件不丢失。
  * 位置：顶栏/底栏/侧栏（单选位置）、行内按钮/快捷命令/命令面板/块菜单/页面菜单/编辑器菜单（可多选）。
  * 块菜单条目支持 types 过滤（空 = 所有块类型）。
  */
 
-import { plugin } from "../../shared/utils";
+import { post } from "../../shared/api-client/request";
+import { getCommandAvId } from "./registration";
 
-export const ENTRY_CONFIG_KEY = "entry-config";
+/** 存 Command-DB 数据库块 custom attributes 的属性名 */
+export const ENTRY_CONFIG_KEY = "custom-indexos-entry-config";
 
 export interface BlockMenuEntry {
     id: string;
@@ -23,7 +27,7 @@ export const ENTRY_POSITIONS = [
     "行内按钮", "快捷命令", "命令面板", "块菜单", "页面菜单", "编辑器菜单"
 ];
 
-const DEFAULT_ENTRY_CONFIG: EntryConfig = {
+export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
     positions: {
         "顶栏右": [],
         "顶栏左": [],
@@ -54,22 +58,77 @@ const DEFAULT_ENTRY_CONFIG: EntryConfig = {
     }
 };
 
-export function loadEntryConfig(): EntryConfig {
-    const data = plugin?.data?.[ENTRY_CONFIG_KEY];
-    if (data && typeof data === "object" && (data as EntryConfig).positions) {
-        return data as EntryConfig;
-    }
-    return DEFAULT_ENTRY_CONFIG;
+function cloneDefault(): EntryConfig {
+    return JSON.parse(JSON.stringify(DEFAULT_ENTRY_CONFIG)) as EntryConfig;
 }
 
-export async function initEntryConfig(): Promise<void> {
-    if (!plugin?.data?.[ENTRY_CONFIG_KEY]) {
-        await plugin.saveData(ENTRY_CONFIG_KEY, DEFAULT_ENTRY_CONFIG);
+/** 解析 Command-DB 数据库块的物理 Block ID（与后台规则同一宿主块） */
+export async function resolveEntryConfigBlockId(): Promise<string> {
+    const commandAvId = getCommandAvId();
+
+    // 1. 直接从 DOM 抓取 NodeAttributeView 的物理 data-node-id
+    if (commandAvId) {
+        const avEl = document.querySelector(`[data-av-id="${commandAvId}"]`);
+        if (avEl) {
+            const nodeId = avEl.getAttribute("data-node-id") || avEl.getAttribute("data-id");
+            if (nodeId && nodeId !== commandAvId) return nodeId;
+        }
     }
+
+    // 2. 从 blocks 表反查 type = 'av' 的物理块
+    if (commandAvId) {
+        try {
+            const res = await post("/api/query/sql", {
+                stmt: `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${commandAvId}%' OR ial LIKE '%${commandAvId}%') LIMIT 1`
+            });
+            if (res && res.code === 0 && Array.isArray(res.data) && res.data.length > 0) {
+                const blockId = String(res.data[0].id || "");
+                if (blockId && blockId !== commandAvId) return blockId;
+            }
+        } catch (_) {}
+    }
+
+    // 3. 从 attributes 表反查 custom-index-command-db 记录的 block_id
+    try {
+        const res = await post("/api/query/sql", {
+            stmt: `SELECT block_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`
+        });
+        if (res && res.code === 0 && Array.isArray(res.data) && res.data.length > 0) {
+            const blockId = String(res.data[0].block_id || "");
+            if (blockId) return blockId;
+        }
+    } catch (_) {}
+
+    return "";
+}
+
+export async function loadEntryConfig(): Promise<EntryConfig> {
+    const blockId = await resolveEntryConfigBlockId();
+    if (!blockId) return cloneDefault(); // 未实例化：种子默认（只读）
+    try {
+        const res = await post("/api/attr/getBlockAttrs", { id: blockId });
+        const raw = res?.[ENTRY_CONFIG_KEY];
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === "object" && parsed.positions) {
+                return parsed as EntryConfig;
+            }
+        }
+    } catch (e) {
+        console.error("[EntryConfig] 读取数据库块属性失败:", e);
+    }
+    return cloneDefault();
 }
 
 export async function saveEntryConfig(cfg: EntryConfig): Promise<void> {
-    await plugin.saveData(ENTRY_CONFIG_KEY, cfg);
+    const blockId = await resolveEntryConfigBlockId();
+    if (!blockId) {
+        throw new Error("未找到 Command-DB 数据库块：请先将数据存到思源，入口配置会保存在数据库块属性中");
+    }
+    await post("/api/attr/setBlockAttrs", {
+        id: blockId,
+        attrs: { [ENTRY_CONFIG_KEY]: JSON.stringify(cfg) }
+    });
 }
 
 /** 某位置的命令 ID 列表 */
