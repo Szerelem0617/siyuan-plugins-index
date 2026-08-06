@@ -13,7 +13,8 @@ import {
     ColumnMeta,
     DbPageConfig,
     getSeedCommandRows,
-    getSeedSupertagRows
+    getSeedSupertagRows,
+    UI_ENTRY_OPTIONS
 } from "./indexos/seed-data";
 import { getOrCreateDataDbsParentDoc, getOrStoreDataDbDoc } from "./data-db-management";
 export { getOrStoreDataDbDoc };
@@ -86,6 +87,22 @@ export async function constructCommandStorage() {
             async (avId) => {
                 const keyMap = await createAvColumns(avId, COMMAND_DB_CONFIG.columns);
 
+                // 为 "UI 入口" 单选列预置可选位置
+                if (keyMap["UI 入口"]) {
+                    await post("/api/transactions", {
+                        app: "plugin-index",
+                        reqId: Date.now(),
+                        transactions: [{
+                            doOperations: [{
+                                action: "updateAttrViewColOptions",
+                                avID: avId,
+                                id: keyMap["UI 入口"],
+                                data: UI_ENTRY_OPTIONS.map(name => ({ name, color: "" }))
+                            }]
+                        }]
+                    });
+                }
+
                 // 从种子常量读取 Layer 2 默认行（不再依赖 SQLite 种子表）
                 const seedRows = getSeedCommandRows();
 
@@ -116,9 +133,19 @@ export async function constructCommandStorage() {
 
                     populateOps.push({ keyID: keyMap["Command ID"], itemID: row.rowID, value: { type: "text", text: { content: String(row.commandID || "") } } });
                     populateOps.push({ keyID: keyMap["Param Mapping"], itemID: row.rowID, value: { type: "text", text: { content: String(row.paramMapping || "") } } });
-                    const entriesList = String(row.uiEntries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    // UI 入口（单选：顶栏等"只选一个"的位置）
                     populateOps.push({
                         keyID: keyMap["UI 入口"],
+                        itemID: row.rowID,
+                        value: {
+                            type: "select",
+                            mSelect: row.uiEntry ? [{ content: row.uiEntry }] : []
+                        }
+                    });
+                    // 按钮 & 命令面板（多选：行内按钮、快捷命令）
+                    const entriesList = String(row.uiEntries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    populateOps.push({
+                        keyID: keyMap["按钮 & 命令面板"],
                         itemID: row.rowID,
                         value: {
                             type: "mSelect",

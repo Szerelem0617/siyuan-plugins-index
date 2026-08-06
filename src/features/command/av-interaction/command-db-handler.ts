@@ -8,7 +8,6 @@ import { post } from "../../../shared/api-client/request";
 import { getParamColKeyId } from "./query-helper";
 import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDialog.svelte";
 import { readPipelineRow, openPipelineEditorForRow } from "../pipeline/manager";
-import UIEntriesSelectorDialog from "./dialogs/UIEntriesSelectorDialog.svelte";
 import ParamConfigDialog from "./dialogs/ParamConfigDialog.svelte";
 import GlobalBackgroundEngineDialog from "./dialogs/GlobalBackgroundEngineDialog.svelte";
 
@@ -337,48 +336,6 @@ export async function handleCommandDbAltClick(
                 return;
             }
             openPipelineEditorForRow(rowId, row.script);
-            return;
-        }
-
-        if (clickedKeyName === "UI 入口" || clickedKeyName === "UI Entries" || clickedKeyName === "注册位置") {
-            event.preventDefault();
-            event.stopPropagation();
-
-            let currentUiEntriesVal = "";
-            try {
-                const { db } = await getSqliteEngine();
-                const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-                const valRes = db.exec(`SELECT "${clickedColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
-                if (valRes.length > 0 && valRes[0].values.length > 0 && valRes[0].values[0][0]) {
-                    currentUiEntriesVal = String(valRes[0].values[0][0]);
-                }
-            } catch (e) {
-                const uiCell = rowEl.querySelector(`.av__cell[data-col-id="${colId}"]`) as HTMLElement;
-                currentUiEntriesVal = uiCell?.textContent?.trim() || "";
-            }
-
-            console.log("[UIEntriesConfig] Dialog opened. currentValue:", currentUiEntriesVal);
-            const dialog = new Dialog({
-                title: `配置注册位置`,
-                content: `<div id="ui-entries-config-dialog" style="height: 100%;"></div>`,
-                width: "360px",
-                height: "300px"
-            });
-            dialog.element.classList.add("indexos-dialog");
-
-            new UIEntriesSelectorDialog({
-                target: document.getElementById("ui-entries-config-dialog")!,
-                props: {
-                    dialog,
-                    commandName: cleanLabel,
-                    currentValue: currentUiEntriesVal,
-                    onSave: async (updatedValue: string) => {
-                        console.log("[UIEntriesConfig] Saving new entries:", updatedValue);
-                        await updateCellValue(null, avId, rowId, colId, updatedValue);
-                        showMessage("✓ 注册位置更新成功，已刷新后台注册。");
-                    }
-                }
-            });
             return;
         }
 

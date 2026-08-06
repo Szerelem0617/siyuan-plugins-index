@@ -44,11 +44,11 @@ export function scanAvIndicators() {
             let isConfigurableCol = isUniversalSpecialCol;
 
             if (isCommandDb) {
-                // Command-DB: 主键, Param Mapping, UI 入口
+                // Command-DB: 主键, Param Mapping, Pipeline 定义（UI 入口/按钮列已直接编辑，不需要 Alt+Click）
                 isConfigurableCol = isConfigurableCol || (
                     txt.includes("主键") ||
                     txt.includes("param mapping") ||
-                    txt.includes("ui 入口") ||
+                    txt.includes("pipeline 定义") ||
                     cell.getAttribute("data-dtype") === "block"
                 );
             } else if (isSupertagDb) {

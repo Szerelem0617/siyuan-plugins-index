@@ -17,10 +17,61 @@ export interface TopBarCommand {
     commandId: string;
     commandParam: string;
     requiresParams: string;
+    position?: string;
+    barSel?: string;
 }
 
 let registeredTopBars: { id: string, element: HTMLElement }[] = [];
+let registeredStatusBars: { id: string, element: HTMLElement }[] = [];
+let registeredDocks: { id: string, element: HTMLElement, barSel: string }[] = [];
 let refreshTimer: any = null;
+
+/** 从 AV 镜像单元格值提取 select 的文本（镜像存的是 JSON 数组） */
+function selectContent(raw: string): string {
+    const t = String(raw || "").trim();
+    if (t.startsWith("[")) {
+        try {
+            const arr = JSON.parse(t);
+            if (Array.isArray(arr) && arr.length > 0) {
+                const first = arr[0];
+                if (typeof first === "string") return first;
+                return first?.content || first?.name || "";
+            }
+        } catch { /* ignore */ }
+    }
+    return t;
+}
+
+/** "UI 入口" 单选值 → 注册位置 */
+function positionFor(uiEntry: string): { kind: "topbar"; position: "right" | "left" } | { kind: "status"; position: "right" | "left" } | { kind: "dock"; barSel: string } | null {
+    switch (uiEntry) {
+        case "顶栏右": return { kind: "topbar", position: "right" };
+        case "顶栏左": return { kind: "topbar", position: "left" };
+        case "底栏右": return { kind: "status", position: "right" };
+        case "底栏左": return { kind: "status", position: "left" };
+        case "侧栏左": return { kind: "dock", barSel: "#dockLeft .dock__items" };
+        case "侧栏右": return { kind: "dock", barSel: "#dockRight .dock__items" };
+        default: return null;
+    }
+}
+
+/** 在停靠栏注入命令按钮（侧栏左/右） */
+function createDockItem(barSel: string, tb: TopBarCommand): HTMLElement | null {
+    const bar = document.querySelector(barSel) as HTMLElement | null;
+    if (!bar) return null;
+    const btn = document.createElement("div");
+    btn.className = "dock__item";
+    btn.title = tb.label;
+    btn.innerHTML = `<svg style="width:14px;height:14px"><use xlink:href="#iconPlay"></use></svg>`;
+    btn.style.cssText = "display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin:2px auto;cursor:pointer;color:var(--b3-theme-on-background);opacity:.85;";
+    btn.addEventListener("click", () => {
+        console.log(`[TopBar] 侧栏命令: ${tb.label}`, tb.commandId);
+        const mockContext = { blockEl: document.body, protyleEl: null };
+        dispatchCommand(tb.commandId, tb.commandParam, mockContext as any);
+    });
+    bar.appendChild(btn);
+    return btn;
+}
 
 /**
  * Scan the Command-DB (Layer 2) and read which commands should be placed on the Top Bar 
@@ -51,6 +102,8 @@ export async function refreshTopBarCommands() {
  */
 function refreshTopBarFromSeed() {
     const newTopBars: TopBarCommand[] = [];
+    const newStatusBars: TopBarCommand[] = [];
+    const newDocks: TopBarCommand[] = [];
     const newInlineBtns: InlineButtonCmd[] = [];
     const newPaletteCmds: PaletteCommand[] = [];
 
@@ -58,10 +111,17 @@ function refreshTopBarFromSeed() {
         if (!row.commandID || !row.label) continue;
         const cmdDef = commandRegistry.getCommand(row.commandID);
         const requiresParams = (cmdDef && cmdDef.params && cmdDef.params.length > 0) ? "true" : "false";
+        const pos = positionFor(row.uiEntry);
         const hasEntry = (type: string) => row.uiEntries.includes(type);
 
-        if (hasEntry("顶栏")) {
-            newTopBars.push({ id: row.rowID, label: row.label, commandId: row.commandID, commandParam: row.paramMapping, requiresParams });
+        if (pos?.kind === "topbar") {
+            newTopBars.push({ id: row.rowID, label: row.label, commandId: row.commandID, commandParam: row.paramMapping, requiresParams, position: pos.position });
+        }
+        if (pos?.kind === "status") {
+            newStatusBars.push({ id: row.rowID, label: row.label, commandId: row.commandID, commandParam: row.paramMapping, requiresParams, position: pos.position });
+        }
+        if (pos?.kind === "dock") {
+            newDocks.push({ id: row.rowID, label: row.label, commandId: row.commandID, commandParam: row.paramMapping, requiresParams, barSel: pos.barSel });
         }
         if (hasEntry("行内按钮")) {
             newInlineBtns.push({ id: row.rowID, label: row.label, commandId: row.commandID, commandParam: row.paramMapping, requiresParams });
@@ -71,8 +131,8 @@ function refreshTopBarFromSeed() {
         }
     }
 
-    applyTopBarUpdates(newTopBars, newInlineBtns, newPaletteCmds);
-    console.log(`[TopBar] Loaded ${newTopBars.length} topbars, ${newInlineBtns.length} inline buttons, ${newPaletteCmds.length} palette commands from seed data.`);
+    applyTopBarUpdates(newTopBars, newStatusBars, newDocks, newInlineBtns, newPaletteCmds);
+    console.log(`[TopBar] Loaded ${newTopBars.length} topbars, ${newStatusBars.length} status bars, ${newDocks.length} docks, ${newInlineBtns.length} inline buttons, ${newPaletteCmds.length} palette commands from seed data.`);
 }
 
 /**
@@ -80,6 +140,12 @@ function refreshTopBarFromSeed() {
  */
 async function refreshTopBarFromSqlite(): Promise<boolean> {
     try {
+        await getSqliteEngine();
+        // 先强制同步 AV 镜像，保证用户刚改的单元格值能读到
+        const cmdAvId = getCommandAvId();
+        if (cmdAvId) {
+            await instantiateAV(cmdAvId, true);
+        }
         await initSystemTables();
         const { commandsTable, commandLabelCol } = await getTargetTablesInfo();
 
@@ -98,6 +164,8 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
         }
 
         const newTopBars: TopBarCommand[] = [];
+        const newStatusBars: TopBarCommand[] = [];
+        const newDocks: TopBarCommand[] = [];
         const newInlineBtns: InlineButtonCmd[] = [];
         const newPaletteCmds: PaletteCommand[] = [];
 
@@ -114,7 +182,8 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
         const labelIdx = colIdx(commandLabelCol, "主键", "label");
         const cmdIdIdx = colIdx("Command_ID", "Command ID", "command_id");
         const paramIdx = colIdx("Param_Mapping", "Param Mapping", "param_mapping");
-        const uiEntriesIdx = colIdx("UI_Entries", "UI 入口", "UI_入口", "ui_entries");
+        const uiEntryIdx = colIdx("UI 入口", "UI_入口", "ui_entry");
+        const uiEntriesIdx = colIdx("按钮 & 命令面板", "按钮___命令面板", "按钮_命令面板", "ui_entries");
 
         for (const row of cmdRes.values) {
             const id = String(row[idIdx]);
@@ -125,12 +194,27 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             const cmdDef = commandRegistry.getCommand(commandId);
             const requiresParams = (cmdDef && cmdDef.params && cmdDef.params.length > 0) ? "true" : "false";
             
+            const uiEntryRaw = uiEntryIdx > -1 ? String(row[uiEntryIdx] || "") : "";
+            const uiEntry = selectContent(uiEntryRaw);
             const uiEntries = uiEntriesIdx > -1 ? String(row[uiEntriesIdx] || "") : "";
+            const pos = positionFor(uiEntry);
             const hasEntry = (type: string) => uiEntries.includes(type);
 
             if (commandId && label) {
-                if (hasEntry("顶栏")) {
-                    newTopBars.push({ id, label, commandId, commandParam, requiresParams });
+                if (pos?.kind === "topbar") {
+                    newTopBars.push({ id, label, commandId, commandParam, requiresParams, position: pos.position });
+                    console.log(`[TopBar] 顶栏注册 ${label} -> ${pos.position}（原始值: ${uiEntryRaw}）`);
+                }
+                if (pos?.kind === "status") {
+                    newStatusBars.push({ id, label, commandId, commandParam, requiresParams, position: pos.position });
+                    console.log(`[TopBar] 底栏注册 ${label} -> ${pos.position}（原始值: ${uiEntryRaw}）`);
+                }
+                if (pos?.kind === "dock") {
+                    newDocks.push({ id, label, commandId, commandParam, requiresParams, barSel: pos.barSel });
+                    console.log(`[TopBar] 侧栏注册 ${label} -> ${pos.barSel}（原始值: ${uiEntryRaw}）`);
+                }
+                if (uiEntryRaw && !pos) {
+                    console.log(`[TopBar] UI 入口值未匹配: 行=${label} 原始=${uiEntryRaw} 解析=${uiEntry}`);
                 }
                 if (hasEntry("行内按钮")) {
                     newInlineBtns.push({ id, label, commandId, commandParam, requiresParams });
@@ -141,14 +225,21 @@ async function refreshTopBarFromSqlite(): Promise<boolean> {
             }
         }
 
-        applyTopBarUpdates(newTopBars, newInlineBtns, newPaletteCmds);
+        console.log(`[TopBar] SQLite 刷新：顶栏 ${newTopBars.length}，底栏 ${newStatusBars.length}，侧栏 ${newDocks.length}，行内 ${newInlineBtns.length}，面板 ${newPaletteCmds.length}`);
+        applyTopBarUpdates(newTopBars, newStatusBars, newDocks, newInlineBtns, newPaletteCmds);
         return true;
     } catch (e) {
         return false;
     }
 }
 
-function applyTopBarUpdates(newTopBars: TopBarCommand[], newInlineBtns: InlineButtonCmd[], newPaletteCmds: PaletteCommand[]) {
+function applyTopBarUpdates(
+    newTopBars: TopBarCommand[],
+    newStatusBars: TopBarCommand[],
+    newDocks: TopBarCommand[],
+    newInlineBtns: InlineButtonCmd[],
+    newPaletteCmds: PaletteCommand[]
+) {
     if (!plugin) return;
 
     // 1. Remove commands that are no longer ticked
@@ -157,22 +248,63 @@ function applyTopBarUpdates(newTopBars: TopBarCommand[], newInlineBtns: InlineBu
         if (rem.element) rem.element.remove();
     }
     registeredTopBars = registeredTopBars.filter(r => newTopBars.find(n => n.id === r.id));
+    const toRemoveStatus = registeredStatusBars.filter(r => !newStatusBars.find(n => n.id === r.id));
+    for (const rem of toRemoveStatus) {
+        if (rem.element) rem.element.remove();
+    }
+    registeredStatusBars = registeredStatusBars.filter(r => newStatusBars.find(n => n.id === r.id));
+    const toRemoveDocks = registeredDocks.filter(r => !newDocks.find(n => n.id === r.id));
+    for (const rem of toRemoveDocks) {
+        if (rem.element) rem.element.remove();
+    }
+    registeredDocks = registeredDocks.filter(r => newDocks.find(n => n.id === r.id));
 
-    // 2. Add new commands
+    // 2. Add new topbar commands
     for (const tb of newTopBars) {
         if (!registeredTopBars.find(r => r.id === tb.id)) {
             const el = plugin.addTopBar({
                 icon: "iconPlay",
                 title: tb.label,
-                position: "right",
+                position: tb.position === "left" ? "left" : "right",
                 callback: () => {
                     console.log(`[TopBar] Executing: ${tb.label}`, tb.commandId);
-                    // Mock context for global Top Bar commands
                     const mockContext = { blockEl: document.body, protyleEl: null };
                     dispatchCommand(tb.commandId, tb.commandParam, mockContext as any);
                 }
             });
             registeredTopBars.push({ id: tb.id, element: el });
+        }
+    }
+
+    // 3. Add new status bar commands（底栏）
+    for (const tb of newStatusBars) {
+        if (!registeredStatusBars.find(r => r.id === tb.id)) {
+            const btn = document.createElement("button");
+            btn.className = "indexos-status-btn";
+            btn.innerHTML = `<svg style="width:13px;height:13px;fill:currentColor;flex-shrink:0"><use xlink:href="#iconPlay"></use></svg><span style="font-size:11px;margin-left:3px;">${tb.label}</span>`;
+            btn.style.cssText = "display:inline-flex;align-items:center;gap:3px;padding:0 6px;background:none;border:none;color:var(--b3-theme-on-surface);cursor:pointer;opacity:.8;";
+            btn.title = tb.label;
+            btn.addEventListener("click", () => {
+                console.log(`[TopBar] Executing status bar command: ${tb.label}`, tb.commandId);
+                const mockContext = { blockEl: document.body, protyleEl: null };
+                dispatchCommand(tb.commandId, tb.commandParam, mockContext as any);
+            });
+            plugin.addStatusBar({
+                element: btn,
+                position: tb.position === "left" ? "left" : "right"
+            });
+            registeredStatusBars.push({ id: tb.id, element: btn });
+        }
+    }
+
+    // 4. Add new dock commands（侧栏）
+    for (const tb of newDocks) {
+        if (!registeredDocks.find(r => r.id === tb.id)) {
+            const el = createDockItem(tb.barSel || "#dockLeft .dock__items", tb);
+            if (el) {
+                registeredDocks.push({ id: tb.id, element: el, barSel: tb.barSel || "#dockLeft .dock__items" });
+                console.log(`[TopBar] 侧栏注册 ${tb.label} -> ${tb.barSel}`);
+            }
         }
     }
 
@@ -185,6 +317,14 @@ export function destroyTopBarCommands() {
         if (rem.element) rem.element.remove();
     }
     registeredTopBars = [];
+    for (const rem of registeredStatusBars) {
+        if (rem.element) rem.element.remove();
+    }
+    registeredStatusBars = [];
+    for (const rem of registeredDocks) {
+        if (rem.element) rem.element.remove();
+    }
+    registeredDocks = [];
 }
 
 /**
@@ -212,6 +352,8 @@ async function refreshTopBarFromApi() {
         const columns: any[] = view.columns || [];
 
         const newTopBars: TopBarCommand[] = [];
+        const newStatusBars: TopBarCommand[] = [];
+        const newDocks: TopBarCommand[] = [];
         const newInlineBtns: InlineButtonCmd[] = [];
         const newPaletteCmds: PaletteCommand[] = [];
 
@@ -231,17 +373,21 @@ async function refreshTopBarFromApi() {
             const cmdDef = commandRegistry.getCommand(commandId);
             const requiresParams = (cmdDef && cmdDef.params && cmdDef.params.length > 0) ? "true" : "false";
             
-            const uiEntries = getCellText("UI 入口") || getCellText("UI Entries") || getCellText("注册位置") || "";
+            const uiEntry = selectContent(getCellText("UI 入口") || getCellText("UI Entries") || getCellText("注册位置") || "");
+            const uiEntries = getCellText("按钮 & 命令面板") || "";
+            const pos = positionFor(uiEntry);
             const hasEntry = (type: string) => uiEntries.includes(type);
 
             if (commandId) {
-                if (hasEntry("顶栏") && label) newTopBars.push({ id: row.id, label, commandId, commandParam, requiresParams });
+                if (pos?.kind === "topbar" && label) newTopBars.push({ id: row.id, label, commandId, commandParam, requiresParams, position: pos.position });
+                if (pos?.kind === "status" && label) newStatusBars.push({ id: row.id, label, commandId, commandParam, requiresParams, position: pos.position });
+                if (pos?.kind === "dock" && label) newDocks.push({ id: row.id, label, commandId, commandParam, requiresParams, barSel: pos.barSel });
                 if (hasEntry("行内按钮") && label) newInlineBtns.push({ id: row.id, label, commandId, commandParam, requiresParams });
                 if (hasEntry("快捷命令") && label) newPaletteCmds.push({ id: row.id, label, commandId, commandParam, requiresParams });
             }
         }
 
-        applyTopBarUpdates(newTopBars, newInlineBtns, newPaletteCmds);
+        applyTopBarUpdates(newTopBars, newStatusBars, newDocks, newInlineBtns, newPaletteCmds);
     } catch (e) {
         console.error("[TopBar-API] Failed:", e);
     }
