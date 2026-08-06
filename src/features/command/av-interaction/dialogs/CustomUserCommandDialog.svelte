@@ -50,7 +50,7 @@
             });
 
             // 2. 使用插件 SQL 引擎 (guide-sqlite.md) 插入 "command-db"
-            const insertSql = `INSERT INTO "command-db" ("主键", "Command ID", "UI 入口") VALUES ('${name.trim()}', '${fullId}', '快捷命令') ON CONFLICT("主键") DO UPDATE SET "Command ID" = EXCLUDED."Command ID"`;
+            const insertSql = `INSERT INTO "command-db" ("主键", "Command ID") VALUES ('${name.trim()}', '${fullId}') ON CONFLICT("主键") DO UPDATE SET "Command ID" = EXCLUDED."Command ID"`;
             await runQuery(insertSql);
 
             showMessage(`✓ 成功注册自定义 user. 命令: ${name.trim()} (${fullId})`);

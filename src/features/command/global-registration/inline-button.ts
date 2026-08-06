@@ -428,7 +428,7 @@ function openButtonConfigurationDialog(targetRange: Range) {
     if (dropdownOptions.length === 0) {
         dropdownOptions.push({
             value: "",
-            label: "没有关联行内按钮入口的命令，请在 Command-DB 的 'UI 入口' 列勾选"
+            label: "没有关联行内按钮的命令，请在『入口配置』中为『行内按钮』位置勾选命令"
         });
     }
 

@@ -44,7 +44,7 @@ export function scanAvIndicators() {
             let isConfigurableCol = isUniversalSpecialCol;
 
             if (isCommandDb) {
-                // Command-DB: 主键, Param Mapping, Pipeline 定义（UI 入口/按钮列已直接编辑，不需要 Alt+Click）
+                // Command-DB: 主键, Param Mapping, Pipeline 定义（入口绑定已迁移至全局『入口配置』）
                 isConfigurableCol = isConfigurableCol || (
                     txt.includes("主键") ||
                     txt.includes("param mapping") ||

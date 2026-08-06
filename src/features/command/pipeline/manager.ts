@@ -88,7 +88,6 @@ export async function getCommandDbKeyIds(): Promise<{
     pkKeyId: string;
     cmdIdKeyId: string;
     paramKeyId: string;
-    uiKeyId: string;
     pipelineKeyId: string;
 } | null> {
     const cmdAvId = getCommandAvId();
@@ -107,7 +106,6 @@ export async function getCommandDbKeyIds(): Promise<{
         pkKeyId: pk?.id ? String(pk.id) : (keys[0]?.id ? String(keys[0].id) : ""),
         cmdIdKeyId: findId("Command ID", "Command_ID"),
         paramKeyId: findId("Param Mapping", "参数映射"),
-        uiKeyId: findId("UI 入口"),
         pipelineKeyId: findId("Pipeline 定义", "Pipeline Config")
     };
     return result.pipelineKeyId ? result : null;
@@ -137,7 +135,6 @@ export async function createPipelineRow(name: string, script: string, globalPara
     if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
     if (keys.cmdIdKeyId) ops.push({ keyID: keys.cmdIdKeyId, itemID: rowId, value: { type: "text", text: { content: commandId } } });
     if (keys.paramKeyId) ops.push({ keyID: keys.paramKeyId, itemID: rowId, value: { type: "text", text: { content: globalParams } } });
-    if (keys.uiKeyId) ops.push({ keyID: keys.uiKeyId, itemID: rowId, value: { type: "mSelect", mSelect: [{ content: "快捷命令" }] } });
     if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
     return rowId;

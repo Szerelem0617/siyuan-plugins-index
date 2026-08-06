@@ -13,7 +13,8 @@ import { addSlash } from "./core/slash";
 import { isDevInitSysEnabled, COMMAND_BINDINGS } from "./features/command/registration";
 import { decodeBtnHref } from "./features/command/global-registration/inline-button";
 import type { CommandContext } from "./features/command/command-dispatcher";
-import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems } from "./features/command/menu-hooks";
+import { addCommandTestMenuItem, addDoctreeMenuItems, addEditorTitleIconMenuItems, addBlockEntryMenuItems, addPageEntryMenuItems, addEditorEntryMenuItems } from "./features/command/menu-hooks";
+import { initEntryConfig } from "./features/command/entry-config";
 import { refreshSupertagRegistry, syncGlobalSupertagsCache } from "./features/command/utils/sync-service";
 import { commandRegistry } from "./features/command/registry/command-registry";
 import { dispatchCommand } from "./features/command/command-dispatcher";
@@ -26,7 +27,7 @@ import {
     SupertagRenderer, 
     initTagMenuInterceptor 
 } from "./features/command/supertag";
-import { refreshTopBarCommands, handleTopBarEvents, destroyTopBarCommands } from "./features/command/global-registration/top-bar";
+import { refreshTopBarCommands, destroyTopBarCommands } from "./features/command/global-registration/top-bar";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
 import { backgroundScheduler } from "./features/command/background/background-scheduler";
@@ -91,6 +92,7 @@ export default class IndexPlugin extends Plugin {
 
         this.init();
         await settings.initData();
+        await initEntryConfig();
         addSlash(); // Rebuild slash items after settings are loaded
         await initTopbar();
 
@@ -103,8 +105,11 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.on("click-blockicon", addDataMenuItems);
         if (isDevInitSysEnabled()) {
             this.eventBus.on("click-blockicon", addCommandTestMenuItem);
+            this.eventBus.on("click-blockicon", addBlockEntryMenuItems);
             this.eventBus.on("open-menu-doctree", addDoctreeMenuItems);
+            this.eventBus.on("open-menu-doctree", addPageEntryMenuItems);
             this.eventBus.on("click-editortitleicon", addEditorTitleIconMenuItems);
+            this.eventBus.on("click-editortitleicon", addEditorEntryMenuItems);
         }
         this.eventBus.on("open-menu-av", addAVMenuItems);
         //监听文档载入事件
@@ -126,10 +131,6 @@ export default class IndexPlugin extends Plugin {
 
         this.switchHandler = this.onTabSwitch.bind(this);
         this.eventBus.on("switch-protyle", this.switchHandler);
-
-        if (isDevInitSysEnabled()) {
-            this.eventBus.on("ws-main", handleTopBarEvents);
-        }
 
         initEmojiEvent();
         avEventHandler.init();
@@ -205,16 +206,15 @@ export default class IndexPlugin extends Plugin {
         this.eventBus.off("click-blockicon", addDataMenuItems);
         if (isDevInitSysEnabled()) {
             this.eventBus.off("click-blockicon", addCommandTestMenuItem);
+            this.eventBus.off("click-blockicon", addBlockEntryMenuItems);
             this.eventBus.off("open-menu-doctree", addDoctreeMenuItems);
+            this.eventBus.off("open-menu-doctree", addPageEntryMenuItems);
             this.eventBus.off("click-editortitleicon", addEditorTitleIconMenuItems);
+            this.eventBus.off("click-editortitleicon", addEditorEntryMenuItems);
         }
         this.eventBus.off("open-menu-av", addAVMenuItems);
         this.eventBus.off("loaded-protyle-static", updateIndex);
         this.eventBus.off("switch-protyle", this.switchHandler);
-        if (isDevInitSysEnabled()) {
-            this.eventBus.off("ws-main", handleTopBarEvents);
-        }
-
         removeEmojiEvent();
         avEventHandler.destroy();
         supertagMonitor.destroy();

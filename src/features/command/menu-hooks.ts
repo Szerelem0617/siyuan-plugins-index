@@ -1,6 +1,9 @@
 import { dispatchCommand, focusBlockForDispatch, cleanupAfterDispatch } from "./command-dispatcher";
 import { addSupertagMenuOption } from "./utils/menu-helper";
 import { refreshSupertagRegistry } from "./utils/sync-service";
+import { loadEntryConfig, positionCommands, blockMenuEntries, blockTypeOf, type BlockMenuEntry } from "./entry-config";
+import { commandRegistry } from "./registry/command-registry";
+import { COMMAND_BINDINGS } from "./registration";
 import { 
     isDevInitSysEnabled, 
     SUPERTAG_REGISTRY, 
@@ -208,4 +211,81 @@ export function addEditorTitleIconMenuItems({ detail }: any) {
     } catch (e) {
         console.error("[IndexOS] Title Icon Menu Add Failed:", e);
     }
+}
+
+// ─── 全局入口配置菜单（方案 B：块菜单 / 页面菜单 / 编辑器菜单） ───
+
+/** 尽力注入一级菜单（与"删除"同级）；失败时降级到插件子菜单（detail.menu） */
+function addMenuEntry(
+    menu: any,
+    realMenu: any,
+    blockType: string | null,
+    entry: BlockMenuEntry,
+    blockEl: HTMLElement | null,
+    protyleEl: HTMLElement | null
+): boolean {
+    if (blockType && entry.types && entry.types.length > 0 && !entry.types.includes(blockType)) {
+        return false;
+    }
+    const def = commandRegistry.getCommand(entry.id);
+    const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === entry.id);
+    const paramMapping = binding?.paramMapping || "";
+    const label = `⚡ ${def?.name || entry.id}`;
+    const click = () => {
+        const ctx = { blockEl: blockEl || document.body, protyleEl, supertag: "" };
+        dispatchCommand(entry.id, paramMapping, ctx as any);
+    };
+    if (realMenu && realMenu !== menu && typeof realMenu.append === "function") {
+        const item = document.createElement("button");
+        item.className = "b3-menu__item";
+        item.innerHTML = `<svg class="b3-menu__icon"><use xlink:href="#iconPlay"></use></svg><span class="b3-menu__label">${label}</span>`;
+        item.addEventListener("click", click);
+        realMenu.append(item);
+    } else {
+        menu?.addItem({ icon: "iconPlay", label, click });
+    }
+    return true;
+}
+
+function addEntryMenuSection(detail: any, position: "块菜单" | "页面菜单" | "编辑器菜单") {
+    const cfg = loadEntryConfig();
+    const entries = position === "块菜单"
+        ? blockMenuEntries(cfg)
+        : positionCommands(cfg, position).map(id => ({ id }) as BlockMenuEntry);
+    if (entries.length === 0) return;
+
+    const menu = detail.menu;
+    if (!menu) return;
+    const realMenu = (window as any).siyuan?.menus?.menu || null;
+
+    const blockEl = (detail.blockElements?.[0] || detail.elements?.[0]) as HTMLElement | null;
+    const blockType = blockEl ? blockTypeOf(blockEl.getAttribute("data-type") || "") : null;
+    const protyleEl = detail.protyle?.element || detail.protyle || null;
+
+    let added = 0;
+    for (const e of entries) {
+        if (addMenuEntry(menu, realMenu, blockType, e, blockEl, protyleEl)) added++;
+    }
+    if (added === 0) return;
+
+    if (realMenu && realMenu !== menu && typeof realMenu.append === "function") {
+        const sep = document.createElement("div");
+        sep.className = "b3-menu__separator";
+        realMenu.append(sep);
+    } else {
+        menu.addSeparator();
+    }
+    console.log(`[EntryMenu] ${position} 注入 ${added} 个命令`);
+}
+
+export function addBlockEntryMenuItems({ detail }: any) {
+    addEntryMenuSection(detail, "块菜单");
+}
+
+export function addPageEntryMenuItems({ detail }: any) {
+    addEntryMenuSection(detail, "页面菜单");
+}
+
+export function addEditorEntryMenuItems({ detail }: any) {
+    addEntryMenuSection(detail, "编辑器菜单");
 }

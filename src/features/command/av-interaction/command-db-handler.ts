@@ -220,7 +220,7 @@ async function insertCommandIntoAv(avId: string, cmd: any) {
 
         // 3. 执行 SQL 插入
         const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-        const insertSql = `INSERT INTO ${tableName} ("${pkColName}", "Command ID", "UI 入口") VALUES ('${finalName}', '${finalId}', '快捷命令')`;
+        const insertSql = `INSERT INTO ${tableName} ("${pkColName}", "Command ID") VALUES ('${finalName}', '${finalId}')`;
         
         console.log("[av-interaction] Running hijacked INSERT sql:", insertSql);
         await executeWritableSql(insertSql);
@@ -312,7 +312,7 @@ export async function handleCommandDbAltClick(
             showMessage("复制链接失败", 2000, "error");
         });
     } else {
-        // Check if they clicked the UI entries / UI 入口 column
+        // 解析点击列名，用于区分 Pipeline 定义 / Param Mapping 的 Alt+Click 行为
         let clickedKeyName = "";
         let clickedColName = "";
         try {

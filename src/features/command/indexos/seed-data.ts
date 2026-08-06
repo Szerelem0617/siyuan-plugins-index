@@ -18,10 +18,6 @@ export interface SeedCommandRow {
     label: string;
     commandID: string;
     paramMapping: string;
-    /** 单选入口（顶栏等"只选一个"的位置）；空 = 不注册 */
-    uiEntry: string;
-    /** 多选入口（按钮 / 命令面板等），逗号分隔 */
-    uiEntries: string;
 }
 
 export interface SeedSupertagRow {
@@ -33,48 +29,17 @@ export interface SeedSupertagRow {
     conditional: string;
 }
 
-const UI_SINGLE_LABELS: Record<string, string> = {
-    topbar: "顶栏右"
-};
-
-/** "UI 入口" 单选列的可选位置（与 top-bar.ts 的位置映射一致） */
-export const UI_ENTRY_OPTIONS = [
-    "顶栏右",
-    "顶栏左",
-    "底栏右",
-    "底栏左",
-    "侧栏左",
-    "侧栏右"
-];
-
-const UI_MULTI_LABELS: Record<string, string> = {
-    inline: "行内按钮",
-    palette: "快捷命令"
-};
-
 /** Layer 2 种子行：从 commands.json 的 seed 字段派生 */
 export function getSeedCommandRows(): SeedCommandRow[] {
     const rows: SeedCommandRow[] = [];
     for (const cmd of (commandsData as any).commands) {
         const s = cmd.seed;
         if (!s) continue;
-        const mapped: string[] = [];
-        let single = "";
-        if (s.uiEntries) {
-            for (const code of s.uiEntries) {
-                const sLabel = UI_SINGLE_LABELS[code];
-                const mLabel = UI_MULTI_LABELS[code];
-                if (sLabel) single = sLabel;
-                if (mLabel) mapped.push(mLabel);
-            }
-        }
         rows.push({
             rowID: s.rowID,
             label: s.label,
             commandID: cmd.id,
-            paramMapping: s.paramMapping || "",
-            uiEntry: single,
-            uiEntries: mapped.join(", ")
+            paramMapping: s.paramMapping || ""
         });
     }
     return rows;
@@ -149,8 +114,6 @@ export const COMMAND_DB_CONFIG: DbPageConfig = {
     expectedColName: "Command ID",
     columns: [
         { name: "Command ID", type: "text", icon: "iconCode" },
-        { name: "UI 入口", type: "select", icon: "iconLayout" },
-        { name: "按钮 & 命令面板", type: "mSelect", icon: "iconPlay" },
         { name: "Param Mapping", type: "text", icon: "iconList" },
         { name: "Pipeline 定义", type: "text", icon: "iconCode" }
     ]

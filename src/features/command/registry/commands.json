@@ -25,8 +25,7 @@
             "seed": {
                 "rowID": "20260526204558-bp28zp8",
                 "label": "🌐 全局关系图",
-                "paramMapping": "",
-                "uiEntries": ["inline", "palette"]
+                "paramMapping": ""
             }
         },
         {
@@ -95,8 +94,7 @@
             "seed": {
                 "rowID": "20260526204558-zxrigm8",
                 "label": "📑 复制当前块",
-                "paramMapping": "",
-                "uiEntries": ["palette"]
+                "paramMapping": ""
             }
         },
         {
@@ -226,8 +224,7 @@
             "seed": {
                 "rowID": "20260527120000-insert",
                 "label": "⚡ 插入块",
-                "paramMapping": "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}",
-                "uiEntries": ["palette"]
+                "paramMapping": "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}"
             }
         },
         {
@@ -295,8 +292,7 @@
             "seed": {
                 "rowID": "20260527120000-update",
                 "label": "📝 安全更新块内容",
-                "paramMapping": "{\"id\":\"{{var.createdblock}}\",\"dataType\":\"markdown\",\"data\":\"[Auto Update] Updated at {{time}}\",\"_outputMapping\":{\"id\":\"updatedblock\"}}",
-                "uiEntries": ["inline", "palette"]
+                "paramMapping": "{\"id\":\"{{var.createdblock}}\",\"dataType\":\"markdown\",\"data\":\"[Auto Update] Updated at {{time}}\",\"_outputMapping\":{\"id\":\"updatedblock\"}}"
             }
         },
         {
@@ -356,8 +352,7 @@
             "seed": {
                 "rowID": "20260701100000-fireworks",
                 "label": "🎆 烟花",
-                "paramMapping": "",
-                "uiEntries": ["inline", "palette"]
+                "paramMapping": ""
             }
         },
         {
@@ -420,8 +415,7 @@
             "seed": {
                 "rowID": "20260713120000-showmessage",
                 "label": "💬 消息提示",
-                "paramMapping": "{}",
-                "uiEntries": ["inline", "palette"]
+                "paramMapping": "{}"
             }
         },
         {
@@ -466,8 +460,7 @@
             "seed": {
                 "rowID": "20260714160000-turnintotask",
                 "label": "☑ 转换为任务",
-                "paramMapping": "{}",
-                "uiEntries": ["inline", "palette"]
+                "paramMapping": "{}"
             }
         }
     ],

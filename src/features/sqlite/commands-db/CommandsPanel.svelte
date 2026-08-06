@@ -7,6 +7,7 @@
     import { encodeBtnHref } from "../../command/global-registration/inline-button";
     import { openGlobalAutomationDialog } from "../../command/av-interaction/command-db-handler";
     import { i18n } from "../../../shared/utils";
+    import { openEntryConfigDialog } from "../../command/entry-config-ui";
 
     let loading = true;
 
@@ -80,6 +81,9 @@
                 <button class="indexos-btn-bordered" style="font-size: 11px; padding: 4px 10px;" on:click={handleInitSystem}>
                     <svg style="width: 12px; height: 12px; fill: currentColor; margin-right: 2px;"><use xlink:href="#iconDatabase"></use></svg>
                     <span>{i18n.initSystemDB}</span>
+                </button>
+                <button class="indexos-btn-bordered" style="font-size: 11px; padding: 4px 10px;" on:click={openEntryConfigDialog}>
+                    <span>🧭 入口配置</span>
                 </button>
                 <button class="indexos-btn-bordered" style="font-size: 11px; padding: 4px 10px; color: var(--indexos-accent-primary);" on:click={openGlobalAutomationDialog}>
                     <span>⚡ 全局后台自动化配置</span>
