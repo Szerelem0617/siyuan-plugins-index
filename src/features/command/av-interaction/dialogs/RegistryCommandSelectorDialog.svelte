@@ -40,8 +40,8 @@
         const dialog = new Dialog({
             title: "创建复合命令 (Pipeline)",
             content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
-            width: "560px",
-            height: "640px"
+            width: "680px",
+            height: "720px"
         });
         dialog.element.classList.add("indexos-dialog");
 

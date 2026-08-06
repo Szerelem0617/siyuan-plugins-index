@@ -230,6 +230,9 @@ class CommandRegistry {
                         id,
                         name: name || "",
                         description: description || "",
+                        // SQLite 表未存 outputs/prompt：从内存中的既有定义保留（如 commands.json 声明的出参契约）
+                        outputs: existing?.outputs,
+                        prompt: existing?.prompt,
                         dispatch: dispatchRaw ? JSON.parse(dispatchRaw) : { method: "custom" },
                         params: paramsRaw ? JSON.parse(paramsRaw) : [],
                         constraints: {

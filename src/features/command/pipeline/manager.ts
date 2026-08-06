@@ -1,6 +1,7 @@
 /**
  * pipeline/manager.ts
- * 复合命令注册管理：从 Command-DB 读取 Pipeline 定义 → 注册/注销 pipeline.* 命令
+ * 复合命令注册管理：Command-DB 的 "Pipeline 定义" 列存统一规则脚本（script-dsl），
+ * 读取后注册为 pipeline.* 命令，执行走统一引擎 runRuleScript。
  */
 
 import { Dialog, showMessage } from "siyuan";
@@ -9,8 +10,9 @@ import { sleep } from "../../../shared/utils";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { getCommandAvId } from "../registration";
 import { commandRegistry } from "../registry/command-registry";
-import { runPipeline } from "./engine";
-import { validatePipeline, type PipelineConfig } from "./types";
+import type { CommandContext } from "../command-dispatcher";
+import { runRuleScript } from "./engine";
+import { parseRuleScript, type RuleScript } from "./script-dsl";
 
 const registeredPipelines = new Set<string>();
 
@@ -40,8 +42,8 @@ export function unregisterAllPipelines(): void {
     registeredPipelines.clear();
 }
 
-/** 注册（或更新）一个复合命令。executor 闭包携带当前配置。 */
-export function registerPipelineCommand(id: string, name: string, config: PipelineConfig, globalParams: string): string {
+/** 注册（或更新）一个复合命令。executor 闭包携带脚本。 */
+export function registerPipelineCommand(id: string, name: string, script: string, globalParams: string): string {
     if (commandRegistry.getCommand(id)) {
         commandRegistry.unregisterCommand(id);
     }
@@ -51,7 +53,20 @@ export function registerPipelineCommand(id: string, name: string, config: Pipeli
         description: `复合命令（Pipeline）：${name}`,
         dispatch: {
             method: "custom",
-            executor: async (params, ctx) => runPipeline(config, ctx, params || globalParams || undefined)
+            executor: async (params, ctx) => {
+                const merged: Record<string, unknown> = { ...parseGlobalParams(globalParams), ...(params || {}) };
+                const runCtx: CommandContext = {
+                    blockEl: ctx.blockEl,
+                    protyleEl: ctx.protyleEl,
+                    supertag: ctx.supertag,
+                    triggerEl: ctx.triggerEl,
+                    vars: { ...((ctx as any).vars || {}), ...merged }
+                };
+                const result = await runRuleScript(script, runCtx);
+                return result.success
+                    ? { success: true, method: "custom", detail: "pipeline ok", value: result.vars }
+                    : { success: false, method: "custom", detail: result.detail || "pipeline failed" };
+            }
         },
         params: [],
         constraints: { requiresFocus: false, environment: "universal" },
@@ -59,6 +74,13 @@ export function registerPipelineCommand(id: string, name: string, config: Pipeli
     });
     registeredPipelines.add(id);
     return id;
+}
+
+function parseGlobalParams(raw: string): Record<string, unknown> {
+    try {
+        const parsed = JSON.parse(raw || "{}");
+        return parsed && typeof parsed === "object" ? parsed : {};
+    } catch { return {}; }
 }
 
 /** 获取 Command-DB 的关键列 keyID */
@@ -91,8 +113,8 @@ export async function getCommandDbKeyIds(): Promise<{
     return result.pipelineKeyId ? result : null;
 }
 
-/** 在 Command-DB 创建一行复合命令记录 */
-export async function createPipelineRow(name: string, config: PipelineConfig, globalParams = "{}"): Promise<string> {
+/** 在 Command-DB 创建一行复合命令记录（Pipeline 定义列存统一规则脚本） */
+export async function createPipelineRow(name: string, script: string, globalParams = "{}"): Promise<string> {
     const cmdAvId = getCommandAvId();
     if (!cmdAvId) {
         throw new Error("请先将数据存储到思源（Command-DB 不存在）");
@@ -110,21 +132,56 @@ export async function createPipelineRow(name: string, config: PipelineConfig, gl
     });
     await sleep(300);
 
-    const ops: any[] = [];
     const commandId = pipelineCommandId(rowId);
+    const ops: any[] = [];
     if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
     if (keys.cmdIdKeyId) ops.push({ keyID: keys.cmdIdKeyId, itemID: rowId, value: { type: "text", text: { content: commandId } } });
     if (keys.paramKeyId) ops.push({ keyID: keys.paramKeyId, itemID: rowId, value: { type: "text", text: { content: globalParams } } });
     if (keys.uiKeyId) ops.push({ keyID: keys.uiKeyId, itemID: rowId, value: { type: "mSelect", mSelect: [{ content: "快捷命令" }] } });
-    if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: JSON.stringify(config, null, 2) } } });
+    if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
     return rowId;
 }
 
-/**
- * 从 Command-DB 同步所有 Pipeline 定义并注册为复合命令。
- * 仅已实例化时调用（未实例化没有 Command-DB）。
- */
+/** 读取一行复合命令的脚本 */
+export async function readPipelineRow(rowId: string): Promise<{ name: string; script: string; rule: RuleScript | null } | null> {
+    const cmdAvId = getCommandAvId();
+    if (!cmdAvId) return null;
+    const { db } = await getSqliteEngine();
+    const tableName = `av_${cmdAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+    const pkRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [cmdAvId]);
+    const pkCol = pkRes.length > 0 && pkRes[0].values.length > 0 ? String(pkRes[0].values[0][0]) : "label";
+    const pipeRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Pipeline 定义' OR key_name = 'Pipeline Config')`, [cmdAvId]);
+    if (pipeRes.length === 0 || pipeRes[0].values.length === 0) return null;
+    const pipeCol = String(pipeRes[0].values[0][0]);
+    const paramRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Param Mapping' OR key_name = '参数映射')`, [cmdAvId]);
+    const paramCol = paramRes.length > 0 && paramRes[0].values.length > 0 ? String(paramRes[0].values[0][0]) : "Param_Mapping";
+
+    const rows = db.exec(`SELECT "${pkCol}", "${pipeCol}", "${paramCol}" FROM "${tableName}" WHERE _itemID = ?`, [rowId]);
+    if (rows.length === 0 || rows[0].values.length === 0) return null;
+    const r = rows[0].values[0];
+    const name = String(r[0] || "");
+    const script = String(r[1] || "").trim();
+    if (!script) return null;
+    return { name, script, rule: parseRuleScript(script) };
+}
+
+/** 更新一行复合命令的名称与脚本 */
+export async function updatePipelineRow(rowId: string, name: string, script: string, globalParams = "{}"): Promise<void> {
+    const cmdAvId = getCommandAvId();
+    const keys = await getCommandDbKeyIds();
+    if (!cmdAvId || !keys) {
+        throw new Error("Command-DB 不可用或缺少 Pipeline 列");
+    }
+    const ops: any[] = [];
+    if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
+    if (keys.paramKeyId) ops.push({ keyID: keys.paramKeyId, itemID: rowId, value: { type: "text", text: { content: globalParams } } });
+    if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
+    await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
+}
+
+/** 从 Command-DB 同步所有复合命令脚本并注册 */
 export async function syncPipelinesFromCommandDb(): Promise<void> {
     try {
         unregisterAllPipelines();
@@ -134,17 +191,13 @@ export async function syncPipelinesFromCommandDb(): Promise<void> {
         const { db } = await getSqliteEngine();
         const tableName = `av_${cmdAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
         const colRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Pipeline 定义' OR key_name = 'Pipeline Config')`, [cmdAvId]);
-        if (colRes.length === 0 || colRes[0].values.length === 0) {
-            return; // 旧库没有 Pipeline 列
-        }
+        if (colRes.length === 0 || colRes[0].values.length === 0) return;
         const pipelineCol = String(colRes[0].values[0][0]);
 
         const pkRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [cmdAvId]);
         const pkCol = pkRes.length > 0 && pkRes[0].values.length > 0 ? String(pkRes[0].values[0][0]) : "label";
-
         const paramRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Param Mapping' OR key_name = '参数映射')`, [cmdAvId]);
         const paramCol = paramRes.length > 0 && paramRes[0].values.length > 0 ? String(paramRes[0].values[0][0]) : "Param_Mapping";
-
         const cmdIdRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Command ID' OR key_name = 'Command_ID')`, [cmdAvId]);
         const cmdIdCol = cmdIdRes.length > 0 && cmdIdRes[0].values.length > 0 ? String(cmdIdRes[0].values[0][0]) : "Command_ID";
 
@@ -154,38 +207,31 @@ export async function syncPipelinesFromCommandDb(): Promise<void> {
         for (const row of rows[0].values) {
             const rowId = String(row[0] || "");
             const label = String(row[1] || "");
-            const rawConfig = String(row[2] || "").trim();
+            const script = String(row[2] || "").trim();
             const globalParams = String(row[3] || "");
             const storedCmdId = String(row[4] || "").trim();
-            if (!rowId || !rawConfig) continue;
-            try {
-                const parsed = JSON.parse(rawConfig);
-                const { ok, errors } = validatePipeline(parsed);
-                if (!ok) {
-                    console.warn(`[Pipeline] 跳过无效配置 "${label}":`, errors);
-                    continue;
-                }
-                const name = parsed.name || label || rowId;
-                // 优先使用 Command ID 列存的值（旧格式兼容），否则按行 ID 派生哈希 ID
-                const commandId = storedCmdId.startsWith("pipeline.") ? storedCmdId : pipelineCommandId(rowId);
-                registerPipelineCommand(commandId, name, parsed, globalParams);
-                console.log(`[Pipeline] 已注册复合命令 ${commandId} (${name})`);
-            } catch (e) {
-                console.error(`[Pipeline] 解析 "${label}" 失败:`, e);
+            if (!rowId || !script) continue;
+            const rule = parseRuleScript(script);
+            if (!rule) {
+                console.warn(`[Pipeline] 跳过无法解析的脚本行 "${label}"`);
+                continue;
             }
+            const commandId = storedCmdId.startsWith("pipeline.") ? storedCmdId : pipelineCommandId(rowId);
+            registerPipelineCommand(commandId, rule.name || label || rowId, script, globalParams);
+            console.log(`[Pipeline] 已注册复合命令 ${commandId} (${rule.name || label})`);
         }
     } catch (e) {
         console.error("[Pipeline] syncPipelinesFromCommandDb failed:", e);
     }
 }
 
-/** 打开复合命令编辑器对话框 */
+/** 打开复合命令编辑器（新建） */
 export function openPipelineEditor(onCreated?: (rowId: string, name: string) => void): void {
     const dialog = new Dialog({
         title: "创建复合命令 (Pipeline)",
         content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
-        width: "560px",
-        height: "640px"
+        width: "680px",
+        height: "720px"
     });
     dialog.element.classList.add("indexos-dialog");
 
@@ -193,6 +239,28 @@ export function openPipelineEditor(onCreated?: (rowId: string, name: string) => 
         new m.default({
             target: dialog.element.querySelector("#pipeline-editor-container")!,
             props: { dialog, onCreated }
+        });
+    }).catch(e => {
+        console.error("[Pipeline] Failed to load editor:", e);
+        showMessage("加载复合命令编辑器失败", 5000, "error");
+        dialog.destroy();
+    });
+}
+
+/** 打开复合命令编辑器（编辑已有行，initialScript 为 Pipeline 定义列内容） */
+export function openPipelineEditorForRow(rowId: string, initialScript: string, onSaved?: (rowId: string, name: string) => void): void {
+    const dialog = new Dialog({
+        title: "编辑复合命令 (Pipeline)",
+        content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
+        width: "680px",
+        height: "720px"
+    });
+    dialog.element.classList.add("indexos-dialog");
+
+    import("./PipelineEditorDialog.svelte").then(m => {
+        new m.default({
+            target: dialog.element.querySelector("#pipeline-editor-container")!,
+            props: { dialog, initialScript, editRowId: rowId, onCreated: onSaved }
         });
     }).catch(e => {
         console.error("[Pipeline] Failed to load editor:", e);

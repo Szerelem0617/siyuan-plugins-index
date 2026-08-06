@@ -7,6 +7,7 @@ import { getSqliteEngine, executeWritableSql } from "../../sqlite/sqlite-manager
 import { post } from "../../../shared/api-client/request";
 import { getParamColKeyId } from "./query-helper";
 import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDialog.svelte";
+import { readPipelineRow, openPipelineEditorForRow } from "../pipeline/manager";
 import UIEntriesSelectorDialog from "./dialogs/UIEntriesSelectorDialog.svelte";
 import ParamConfigDialog from "./dialogs/ParamConfigDialog.svelte";
 import GlobalBackgroundEngineDialog from "./dialogs/GlobalBackgroundEngineDialog.svelte";
@@ -324,6 +325,19 @@ export async function handleCommandDbAltClick(
             }
         } catch (e) {
             console.error("[AltClick] Failed to resolve column schema details:", e);
+        }
+
+        if (clickedKeyName === "Pipeline 定义" || clickedKeyName === "Pipeline Config") {
+            // --- 行为 0: Alt+Click Pipeline 定义单元格 → 可视化编辑复合命令 ---
+            event.preventDefault();
+            event.stopPropagation();
+            const row = await readPipelineRow(rowId);
+            if (!row) {
+                showMessage("该行没有有效的 Pipeline 定义（或列不存在）", 3000, "info");
+                return;
+            }
+            openPipelineEditorForRow(rowId, row.script);
+            return;
         }
 
         if (clickedKeyName === "UI 入口" || clickedKeyName === "UI Entries" || clickedKeyName === "注册位置") {

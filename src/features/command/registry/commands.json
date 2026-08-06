@@ -431,18 +431,28 @@
             "dispatch": {
                 "method": "custom"
             },
-            "params": [
-                {
-                    "key": "id",
-                    "label": "目标块或页面 ID",
-                    "type": "blockid",
-                    "required": false,
-                    "paramMode": "template",
-                    "default": "{{block_id}}",
-                    "description": "目标块或页面的 ID (默认注入当前上下文的 block_id)"
-                }
-            ],
-            "constraints": {
+  "params": [
+    {
+      "key": "id",
+      "label": "目标块或页面 ID",
+      "type": "blockid",
+      "required": false,
+      "paramMode": "template",
+      "default": "{{block_id}}",
+      "description": "目标块或页面的 ID (默认注入当前上下文的 block_id)"
+    }
+  ],
+  "outputs": [
+    {
+      "key": "isTask",
+      "label": "是否已转换为任务",
+      "type": "boolean",
+      "required": false,
+      "paramMode": "template",
+      "description": "转换后目标块是否为任务状态"
+    }
+  ],
+  "constraints": {
                 "requiresFocus": false,
                 "environment": "universal"
             },

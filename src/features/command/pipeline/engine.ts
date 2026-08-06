@@ -1,21 +1,17 @@
 /**
  * pipeline/engine.ts
- * Pipeline 执行引擎（双轨：command 步骤 + script 步骤）
+ * 统一规则脚本执行器（RuleEngine）
  *
- * 优先级：#1 步骤 params（manual）> #2 pipeline 全局默认（auto）>
- *         #3 Command-DB paramMapping（commandDb）> 变量解析内嵌 > schema 默认
+ * Conditional 列 / 全局后台任务 / 复合命令共用同一脚本工件与同一沙箱环境：
+ *   env = { dispatch, state: { vars }, delay, context, eventName }
+ *
+ * - dispatch()：调用任意已注册命令；成功后把出参（规范 key + 用户别名）写入参数池 state.vars；
+ * - state.vars：平坦参数池（用户别名为键），模板 {{name}} / {{block_id}} 等环境变量照常解析；
+ * - 优先级：#1 脚本内联参数（manual）> #3 Command-DB paramMapping > 变量解析内嵌。
  */
 
-import { dispatchCommand, parseParam, type CommandContext, type DispatchResult } from "../command-dispatcher";
+import { dispatchCommand, type CommandContext, type DispatchResult } from "../command-dispatcher";
 import { COMMAND_BINDINGS } from "../registration";
-import type { PipelineConfig } from "./types";
-
-export interface PipelineRuntimeState {
-    /** 变量池（含 stepN.key 出参、全局默认、上下文 vars） */
-    vars: Record<string, any>;
-    stepIndex: number;
-    stepResults: Record<string, DispatchResult>;
-}
 
 /** 按 commandRef 在 COMMAND_BINDINGS 中反查 paramMapping（Command-DB 配置） */
 export function findCommandDbParamMapping(commandRef: string): string {
@@ -23,95 +19,65 @@ export function findCommandDbParamMapping(commandRef: string): string {
     return binding?.paramMapping || "";
 }
 
-/** 步骤出参写入变量池（stepN.key），供后续步骤以 {{stepN.key}} 引用 */
-function exportStepOutputs(state: PipelineRuntimeState, stepIndex: number, result: DispatchResult) {
-    const prefix = `step${stepIndex}.`;
-    if (result.id) {
-        state.vars[`${prefix}id`] = result.id;
-        state.vars[`${prefix}createdblock`] = result.id;
-        state.vars[`${prefix}last_id`] = result.id;
-    }
-    if (result.value !== undefined) {
-        state.vars[`${prefix}value`] = result.value;
-        if (typeof result.value === "object" && result.value !== null) {
-            for (const [k, v] of Object.entries(result.value)) {
-                state.vars[`${prefix}${k}`] = v;
-            }
+/** 解析 paramMapping 里的用户出参别名（_outputMapping: { 规范key: 别名 }） */
+function parseOutputMapping(paramMapping: string): Record<string, string> {
+    try {
+        const parsed = JSON.parse(paramMapping || "{}");
+        if (parsed && typeof parsed === "object" && parsed._outputMapping && typeof parsed._outputMapping === "object") {
+            return parsed._outputMapping as Record<string, string>;
+        }
+    } catch { /* ignore */ }
+    return {};
+}
+
+/** dispatch 成功后把出参写入参数池（规范 key + 用户别名） */
+function exportToPool(vars: Record<string, any>, commandDb: string, res: DispatchResult) {
+    if (res.id) vars.id = res.id;
+    if (res.value !== undefined) {
+        if (typeof res.value === "object" && res.value !== null) {
+            for (const [k, v] of Object.entries(res.value)) vars[k] = v;
+        } else {
+            vars.value = res.value;
         }
     }
-    state.stepResults[stepIndex] = result;
+    const mapping = parseOutputMapping(commandDb);
+    for (const [canonical, alias] of Object.entries(mapping)) {
+        if (alias && vars[canonical] !== undefined) vars[alias] = vars[canonical];
+    }
+}
+
+export interface RuleRunResult {
+    success: boolean;
+    vars: Record<string, any>;
+    detail?: string;
 }
 
 /**
- * 执行整条 pipeline。
- * @param config      pipeline 配置（JSON 模型）
- * @param context     命令上下文（blockEl / protyleEl / vars）
- * @param entryParams 该复合命令行 Param Mapping 列的全局默认参数（#2 auto 层）
+ * 执行统一规则脚本。
+ * @param script    脚本正文（编辑器生成的 DSL 或手写 TS）
+ * @param context   命令上下文（blockEl / protyleEl / vars）
+ * @param eventName 触发事件名（Conditional 使用，如 tag_created）
  */
-export async function runPipeline(
-    config: PipelineConfig,
+export async function runRuleScript(
+    script: string,
     context: CommandContext,
-    entryParams?: string | Record<string, unknown> | null
-): Promise<{ success: boolean; state: PipelineRuntimeState; failedStep?: number }> {
-    const state: PipelineRuntimeState = {
-        vars: { ...(context.vars || {}), ...parseParam(entryParams) },
-        stepIndex: 0,
-        stepResults: {}
-    };
-
-    for (let i = 0; i < config.steps.length; i++) {
-        const step = config.steps[i];
-        state.stepIndex = i;
-
-        if (step.enabled === false) {
-            console.log(`[Pipeline] step${i} disabled, skip`);
-            continue;
-        }
-        if (step.delayMs) {
-            await new Promise(resolve => setTimeout(resolve, step.delayMs));
-        }
-
-        const stepCtx: CommandContext = { ...context, vars: { ...context.vars, ...state.vars } };
-        try {
-            const type = step.type || "command";
-            let result: DispatchResult;
-            if (type === "script") {
-                result = await executePipelineScript(step.code || "", stepCtx, state);
-            } else {
-                result = await dispatchCommand(step.commandRef || "", null, stepCtx, {
-                    manual: step.params || {},
-                    commandDb: findCommandDbParamMapping(step.commandRef || "")
-                });
-            }
-
-            if (!result.success) {
-                console.error(`[Pipeline] step${i} failed:`, result.detail);
-                return { success: false, state, failedStep: i };
-            }
-            exportStepOutputs(state, i, result);
-            context.vars = { ...context.vars, ...state.vars };
-        } catch (err) {
-            console.error(`[Pipeline] step${i} threw:`, err);
-            return { success: false, state, failedStep: i };
-        }
-    }
-    return { success: true, state };
-}
-
-/** script 步骤：与 supertag-sandbox 相同的脚本约定（async ({ dispatch, state, ... }) => {...}） */
-async function executePipelineScript(code: string, context: CommandContext, state: PipelineRuntimeState): Promise<DispatchResult> {
+    eventName = ""
+): Promise<RuleRunResult> {
     try {
+        const vars: Record<string, any> = { ...(context.vars || {}) };
+
         const dispatch = async (commandId: string, params?: any): Promise<DispatchResult> => {
-            const res = await dispatchCommand(commandId, null, context, {
+            const commandDb = findCommandDbParamMapping(commandId);
+            const res = await dispatchCommand(commandId, null, { ...context, vars }, {
                 manual: params || {},
-                commandDb: findCommandDbParamMapping(commandId)
+                commandDb
             });
-            if (res.id && !state.vars.createdblock) {
-                state.vars.createdblock = res.id;
-                state.vars.last_id = res.id;
+            if (res.success) {
+                exportToPool(vars, commandDb, res);
             }
             return res;
         };
+
         const delay = (ms: number | string) => {
             let numMs = typeof ms === "number" ? ms : 0;
             if (typeof ms === "string") {
@@ -122,7 +88,7 @@ async function executePipelineScript(code: string, context: CommandContext, stat
             return new Promise(resolve => setTimeout(resolve, numMs));
         };
 
-        let body = code.trim();
+        let body = script.trim();
         if (body.startsWith("async ({") || body.startsWith("async (") || body.startsWith("({")) {
             body = `return (${body})(arguments[0]);`;
         } else if (body.startsWith("async function") || body.startsWith("function")) {
@@ -135,15 +101,17 @@ async function executePipelineScript(code: string, context: CommandContext, stat
         const fn = new AsyncFunction("env", body);
         const env = {
             dispatch,
-            state: { vars: state.vars },
+            state: { vars },
             delay,
             context,
-            eventName: ""
+            eventName
         };
-        const output = await fn(env);
-        return { success: true, method: "custom", detail: "script step ok", value: output };
+        await fn(env);
+
+        context.vars = { ...context.vars, ...vars };
+        return { success: true, vars };
     } catch (err) {
-        console.error("[Pipeline] script step error:", err);
-        return { success: false, method: "custom", detail: String(err) };
+        console.error("[RuleEngine] script error:", err);
+        return { success: false, vars: context.vars || {}, detail: String(err) };
     }
 }
