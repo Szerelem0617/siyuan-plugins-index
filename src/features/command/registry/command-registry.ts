@@ -32,8 +32,13 @@ export type ParamMode =
 /** 命令的调度方式 */
 export type DispatchMethod = "keyboard" | "global" | "api" | "custom";
 
-/** 命令对块的作用域 */
-export type CommandScope = "global" | "self" | "sibling" | "parent";
+/**
+ * 命令裸绑定时的最小上下文需求（入口适配判断的推导依据）。
+ * - none  : 不依赖任何块/文档上下文（视图、特效、提示等），可绑定到顶栏/命令面板等全局位置；
+ * - block : 依赖当前块上下文（作用于块自身/其兄弟/其父的命令），只应出现在块菜单/行内按钮等；
+ * - doc   : 依赖当前文档上下文，只应出现在页面/编辑器菜单等位置。
+ */
+export type ContextNeed = "none" | "block" | "doc";
 
 /** 命令所属功能分类 */
 export type CommandCategory =
@@ -116,8 +121,8 @@ export interface CommandConstraints {
 
 /** 命令的元信息，供 command-db 展示和筛选使用 */
 export interface CommandMeta {
-    /** 命令作用的块范围 */
-    scope: CommandScope;
+    /** 裸绑定时的最小上下文需求（none/block/doc），决定可绑定的入口位置 */
+    contextNeed: ContextNeed;
     /** 功能分类 */
     category: CommandCategory;
     /** 命令来源 */
@@ -240,7 +245,7 @@ class CommandRegistry {
                             environment: constraintsObj.environment,
                             comment: constraintsObj.comment
                         },
-                        meta: metaRaw ? JSON.parse(metaRaw) : { scope: "global", category: "custom", source: "plugin" }
+                        meta: metaRaw ? JSON.parse(metaRaw) : { contextNeed: "none", category: "custom", source: "plugin" }
                     };
                     if (existing && existing.dispatch.executor) {
                         def.dispatch.executor = existing.dispatch.executor;
@@ -268,7 +273,7 @@ class CommandRegistry {
      *     dispatch: { method: "custom", executor: async (params, ctx) => { ... } },
      *     params: [],
      *     constraints: { requiresFocus: false, uiOnly: false, schedulable: true },
-     *     meta: { scope: "global", category: "custom", source: "plugin", plugin: "myplugin" }
+     *     meta: { contextNeed: "none", category: "custom", source: "plugin", plugin: "myplugin" }
      * });
      */
     registerCommand(def: CommandDef): void {
@@ -319,7 +324,7 @@ class CommandRegistry {
             },
             params: [],
             constraints: { requiresFocus: false, environment: "universal", uiOnly: false, schedulable: true },
-            meta: { scope: "global", category: "user", source: "user", plugin: "user", icon: userCmd.icon || "iconSparkles" }
+            meta: { contextNeed: "none", category: "user", source: "user", plugin: "user", icon: userCmd.icon || "iconSparkles" }
         };
 
         this.registerCommand(cmdDef);

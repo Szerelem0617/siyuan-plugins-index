@@ -664,7 +664,13 @@ async function handleAvMouseOver(event: MouseEvent) {
         }
 
         const requiresParams = cmdDef.params && cmdDef.params.length > 0;
-        const scopeLabel = cmdDef.meta?.scope ? (cmdDef.meta.scope.charAt(0).toUpperCase() + cmdDef.meta.scope.slice(1)) : "Global";
+        const contextNeed = cmdDef.meta?.contextNeed || "none";
+        const ctxLabel: Record<string, string> = {
+            none: "全局（无需上下文）",
+            block: "需要块上下文",
+            doc: "需要文档上下文"
+        };
+        const ctxLabelText = ctxLabel[contextNeed] || contextNeed;
 
         const uiOnly = cmdDef.constraints?.uiOnly ?? false;
         const schedulable = cmdDef.constraints?.schedulable ?? false;
@@ -700,7 +706,7 @@ async function handleAvMouseOver(event: MouseEvent) {
                 ${cmdDef.description || "无描述"}
             </div>
             <div style="font-size: 10px; display: flex; gap: 8px; color: var(--b3-theme-on-surface-mute); border-top: 1px dashed var(--b3-border-color); padding-top: 4px; flex-wrap: wrap;">
-                <span>范围: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${scopeLabel}</code></span>
+                <span>上下文: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${ctxLabelText}</code></span>
                 <span>环境: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${envLabel}</code></span>
                 <span>参数: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${requiresParams ? "是" : "否"}</code></span>
             </div>

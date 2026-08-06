@@ -2,8 +2,9 @@
     import { onMount } from "svelte";
     import { Dialog, showMessage } from "siyuan";
     import { commandRegistry } from "./registry/command-registry";
+    import type { ContextNeed } from "./registry/command-registry";
     import {
-        loadEntryConfig, saveEntryConfig, resolveEntryConfigBlockId, ENTRY_POSITIONS, BLOCK_TYPES,
+        loadEntryConfig, saveEntryConfig, resolveEntryConfigBlockId, suitableForPosition, ENTRY_POSITIONS, BLOCK_TYPES,
         type EntryConfig, type BlockMenuEntry
     } from "./entry-config";
     import { refreshTopBarCommands } from "./global-registration/top-bar";
@@ -17,6 +18,7 @@
     let searchQuery = "";
     let editingTypes: string | null = null; // 块菜单：正在配类型的命令 id
     let saving = false;
+    let showAll = false;
 
     onMount(async () => {
         isInstantiated = !!(await resolveEntryConfigBlockId());
@@ -27,7 +29,11 @@
 
     $: commands = commandRegistry
         .getAllCommands()
-        .map(c => ({ id: c.id, name: c.name }))
+        .map((c): { id: string; name: string; contextNeed: ContextNeed } => ({
+            id: c.id,
+            name: c.name,
+            contextNeed: c.meta?.contextNeed || "none"
+        }))
         .sort((a, b) => a.name.localeCompare(b.name, "zh"));
 
     $: visibleCommands = commands.filter(cmd =>
@@ -38,8 +44,16 @@
 
     $: entries = cfg ? (cfg.positions[activePos] || []) : [];
     $: selectedMap = Object.fromEntries(entries.map(e => [typeof e === "string" ? e : e.id, true]));
+    // 已绑定的命令始终显示（便于移除旧配置）；showAll 时展示全部并标注不适用
+    $: displayCommands = visibleCommands.filter(cmd => showAll || suitableForPosition(cmd.contextNeed, activePos) || !!selectedMap[cmd.id]);
 
     function toggle(id: string) {
+        const cmd = commands.find(c => c.id === id);
+        // 只拦截"新增绑定"不适用命令；已绑定的允许取消
+        if (cmd && !suitableForPosition(cmd.contextNeed, activePos) && !selectedMap[id]) {
+            showMessage(`该命令${contextNeedText(cmd.contextNeed)}，不能绑定到「${activePos}」`, 2500, "info");
+            return;
+        }
         const list = [...(cfg.positions[activePos] || [])];
         if (selectedMap[id]) {
             cfg.positions[activePos] = list.filter(e => (typeof e === "string" ? e : e.id) !== id);
@@ -47,6 +61,12 @@
             cfg.positions[activePos] = activePos === "块菜单" ? [...list, { id }] : [...list, id];
         }
         cfg = { ...cfg, positions: { ...cfg.positions } };
+    }
+
+    function contextNeedText(need: ContextNeed): string {
+        if (need === "block") return "需要块上下文";
+        if (need === "doc") return "需要文档上下文";
+        return "无需上下文";
     }
 
     function typesOf(id: string): string[] {
@@ -111,24 +131,36 @@
 
         <!-- 右：命令勾选 -->
         <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;">
-            <input
-                type="text"
-                class="b3-text-field fn__block"
-                style="font-size: 12px; padding: 5px 10px; flex-shrink: 0;"
-                placeholder="搜索命令..."
-                bind:value={searchQuery}
-            />
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                <input
+                    type="text"
+                    class="b3-text-field fn__block"
+                    style="font-size: 12px; padding: 5px 10px; flex: 1; min-width: 0;"
+                    placeholder="搜索命令..."
+                    bind:value={searchQuery}
+                />
+                <button
+                    type="button"
+                    class="indexos-btn-bordered"
+                    style="font-size: 11px; padding: 4px 10px; flex-shrink: 0;"
+                    on:click={() => { showAll = !showAll; }}
+                >{showAll ? "隐藏不适用" : "显示全部"}</button>
+            </div>
             <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding-right: 4px;">
-                {#each visibleCommands as cmd}
+                {#each displayCommands as cmd}
                     {@const sel = !!selectedMap[cmd.id]}
+                    {@const suitable = suitableForPosition(cmd.contextNeed, activePos)}
                     <div
-                        style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 5px; cursor: pointer; border-left: 3px solid {sel ? 'var(--indexos-accent-primary)' : 'transparent'}; background: {sel ? 'rgba(40, 81, 127, 0.06)' : 'transparent'};"
+                        style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 5px; cursor: pointer; border-left: 3px solid {sel ? 'var(--indexos-accent-primary)' : 'transparent'}; background: {sel ? 'rgba(40, 81, 127, 0.06)' : 'transparent'}; opacity: {suitable ? 1 : 0.45};"
                         on:click={() => toggle(cmd.id)}
                     >
                         <span
                             style="width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; background: {sel ? 'var(--indexos-accent-primary)' : 'var(--indexos-border-light)'}; color: #fff;"
                         >{sel ? "✓" : ""}</span>
                         <span style="font-size: 12px; font-weight: 600; color: var(--indexos-text-main); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{cmd.name}</span>
+                        {#if !suitable}
+                            <span style="font-size: 10px; padding: 1px 6px; border-radius: 3px; background: rgba(240, 173, 78, 0.14); color: var(--indexos-text-warn, #e6a23c); flex-shrink: 0;" title="该命令无法在无此上下文的位置使用">⚠ {contextNeedText(cmd.contextNeed)}</span>
+                        {/if}
                         {#if activePos === "块菜单" && sel}
                             <button
                                 type="button"
@@ -152,7 +184,7 @@
                         </div>
                     {/if}
                 {/each}
-                {#if visibleCommands.length === 0}
+                {#if displayCommands.length === 0}
                     <div style="text-align: center; padding: 24px; opacity: 0.5; font-size: 12px;">无匹配命令</div>
                 {/if}
             </div>

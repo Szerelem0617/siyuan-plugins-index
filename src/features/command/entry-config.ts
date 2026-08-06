@@ -9,6 +9,7 @@
 
 import { post } from "../../shared/api-client/request";
 import { getCommandAvId } from "./registration";
+import type { ContextNeed } from "./registry/command-registry";
 
 /** 存 Command-DB 数据库块 custom attributes 的属性名 */
 export const ENTRY_CONFIG_KEY = "custom-indexos-entry-config";
@@ -160,3 +161,25 @@ export function blockTypeOf(dataType: string): string | null {
 }
 
 export const BLOCK_TYPES = ["段落", "标题", "列表", "引述", "代码块", "表格", "超级块", "文档"];
+
+/** 各入口位置提供的上下文等级（none=无上下文 / block=块 / doc=文档） */
+export const POSITION_CONTEXT: Record<string, ContextNeed> = {
+    "顶栏右": "none", "顶栏左": "none",
+    "底栏右": "none", "底栏左": "none",
+    "侧栏左": "none", "侧栏右": "none",
+    "命令面板": "none", "快捷命令": "none",
+    "行内按钮": "block", "块菜单": "block",
+    "页面菜单": "doc", "编辑器菜单": "doc"
+};
+
+const CTX_LEVEL: Record<ContextNeed, number> = { none: 0, block: 1, doc: 2 };
+
+/**
+ * 命令裸绑定到某位置是否合适：位置提供的上下文等级 >= 命令的最低需求。
+ * 例：contextNeed=block 的命令绑定到顶栏（none）→ 不合适；绑定到块菜单 → 合适。
+ */
+export function suitableForPosition(contextNeed: ContextNeed, position: string): boolean {
+    const provided = POSITION_CONTEXT[position];
+    if (!provided) return true; // 未知位置放行
+    return CTX_LEVEL[provided] >= CTX_LEVEL[contextNeed];
+}

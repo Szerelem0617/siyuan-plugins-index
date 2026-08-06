@@ -70,7 +70,7 @@ export function registerPipelineCommand(id: string, name: string, script: string
         },
         params: [],
         constraints: { requiresFocus: false, environment: "universal" },
-        meta: { scope: "global", category: "custom", source: "user", plugin: "pipeline" }
+        meta: { contextNeed: "none", category: "custom", source: "user", plugin: "pipeline" }
     });
     registeredPipelines.add(id);
     return id;

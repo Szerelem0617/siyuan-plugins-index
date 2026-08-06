@@ -18,7 +18,7 @@
                 "comment": "依赖思源 UI 状态，无法定时触发"
             },
             "meta": {
-                "scope": "global",
+                "contextNeed": "none",
                 "category": "navigation",
                 "source": "builtin"
             },
@@ -42,7 +42,7 @@
                 "environment": "ui"
             },
             "meta": {
-                "scope": "global",
+                "contextNeed": "none",
                 "category": "navigation",
                 "source": "builtin"
             }
@@ -61,7 +61,7 @@
                 "environment": "ui"
             },
             "meta": {
-                "scope": "global",
+                "contextNeed": "none",
                 "category": "view",
                 "source": "builtin"
             }
@@ -85,7 +85,7 @@
                 "comment": "快捷键实现，无法指定任意块ID；如需定时复制请改用 api.block.insertBlock"
             },
             "meta": {
-                "scope": "self",
+                "contextNeed": "block",
                 "category": "edit",
                 "source": "builtin",
                 "apiEquivalent": "api.block.insert",
@@ -115,7 +115,7 @@
                 "environment": "ui"
             },
             "meta": {
-                "scope": "sibling",
+                "contextNeed": "block",
                 "category": "edit",
                 "source": "builtin",
                 "apiEquivalent": "api.block.insert",
@@ -140,7 +140,7 @@
                 "environment": "ui"
             },
             "meta": {
-                "scope": "self",
+                "contextNeed": "block",
                 "category": "clipboard",
                 "source": "builtin",
                 "appliesTo": ["paragraph", "heading", "list", "blockquote", "code", "table", "super"]
@@ -217,7 +217,7 @@
                 "environment": "kernel"
             },
             "meta": {
-                "scope": "sibling",
+                "contextNeed": "block",
                 "category": "edit",
                 "source": "builtin"
             },
@@ -285,7 +285,7 @@
                 "environment": "kernel"
             },
             "meta": {
-                "scope": "self",
+                "contextNeed": "block",
                 "category": "edit",
                 "source": "builtin"
             },
@@ -326,7 +326,7 @@
                 "environment": "kernel"
             },
             "meta": {
-                "scope": "self",
+                "contextNeed": "block",
                 "category": "attribute",
                 "source": "builtin"
             }
@@ -344,7 +344,7 @@
                 "environment": "ui"
             },
             "meta": {
-                "scope": "self",
+                "contextNeed": "none",
                 "category": "custom",
                 "source": "plugin",
                 "plugin": "index"
@@ -407,7 +407,7 @@
                 "environment": "universal"
             },
             "meta": {
-                "scope": "self",
+                "contextNeed": "none",
                 "category": "custom",
                 "source": "plugin",
                 "plugin": "index"
@@ -451,7 +451,7 @@
                 "environment": "universal"
             },
             "meta": {
-                "scope": "self",
+                "contextNeed": "block",
                 "category": "edit",
                 "source": "plugin",
                 "plugin": "index",
