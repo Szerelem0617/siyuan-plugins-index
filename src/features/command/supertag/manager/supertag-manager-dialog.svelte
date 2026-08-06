@@ -197,7 +197,7 @@
     }
 
     import { confirmDialog } from "../../../../shared/utils";
-    import { constructCommandStorage } from "../../construct-dir";
+    import { constructCommandStorage } from "../../instantiate-storage";
     import { isDataDbsInstantiated, getOrStoreDataDbDoc } from "../../data-db-management";
 
     async function handlePrefChange(typeName: string, avId: string) {

@@ -1,4 +1,4 @@
-import { constructCommandStorage } from "./construct-dir";
+import { constructCommandStorage } from "./instantiate-storage";
 import { i18n } from "../../shared/utils";
 import { type Protyle } from "siyuan";
 import { registerFriendlyTableName } from "../sqlite/sqlite-manager";

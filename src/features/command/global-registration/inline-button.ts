@@ -215,7 +215,7 @@ function injectButtonCSS() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Available inline commands registry (fed by top-bar.ts scan)
+// Available inline commands registry (fed by entry-registration.ts scan)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface InlineButtonCmd {

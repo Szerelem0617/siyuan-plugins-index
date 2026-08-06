@@ -1,6 +1,6 @@
 /**
- * top-bar.ts
- * 全局入口注册：从 entry-config（位置 → 命令）读取，注册到顶栏/底栏/侧栏/行内按钮/命令面板。
+ * entry-registration.ts
+ * 全局入口注册：从 entry-config（位置 → 命令）读取，注册到顶栏/底栏/侧栏/命令按钮/;;菜单/快捷键//菜单。
  */
 
 import { commandRegistry } from "../registry/command-registry";
@@ -10,8 +10,9 @@ import { COMMAND_BINDINGS } from "../registration";
 import { updateInlineButtonList, InlineButtonCmd } from "./inline-button";
 import { updateCommandPaletteList, PaletteCommand } from "./command-palette";
 import { loadEntryConfig, positionCommands } from "../entry-config";
+import { updateEntrySlashCommands } from "../../../core/slash";
 
-export interface TopBarCommand {
+export interface EntryCommand {
     id: string;
     label: string;
     commandId: string;
@@ -37,7 +38,7 @@ function commandMeta(id: string): { label: string; commandParam: string; require
 }
 
 function dispatchCommandById(id: string, param: string) {
-    console.log(`[TopBar] 执行命令: ${id}`, param);
+    console.log(`[Entry] 执行命令: ${id}`, param);
     const mockContext = { blockEl: document.body, protyleEl: null };
     dispatchCommand(id, param, mockContext as any);
 }
@@ -56,7 +57,7 @@ function positionFor(position: string): { kind: "topbar"; position: "right" | "l
 }
 
 /** 在停靠栏注入命令按钮（侧栏左/右） */
-function createDockItem(barSel: string, tb: TopBarCommand): HTMLElement | null {
+function createDockItem(barSel: string, tb: EntryCommand): HTMLElement | null {
     const bar = document.querySelector(barSel) as HTMLElement | null;
     if (!bar) return null;
     const btn = document.createElement("div");
@@ -78,38 +79,64 @@ function syncNativeCommands(ids: string[]) {
             const callback = async () => {
                 // 原生命令注册后无法在会话内注销（思源插件 API 无 removeCommand），
                 // 执行前检查是否仍在配置中，避免执行已移除的过期命令
-                const current = positionCommands(await loadEntryConfig(), "命令面板");
+                const current = positionCommands(await loadEntryConfig(), "快捷键");
                 if (!current.includes(id)) {
-                    console.log(`[TopBar] 命令 ${id} 已从『命令面板』移除，忽略执行`);
+                    console.log(`[Entry] 命令 ${id} 已从『快捷键』位置移除，忽略执行`);
                     return;
                 }
                 dispatchCommandById(id, meta.commandParam);
             };
             plugin.addCommand({
                 langKey: `indexos_${id.replace(/[^a-zA-Z0-9_.-]/g, "_")}`,
+                langText: meta.label,
                 hotkey: "",
                 callback
             });
             registeredNativeCommands.add(id);
-            console.log(`[TopBar] 原生命令面板注册 ${id}`);
+            console.log(`[Entry] 原生命令面板注册 ${id}`);
         } catch (e) {
-            console.error(`[TopBar] 原生命令面板注册失败 ${id}:`, e);
+            console.error(`[Entry] 原生命令面板注册失败 ${id}:`, e);
         }
     }
 }
 
+/** "/菜单" 位置命令 → slash 菜单项 */
+function buildEntrySlashCommands(ids: string[]): any[] {
+    return ids.map((id) => {
+        const meta = commandMeta(id);
+        return {
+            filter: [id, meta.label],
+            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">${meta.label}</span><span class="b3-list-item__meta">命令</span></div>`,
+            id: `entry-${id}`,
+            callback: async (protyle: any) => {
+                // 捕获当前块上下文（slash 触发后光标位于当前块内）
+                const selection = window.getSelection();
+                let blockEl: HTMLElement | null = null;
+                if (selection && selection.anchorNode) {
+                    let node = selection.anchorNode;
+                    if (node.nodeType !== Node.ELEMENT_NODE) node = node.parentElement;
+                    blockEl = (node as HTMLElement)?.closest("[data-node-id]") || null;
+                }
+                const protyleEl = protyle?.element || (window as any).activeProtyleInstance?.element || null;
+                dispatchCommand(id, meta.commandParam, { blockEl: blockEl || document.body, protyleEl } as any);
+            }
+        };
+    });
+}
+
 /** 从全局入口配置刷新所有注册面 */
-export async function refreshTopBarCommands() {
+export async function refreshEntryRegistrations() {
     if (!plugin) return;
     const cfg = await loadEntryConfig();
 
-    const newTopBars: TopBarCommand[] = [];
-    const newStatusBars: TopBarCommand[] = [];
-    const newDocks: TopBarCommand[] = [];
+    const newTopBars: EntryCommand[] = [];
+    const newStatusBars: EntryCommand[] = [];
+    const newDocks: EntryCommand[] = [];
     const newInlineBtns: InlineButtonCmd[] = [];
     const newPaletteCmds: PaletteCommand[] = [];
 
-    syncNativeCommands(positionCommands(cfg, "命令面板"));
+    syncNativeCommands(positionCommands(cfg, "快捷键"));
+    updateEntrySlashCommands(buildEntrySlashCommands(positionCommands(cfg, "/菜单")));
 
     for (const [posName, cmdIds] of Object.entries(cfg.positions)) {
         const pos = positionFor(posName);
@@ -125,23 +152,23 @@ export async function refreshTopBarCommands() {
         }
     }
 
-    for (const id of positionCommands(cfg, "行内按钮")) {
+    for (const id of positionCommands(cfg, "命令按钮")) {
         const meta = commandMeta(id);
         newInlineBtns.push({ id, label: meta.label, commandId: id, commandParam: meta.commandParam, requiresParams: meta.requiresParams });
     }
-    for (const id of positionCommands(cfg, "快捷命令")) {
+    for (const id of positionCommands(cfg, ";;菜单")) {
         const meta = commandMeta(id);
         newPaletteCmds.push({ id, label: meta.label, commandId: id, commandParam: meta.commandParam, requiresParams: meta.requiresParams });
     }
 
-    applyTopBarUpdates(newTopBars, newStatusBars, newDocks, newInlineBtns, newPaletteCmds);
-    console.log(`[TopBar] 入口刷新：顶栏 ${newTopBars.length}，底栏 ${newStatusBars.length}，侧栏 ${newDocks.length}，行内 ${newInlineBtns.length}，面板 ${newPaletteCmds.length}`);
+    applyEntryUpdates(newTopBars, newStatusBars, newDocks, newInlineBtns, newPaletteCmds);
+    console.log(`[Entry] 入口刷新：顶栏 ${newTopBars.length}，底栏 ${newStatusBars.length}，侧栏 ${newDocks.length}，按钮 ${newInlineBtns.length}，;;菜单 ${newPaletteCmds.length}`);
 }
 
-function applyTopBarUpdates(
-    newTopBars: TopBarCommand[],
-    newStatusBars: TopBarCommand[],
-    newDocks: TopBarCommand[],
+function applyEntryUpdates(
+    newTopBars: EntryCommand[],
+    newStatusBars: EntryCommand[],
+    newDocks: EntryCommand[],
     newInlineBtns: InlineButtonCmd[],
     newPaletteCmds: PaletteCommand[]
 ) {
@@ -194,7 +221,7 @@ function applyTopBarUpdates(
     updateCommandPaletteList(newPaletteCmds);
 }
 
-export function destroyTopBarCommands() {
+export function destroyEntryRegistrations() {
     for (const rem of registeredTopBars) if (rem.element) rem.element.remove();
     registeredTopBars = [];
     for (const rem of registeredStatusBars) if (rem.element) rem.element.remove();

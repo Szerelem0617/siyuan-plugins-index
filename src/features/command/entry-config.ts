@@ -3,7 +3,7 @@
  * 全局入口配置（方案 B）：位置 → 命令列表。
  * 与后台规则一致，配置存 Command-DB 数据库块的 custom attributes
  * （custom-indexos-entry-config），随数据在思源内，卸载插件不丢失。
- * 位置：顶栏/底栏/侧栏（单选位置）、行内按钮/快捷命令/命令面板/块菜单/页面菜单/编辑器菜单（可多选）。
+ * 位置：顶栏/底栏/侧栏、命令按钮、;;菜单、快捷键、/菜单、块菜单、页面菜单、编辑器菜单。
  * 块菜单条目支持 types 过滤（空 = 所有块类型）。
  */
 
@@ -25,7 +25,7 @@ export interface EntryConfig {
 
 export const ENTRY_POSITIONS = [
     "顶栏右", "顶栏左", "底栏右", "底栏左", "侧栏左", "侧栏右",
-    "行内按钮", "快捷命令", "命令面板", "块菜单", "页面菜单", "编辑器菜单"
+    "命令按钮", ";;菜单", "快捷键", "/菜单", "块菜单", "页面菜单", "编辑器菜单"
 ];
 
 export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
@@ -36,14 +36,14 @@ export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
         "底栏左": [],
         "侧栏左": [],
         "侧栏右": [],
-        "行内按钮": [
+        "命令按钮": [
             "plugin-index.command.safeUpdateBlock",
             "plugin-index.effect.fireworks",
             "siyuan.ui.toast",
             "plugin-index.command.turnIntoTask",
             "siyuan.view.graph"
         ],
-        "快捷命令": [
+        ";;菜单": [
             "siyuan.view.graph",
             "editor.block.duplicate",
             "api.block.insert",
@@ -52,11 +52,20 @@ export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
             "siyuan.ui.toast",
             "plugin-index.command.turnIntoTask"
         ],
-        "命令面板": [],
+        "快捷键": [],
+        "/菜单": [],
         "块菜单": [],
         "页面菜单": [],
         "编辑器菜单": []
     }
+};
+
+/** 位置的补充说明（显示在入口配置对话框） */
+export const POSITION_HINTS: Record<string, string> = {
+    "快捷键": "加入后可在 设置 → 快捷键 → 插件 → 目录插件 中找到该命令，并为其绑定快捷键",
+    "/菜单": "加入后可在编辑器内输入 / 呼出的菜单中找到该命令",
+    ";;菜单": "在编辑器内输入 ;;（或；；）呼出的快捷命令面板",
+    "命令按钮": "以命令按钮的形式出现在编辑器中（插入命令按钮 / 超级标签按钮段落）"
 };
 
 function cloneDefault(): EntryConfig {
@@ -162,24 +171,29 @@ export function blockTypeOf(dataType: string): string | null {
 
 export const BLOCK_TYPES = ["段落", "标题", "列表", "引述", "代码块", "表格", "超级块", "文档"];
 
-/** 各入口位置提供的上下文等级（none=无上下文 / block=块 / doc=文档） */
-export const POSITION_CONTEXT: Record<string, ContextNeed> = {
-    "顶栏右": "none", "顶栏左": "none",
-    "底栏右": "none", "底栏左": "none",
-    "侧栏左": "none", "侧栏右": "none",
-    "命令面板": "none", "快捷命令": "none",
-    "行内按钮": "block", "块菜单": "block",
-    "页面菜单": "doc", "编辑器菜单": "doc"
+/**
+ * 各入口位置的“典型命令上下文”：默认只显示大概率会用到的命令（“显示全部”可绕过）。
+ * - 全局位置（顶栏/底栏/侧栏/快捷键）：只显示无需上下文的命令
+ * - 块菜单 / /菜单：以块命令为主（全局视图/特效类命令大概率用不到）
+ * - 命令按钮 / ;;菜单：显式触发器/快速启动器，保留全局命令（如按钮放烟花、启动器开视图）
+ * - 页面菜单 / 编辑器菜单：块命令 + 文档命令
+ */
+export const POSITION_EXPECTED: Record<string, ContextNeed[]> = {
+    "顶栏右": ["none"], "顶栏左": ["none"],
+    "底栏右": ["none"], "底栏左": ["none"],
+    "侧栏左": ["none"], "侧栏右": ["none"],
+    "快捷键": ["none"],
+    "命令按钮": ["none", "block"],
+    ";;菜单": ["none", "block"],
+    "/菜单": ["block"],
+    "块菜单": ["block"],
+    "页面菜单": ["block", "doc"],
+    "编辑器菜单": ["block", "doc"]
 };
 
-const CTX_LEVEL: Record<ContextNeed, number> = { none: 0, block: 1, doc: 2 };
-
-/**
- * 命令裸绑定到某位置是否合适：位置提供的上下文等级 >= 命令的最低需求。
- * 例：contextNeed=block 的命令绑定到顶栏（none）→ 不合适；绑定到块菜单 → 合适。
- */
+/** 命令裸绑定到某位置是否大概率合适（不匹配的仍可经“显示全部”查看） */
 export function suitableForPosition(contextNeed: ContextNeed, position: string): boolean {
-    const provided = POSITION_CONTEXT[position];
-    if (!provided) return true; // 未知位置放行
-    return CTX_LEVEL[provided] >= CTX_LEVEL[contextNeed];
+    const expected = POSITION_EXPECTED[position];
+    if (!expected) return true; // 未知位置放行
+    return expected.includes(contextNeed);
 }

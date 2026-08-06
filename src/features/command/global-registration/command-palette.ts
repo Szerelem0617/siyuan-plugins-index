@@ -229,7 +229,7 @@ function renderList(query: string) {
             <svg class="card-icon"><use xlink:href="#iconPlay"></use></svg>
             <div class="card-body">
                 <div class="card-title">${escapeHtml(cmd.label)}</div>
-                ${cmd.description ? `<div class="card-desc">${escapeHtml(cmd.description)}</div>` : `<div class="card-desc" style="opacity:0.4;">快捷命令</div>`}
+                ${cmd.description ? `<div class="card-desc">${escapeHtml(cmd.description)}</div>` : `<div class="card-desc" style="opacity:0.4;">;;菜单</div>`}
             </div>
         </button>
     `).join("");

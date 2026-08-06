@@ -19,16 +19,23 @@ function getCurrentBlockId(): string | null {
 }
 
 let dynamicSlashCommands: any[] = [];
+let entrySlashCommands: any[] = [];
 
 export function updateDynamicSlashCommands(cmds: any[]) {
     dynamicSlashCommands = cmds;
     addSlash(); // rebuild the plugin.protyleSlash array
 }
 
+/** 入口配置 "/菜单" 位置的命令 → slash 菜单项 */
+export function updateEntrySlashCommands(cmds: any[]) {
+    entrySlashCommands = cmds;
+    addSlash();
+}
+
 export function addSlash() {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const shortcutIndex = isMobile ? "" : (isMac ? "⌥⌘I" : "Alt+Ctrl+I");
-    const shortcutOutline = isMobile ? "" : (isMac ? "⌥⌘P" : "Alt+Ctrl+P");
+    const shortcutOutline = isMobile ? "" : (isMac ? "⌥⌘O" : "Alt+Ctrl+O");
 
     const protyleSlashContent: any[] = [{
         filter: ["insert index", "插入文档目录", "crawml"],
@@ -60,6 +67,11 @@ export function addSlash() {
     // Append all dynamically injected commands (e.g., from DB-checked Inline Buttons)
     for (const dCmd of dynamicSlashCommands) {
         protyleSlashContent.push(dCmd);
+    }
+
+    // 追加入口配置 "/菜单" 绑定的命令
+    for (const eCmd of entrySlashCommands) {
+        protyleSlashContent.push(eCmd);
     }
 
     plugin.protyleSlash = protyleSlashContent;

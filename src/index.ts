@@ -26,7 +26,7 @@ import {
     SupertagRenderer, 
     initTagMenuInterceptor 
 } from "./features/command/supertag";
-import { refreshTopBarCommands, destroyTopBarCommands } from "./features/command/global-registration/top-bar";
+import { refreshEntryRegistrations, destroyEntryRegistrations } from "./features/command/global-registration/entry-registration";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
 import { backgroundScheduler } from "./features/command/background/background-scheduler";
@@ -96,7 +96,7 @@ export default class IndexPlugin extends Plugin {
 
         if (isDevInitSysEnabled()) {
             refreshSupertagRegistry();
-            await refreshTopBarCommands();
+            await refreshEntryRegistrations();
         }
         //监听块菜单事件
         this.eventBus.on("click-blockicon", buildDocNew);
@@ -186,7 +186,7 @@ export default class IndexPlugin extends Plugin {
                 await commandRegistry.loadFromDatabase();
                 // Refresh registrations once DB is ready
                 await refreshSupertagRegistry();
-                await refreshTopBarCommands();
+                await refreshEntryRegistrations();
                 await syncGlobalSupertagsCache();
                 
                 // 广播 indexos-ready 全局事件通知第三方插件
@@ -222,7 +222,7 @@ export default class IndexPlugin extends Plugin {
             destroyCommandPalette();
             destroyButtonLinkListener();
             destroyHoverTooltipListener();
-            destroyTopBarCommands();
+            destroyEntryRegistrations();
         }
         destroyTagSuggestion();
         backgroundScheduler.stop();

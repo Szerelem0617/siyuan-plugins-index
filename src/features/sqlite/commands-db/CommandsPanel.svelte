@@ -2,7 +2,7 @@
     import { onMount } from "svelte";
     import { refreshSupertagRegistry } from "../../command/utils/sync-service";
     import { showMessage } from "siyuan";
-    import { constructCommandStorage } from "../../command/construct-dir";
+    import { constructCommandStorage } from "../../command/instantiate-storage";
     import { commandRegistry } from "../../command/registry/command-registry";
     import { encodeBtnHref } from "../../command/global-registration/inline-button";
     import { openGlobalAutomationDialog } from "../../command/av-interaction/command-db-handler";

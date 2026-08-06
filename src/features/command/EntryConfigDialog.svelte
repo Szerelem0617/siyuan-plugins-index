@@ -4,10 +4,10 @@
     import { commandRegistry } from "./registry/command-registry";
     import type { ContextNeed } from "./registry/command-registry";
     import {
-        loadEntryConfig, saveEntryConfig, resolveEntryConfigBlockId, suitableForPosition, ENTRY_POSITIONS, BLOCK_TYPES,
+        loadEntryConfig, saveEntryConfig, resolveEntryConfigBlockId, suitableForPosition, ENTRY_POSITIONS, BLOCK_TYPES, POSITION_HINTS,
         type EntryConfig, type BlockMenuEntry
     } from "./entry-config";
-    import { refreshTopBarCommands } from "./global-registration/top-bar";
+    import { refreshEntryRegistrations } from "./global-registration/entry-registration";
 
     export let dialog: Dialog;
 
@@ -95,7 +95,7 @@
         saving = true;
         try {
             await saveEntryConfig(cfg);
-            await refreshTopBarCommands();
+            await refreshEntryRegistrations();
             console.log("[EntryConfig] 已保存入口配置", cfg);
             showMessage("✓ 入口配置已保存");
             dialog.destroy();
@@ -188,6 +188,9 @@
                     <div style="text-align: center; padding: 24px; opacity: 0.5; font-size: 12px;">无匹配命令</div>
                 {/if}
             </div>
+            {#if POSITION_HINTS[activePos]}
+                <div style="font-size: 10px; color: var(--indexos-text-muted); flex-shrink: 0;">💡 {POSITION_HINTS[activePos]}</div>
+            {/if}
             {#if activePos === "块菜单"}
                 <div style="font-size: 10px; color: var(--indexos-text-muted); flex-shrink: 0;">块菜单命令默认出现在所有块类型上；点"⚙ 类型"可限定只出现在某些块。</div>
             {/if}
