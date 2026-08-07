@@ -106,7 +106,7 @@
 </script>
 
 <div class="fn__flex-column" style="height: 100%; padding: 16px; box-sizing: border-box; gap: 10px;">
-    <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); flex-shrink: 0;">🧭 入口配置（位置 → 命令）</div>
+    <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); flex-shrink: 0;">🧭 UI 入口（位置 → 命令）</div>
 
     {#if loading}
         <div style="text-align: center; padding: 40px; opacity: 0.6; font-size: 12px;">加载中...</div>

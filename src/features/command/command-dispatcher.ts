@@ -104,7 +104,11 @@ export async function dispatchCommand(
 
     console.log(`[Dispatcher] Executing command "${commandId}" via method "${def.dispatch.method}". Params:`, resolvedParams);
 
-    // 4. 按 dispatch.method 执行
+    // 检查 enabled 控制标志：若为 false 则直接跳过当前命令（用于条件流控制，非错误）
+    if (resolvedParams.enabled === false || resolvedParams.enabled === "false" || resolvedParams.enabled === 0) {
+        console.log(`[Dispatcher] 命令 "${commandId}" 的 enabled 评估为 false，自动跳过执行。`);
+        return { success: true, method: def.dispatch.method, detail: "Skipped via enabled=false" };
+    }
     try {
         let result: DispatchResult;
         switch (def.dispatch.method) {
@@ -388,8 +392,35 @@ export async function resolveCommandParams(
     const raw = mergeParamSources(sources);
     const result: Record<string, unknown> = {};
 
+    // 预解析当前可用的 Auto-Context 变量集
+    const vars = context.vars || {};
+
     for (const schema of def.params) {
-        const value = raw[schema.key] ?? schema.default;
+        let value = raw[schema.key];
+        
+        // 1. 若 Layer 3 未显式配置 (undefined 或 "")，尝试走 Auto-Context 动态推导
+        if (value === undefined || value === "") {
+            // Auto-Context 推导 1：id 字段优先自动匹配 createdblock 或 id
+            if (schema.key === "id" || schema.type === "blockid") {
+                const autoId = vars["var.createdblock"] || vars["createdblock"] || vars["var.id"] || vars["id"];
+                if (autoId) {
+                    value = String(autoId);
+                }
+            }
+            // Auto-Context 推导 2：enabled 字段自动绑定上一步的 boolean 出参
+            if (schema.key === "enabled") {
+                const autoBool = vars["var.last_boolean_result"] ?? vars["last_boolean_result"] ?? vars["var.completed"] ?? vars["completed"];
+                if (autoBool !== undefined) {
+                    value = autoBool;
+                }
+            }
+        }
+
+        // 2. 若 Auto-Context 仍未命中，走 Layer 2 默认值 (schema.default)
+        if (value === undefined || value === "") {
+            value = schema.default;
+        }
+
         if (schema.paramMode === "template") {
             result[schema.key] = await resolveTemplate(String(value ?? ""), context);
         } else if (typeof value === "string") {
@@ -425,11 +456,25 @@ export async function resolveCommandParams(
  *   {{root_id}}      所在文档根块 ID
  *   {{attr:KEY}}     触发块的自定义属性值
  */
+import { promptUserModal } from "./utils/prompt-modal";
+
 export async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
     if (!text || typeof text !== "string" || (!text.includes("{{") && !text.includes("${"))) return text;
 
     // 统一规范化 ${xxx} 为 {{xxx}}
     let normalizedText = text.replace(/\$\{([a-zA-Z0-9_.:-]+)\}/g, "{{$1}}");
+
+    // 0. JIT 实时交互弹窗解析支持：{{prompt}} 或 {{prompt:提示文案}} (兼顾 {{interactive}} / {{input}})
+    if (normalizedText.includes("{{prompt") || normalizedText.includes("{{interactive") || normalizedText.includes("{{input")) {
+        const promptRegex = /\{\{(prompt|interactive|input)(?::([^}]+))?\}\}/g;
+        let match: RegExpExecArray | null;
+        while ((match = promptRegex.exec(normalizedText)) !== null) {
+            const fullPlaceholder = match[0];
+            const titlePrompt = match[2]?.trim() || "请输入参数内容";
+            const userInput = await promptUserModal(titlePrompt);
+            normalizedText = normalizedText.replace(fullPlaceholder, userInput ?? "");
+        }
+    }
 
     const blockId = getBlockId(context);
     const variables: Record<string, string> = {

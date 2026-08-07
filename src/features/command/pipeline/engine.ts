@@ -81,6 +81,13 @@ export async function runRuleScript(
         const vars: Record<string, any> = { ...(context.vars || {}) };
 
         const dispatch = async (commandId: string, params?: any): Promise<DispatchResult> => {
+            if (params && params.delayMs) {
+                const ms = Number(params.delayMs);
+                if (!isNaN(ms) && ms > 0) {
+                    console.log(`[RuleEngine] Step ${commandId} 预设延时 ${ms} ms...`);
+                    await delay(ms);
+                }
+            }
             const commandDb = findCommandDbInputMapping(commandId);
             const res = await dispatchCommand(commandId, null, { ...context, vars }, {
                 manual: params || {},

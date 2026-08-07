@@ -55,13 +55,15 @@
         const inputResult: Record<string, any> = {};
         paramsSchema.forEach(param => {
             const val = values[param.key];
-            if (param.type === "boolean") {
-                inputResult[param.key] = !!val;
-            } else if (param.type === "number") {
-                const parsed = Number(val);
-                inputResult[param.key] = isNaN(parsed) ? val : parsed;
-            } else {
-                inputResult[param.key] = val;
+            if (val !== undefined && val !== "") {
+                if (param.type === "boolean") {
+                    inputResult[param.key] = !!val;
+                } else if (param.type === "number") {
+                    const parsed = Number(val);
+                    inputResult[param.key] = isNaN(parsed) ? val : parsed;
+                } else {
+                    inputResult[param.key] = val;
+                }
             }
         });
 
@@ -128,11 +130,16 @@
                                 </button>
                             </div>
                         {:else}
+                            {@const autoSuggest = (param.key === 'id' || param.type === 'blockid') 
+                                ? '⚡ Auto-Context 推荐: {{var.createdblock}} (不填将自动智能匹配)' 
+                                : (param.key === 'enabled' 
+                                    ? '⚡ Auto-Context 推荐: {{var.last_boolean_result}} (不填将由前一步控制)' 
+                                    : (param.default !== undefined ? `Layer 2 默认: ${param.default}` : (param.description || '')))}
                             <input 
                                 type="text" 
                                 class="b3-input fn__block" 
                                 style="box-sizing: border-box; width: 100%; max-width: 100%;"
-                                placeholder={param.paramMode === "template" ? "支持占位符，如 {{block_id}}, {{date}}" : (param.description || "")}
+                                placeholder={autoSuggest}
                                 bind:value={values[param.key]} 
                             />
                         {/if}

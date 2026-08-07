@@ -422,7 +422,7 @@
     <div style="display: flex; align-items: center; justify-content: space-between; background: var(--b3-theme-surface); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--b3-border-color); flex-shrink: 0;">
         <div style="display: flex; flex-direction: column; gap: 2px;">
             <div style="font-size: 13px; font-weight: 600; color: var(--b3-theme-on-background); display: flex; align-items: center; gap: 6px;">
-                <span>⚡ 全局后台自动化控制中心 (Background Engine)</span>
+                <span>⚡ 后台执行控制中心 (Background Engine)</span>
                 <span style="font-size: 10px; color: var(--indexos-accent-primary); font-family: monospace; background: var(--indexos-weak-accent); padding: 2px 6px; border-radius: 3px;">TS Script Storage</span>
             </div>
             <div style="font-size: 11px; color: var(--b3-theme-on-surface-light); opacity: 0.8;">

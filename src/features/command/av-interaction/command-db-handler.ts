@@ -13,7 +13,7 @@ import GlobalBackgroundEngineDialog from "./dialogs/GlobalBackgroundEngineDialog
 
 export function openGlobalAutomationDialog() {
     const dialog = new Dialog({
-        title: "⚡ 全局后台自动化控制中心",
+        title: "⚡ 后台执行控制中心",
         content: `<div class="b3-dialog__content" id="global-bg-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
         width: "720px",
         height: "560px"

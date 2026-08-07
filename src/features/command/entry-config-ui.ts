@@ -3,7 +3,7 @@ import EntryConfigDialog from "./EntryConfigDialog.svelte";
 
 export function openEntryConfigDialog(): void {
     const dialog = new Dialog({
-        title: "入口配置",
+        title: "🧭 UI 入口",
         content: `<div id="entry-config-container" style="height: 100%;"></div>`,
         width: "720px",
         height: "600px"

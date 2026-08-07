@@ -83,10 +83,10 @@
                     <span>{i18n.initSystemDB}</span>
                 </button>
                 <button class="indexos-btn-bordered" style="font-size: 11px; padding: 4px 10px;" on:click={openEntryConfigDialog}>
-                    <span>🧭 入口配置</span>
+                    <span>🧭 UI 入口</span>
                 </button>
                 <button class="indexos-btn-bordered" style="font-size: 11px; padding: 4px 10px; color: var(--indexos-accent-primary);" on:click={openGlobalAutomationDialog}>
-                    <span>⚡ 全局后台自动化配置</span>
+                    <span>⚡ 后台执行</span>
                 </button>
             </div>
             <div style="font-size: 11px; opacity: 0.6; line-height: 1.4; color: var(--b3-theme-on-surface-light);">

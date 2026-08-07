@@ -518,6 +518,7 @@
         "{{parent_id}}": "触发块的父块 ID（API 查询）",
         "{{root_id}}": "所在文档的根块 ID",
         "{{notebook_id}}": "所在笔记本 ID",
-        "{{vars.KEY}}": "统一变量池或属性值，如 {{vars.completed}} 或 {{vars.task_status}}"
+        "{{vars.KEY}}": "统一变量池或属性值，如 {{vars.completed}} 或 {{vars.task_status}}",
+        "{{prompt}}": "JIT 实时交互弹窗输入，支持指定引导文案如 {{prompt:请输入标题}}"
     }
 }

@@ -11,7 +11,12 @@
     /** 仅显示这些命令（如 Conditional 只显示绑定命令）；null = 全部 */
     export let allowedCommands: string[] | null = null;
 
-    const ENV_VARS = ["block_id", "root_id", "parent_id", "date", "time"];
+    const ENV_VARS = ["block_id", "root_id", "parent_id", "date", "time", "prompt"];
+
+    const COMMON_CONTROL_PARAMS = [
+        { key: "enabled", label: "是否执行本步骤", type: "boolean", default: "true", description: "评估为 false 时跳过本步骤" },
+        { key: "delayMs", label: "前置延时 (毫秒)", type: "number", default: "0", description: "本步骤执行前的延迟等待时间 (ms)" }
+    ];
 
     let name = "";
     let checked: string[] = [];
@@ -19,6 +24,7 @@
     let editingCmd: string | null = null;
     let activeParam = "";
     let searchQuery = "";
+    let showAdvancedParams = false;
 
     $: commands = commandRegistry
         .getAllCommands()
@@ -28,6 +34,12 @@
     $: availableCommands = allowedCommands
         ? commands.filter(cmd => allowedCommands.includes(cmd.id))
         : commands;
+
+    $: currentEditingParams = editingCmd
+        ? (showAdvancedParams 
+            ? [...(commandRegistry.getCommand(editingCmd)?.params || []), ...COMMON_CONTROL_PARAMS] 
+            : (commandRegistry.getCommand(editingCmd)?.params || []))
+        : [];
 
     $: visibleCommands = availableCommands.filter(cmd =>
         !searchQuery.trim()
@@ -137,6 +149,22 @@
     if (initialScript) {
         loadScript(initialScript);
     }
+
+    function getAutoSuggestion(cmdId: string, schema: any): { varName: string; note: string } | null {
+        const idx = checked.indexOf(cmdId);
+        if (idx > 0) {
+            const prevOutputs = previousOutputs(cmdId);
+            if (schema.key === "id" || schema.type === "blockid") {
+                const matched = prevOutputs.find(po => po.name.includes("createdblock") || po.name === "id");
+                const suggestedVar = matched ? matched.name : "createdblock";
+                return { varName: `{{var.${suggestedVar}}}`, note: "(不填自动推导)" };
+            }
+            if (schema.key === "enabled") {
+                return { varName: `{{var.last_boolean_result}}`, note: "(不填受前一步控制)" };
+            }
+        }
+        return null;
+    }
 </script>
 
 <div style="display: flex; gap: 12px; flex: 1; min-height: 0;">
@@ -204,24 +232,54 @@
                     on:click={() => { editingCmd = null; }}
                 >✕</button>
             </div>
-            {#if (commandRegistry.getCommand(editingCmd)?.params || []).length > 0}
+            {#if currentEditingParams.length > 0}
                 <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
-                    {#each (commandRegistry.getCommand(editingCmd)?.params || []) as schema}
+                    {#each currentEditingParams as schema}
+                        {@const sug = getAutoSuggestion(editingCmd, schema)}
                         <div style="display: flex; flex-direction: column; gap: 3px;">
-                            <label style="font-size: 10px; color: var(--indexos-text-muted);">
-                                {schema.label || schema.key}
-                                <code style="font-size: 9px; opacity: 0.7;">{schema.key}</code>
-                            </label>
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <label style="font-size: 10px; color: var(--indexos-text-muted);">
+                                    {schema.label || schema.key}
+                                    <code style="font-size: 9px; opacity: 0.7;">{schema.key}</code>
+                                </label>
+                                {#if sug}
+                                    <div style="font-size: 10px; color: var(--indexos-text-muted); display: flex; align-items: center; gap: 3px;">
+                                        <span style="color: var(--indexos-accent-primary); font-weight: 600;">⚡ 推荐:</span>
+                                        <span
+                                            role="button"
+                                            tabindex="0"
+                                            class="b3-chip b3-chip--secondary"
+                                            style="font-family: monospace; font-size: 10px; cursor: pointer; padding: 1px 4px; color: var(--indexos-accent-primary); border: 1px dashed var(--indexos-accent-primary);"
+                                            title="点击将推荐变量填入输入框"
+                                            on:click={() => setParam(editingCmd, schema.key, sug.varName)}
+                                            on:keydown={e => (e.key === 'Enter' || e.key === ' ') && setParam(editingCmd, schema.key, sug.varName)}
+                                        >{sug.varName}</span>
+                                        <span style="opacity: 0.7; font-size: 9px;">{sug.note}</span>
+                                    </div>
+                                {/if}
+                            </div>
                             <input
                                 type="text"
                                 style="font-size: 11px; padding: 4px 8px; border: 1px solid {(paramsByCmd[editingCmd] || {})[schema.key] ? 'rgba(40, 81, 127, 0.55)' : 'var(--indexos-border-light)'}; border-radius: 4px; background: var(--indexos-bg-container); color: var(--indexos-text-main);"
                                 value={(paramsByCmd[editingCmd] || {})[schema.key] || ""}
-                                placeholder="空 = 用 Command-DB 配置；可写 &#123;&#123;变量&#125;&#125;"
+                                placeholder={schema.default !== undefined ? `Layer 2 默认: ${schema.default}` : (schema.description || "空 = 自动继承缺省/推荐；可手写 {{变量}}")}
                                 on:focus={() => { activeParam = schema.key; }}
                                 on:input={e => setParam(editingCmd, schema.key, e.currentTarget.value)}
                             />
                         </div>
                     {/each}
+
+                    <!-- 展开/隐藏控制参数 -->
+                    <div style="display: flex; justify-content: center; margin-top: 4px;">
+                        <button
+                            type="button"
+                            class="b3-button b3-button--text"
+                            style="font-size: 10px; padding: 2px 6px; opacity: 0.8;"
+                            on:click={() => showAdvancedParams = !showAdvancedParams}
+                        >
+                            {showAdvancedParams ? "🔼 隐藏步骤控制参数 (enabled, delayMs)" : "🔽 高级控制参数 (enabled, delayMs)"}
+                        </button>
+                    </div>
                 </div>
             {:else}
                 <div style="font-size: 11px; color: var(--indexos-text-muted); opacity: 0.6;">该命令没有可配置的入参。</div>

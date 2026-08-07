@@ -20,18 +20,27 @@ export function outputsOf(def: CommandDef | undefined): OutputEndpoint[] {
     return [];
 }
 
-/** 出参在参数池中的名字：用户配置的别名（outputMapping）优先，否则用规范 key */
+import { commandRegistry } from "../registry/command-registry";
+
+/** 出参在参数池中的名字：用户配置的别名 (outputMapping) 优先，其次为 schema.default (如 createdblock)，最后用规范 key */
 export function outputName(commandRef: string, canonicalKey: string): string {
     try {
-        const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === commandRef);
-        if (binding) {
-            const raw = binding.outputMapping || binding.inputMapping;
-            const parsed = JSON.parse(raw || "{}");
-            if (parsed && typeof parsed === "object") {
-                const map = parsed._outputMapping || parsed;
-                if (map && map[canonicalKey]) {
-                    return String(map[canonicalKey]);
+        // 1. 优先从 COMMAND_BINDINGS (即 Command-DB 真实数据源) 获取用户在 Output 列保存的名
+        for (const binding of Object.values(COMMAND_BINDINGS)) {
+            if (binding.commandRef === commandRef && binding.outputMapping) {
+                const parsed = JSON.parse(binding.outputMapping);
+                if (parsed && typeof parsed === "object" && parsed[canonicalKey]) {
+                    return String(parsed[canonicalKey]);
                 }
+            }
+        }
+
+        // 2. 只有当 Command-DB 中未修改/为空时，才降级读取 commandRegistry 内置 Schema 默认别名 (如 createdblock)
+        const def = commandRegistry.getCommand(commandRef);
+        if (def && def.outputs) {
+            const outSchema = def.outputs.find(o => o.key === canonicalKey);
+            if (outSchema && outSchema.default) {
+                return String(outSchema.default);
             }
         }
     } catch { /* ignore */ }
