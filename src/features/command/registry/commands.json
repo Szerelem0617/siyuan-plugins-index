@@ -178,7 +178,7 @@
                         "{{date}}",
                         "{{time}}",
                         "{{block_id}}",
-                        "{{attr:*}}"
+                        "{{var.*}}"
                     ],
                     "description": "插入的 Markdown 或 DOM 字符串，支持 {{变量}} 占位符"
                 },
@@ -240,21 +240,16 @@
                     "label": "目标块 ID",
                     "type": "blockid",
                     "required": true,
-                    "paramMode": "template",
-                    "default": "{{block_id}}",
+                    "default": "",
                     "description": "目标块 ID，默认自动注入当前块 ID"
                 },
                 {
                     "key": "dataType",
                     "label": "内容类型",
                     "type": "enum",
-                    "values": [
-                        "markdown",
-                        "dom"
-                    ],
-                    "default": "markdown",
                     "required": true,
-                    "paramMode": "static"
+                    "default": "markdown",
+                    "values": ["markdown", "dom"]
                 },
                 {
                     "key": "data",
@@ -265,7 +260,7 @@
                     "templateVars": [
                         "{{date}}",
                         "{{time}}",
-                        "{{attr:*}}"
+                        "{{var.*}}"
                     ]
                 }
             ],
@@ -292,7 +287,7 @@
             "seed": {
                 "rowID": "20260527120000-update",
                 "label": "📝 安全更新块内容",
-                "paramMapping": "{\"id\":\"{{var.createdblock}}\",\"dataType\":\"markdown\",\"data\":\"[Auto Update] Updated at {{time}}\",\"_outputMapping\":{\"id\":\"updatedblock\"}}"
+                "paramMapping": "{\"id\":\"{{var.createdblock}}\",\"dataType\":\"markdown\",\"data\":\"[Auto Update] Updated at {{time}}\"}"
             }
         },
         {

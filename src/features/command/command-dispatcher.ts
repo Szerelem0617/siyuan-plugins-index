@@ -433,60 +433,60 @@ export async function resolveCommandParams(
  *   {{attr:KEY}}     触发块的自定义属性值
  */
 export async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
-    if (!text.includes("{{") && !text.includes("${")) return text;
+    if (!text || typeof text !== "string" || (!text.includes("{{") && !text.includes("${"))) return text;
 
-    // 自动兼容并归一化 ${xxx} 占位符为标准 {{xxx}} 格式
+    // 统一规范化 ${xxx} 为 {{xxx}}
     let normalizedText = text.replace(/\$\{([a-zA-Z0-9_.:-]+)\}/g, "{{$1}}");
 
     const blockId = getBlockId(context);
-    let isClassMethodMode = false;
     const variables: Record<string, string> = {
         "date": formatDate(new Date()),
         "time": formatTime(new Date()),
-        "block_id": blockId,
+        "block_id": blockId || "",
     };
 
+    // 1. 注入内存参数池 (context.vars)
     if (context.vars) {
         for (const [k, v] of Object.entries(context.vars)) {
-            const strVal = v === undefined || v === null ? "" : String(v);
-            variables[`var.${k}`] = strVal; // 仅支持 var.xxx 标准占位符格式
-            if (!(k in variables)) {
-                variables[k] = strVal;
+            if (v !== undefined && v !== null) {
+                const strVal = String(v);
+                const varKey = k.startsWith("var.") ? k : `var.${k}`;
+                variables[varKey] = strVal;
             }
         }
     }
 
-    if (blockId) {
-        const layer4Params = await resolveLayer4Params(blockId, context.supertag);
-        if (Object.keys(layer4Params).length > 0) {
-            isClassMethodMode = true;
-            for (const [k, v] of Object.entries(layer4Params)) {
-                const strVal = v === undefined || v === null ? "" : String(v);
-                // 仅当数据库中的值非空，或者内存变量池中尚无此变量时才覆盖写入
-                if (strVal !== "" || !(k in variables) || !variables[k]) {
-                    variables[k] = strVal;
-                    variables[`var.${k}`] = strVal;
-                }
-            }
-        }
-    }
-
+    // 2. 解析父块与根块 ID（按需加载）
     if (normalizedText.includes("{{root_id}}") || normalizedText.includes("{{parent_id}}")) {
         const { rootId, parentId } = await getParentIdAndRootId(blockId);
         variables["root_id"] = rootId;
         variables["parent_id"] = parentId;
     }
 
-    if (normalizedText.includes("{{attr:") && blockId) {
-        if (isClassMethodMode) {
-            const attrs = await getBlockAttrs(blockId);
-            for (const [k, v] of Object.entries(attrs)) {
-                variables[`attr:${k}`] = v;
+    // 3. 注入 Layer 4 关联参数/属性
+    if (blockId) {
+        const layer4Params = await resolveLayer4Params(blockId, context.supertag);
+        for (const [k, v] of Object.entries(layer4Params)) {
+            if (v !== undefined && v !== null && (!(k in variables) || !variables[k])) {
+                variables[k] = String(v);
+            }
+        }
+
+        // 4. 读取触发块的真实 Block Attrs（用于未在内存中找到的属性）
+        const attrs = await getBlockAttrs(blockId);
+        for (const [k, v] of Object.entries(attrs)) {
+            // 自动去掉 custom- 前缀暴露给用户
+            const cleanKey = k.replace(/^custom-/, "");
+            if (!(cleanKey in variables)) {
+                variables[cleanKey] = v;
+            }
+            if (!(k in variables)) {
+                variables[k] = v;
             }
         }
     }
 
-    return renderTemplate(normalizedText, variables, isClassMethodMode);
+    return renderTemplate(normalizedText, variables, false);
 }
 
 

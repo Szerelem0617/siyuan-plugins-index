@@ -36,12 +36,14 @@ export function getSeedCommandRows(): SeedCommandRow[] {
     for (const cmd of (commandsData as any).commands) {
         const s = cmd.seed;
         if (!s) continue;
+        const hasOutputs = cmd.outputs && Array.isArray(cmd.outputs) && cmd.outputs.length > 0;
+        const outputMapping = s.outputMapping || (hasOutputs ? "{}" : "");
         rows.push({
             rowID: s.rowID,
             label: s.label,
             commandID: cmd.id,
             inputMapping: s.inputMapping || s.paramMapping || "",
-            outputMapping: s.outputMapping || ""
+            outputMapping
         });
     }
     return rows;

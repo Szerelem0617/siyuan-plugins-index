@@ -11,7 +11,7 @@
     /** 仅显示这些命令（如 Conditional 只显示绑定命令）；null = 全部 */
     export let allowedCommands: string[] | null = null;
 
-    const ENV_VARS = ["block_id", "root_id", "parent_id", "date", "time", "attr:KEY"];
+    const ENV_VARS = ["block_id", "root_id", "parent_id", "date", "time"];
 
     let name = "";
     let checked: string[] = [];

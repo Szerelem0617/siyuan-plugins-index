@@ -35,19 +35,28 @@ function parseOutputMapping(commandRef: string): Record<string, string> {
     return {};
 }
 
-/** dispatch 成功后把出参写入参数池（规范 key + 用户别名） */
+/** dispatch 成功后把出参写入参数池（规范 key + var.用户别名） */
 function exportToPool(vars: Record<string, any>, commandId: string, res: DispatchResult) {
-    if (res.id) vars.id = res.id;
+    if (res.id) {
+        vars.id = res.id;
+        vars["var.id"] = res.id;
+    }
     if (res.value !== undefined) {
         if (typeof res.value === "object" && res.value !== null) {
-            for (const [k, v] of Object.entries(res.value)) vars[k] = v;
+            for (const [k, v] of Object.entries(res.value)) {
+                vars[k] = v;
+                vars[`var.${k}`] = v;
+            }
         } else {
             vars.value = res.value;
+            vars["var.value"] = res.value;
         }
     }
     const mapping = parseOutputMapping(commandId);
     for (const [canonical, alias] of Object.entries(mapping)) {
-        if (alias && vars[canonical] !== undefined) vars[alias] = vars[canonical];
+        if (alias && vars[canonical] !== undefined) {
+            vars[`var.${alias}`] = vars[canonical];
+        }
     }
 }
 
