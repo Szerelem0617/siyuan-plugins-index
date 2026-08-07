@@ -44,9 +44,11 @@ export function scanAvIndicators() {
             let isConfigurableCol = isUniversalSpecialCol;
 
             if (isCommandDb) {
-                // Command-DB: 主键, Param Mapping, Pipeline 定义（入口绑定已迁移至全局『入口配置』）
+                // Command-DB: 主键, Input, Output, Pipeline 定义（入口绑定已迁移至全局『入口配置』）
                 isConfigurableCol = isConfigurableCol || (
                     txt.includes("主键") ||
+                    txt.includes("input") ||
+                    txt.includes("output") ||
                     txt.includes("param mapping") ||
                     txt.includes("pipeline 定义") ||
                     cell.getAttribute("data-dtype") === "block"

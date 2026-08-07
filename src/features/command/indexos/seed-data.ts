@@ -116,8 +116,8 @@ export const COMMAND_DB_CONFIG: DbPageConfig = {
     expectedColName: "Command ID",
     columns: [
         { name: "Command ID", type: "text", icon: "iconCode" },
-        { name: "Input Mapping", type: "text", icon: "iconList" },
-        { name: "Output Mapping", type: "text", icon: "iconCheck" },
+        { name: "Input", type: "text", icon: "iconList" },
+        { name: "Output", type: "text", icon: "iconCheck" },
         { name: "Pipeline 定义", type: "text", icon: "iconCode" }
     ]
 };

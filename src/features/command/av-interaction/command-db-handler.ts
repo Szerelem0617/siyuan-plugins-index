@@ -337,7 +337,7 @@ export async function handleCommandDbAltClick(
             return;
         }
 
-        if (clickedKeyName === "Input Mapping" || clickedKeyName === "入参映射" || clickedKeyName === "Output Mapping" || clickedKeyName === "出参映射" || clickedKeyName === "Param Mapping" || clickedKeyName === "参数映射") {
+        if (clickedKeyName === "Input" || clickedKeyName === "Input Mapping" || clickedKeyName === "入参映射" || clickedKeyName === "Output" || clickedKeyName === "Output Mapping" || clickedKeyName === "出参映射" || clickedKeyName === "Param Mapping" || clickedKeyName === "参数映射") {
             // --- 行为 2: 弹窗可视化配置参数 ---
             event.preventDefault();
             event.stopPropagation();
@@ -348,7 +348,7 @@ export async function handleCommandDbAltClick(
                 return;
             }
 
-            const isOutputClick = clickedKeyName === "Output Mapping" || clickedKeyName === "出参映射";
+            const isOutputClick = clickedKeyName === "Output" || clickedKeyName === "Output Mapping" || clickedKeyName === "出参映射";
             const initialTab = isOutputClick ? "output" : "input";
 
             const paramsSchema = cmdDef.params || [];
@@ -368,11 +368,11 @@ export async function handleCommandDbAltClick(
             const outputColKeyId = await getOutputColKeyId(avId);
 
             if (initialTab === "input" && !inputColKeyId) {
-                showMessage("未能在表中找到 'Input Mapping' 入参映射列", 3000, "error");
+                showMessage("未能在表中找到 'Input' 列", 3000, "error");
                 return;
             }
             if (initialTab === "output" && !outputColKeyId) {
-                showMessage("未能在表中找到 'Output Mapping' 出参映射列", 3000, "error");
+                showMessage("未能在表中找到 'Output' 列", 3000, "error");
                 return;
             }
 
@@ -383,10 +383,10 @@ export async function handleCommandDbAltClick(
                 const { db } = await getSqliteEngine();
                 const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
                 
-                const inputColQuery = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Input Mapping' OR key_name = '入参映射' OR key_name = 'Param Mapping')`, [avId]);
+                const inputColQuery = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Input' OR key_name = 'Input Mapping' OR key_name = '入参映射' OR key_name = 'Param Mapping')`, [avId]);
                 const inputColName = inputColQuery.length > 0 && inputColQuery[0].values.length > 0 ? String(inputColQuery[0].values[0][0]) : "";
 
-                const outputColQuery = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Output Mapping' OR key_name = '出参映射')`, [avId]);
+                const outputColQuery = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Output' OR key_name = 'Output Mapping' OR key_name = '出参映射')`, [avId]);
                 const outputColName = outputColQuery.length > 0 && outputColQuery[0].values.length > 0 ? String(outputColQuery[0].values[0][0]) : "";
 
                 if (inputColName) {

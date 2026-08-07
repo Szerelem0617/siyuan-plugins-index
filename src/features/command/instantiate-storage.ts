@@ -116,8 +116,8 @@ export async function constructCommandStorage() {
                     }
 
                     populateOps.push({ keyID: keyMap["Command ID"], itemID: row.rowID, value: { type: "text", text: { content: String(row.commandID || "") } } });
-                    if (keyMap["Input Mapping"]) populateOps.push({ keyID: keyMap["Input Mapping"], itemID: row.rowID, value: { type: "text", text: { content: String(row.inputMapping || "") } } });
-                    if (keyMap["Output Mapping"]) populateOps.push({ keyID: keyMap["Output Mapping"], itemID: row.rowID, value: { type: "text", text: { content: String(row.outputMapping || "") } } });
+                    if (keyMap["Input"]) populateOps.push({ keyID: keyMap["Input"], itemID: row.rowID, value: { type: "text", text: { content: String(row.inputMapping || "") } } });
+                    if (keyMap["Output"]) populateOps.push({ keyID: keyMap["Output"], itemID: row.rowID, value: { type: "text", text: { content: String(row.outputMapping || "") } } });
                 }
 
                 if (populateOps.length > 0) {
