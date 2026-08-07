@@ -62,7 +62,7 @@ export function addCommandTestMenuItem({ detail }: any) {
 
     for (const tag of currentBlockTags) {
         const matches = SUPERTAG_REGISTRY.filter(item =>
-            (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
+            item.typeTag === tag
             && (item.uiLocation === "IconMenu" || item.uiLocation === "BlockIconMenu" || item.uiLocation === "PageMenu")
         );
 
@@ -126,7 +126,7 @@ export function addDoctreeMenuItems({ detail }: any) {
 
         for (const tag of tags) {
             const matches = SUPERTAG_REGISTRY.filter(item =>
-                (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
+                item.typeTag === tag
                 && (item.uiLocation === "IconMenu" || item.uiLocation === "BlockIconMenu" || item.uiLocation === "PageMenu")
             );
 
@@ -180,7 +180,7 @@ export function addEditorTitleIconMenuItems({ detail }: any) {
 
         for (const tag of tags) {
             const matches = SUPERTAG_REGISTRY.filter(item =>
-                (item.typeTag === tag || tag.includes(item.typeTag) || item.typeTag.includes(tag))
+                item.typeTag === tag
                 && (item.uiLocation === "IconMenu" || item.uiLocation === "BlockIconMenu" || item.uiLocation === "PageMenu")
             );
 

@@ -291,8 +291,19 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             }
         }
 
+        // 1. Resolve actual SQLite column names for Layer 2 (Command-DB)
+        const { db } = await getSqliteEngine();
+        let inputCol = "Input";
+        let outputCol = "Output";
+        try {
+            const inRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Input' OR key_name = 'Input Mapping' OR key_name = 'Param Mapping')`, [cmdAvId]);
+            if (inRes.length > 0 && inRes[0].values.length > 0) inputCol = String(inRes[0].values[0][0]);
+            const outRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Output' OR key_name = 'Output Mapping')`, [cmdAvId]);
+            if (outRes.length > 0 && outRes[0].values.length > 0) outputCol = String(outRes[0].values[0][0]);
+        } catch { /* ignore */ }
+
         // 1. Load Commands (Layer 2)
-        const cmdRes = await runQuery(`SELECT rowID, "${commandLabelCol}", Command_ID, "Input Mapping", "Output Mapping", Param_Mapping FROM ${commandsTable}`);
+        const cmdRes = await runQuery(`SELECT rowID, "${commandLabelCol}", Command_ID, "${inputCol}", "${outputCol}" FROM ${commandsTable}`);
         if (!cmdRes || !cmdRes.values) return false;
 
         const newCommandBindings: Record<string, CommandBinding> = {};
@@ -302,7 +313,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             const rowID = String(row[0]);
             const label = row[1];
             const cmdId = row[2];
-            const inputMap = row[3] || row[5];
+            const inputMap = row[3];
             const outputMap = row[4];
             if (label && cmdId) {
                 const cmdInfo: CommandBinding = {
@@ -318,13 +329,12 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         setCommandBindings(newCommandBindings);
 
         // 2. Query relation column name for '绑定命令' in Type-DB
-        const { db } = await getSqliteEngine();
         let typeRelationCol = "绑定命令";
         let hasRelationCol = false;
         try {
-            const relColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = '绑定命令'`, [tAvId]);
+            const relColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = '绑定命令' OR key_name LIKE '%Command%')`, [tAvId]);
             if (relColRes.length > 0 && relColRes[0].values.length > 0) {
-                typeRelationCol = relColRes[0].values[0][0];
+                typeRelationCol = String(relColRes[0].values[0][0]);
                 hasRelationCol = true;
             }
         } catch (e) {
@@ -334,7 +344,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         // 3. Load Type Bindings (Layer 3)
         let iconMenuCol = "Icon_Menu";
         try {
-            const iconRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name IN ('Icon Menu', 'Icon menu & button', '图标菜单')`, [tAvId]);
+            const iconRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name IN ('Icon Menu', 'Icon menu & button', '图标菜单') OR key_name LIKE '%Icon%')`, [tAvId]);
             if (iconRes.length > 0 && iconRes[0].values.length > 0) {
                 iconMenuCol = String(iconRes[0].values[0][0]);
             }
@@ -505,8 +515,8 @@ async function refreshRegistryFromApi() {
                         };
                         const pk = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
                         const cmdId = getCellText("Command ID");
-                        const inputMapping = getCellText("Input Mapping") || getCellText("Param Mapping");
-                        const outputMapping = getCellText("Output Mapping");
+                        const inputMapping = getCellText("Input") || getCellText("Input Mapping") || getCellText("Param Mapping");
+                        const outputMapping = getCellText("Output") || getCellText("Output Mapping");
 
                         if (pk && cmdId) {
                             const cmdInfo: CommandBinding = {

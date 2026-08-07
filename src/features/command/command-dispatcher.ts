@@ -253,12 +253,12 @@ async function dispatchApi(
         return { success: false, method: "api", detail: "No endpoint defined for api command." };
     }
 
-    // 自动注入 id（如果 params 里没有且有 context.blockEl）
+    // 只有在 params 中完全未定义/未传入 id 字段时，才自动注入上下文块 ID
     const body: Record<string, unknown> = { ...params };
-    if (!body.id && context.blockEl) {
+    if (!("id" in body) && context.blockEl) {
         const autoId = context.blockEl.getAttribute("data-node-id") ?? undefined;
         if (autoId) {
-            console.log(`[Dispatcher] api 命令 ${def.id} 未提供 id，自动注入上下文块 ID ${autoId}（如需显式，请用 {{block_id}}）`);
+            console.log(`[Dispatcher] api 命令 ${def.id} 未配置 id 字段，自动注入上下文块 ID ${autoId}`);
         }
         body.id = autoId;
     }
@@ -406,13 +406,6 @@ export async function resolveCommandParams(
         }
     }
 
-    // 剔除所有空字符串属性
-    for (const key of Object.keys(result)) {
-        if (result[key] === "") {
-            delete result[key];
-        }
-    }
-
     console.log(`[ParamResolver] ${def.id}: manual=${Object.keys(sources.manual || {}).length} auto=${Object.keys(sources.auto || {}).length} commandDb=${sources.commandDb ? 1 : 0} -> resolved`, result);
     return result;
 }
@@ -472,16 +465,18 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
             }
         }
 
-        // 4. 读取触发块的真实 Block Attrs（用于未在内存中找到的属性）
+        // 4. 读取触发块的真实 Block Attrs（用于未在内存中找到的属性，支持 var.KEY 检索）
         const attrs = await getBlockAttrs(blockId);
         for (const [k, v] of Object.entries(attrs)) {
             // 自动去掉 custom- 前缀暴露给用户
             const cleanKey = k.replace(/^custom-/, "");
-            if (!(cleanKey in variables)) {
-                variables[cleanKey] = v;
-            }
-            if (!(k in variables)) {
-                variables[k] = v;
+            if (v !== undefined && v !== null) {
+                const strVal = String(v);
+                if (!(cleanKey in variables)) variables[cleanKey] = strVal;
+                if (!(k in variables)) variables[k] = strVal;
+                // 同步支持 {{var.createdblock}} 检索块上的属性
+                const varKey = `var.${cleanKey}`;
+                if (!(varKey in variables)) variables[varKey] = strVal;
             }
         }
     }
