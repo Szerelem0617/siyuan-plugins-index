@@ -368,7 +368,7 @@ export class SupertagMonitor {
         const buttonsMd = buttonEntries.map(e => {
             const cmdDef = commandRegistry.getCommand(e.commandRef);
             const label = cmdDef?.name || e.commandRef;
-            const href = encodeBtnHref({ command: e.commandRef, param: e.paramMapping || undefined });
+            const href = encodeBtnHref({ command: e.commandRef, param: e.inputMapping || undefined });
             return `[⚡ ${label}](${href})`;
         }).join(" ");
 

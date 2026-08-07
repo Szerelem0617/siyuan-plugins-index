@@ -32,7 +32,7 @@ function commandMeta(id: string): { label: string; commandParam: string; require
     const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === id);
     return {
         label: def?.name || id,
-        commandParam: binding?.paramMapping || "",
+        commandParam: binding?.inputMapping || "",
         requiresParams: def && def.params && def.params.length > 0 ? "true" : "false"
     };
 }

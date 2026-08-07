@@ -104,9 +104,12 @@ export function parseRuleScript(text: string): RuleScript | null {
         if (end === -1) continue;
 
         try {
-            const parsed = JSON.parse(text.slice(braceStart, end)) as Record<string, unknown>;
+            const jsonText = text.slice(braceStart, end);
+            const parsed = JSON.parse(jsonText) as Record<string, unknown>;
             const params: Record<string, string> = {};
-            for (const [k, v] of Object.entries(parsed)) params[k] = String(v);
+            for (const [k, v] of Object.entries(parsed)) {
+                params[k] = typeof v === "string" ? v : JSON.stringify(v);
+            }
             commands.push({ commandRef, params });
         } catch { /* 非我们生成的形态，跳过 */ }
     }

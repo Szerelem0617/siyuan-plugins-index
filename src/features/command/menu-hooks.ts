@@ -92,7 +92,7 @@ export function addCommandTestMenuItem({ detail }: any) {
                                     item.commandRef === match.commandRef && item.typeTag === match.typeTag
                                 ) || match;
 
-                                await dispatchCommand(freshMatch.commandRef, freshMatch.paramMapping, { blockEl: targetEl, protyleEl, supertag: tag });
+                                await dispatchCommand(freshMatch.commandRef, freshMatch.inputMapping, { blockEl: targetEl, protyleEl, supertag: tag });
                             } catch (err) {
                                 console.error("[IndexOS] Command Execution Failed:", err);
                             } finally {
@@ -145,7 +145,7 @@ export function addDoctreeMenuItems({ detail }: any) {
                             const protyleEl = activeProtyle?.element || null;
                             const blockEl = protyleEl?.querySelector(`[data-node-id="${docId}"]`) || null;
 
-                            await dispatchCommand(freshMatch.commandRef, freshMatch.paramMapping, { 
+                            await dispatchCommand(freshMatch.commandRef, freshMatch.inputMapping, { 
                                 blockEl: blockEl || document.createElement("div"), 
                                 protyleEl, 
                                 supertag: tag 
@@ -198,7 +198,7 @@ export function addEditorTitleIconMenuItems({ detail }: any) {
                             const protyleEl = protyle.element || null;
                             const blockEl = protyleEl?.querySelector(`[data-node-id="${docId}"]`) || null;
 
-                            await dispatchCommand(freshMatch.commandRef, freshMatch.paramMapping, { 
+                            await dispatchCommand(freshMatch.commandRef, freshMatch.inputMapping, { 
                                 blockEl: blockEl || document.createElement("div"), 
                                 protyleEl, 
                                 supertag: tag 
@@ -229,7 +229,7 @@ function addMenuEntry(
     }
     const def = commandRegistry.getCommand(entry.id);
     const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === entry.id);
-    const paramMapping = binding?.paramMapping || "";
+    const paramMapping = binding?.inputMapping || "";
     const label = `⚡ ${def?.name || entry.id}`;
     const click = () => {
         const ctx = { blockEl: blockEl || document.body, protyleEl, supertag: "" };

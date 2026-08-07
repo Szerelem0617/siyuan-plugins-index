@@ -13,25 +13,30 @@
 import { dispatchCommand, type CommandContext, type DispatchResult } from "../command-dispatcher";
 import { COMMAND_BINDINGS } from "../registration";
 
-/** 按 commandRef 在 COMMAND_BINDINGS 中反查 paramMapping（Command-DB 配置） */
-export function findCommandDbParamMapping(commandRef: string): string {
+/** 按 commandRef 在 COMMAND_BINDINGS 中反查 inputMapping（Command-DB 配置） */
+export function findCommandDbInputMapping(commandRef: string): string {
     const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === commandRef);
-    return binding?.paramMapping || "";
+    return binding?.inputMapping || "";
 }
 
-/** 解析 paramMapping 里的用户出参别名（_outputMapping: { 规范key: 别名 }） */
-function parseOutputMapping(paramMapping: string): Record<string, string> {
+/** 兼容保留旧方法名 */
+export const findCommandDbParamMapping = findCommandDbInputMapping;
+
+/** 解析 outputMapping 里的用户出参别名（{ 规范key: 别名 }） */
+function parseOutputMapping(commandRef: string): Record<string, string> {
+    const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === commandRef);
+    const raw = binding?.outputMapping;
     try {
-        const parsed = JSON.parse(paramMapping || "{}");
-        if (parsed && typeof parsed === "object" && parsed._outputMapping && typeof parsed._outputMapping === "object") {
-            return parsed._outputMapping as Record<string, string>;
+        const parsed = JSON.parse(raw || "{}");
+        if (parsed && typeof parsed === "object") {
+            return parsed as Record<string, string>;
         }
     } catch { /* ignore */ }
     return {};
 }
 
 /** dispatch 成功后把出参写入参数池（规范 key + 用户别名） */
-function exportToPool(vars: Record<string, any>, commandDb: string, res: DispatchResult) {
+function exportToPool(vars: Record<string, any>, commandId: string, res: DispatchResult) {
     if (res.id) vars.id = res.id;
     if (res.value !== undefined) {
         if (typeof res.value === "object" && res.value !== null) {
@@ -40,7 +45,7 @@ function exportToPool(vars: Record<string, any>, commandDb: string, res: Dispatc
             vars.value = res.value;
         }
     }
-    const mapping = parseOutputMapping(commandDb);
+    const mapping = parseOutputMapping(commandId);
     for (const [canonical, alias] of Object.entries(mapping)) {
         if (alias && vars[canonical] !== undefined) vars[alias] = vars[canonical];
     }
@@ -67,13 +72,13 @@ export async function runRuleScript(
         const vars: Record<string, any> = { ...(context.vars || {}) };
 
         const dispatch = async (commandId: string, params?: any): Promise<DispatchResult> => {
-            const commandDb = findCommandDbParamMapping(commandId);
+            const commandDb = findCommandDbInputMapping(commandId);
             const res = await dispatchCommand(commandId, null, { ...context, vars }, {
                 manual: params || {},
                 commandDb
             });
             if (res.success) {
-                exportToPool(vars, commandDb, res);
+                exportToPool(vars, commandId, res);
             }
             return res;
         };

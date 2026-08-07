@@ -17,7 +17,8 @@ export interface SeedCommandRow {
     rowID: string;
     label: string;
     commandID: string;
-    paramMapping: string;
+    inputMapping: string;
+    outputMapping: string;
 }
 
 export interface SeedSupertagRow {
@@ -39,7 +40,8 @@ export function getSeedCommandRows(): SeedCommandRow[] {
             rowID: s.rowID,
             label: s.label,
             commandID: cmd.id,
-            paramMapping: s.paramMapping || ""
+            inputMapping: s.inputMapping || s.paramMapping || "",
+            outputMapping: s.outputMapping || ""
         });
     }
     return rows;
@@ -114,7 +116,8 @@ export const COMMAND_DB_CONFIG: DbPageConfig = {
     expectedColName: "Command ID",
     columns: [
         { name: "Command ID", type: "text", icon: "iconCode" },
-        { name: "Param Mapping", type: "text", icon: "iconList" },
+        { name: "Input Mapping", type: "text", icon: "iconList" },
+        { name: "Output Mapping", type: "text", icon: "iconCheck" },
         { name: "Pipeline 定义", type: "text", icon: "iconCode" }
     ]
 };

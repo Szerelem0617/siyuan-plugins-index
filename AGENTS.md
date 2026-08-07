@@ -32,4 +32,4 @@
 ## 工程命令
 
 - 类型检查：`npx tsc --noEmit`（必须零错误）
-- 构建：`npm run build`
+

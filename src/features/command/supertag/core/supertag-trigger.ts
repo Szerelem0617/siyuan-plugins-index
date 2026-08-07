@@ -267,13 +267,13 @@ export async function triggerConditionalCommands(
                         const cmdInfo = COMMAND_BINDINGS[cmdLabel];
                         const commandRef = cmdInfo?.commandRef || cmdLabel;
                         
-                        console.log(`[Supertag-Trigger] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId} [manual=${Object.keys(cmdObj.args || {}).length}, commandDb=${cmdInfo?.paramMapping ? 1 : 0}]`);
+                        console.log(`[Supertag-Trigger] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId} [manual=${Object.keys(cmdObj.args || {}).length}, commandDb=${cmdInfo?.inputMapping ? 1 : 0}]`);
 
                         try {
-                            // #1 pipeline 脚本内联参数 > #3 Command-DB paramMapping
+                            // #1 pipeline 脚本内联参数 > #3 Command-DB inputMapping
                             const dispatchRes = await dispatchCommand(commandRef, null, context, {
                                 manual: cmdObj.args || {},
-                                commandDb: cmdInfo?.paramMapping || ""
+                                commandDb: cmdInfo?.inputMapping || ""
                             });
                             if (!dispatchRes.success || dispatchRes.continue === false || dispatchRes.value === false || dispatchRes.status === "break") {
                                 console.log(`[Supertag-Trigger] Pipeline execution halted: Command "${cmdLabel}" returned break, false, or failed.`);

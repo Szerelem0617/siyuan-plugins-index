@@ -18,14 +18,16 @@ export const DEV_ENABLE_INIT_SYS = false;
 export interface CommandBinding {
     methodName: string;
     commandRef: string;
-    paramMapping: string;
+    inputMapping: string;
+    outputMapping: string;
 }
 
 export interface SupertagCommand {
     typeTag: string;      // 匹配核心标签 (如 Project)
     methodName: string;   // UI 显示的方法名
     commandRef: string;   // 执行 of the command ID
-    paramMapping: string;
+    inputMapping: string;
+    outputMapping: string;
     uiLocation: string;   // 绑定的界面位置
     autoSync?: boolean;
     targetDbId?: string;

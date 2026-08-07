@@ -5,7 +5,7 @@ import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
 import { getSqliteEngine, executeWritableSql } from "../../sqlite/sqlite-manager";
 import { post } from "../../../shared/api-client/request";
-import { getParamColKeyId } from "./query-helper";
+import { getInputColKeyId, getOutputColKeyId } from "./query-helper";
 import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDialog.svelte";
 import { readPipelineRow, openPipelineEditorForRow } from "../pipeline/manager";
 import ParamConfigDialog from "./dialogs/ParamConfigDialog.svelte";
@@ -236,7 +236,7 @@ export async function handleCommandDbAltClick(
     avId: string,
     rowId: string,
     colId: string,
-    rowEl: HTMLElement,
+    _rowEl: HTMLElement,
     avContainer: HTMLElement,
     isPrimaryKeyCell: boolean
 ) {
@@ -314,13 +314,11 @@ export async function handleCommandDbAltClick(
     } else {
         // 解析点击列名，用于区分 Pipeline 定义 / Param Mapping 的 Alt+Click 行为
         let clickedKeyName = "";
-        let clickedColName = "";
         try {
             const { db } = await getSqliteEngine();
-            const colQuery = db.exec(`SELECT key_name, col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
+            const colQuery = db.exec(`SELECT key_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
             if (colQuery.length > 0 && colQuery[0].values.length > 0) {
                 clickedKeyName = String(colQuery[0].values[0][0]);
-                clickedColName = String(colQuery[0].values[0][1]);
             }
         } catch (e) {
             console.error("[AltClick] Failed to resolve column schema details:", e);
@@ -339,7 +337,7 @@ export async function handleCommandDbAltClick(
             return;
         }
 
-        if (clickedKeyName === "Param Mapping" || clickedKeyName === "参数映射") {
+        if (clickedKeyName === "Input Mapping" || clickedKeyName === "入参映射" || clickedKeyName === "Output Mapping" || clickedKeyName === "出参映射" || clickedKeyName === "Param Mapping" || clickedKeyName === "参数映射") {
             // --- 行为 2: 弹窗可视化配置参数 ---
             event.preventDefault();
             event.stopPropagation();
@@ -350,46 +348,74 @@ export async function handleCommandDbAltClick(
                 return;
             }
 
-            const paramsSchema = cmdDef.params || [];
+            const isOutputClick = clickedKeyName === "Output Mapping" || clickedKeyName === "出参映射";
+            const initialTab = isOutputClick ? "output" : "input";
 
-            if (paramsSchema.length === 0) {
-                showMessage(`命令 "${cmdDef.name || cleanLabel}" 不支持参数配置`);
+            const paramsSchema = cmdDef.params || [];
+            const outputsSchema = (cmdDef && cmdDef.outputs && Array.isArray(cmdDef.outputs)) ? cmdDef.outputs : [];
+
+            if (initialTab === "input" && paramsSchema.length === 0) {
+                showMessage(`命令 "${cmdDef.name || cleanLabel}" 不包含可配置的输入参数`);
                 return;
             }
 
-            const paramColKeyId = await getParamColKeyId(avId);
-            if (!paramColKeyId) {
-                showMessage("未能在表中找到 'Param Mapping' 参数映射列", 3000, "error");
+            if (initialTab === "output" && outputsSchema.length === 0) {
+                showMessage(`命令 "${cmdDef.name || cleanLabel}" 不包含可配置的导出的出参变量`);
+                return;
+            }
+
+            const inputColKeyId = await getInputColKeyId(avId);
+            const outputColKeyId = await getOutputColKeyId(avId);
+
+            if (initialTab === "input" && !inputColKeyId) {
+                showMessage("未能在表中找到 'Input Mapping' 入参映射列", 3000, "error");
+                return;
+            }
+            if (initialTab === "output" && !outputColKeyId) {
+                showMessage("未能在表中找到 'Output Mapping' 出参映射列", 3000, "error");
                 return;
             }
 
             // 获取当前单元格的参数 JSON 字符串
-            let currentValStr = "{}";
+            let currentInputStr = "{}";
+            let currentOutputStr = "{}";
             try {
                 const { db } = await getSqliteEngine();
                 const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-                const valRes = db.exec(`SELECT "${clickedColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
-                if (valRes.length > 0 && valRes[0].values.length > 0 && valRes[0].values[0][0]) {
-                    currentValStr = String(valRes[0].values[0][0]);
+                
+                const inputColQuery = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Input Mapping' OR key_name = '入参映射' OR key_name = 'Param Mapping')`, [avId]);
+                const inputColName = inputColQuery.length > 0 && inputColQuery[0].values.length > 0 ? String(inputColQuery[0].values[0][0]) : "";
+
+                const outputColQuery = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Output Mapping' OR key_name = '出参映射')`, [avId]);
+                const outputColName = outputColQuery.length > 0 && outputColQuery[0].values.length > 0 ? String(outputColQuery[0].values[0][0]) : "";
+
+                if (inputColName) {
+                    const inputValRes = db.exec(`SELECT "${inputColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+                    if (inputValRes.length > 0 && inputValRes[0].values.length > 0 && inputValRes[0].values[0][0]) {
+                        currentInputStr = String(inputValRes[0].values[0][0]);
+                    }
+                }
+                if (outputColName) {
+                    const outputValRes = db.exec(`SELECT "${outputColName}" FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+                    if (outputValRes.length > 0 && outputValRes[0].values.length > 0 && outputValRes[0].values[0][0]) {
+                        currentOutputStr = String(outputValRes[0].values[0][0]);
+                    }
                 }
             } catch (e) {
-                const paramCell = rowEl.querySelector(`.av__cell[data-col-id="${paramColKeyId}"]`) as HTMLElement;
-                currentValStr = paramCell?.textContent?.trim() || "{}";
+                console.error("[ParamConfig] Query columns error:", e);
             }
 
-            let currentParams = {};
-            try {
-                currentParams = JSON.parse(currentValStr);
-            } catch (_) {
-                currentParams = {};
-            }
+            let currentInputParams = {};
+            let currentOutputMapping = {};
+            try { currentInputParams = JSON.parse(currentInputStr); } catch (_) {}
+            try { currentOutputMapping = JSON.parse(currentOutputStr); } catch (_) {}
 
-            console.log("[ParamConfig] Dialog opened. paramsSchema:", paramsSchema);
+            console.log(`[ParamConfig] Dialog opened with tab "${initialTab}". paramsSchema:`, paramsSchema, "outputsSchema:", outputsSchema);
             const dialog = new Dialog({
-                title: "配置命令参数",
+                title: initialTab === "input" ? "配置命令入参" : "配置出参别名",
                 content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-                width: "480px",
-                height: "500px"
+                width: "520px",
+                height: "520px"
             });
             dialog.element.classList.add("indexos-dialog");
 
@@ -400,9 +426,16 @@ export async function handleCommandDbAltClick(
                     commandName: cmdDef.name || cleanLabel,
                     commandId: resolvedCommand,
                     paramsSchema,
-                    currentParams,
-                    onSave: async (updated: Record<string, any>) => {
-                        await updateCellValue(null, avId, rowId, paramColKeyId, JSON.stringify(updated, null, 2));
+                    initialTab,
+                    currentInputParams,
+                    currentOutputMapping,
+                    onSave: async (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => {
+                        if (inputColKeyId) {
+                            await updateCellValue(null, avId, rowId, inputColKeyId, JSON.stringify(updatedInput, null, 2));
+                        }
+                        if (outputColKeyId) {
+                            await updateCellValue(null, avId, rowId, outputColKeyId, JSON.stringify(updatedOutput, null, 2));
+                        }
                     }
                 }
             });
@@ -456,39 +489,51 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
             return;
         }
 
-        // 3. 获取 Param Mapping 的 Siyuan key ID
-        const paramColKeyId = await getParamColKeyId(commandAvId);
-        if (!paramColKeyId) {
-            showMessage("未能在命令管理中找到 'Param Mapping' 列", 3000, "error");
+        // 3. 获取 Input/Output Mapping 列的 Siyuan key ID
+        const inputColKeyId = await getInputColKeyId(commandAvId);
+        const outputColKeyId = await getOutputColKeyId(commandAvId);
+
+        if (!inputColKeyId) {
+            showMessage("未能在命令管理中找到 'Input Mapping' 列", 3000, "error");
             return;
         }
 
         // 4. 读取当前参数映射值
-        const schemaParamCol = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Param Mapping'`, [commandAvId]);
-        let paramColName = "Param_Mapping";
-        if (schemaParamCol.length > 0 && schemaParamCol[0].values.length > 0) {
-            paramColName = String(schemaParamCol[0].values[0][0]);
+        const schemaInputCol = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Input Mapping' OR key_name = 'Param Mapping')`, [commandAvId]);
+        let inputColName = "Input_Mapping";
+        if (schemaInputCol.length > 0 && schemaInputCol[0].values.length > 0) {
+            inputColName = String(schemaInputCol[0].values[0][0]);
         }
 
-        const valRes = db.exec(`SELECT "${paramColName}" FROM ${tableName} WHERE rowID = ?`, [cmdBoundBlockId]);
-        let currentValStr = "{}";
-        if (valRes.length > 0 && valRes[0].values.length > 0 && valRes[0].values[0][0]) {
-            currentValStr = String(valRes[0].values[0][0]);
+        const schemaOutputCol = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Output Mapping'`, [commandAvId]);
+        let outputColName = "Output_Mapping";
+        if (schemaOutputCol.length > 0 && schemaOutputCol[0].values.length > 0) {
+            outputColName = String(schemaOutputCol[0].values[0][0]);
         }
-        let currentParams = {};
-        try {
-            currentParams = JSON.parse(currentValStr);
-        } catch (_) {
-            currentParams = {};
+
+        const inputValRes = db.exec(`SELECT "${inputColName}" FROM ${tableName} WHERE rowID = ?`, [cmdBoundBlockId]);
+        let currentInputStr = "{}";
+        if (inputValRes.length > 0 && inputValRes[0].values.length > 0 && inputValRes[0].values[0][0]) {
+            currentInputStr = String(inputValRes[0].values[0][0]);
         }
+        let currentInputParams = {};
+        try { currentInputParams = JSON.parse(currentInputStr); } catch (_) {}
+
+        const outputValRes = db.exec(`SELECT "${outputColName}" FROM ${tableName} WHERE rowID = ?`, [cmdBoundBlockId]);
+        let currentOutputStr = "{}";
+        if (outputValRes.length > 0 && outputValRes[0].values.length > 0 && outputValRes[0].values[0][0]) {
+            currentOutputStr = String(outputValRes[0].values[0][0]);
+        }
+        let currentOutputMapping = {};
+        try { currentOutputMapping = JSON.parse(currentOutputStr); } catch (_) {}
 
         // 5. 唤起配置弹窗
         console.log("[ParamConfig] Dialog opened via openConfigForCommand. paramsSchema:", paramsSchema);
         const dialog = new Dialog({
-            title: "配置命令参数",
+            title: "配置命令参数 & 出参控制",
             content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-            width: "480px",
-            height: "500px"
+            width: "520px",
+            height: "520px"
         });
         dialog.element.classList.add("indexos-dialog");
 
@@ -499,9 +544,15 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
                 commandName: cmdDef.name || cleanLabel,
                 commandId: cmdDef.id,
                 paramsSchema,
-                currentParams,
-                onSave: async (updated: Record<string, any>) => {
-                    await updateCellValue(null, commandAvId, cmdRowItemId, paramColKeyId, JSON.stringify(updated, null, 2));
+                currentInputParams,
+                currentOutputMapping,
+                onSave: async (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => {
+                    if (inputColKeyId) {
+                        await updateCellValue(null, commandAvId, cmdRowItemId, inputColKeyId, JSON.stringify(updatedInput, null, 2));
+                    }
+                    if (outputColKeyId) {
+                        await updateCellValue(null, commandAvId, cmdRowItemId, outputColKeyId, JSON.stringify(updatedOutput, null, 2));
+                    }
                 }
             }
         });

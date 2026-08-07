@@ -6,13 +6,15 @@
     export let commandName: string;
     export let commandId: string;
     export let paramsSchema: any[]; // list of ParamSchema
-    export let currentParams: Record<string, any>;
-    export let onSave: (updated: Record<string, any>) => Promise<void>;
+    export let initialTab: "input" | "output" = "input";
+    export let currentInputParams: Record<string, any> = {};
+    export let currentOutputMapping: Record<string, string> = {};
+    export let onSave: (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => Promise<void>;
 
     import { commandRegistry } from "../../registry/command-registry";
     import { openIndexDropdown } from "../../../../ui/components/index-dropdown";
 
-    let activeTab: "input" | "output" = "input";
+    let activeTab: "input" | "output" = initialTab;
     let values: Record<string, any> = {};
     let outputAliasMap: Record<string, string> = {};
     let showHidden = false;
@@ -20,29 +22,19 @@
     $: hasHiddenParams = paramsSchema.some(p => p.hidden);
     $: visibleParams = showHidden ? paramsSchema : paramsSchema.filter(p => !p.hidden);
 
-    // 动态读取 Command Registry 中注册的 outputs 定义
+    // 动态读取 Command Registry 中注册的 outputs 定义（严格按 registry 查找，无定义则为空）
     $: cmdDef = commandRegistry.getCommand(commandId);
-    $: outputsSchema = (cmdDef && cmdDef.outputs && cmdDef.outputs.length > 0)
-        ? cmdDef.outputs
-        : [
-            {
-                key: "id",
-                label: "生成的新块 ID",
-                type: "text",
-                required: true,
-                default: "createdblock",
-                description: "后创块在思源内核中生成的 14 位真实 Block ID"
-            }
-        ];
+    $: outputsSchema = (cmdDef && cmdDef.outputs && Array.isArray(cmdDef.outputs)) ? cmdDef.outputs : [];
 
     onMount(() => {
+        activeTab = initialTab;
         // Initialize input values based on schema and current configurations
         paramsSchema.forEach(param => {
-            if (currentParams && currentParams[param.key] !== undefined) {
+            if (currentInputParams && currentInputParams[param.key] !== undefined) {
                 if (param.type === "boolean") {
-                    values[param.key] = currentParams[param.key] === true || currentParams[param.key] === 1 || currentParams[param.key] === "1" || String(currentParams[param.key]).toLowerCase() === "true";
+                    values[param.key] = currentInputParams[param.key] === true || currentInputParams[param.key] === 1 || currentInputParams[param.key] === "1" || String(currentInputParams[param.key]).toLowerCase() === "true";
                 } else {
-                    values[param.key] = currentParams[param.key];
+                    values[param.key] = currentInputParams[param.key];
                 }
             } else {
                 if (param.type === "boolean") {
@@ -54,40 +46,38 @@
         });
 
         // Initialize output alias values based on outputsSchema
-        const savedOutputs = currentParams?._outputMapping || {};
         outputsSchema.forEach(out => {
-            outputAliasMap[out.key] = savedOutputs[out.key] || String(out.default || out.key || "createdblock");
+            outputAliasMap[out.key] = currentOutputMapping[out.key] || String(out.default || out.key || "createdblock");
         });
     });
 
     async function handleSave() {
-        const result: Record<string, any> = {};
+        const inputResult: Record<string, any> = {};
         paramsSchema.forEach(param => {
             const val = values[param.key];
             if (param.type === "boolean") {
-                result[param.key] = !!val;
+                inputResult[param.key] = !!val;
             } else if (param.type === "number") {
                 const parsed = Number(val);
-                result[param.key] = isNaN(parsed) ? val : parsed;
+                inputResult[param.key] = isNaN(parsed) ? val : parsed;
             } else {
-                result[param.key] = val;
+                inputResult[param.key] = val;
             }
         });
 
-        // Attach output mapping aliases
-        result._outputMapping = { ...outputAliasMap };
+        const outputResult = { ...outputAliasMap };
 
-        await onSave(result);
+        await onSave(inputResult, outputResult);
         dialog.destroy();
     }
 </script>
 
-<div class="fn__flex-column" style="height: 100%; padding: 16px; box-sizing: border-box;">
+<div class="fn__flex-column" style="height: 100%; padding: 16px; box-sizing: border-box; overflow-x: hidden;">
     <!-- Dialog Header -->
     <div style="margin-bottom: 12px; flex-shrink: 0;">
         <div style="font-size: 15px; font-weight: bold; color: var(--b3-theme-on-surface); display: flex; align-items: center; gap: 8px;">
             <svg class="b3-list-item__graphic" style="height: 18px; width: 18px; color: var(--b3-theme-primary);"><use xlink:href="#iconSettings"></use></svg>
-            <span>配置命令参数 & 出参控制</span>
+            <span>{initialTab === 'input' ? "📥 配置命令入参 (Input Mapping)" : "📤 配置出参别名 (Output Mapping)"}</span>
         </div>
         <div style="font-size: 11px; color: var(--b3-theme-on-surface-light); margin-top: 6px; padding: 6px; border-radius: 4px; background-color: var(--b3-theme-surface); border: 1px solid var(--b3-border-color);">
             <div style="font-family: monospace; font-weight: bold; margin-bottom: 2px;">{commandName}</div>
@@ -95,27 +85,9 @@
         </div>
     </div>
 
-    <!-- Tab Buttons -->
-    <div style="display: flex; gap: 4px; border-bottom: 1px solid var(--b3-border-color); margin-bottom: 12px; flex-shrink: 0;">
-        <button 
-            class="b3-button {activeTab === 'input' ? 'b3-button--primary' : 'b3-button--text'}"
-            style="font-size: 12px; padding: 4px 12px; border-radius: 4px 4px 0 0;"
-            on:click={() => activeTab = 'input'}
-        >
-            📥 入参配置 (Input Params)
-        </button>
-        <button 
-            class="b3-button {activeTab === 'output' ? 'b3-button--primary' : 'b3-button--text'}"
-            style="font-size: 12px; padding: 4px 12px; border-radius: 4px 4px 0 0;"
-            on:click={() => activeTab = 'output'}
-        >
-            📤 出参命名 (Output Params)
-        </button>
-    </div>
-
-    <!-- Scrollable Form Content -->
-    <div style="flex: 1; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 16px;">
-        {#if activeTab === 'input'}
+    <!-- Scrollable Form Content (独立根据 initialTab 渲染) -->
+    <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 4px; display: flex; flex-direction: column; gap: 16px;">
+        {#if initialTab === 'input'}
             {#if paramsSchema.length === 0}
                 <div style="text-align: center; color: var(--b3-theme-on-surface-light); padding: 40px 0;">
                     此命令没有需要配置的输入参数。
@@ -159,6 +131,7 @@
                             <input 
                                 type="text" 
                                 class="b3-input fn__block" 
+                                style="box-sizing: border-box; width: 100%; max-width: 100%;"
                                 placeholder={param.paramMode === "template" ? "支持占位符，如 {{block_id}}, {{date}}" : (param.description || "")}
                                 bind:value={values[param.key]} 
                             />
@@ -213,7 +186,7 @@
                     </div>
                 {/if}
             {/if}
-        {:else if activeTab === 'output'}
+        {:else if initialTab === 'output'}
             <div style="display: flex; flex-direction: column; gap: 16px;">
                 {#if outputsSchema.length === 0}
                     <div style="text-align: center; color: var(--b3-theme-on-surface-light); padding: 40px 0;">
@@ -234,7 +207,7 @@
                             <input 
                                 type="text" 
                                 class="b3-input fn__block" 
-                                style="font-family: monospace;"
+                                style="font-family: monospace; box-sizing: border-box; width: 100%;"
                                 placeholder="请输入自定义出参变量名，如: createdblock"
                                 bind:value={outputAliasMap[outParam.key]} 
                             />

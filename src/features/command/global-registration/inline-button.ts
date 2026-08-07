@@ -350,7 +350,7 @@ export async function handleInlineButtonClick(event: MouseEvent) {
                     item.commandRef === def.id && item.typeTag === tag
                 );
                 if (match) {
-                    paramMapping = match.paramMapping ? JSON.stringify(match.paramMapping) : "";
+                    paramMapping = match.inputMapping ? JSON.stringify(match.inputMapping) : "";
                     console.log(`[InlineButton-Debug] Found matching supertag mapping for tag "${tag}":`, paramMapping);
                     break;
                 }
@@ -362,7 +362,7 @@ export async function handleInlineButtonClick(event: MouseEvent) {
             // Look up by command ID in COMMAND_BINDINGS
             const cmdConfig = Object.values(COMMAND_BINDINGS).find(c => c.commandRef === def.id);
             if (cmdConfig) {
-                paramMapping = cmdConfig.paramMapping;
+                paramMapping = cmdConfig.inputMapping;
                 console.log(`[InlineButton-Debug] Found global command mapping:`, paramMapping);
             }
         }

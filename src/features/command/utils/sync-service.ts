@@ -208,7 +208,8 @@ function refreshRegistryFromSeed() {
             newCommandBindings[label] = {
                 methodName: label,
                 commandRef: row.commandID.trim(),
-                paramMapping: row.paramMapping.trim()
+                inputMapping: row.inputMapping.trim(),
+                outputMapping: row.outputMapping.trim()
             };
         }
     }
@@ -231,9 +232,9 @@ function refreshRegistryFromSeed() {
             const cmdInfo = findBinding(entry.id);
             if (!cmdInfo) return;
             const hasParams = entry.params && Object.keys(entry.params).length > 0;
-            const paramMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.paramMapping;
+            const inputMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.inputMapping;
             if (!newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === uiLocation)) {
-                newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, paramMapping, uiLocation });
+                newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, inputMapping, outputMapping: cmdInfo.outputMapping, uiLocation });
             }
         };
         for (const e of iconCfg.menu) pushEntry(e, "IconMenu");
@@ -248,14 +249,14 @@ function refreshRegistryFromSeed() {
                 if (foundCmd
                     && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef && r.uiLocation === "IconMenu")
                     && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef)) {
-                    newRegistry.push({ typeTag: cleanTag, methodName: foundCmd.methodName, commandRef: foundCmd.commandRef, paramMapping: foundCmd.paramMapping, uiLocation: "BoundOnly" });
+                    newRegistry.push({ typeTag: cleanTag, methodName: foundCmd.methodName, commandRef: foundCmd.commandRef, inputMapping: foundCmd.inputMapping, outputMapping: foundCmd.outputMapping, uiLocation: "BoundOnly" });
                 }
             }
         }
 
         // 3. 确保标签本身已注册（即使没有绑定任何命令）
         if (!newRegistry.some(r => r.typeTag === cleanTag)) {
-            newRegistry.push({ typeTag: cleanTag, methodName: "", commandRef: "", paramMapping: "", uiLocation: "IconMenu" });
+            newRegistry.push({ typeTag: cleanTag, methodName: "", commandRef: "", inputMapping: "", outputMapping: "", uiLocation: "IconMenu" });
         }
     }
     setSupertagRegistry(newRegistry);
@@ -291,22 +292,24 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         }
 
         // 1. Load Commands (Layer 2)
-        const cmdRes = await runQuery(`SELECT rowID, "${commandLabelCol}", Command_ID, Param_Mapping FROM ${commandsTable}`);
+        const cmdRes = await runQuery(`SELECT rowID, "${commandLabelCol}", Command_ID, "Input Mapping", "Output Mapping", Param_Mapping FROM ${commandsTable}`);
         if (!cmdRes || !cmdRes.values) return false;
 
         const newCommandBindings: Record<string, CommandBinding> = {};
-        const cmdByRowId: Record<string, { methodName: string, commandRef: string, paramMapping: string }> = {};
+        const cmdByRowId: Record<string, CommandBinding> = {};
 
         for (const row of cmdRes.values) {
             const rowID = String(row[0]);
             const label = row[1];
             const cmdId = row[2];
-            const param = row[3];
+            const inputMap = row[3] || row[5];
+            const outputMap = row[4];
             if (label && cmdId) {
-                const cmdInfo = {
+                const cmdInfo: CommandBinding = {
                     methodName: String(label).trim(),
                     commandRef: String(cmdId).trim(),
-                    paramMapping: String(param || "").trim()
+                    inputMapping: String(inputMap || "").trim(),
+                    outputMapping: String(outputMap || "").trim()
                 };
                 newCommandBindings[String(label).trim()] = cmdInfo;
                 cmdByRowId[rowID] = cmdInfo;
@@ -380,9 +383,9 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                     const cmdInfo = resolveCmd(entry.id);
                     if (!cmdInfo) return;
                     const hasParams = entry.params && Object.keys(entry.params).length > 0;
-                    const paramMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.paramMapping;
+                    const inputMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.inputMapping;
                     if (!newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === uiLocation)) {
-                        newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, paramMapping, uiLocation });
+                        newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, inputMapping, outputMapping: cmdInfo.outputMapping, uiLocation });
                     }
                 };
                 for (const e of iconCfg.menu) pushEntry(e, "IconMenu");
@@ -404,7 +407,8 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                                                 typeTag: cleanTag,
                                                 methodName: cmdInfo.methodName,
                                                 commandRef: cmdInfo.commandRef,
-                                                paramMapping: cmdInfo.paramMapping,
+                                                inputMapping: cmdInfo.inputMapping,
+                                                outputMapping: cmdInfo.outputMapping,
                                                 uiLocation: "BoundOnly"
                                             });
                                         }
@@ -432,7 +436,8 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                                         typeTag: cleanTag,
                                         methodName: foundCmd.methodName,
                                         commandRef: foundCmd.commandRef,
-                                        paramMapping: foundCmd.paramMapping,
+                                        inputMapping: foundCmd.inputMapping,
+                                        outputMapping: foundCmd.outputMapping,
                                         uiLocation: "BoundOnly"
                                     });
                                 }
@@ -447,7 +452,8 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                         typeTag: cleanTag,
                         methodName: "",
                         commandRef: "",
-                        paramMapping: "",
+                        inputMapping: "",
+                        outputMapping: "",
                         uiLocation: "IconMenu"
                     });
                 }
@@ -470,7 +476,7 @@ async function refreshRegistryFromApi() {
         // --- 1. Load Layer 2 (Command-DB) ---
         const cmdSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
         const cmdDocs = await post("/api/query/sql", { stmt: cmdSql });
-        const cmdByRowId: Record<string, { methodName: string, commandRef: string, paramMapping: string }> = {};
+        const cmdByRowId: Record<string, CommandBinding> = {};
 
         const newCommandBindings: Record<string, CommandBinding> = {};
 
@@ -499,13 +505,15 @@ async function refreshRegistryFromApi() {
                         };
                         const pk = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
                         const cmdId = getCellText("Command ID");
-                        const paramMapping = getCellText("Param Mapping");
+                        const inputMapping = getCellText("Input Mapping") || getCellText("Param Mapping");
+                        const outputMapping = getCellText("Output Mapping");
 
                         if (pk && cmdId) {
-                            const cmdInfo = {
+                            const cmdInfo: CommandBinding = {
                                 methodName: pk.trim(),
                                 commandRef: cmdId.trim(),
-                                paramMapping: paramMapping.trim()
+                                inputMapping: inputMapping.trim(),
+                                outputMapping: outputMapping.trim()
                             };
                             newCommandBindings[pk.trim()] = cmdInfo;
                             cmdByRowId[row.id] = cmdInfo;
@@ -572,9 +580,9 @@ async function refreshRegistryFromApi() {
                     const cmdInfo = foundKey ? newCommandBindings[foundKey] : undefined;
                     if (!cmdInfo) return;
                     const hasParams = entry.params && Object.keys(entry.params).length > 0;
-                    const paramMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.paramMapping;
+                    const inputMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.inputMapping;
                     if (!newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === uiLocation)) {
-                        newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, paramMapping, uiLocation });
+                        newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, inputMapping, outputMapping: cmdInfo.outputMapping, uiLocation });
                     }
                 };
                 for (const e of iconCfg.menu) pushEntry(e, "IconMenu");
@@ -593,7 +601,8 @@ async function refreshRegistryFromApi() {
                                         typeTag: cleanTag,
                                         methodName: cmdInfo.methodName,
                                         commandRef: cmdInfo.commandRef,
-                                        paramMapping: cmdInfo.paramMapping,
+                                        inputMapping: cmdInfo.inputMapping,
+                                        outputMapping: cmdInfo.outputMapping,
                                         uiLocation: "BoundOnly"
                                     });
                                 }

@@ -20,15 +20,18 @@ export function outputsOf(def: CommandDef | undefined): OutputEndpoint[] {
     return [];
 }
 
-/** 出参在参数池中的名字：用户配置的别名（_outputMapping）优先，否则用规范 key */
+/** 出参在参数池中的名字：用户配置的别名（outputMapping）优先，否则用规范 key */
 export function outputName(commandRef: string, canonicalKey: string): string {
     try {
         const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === commandRef);
         if (binding) {
-            const parsed = JSON.parse(binding.paramMapping || "{}");
-            const map = parsed?._outputMapping;
-            if (map && typeof map === "object" && map[canonicalKey]) {
-                return String(map[canonicalKey]);
+            const raw = binding.outputMapping || binding.inputMapping;
+            const parsed = JSON.parse(raw || "{}");
+            if (parsed && typeof parsed === "object") {
+                const map = parsed._outputMapping || parsed;
+                if (map && map[canonicalKey]) {
+                    return String(map[canonicalKey]);
+                }
             }
         }
     } catch { /* ignore */ }

@@ -1,220 +1,150 @@
 # 命令 Pipeline（复合命令）设计文档
 
-> 状态：设计稿 v1（待评审）
-> 范围：多命令按序执行作为一个行为的参数流转、存储、注册与可视化配置
+> 状态：架构终稿 v2
+> 范围：多命令按序执行的参数流转、存储、注册与可视化配置
 
 ## 1. 背景与目标
 
-当前多命令编排有两种形态：supertag 条件触发（结构化行文本 + TS 脚本）和全局后台调度（TS 脚本）。两者都把配置存成 AV 单元格里的**带注释文本**，存在解析脆弱、无法校验、无法版本化、无法可视化编辑、无法复用的问题。
+当前多命令编排包含多种形态：supertag 条件触发（结构化行文本 + TS 脚本）、全局后台调度（TS 脚本）以及复合命令。
 
 目标：
 
-1. **极简默认**：用户只需按序勾选命令，系统自动完成参数匹配（"创建新块后更新块内容"这类场景开箱即用）。
-2. **深度可选**：用户可打开"更新参数配置"面板，手动连线/填写参数；复杂逻辑可内嵌 TS 脚本。
-3. **可复用**：pipeline 配置存为 Command-DB 的一条记录，注册成命令后，顶栏、行内按钮、Icon Menu、supertag 触发、后台调度都能绑定。
+1. **单 source of truth（不增加 JSON 中介层）**：无论 GUI 勾选配置还是用户手写复杂逻辑，全量存储与执行均基于 **TS 脚本 DSL**，不强行引入 JSON 描述层或复杂解释器。
+2. **零门槛 GUI + 自由扩展**：系统通过 GUI 自动渲染生成规范的 TS 脚本；反向解析成功时提供可视化勾选/参数填充面板；解析失败（手写代码）时无缝降级为代码编辑器。
+3. **公共 State 参数流转**：摒弃繁琐的 `stepN.key` 级联，采用极简的公共 `state.vars` 状态池机制（类似 ECS 系统状态覆盖），出参直接更新到公共 state，后续命令直接引用。
+4. **可复用注册**：pipeline 配置存为 Command-DB 的一条记录，注册成命令后，顶栏、行内按钮、Icon Menu、supertag 触发、后台调度都能无缝绑定。
 
 ## 2. 设计原则
 
-### 2.1 以 param-mapping 为核心
+### 2.1 以 TS 脚本 DSL 为唯一存储与执行源
 
-不引入 guard、条件跳转等"控制台思维"。pipeline 的本质是**参数流转**：每个命令的入参 = 自己填，或引用前一步的出参。用户心智模型是"勾选命令 + 连线"。
+绝不引入中介 JSON DSL。Command-DB 的 "Pipeline 定义" 列直接存储标准 TS 脚本文本。
 
-### 2.2 双轨：JSON 编排 + script 算法
+- **gui 生成模式**：由界面自动拼装出特定规范格式的 `async ({ dispatch, state, eventName }) => { ... }` 文本。
+- **自定义代码模式**：用户可任意书写 JS/TS 语句（循环、条件、调用外部 API），执行引擎以统一沙箱运行。
 
-- **编排**（高频、需要可视化/校验/复用）：存 JSON。
-- **算法**（低频、个性强：循环、复杂条件、外部 API）：存 TS 脚本，作为 pipeline 的一种步骤类型。
+### 2.2 简单平坦的参数流转（公共 State 覆盖机制）
 
-划界原则：绝不试图用 JSON 造一门通用编程语言；凡是高频可配置的将来做成 JSON 原语 + UI 控件，其余一律 script。
+摒弃复杂的 `stepN.key` 作用域映射，参数池 `state.vars` 是一个平坦且全局共享的上下文（类似 ECS 系统中的公共 Component）：
+
+1. 每个命令执行完成后，出参（如 `id`、`createdblock`、`value`）直接写入/覆盖公共 `state.vars`。
+2. 后续步骤命令入参可通过 `{{id}}` / `{{createdblock}}` 或 `{{var.x}}` 直接读取最新的状态。
+3. 用户或自定义 TS 脚本亦可随时修改 `state.vars`。
 
 ### 2.3 参数优先级
 
 运行时按优先级**逐键合并**（后覆盖前）：
 
-1. **#1 Pipeline 人为规划**：步骤 params 中显式填写的值 / 绑定的出参引用。
-2. **#2 Pipeline 自动赋予**：前序步骤出参经 `stepN.key` 变量引用自动注入。
-3. **#3 Command-DB 配置**：该命令在 Command-DB "Param Mapping" 列的配置（唯一持久化配置源）。
-4. **变量解析（内嵌）**：所有字符串参数值统一解析 `{{date}}/{{time}}/{{block_id}}/{{root_id}}/{{parent_id}}/{{attr:KEY}}/{{var.x}}/{{stepN.key}}`。
-5. **#5 Registry 默认**：`commands.json` 的 `params[].default` 与 seed paramMapping，仅作初始模板，不参与运行时优先级。
+1. **#1 脚本内联参数（manual）**：`dispatch("cmd", { key: "val" })` 显式传递的入参。
+2. **#2 Command-DB 配置**：该命令在 Command-DB "Param Mapping" 列的默认配置。
+3. **#3 变量解析内嵌**：所有字符串参数统一解析 `{{date}}/{{time}}/{{block_id}}/{{root_id}}/{{parent_id}}/{{attr:KEY}}/{{var.x}}/{{custom_alias}}`。
+4. **#4 Schema 默认**：`commands.json` 里的 `params[].default`。
 
-## 3. 数据模型（v1）
+---
 
-### 3.1 JSON Schema
+## 3. 脚本规范与 DSL 格式
 
-```json
-{
-  "version": 1,
-  "name": "创建任务并更新",
-  "steps": [
-    {
-      "type": "command",
-      "commandRef": "api.block.insert",
-      "enabled": true,
-      "delayMs": 0,
-      "params": {
+### 3.1 GUI 生成的标准 TS 范式
+
+可视化编辑器生成的标准脚本结构：
+
+```ts
+// 名称: 创建任务并更新
+async ({ dispatch, state, eventName }) => {
+    await dispatch("api.block.insertBlock", {
         "data": "[新任务] {{time}}",
         "previousID": "{{block_id}}"
-      }
-    },
-    {
-      "type": "command",
-      "commandRef": "plugin-index.command.safeUpdateBlock",
-      "enabled": true,
-      "delayMs": 0,
-      "params": {
-        "id": "{{step0.id}}"
-      }
-    }
-  ]
+    });
+    await dispatch("plugin-index.command.safeUpdateBlock", {
+        "id": "{{createdblock}}"
+    });
 }
 ```
 
-### 3.2 字段说明
+### 3.2 沙箱运行环境 (Environment Context)
 
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `version` | number | 是 | 模型版本，演进用 |
-| `name` | string | 是 | pipeline 显示名 |
-| `steps` | array | 是 | 按序执行的步骤 |
-| `steps[].type` | `"command" \| "script"` | 否 | 默认 `"command"` |
-| `steps[].commandRef` | string | command 必填 | 已注册命令 ID（可以是另一个复合命令，允许嵌套，需循环检测） |
-| `steps[].enabled` | boolean | 否 | 是否执行本步，默认 `true` |
-| `steps[].delayMs` | number | 否 | 执行本步前等待毫秒，默认 `0` |
-| `steps[].params` | object | 否 | 命令入参，逐键覆盖 Command-DB 配置 |
-| `steps[].code` | string | script 必填 | TS 脚本正文（`async ({ dispatch, state, eventName }) => {...}`） |
+脚本由 `runRuleScript` 在统一沙箱中执行，注入以下内置变量：
 
-### 3.3 params 的三态
-
-| 状态 | 写法 | 运行时 |
+| 变量名 | 类型 | 说明 |
 |---|---|---|
-| 空/缺键 | 不写该键 | 用 Command-DB paramMapping → schema 默认 |
-| 字面量 | `"data": "固定内容 {{time}}"` | 直接传值，字符串做占位符解析 |
-| 出参引用 | `"id": "{{step0.id}}"` | 解析为前序步骤出参 |
+| `dispatch` | `(cmdId: string, params?: object) => Promise<DispatchResult>` | 执行指定命令，成功后自动将出参更新至 `state.vars` |
+| `state` | `{ vars: Record<string, any> }` | 共享状态池对象 |
+| `delay` | `(ms: number \| string) => Promise<void>` | 延迟函数，支持 `500` 或 `"1s"` / `"2m"` |
+| `context` | `CommandContext` | 包含 `blockEl` / `protyleEl` / `supertag` 等上下文 |
+| `eventName` | `string` | 触发事件名（仅条件触发时使用） |
 
-### 3.4 保留控制字段
+---
 
-`enabled` / `delayMs` 是**步骤级控制字段**，引擎拦截，不转发给命令。避免用 `pause`/`continue` 这类可能与命令真实参数冲突的命名。
+## 4. 可视化编辑与反向解析机制
 
-## 4. 出参与变量池
+### 4.1 双态降级策略
 
-- 每步执行完，出参按 `step<序号>.<输出名>` 写入 pipeline 变量池（如 `step0.id`、`step0.createdblock`）。
-- 出参来源：`CommandDef.outputs` schema；无 schema 时默认暴露 `id` / `createdblock`（与现 ParamConfigDialog 的出参命名一致）。
-- 变量池仅当次执行有效，不持久化；跨执行共享需显式写回 Command-DB / Layer 4。
-- script 步骤可通过 `state.vars` 读写同一变量池，`stepN.key` 与其打通。
-
-## 5. 智能默认匹配（极简入口的核心）
-
-勾选命令后自动生成初始 params。启发式（按优先级排序）：
-
-1. **类型匹配**：入参类型（blockid / text / boolean...）对应出参类型；
-2. **最近前驱优先**：优先绑定最近的前序步骤；
-3. **名字相似**：`id` ↔ `id` / `createdblock` 等。
-
-示例："创建新块后更新块内容"：
-
-- step0 `api.block.insert` 出参：`id`（blockid）
-- step1 `plugin-index.command.safeUpdateBlock` 入参 `id`（blockid）
-- 匹配：向前找最近的 blockid 出参 → 自动写 `"id": "{{step0.id}}"`
-
-规则：**默认绑定只是建议，始终可视化可见、可改**。系统不做隐式自动接线，避免"系统擅自控制某一步"的歧义。
-
-## 6. 执行引擎
-
-### 6.1 双轨执行
+系统不使用复杂的 AST 词法树分析库，而是采用**封闭格式解析 + 容错降级**：
 
 ```
-runPipeline(config, context):
-  pool = { ...context.vars }
-  for each step:
-    if !step.enabled: continue
-    await sleep(step.delayMs)
-    if step.type == "script":
-      result = executeTsScript(step.code, { dispatch, state: pool, eventName })
-    else:
-      result = dispatchCommand(step.commandRef, null, context, {
-        manual: step.params || {},
-        commandDb: COMMAND_BINDINGS 中该命令的 paramMapping  // 引擎侧解析
-      })
-    pool[`step${i}.*`] = result 出参
++----------------------------------------------------+
+|               读取 Command-DB 中的 TS 脚本          |
++----------------------------------------------------+
+                          |
+                          v
+         +----------------------------------+
+         | parseRuleScript (匹配模板/JSON) |
+         +----------------------------------+
+                /                    \
+         (解析成功)                (解析失败/手写逻辑)
+              /                        \
+              v                         v
++---------------------------+  +---------------------------+
+| GUI 可视化模式            |  | 自由代码编辑模式           |
+| (展示命令勾选/顺序/入参)  |  | (展示 Ace/Monaco 代码框)  |
++---------------------------+  +---------------------------+
 ```
 
-### 6.2 与现有代码衔接
+1. **GUI 勾选模式**：当代码符合 `dispatch("cmdId", { JSON })` 标准模板时，反向解析提取出命令序列和入参，在 UI 上提供勾选列表、排序与入参配置框。
+2. **代码编辑模式**：一旦脚本中包含手写的逻辑（如 `if` 条件、`for` 循环、非 JSON 的 JS 动态表达式），反编译逻辑返回 `null`，UI 自动切换为脚本文本编辑器。两种模式均保存为 TS 脚本，无缝兼容。
 
-- 参数合并/解析：复用 `resolveCommandParams()` / `mergeParamSources()`（`command-dispatcher.ts`）。
-- 占位符解析：复用 `resolveTemplate()`，扩展 `{{stepN.key}}` 变量来源。
-- script 执行：复用 `executeTsScript()`（`supertag-sandbox.ts`），统一 `dispatch` 助手。
-- 命令库 paramMapping：从 `COMMAND_BINDINGS` 按 commandRef 反查（复合命令自身的 paramMapping 作为全局默认，被步骤 params 覆盖）。
+### 4.2 智能默认填充 (Smart Fill)
 
-### 6.3 错误处理（v1 从简）
+在 GUI 勾选界面，系统按如下启发式规则为新勾选的命令补全入参：
+1. 提取前序命令在其 `outputs` 中声明的规范 key 或用户别名（`_outputMapping`）。
+2. 类型匹配：`blockid` 类型优先填入 `{{createdblock}}` 或 `{{id}}`。
+3. 输入框高亮显示当前使用的状态引用。
 
-- 步骤失败：默认中断整条 pipeline，抛出错误并提示。
-- `enabled=false` 跳过；`delayMs` 等待。
-- retry / onFail / 并行：**v1 不实现**，将来以加字段方式演进（见 §8）。
+---
 
-## 7. 存储与注册
+## 5. 存储与注册
 
-### 7.1 存储
+### 5.1 存储
 
-- 位置：Command-DB 一行记录的 **"Pipeline 定义"列**（JSON 字符串）。
-- 该行其他列照常：主键 = 名称，Command ID = `pipeline.<行ID>`，Param Mapping = pipeline 全局默认参数，UI 入口列决定展示位置。
-- script 代码内嵌在 JSON 的 `steps[].code`，随 pipeline 一起存储/复制/迁移（可视化编辑器内用代码编辑器渲染，用户不直接面对转义）。
+- 位置：Command-DB 一行记录的 **"Pipeline 定义"列**（TS 代码字符串）。
+- Command ID 规范：`pipeline.<shortHash(rowID)>`。
+- 其他列：主键 = 名称，Param Mapping = 全局默认参数，UI 入口列决定展示位置。
 
-### 7.2 注册
-
-保存时：
+### 5.2 注册
 
 ```ts
 commandRegistry.registerCommand({
-  id: "pipeline.<rowID>",
-  name: pipeline.name,
-  dispatch: { method: "custom", executor: (params, ctx) => runPipeline(config, ctx) },
-  params: [],  // pipeline 自身的参数 schema（后续可支持参数化入口）
+  id: pipelineCommandId(rowId),
+  name: pipelineName,
+  description: `复合命令（Pipeline）：${pipelineName}`,
+  dispatch: {
+    method: "custom",
+    executor: async (params, ctx) => {
+      return runRuleScript(script, ctx);
+    }
+  },
+  params: [],
   constraints: { requiresFocus: false, environment: "universal" },
-  meta: { scope: "global", category: "custom", source: "user" }
+  meta: { contextNeed: "none", category: "custom", source: "user", plugin: "pipeline" }
 });
 ```
 
-注册后即被现有绑定点（顶栏 / 行内按钮 / Icon Menu / supertag / 后台）无差别使用，消费方零改动。
+注册后，任何绑定点（顶栏按钮、Icon Menu、Supertag 触发器、后台定时任务）均可以统一方式调度该复合命令。
 
-## 8. 能力边界与演进
+---
 
-### v1 能做的
+## 6. 演进说明
 
-- 按序执行、参数绑定（字面量/出参引用/命令库默认）
-- 手动禁用某步、步间延迟
-- 复用/嵌套（复合命令作为步骤）
-- 内嵌 TS 脚本实现任意逻辑
+- 本设计作为测试版本的唯一标准架构，彻底废弃原草案中的 JSON Schema 编排与 `stepN.key` 作用域说明。
+- 后续如需增加步间控制（如忽略错误继续执行），可在 `dispatch` 辅助函数中增加可选配置参数（如 `dispatch("cmd", params, { ignoreError: true })`），保持整体代码精简一致。
 
-### v1 不做的（将来按需加字段）
-
-- `retry`（失败重试/直到成功）：`{ untilSuccess, maxAttempts, intervalMs }`
-- `onFail`（失败跳转/备用命令）
-- 并行步骤（容器原语）
-- 条件分支/跳转原语
-- 动态步骤（运行中增删）
-
-模型演进方式：加可选字段 + `version` bump，已存 JSON 兼容。
-
-## 9. 可视化面板交互
-
-### 9.1 流程
-
-1. 用户勾选命令（按序）→ 系统按 §5 智能生成初始 params。
-2. 点"更新参数配置"→ 面板展示每步默认绑定（智能自动的以连线/高亮标出）。
-3. 用户修改：
-   - 点某步的**入参** → 点另一步的**出参端点** = 绑定（写入 `{{stepN.key}}`）；
-   - 直接输入框填写 = 字面量；
-   - 清空 = 恢复使用 Command-DB 配置。
-4. 保存 → 写 Command-DB "Pipeline 定义"列 → 注册命令。
-
-### 9.2 交互细节
-
-- 出参端点类型感知：blockid 入参高亮 blockid 出参端点，boolean 类似。
-- 被 pipeline 覆盖的参数在面板中标注"已被 pipeline 覆盖"，避免与 Command-DB 配置混淆。
-- 每步头部显示 `enabled` 开关与 `delayMs` 输入。
-- 支持"转为脚本"：把整条 pipeline 或单步切换为 script 模式（编辑现有 TS 文本）。
-
-## 10. 待决问题
-
-1. 复合命令作为步骤时，其出参如何暴露（默认：内部最后一步出参，或显式声明导出）。
-2. pipeline 自身是否支持参数化入口（`params` schema），以便同一 pipeline 被不同场景以不同参数调用。
-3. 结构化行文本（`// [事件] -> 命令(参数)`）与旧 TS 文本的迁移策略（测试版本可不做向后兼容，直接以 script 步骤包装）。
