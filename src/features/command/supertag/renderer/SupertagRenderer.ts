@@ -115,6 +115,12 @@ export class SupertagRenderer {
      */
     public static renderSingleBlockElement(blockEl: HTMLElement) {
         if (!blockEl || !blockEl.getAttribute) return;
+        
+        // 跳过页面标题节点（页面文档级别的标签与 Task 由 renderDocumentTags 统一在标题下方挂载，避免右上角重复渲染）
+        if (blockEl.classList.contains("protyle-title") || blockEl.closest(".protyle-title")) {
+            return;
+        }
+
         const blockId = blockEl.getAttribute("data-node-id");
         if (!blockId) return;
 

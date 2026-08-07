@@ -31,10 +31,12 @@ async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
     SupertagRenderer.render(protyle);
 }
 
-function renderSupertagsInPanel(panel: HTMLElement, query: string) {
+import { getGlobalTypeConfigs } from "../../../av/av-setting/db-config";
+
+async function renderSupertagsInPanel(panel: HTMLElement, query: string) {
     panel.innerHTML = "";
 
-    const dbConfigs: any[] = [];
+    const dbConfigs = await getGlobalTypeConfigs();
     const logicConfigs = SUPERTAG_REGISTRY || [];
 
     const dataNames = new Set(dbConfigs.map((c: any) => c.typeName.trim().toLowerCase()));
@@ -95,8 +97,8 @@ function renderSupertagsInPanel(panel: HTMLElement, query: string) {
         return section;
     };
 
-    const cmdSec = createSection("命令tag", cmdComps.sort(), "var(--b3-theme-primary)");
-    const dataSec = createSection("数据tag", dataComps.sort(), "#4caf50");
+    const cmdSec = createSection("命令标签", cmdComps.sort(), "var(--b3-theme-primary)");
+    const dataSec = createSection("数据标签", dataComps.sort(), "#4caf50");
 
     if (cmdSec) panel.appendChild(cmdSec);
     if (dataSec) panel.appendChild(dataSec);
@@ -136,11 +138,11 @@ function transformTagMenu(menuFilter: HTMLElement, inputEl: HTMLInputElement) {
     rowContainer.appendChild(supertagPanel);
     rowContainer.appendChild(nativeList);
 
-    renderSupertagsInPanel(supertagPanel, "");
+    void renderSupertagsInPanel(supertagPanel, "");
 
     inputEl.addEventListener("input", () => {
         const query = inputEl.value.trim().toLowerCase();
-        renderSupertagsInPanel(supertagPanel, query);
+        void renderSupertagsInPanel(supertagPanel, query);
     });
 }
 
