@@ -23,7 +23,8 @@ export async function triggerTurnIntoTask(
     let currentTaskAttr = liveBlockEl ? liveBlockEl.getAttribute("custom-index-task") : null;
     if (!currentTaskAttr) {
         const attrsRes = await post("/api/attr/getBlockAttrs", { id: targetBlockId });
-        currentTaskAttr = attrsRes?.["custom-index-task"] || "";
+        const attrs = attrsRes?.data || attrsRes || {};
+        currentTaskAttr = attrs["custom-index-task"] || "";
     }
 
     const isAlreadyTask = Boolean(currentTaskAttr);

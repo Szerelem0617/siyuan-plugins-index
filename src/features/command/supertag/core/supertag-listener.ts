@@ -391,10 +391,6 @@ export class SupertagMonitor {
             
             const cached = tagCache.get(blockId);
             if (cached) {
-                if (!cached.has(cleanTag)) {
-                    console.log(`[Supertag] Tag #${cleanTag} already absent from cache for block "${blockId}". Skipping duplicate processRemovedTag.`);
-                    return;
-                }
                 cached.delete(cleanTag);
                 if (cached.size > 0) {
                     globalSupertagsCache.set(blockId, Array.from(cached));
@@ -403,6 +399,7 @@ export class SupertagMonitor {
                 }
             }
 
+            console.log(`[Supertag] 🗑️ Processing removed tag #${cleanTag} for block "${blockId}"...`);
             await triggerConditionalCommands(blockId, cleanTag, "tag_removed");
         } catch (e) {
             console.error("[Supertag] Failed to process removed tag:", blockId, e);
@@ -417,6 +414,17 @@ export class SupertagMonitor {
 
     public async processTaskCompleted(blockId: string) {
         try {
+            // 严谨校验：只有当该块身上当前依然拥有 #task 标签时，才触发任务完成自动化（如放烟花）
+            const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+            const attrs = attrsRes?.data || attrsRes || {};
+            const rawTags = attrs["custom-supertags"];
+            const currentTags = parseSupertags(rawTags).map(t => cleanTagString(t));
+
+            if (!currentTags.includes("task")) {
+                console.log(`[Supertag] 块 ${blockId} 未打上 #task 标签，跳过 task_completed 自动化触发`);
+                return;
+            }
+
             console.log(`[Supertag] Triggering task_completed event for block "${blockId}"...`);
             await triggerConditionalCommands(blockId, "task", "task_completed");
         } catch (e) {
