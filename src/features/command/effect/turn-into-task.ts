@@ -95,3 +95,60 @@ export async function triggerTurnIntoTask(
         return { success: false, detail: err.message };
     }
 }
+
+export async function triggerToggleTaskStatus(
+    params: Record<string, unknown>,
+    context: CommandContext
+): Promise<any> {
+    const rawBlockEl = context.blockEl;
+    const targetBlockId = (params?.id as string) || (params?.block_id as string) || (context as any).blockId || rawBlockEl?.getAttribute("data-node-id");
+
+    if (!targetBlockId) {
+        showMessage("❌ 切换任务状态失败：无法获取目标块或页面 ID", 5000, "error");
+        return { success: false };
+    }
+
+    const liveBlockEl = (document.querySelector(`[data-node-id="${targetBlockId}"]`) as HTMLElement) || rawBlockEl;
+    const editorEl = liveBlockEl ? (liveBlockEl.closest(".protyle") as HTMLElement) : (document.querySelector(".protyle") as HTMLElement);
+
+    let currentTaskAttr = liveBlockEl ? liveBlockEl.getAttribute("custom-index-task") : null;
+    if (!currentTaskAttr) {
+        const attrsRes = await post("/api/attr/getBlockAttrs", { id: targetBlockId });
+        const attrs = attrsRes?.data || attrsRes || {};
+        currentTaskAttr = attrs["custom-index-task"] || "";
+    }
+
+    if (!currentTaskAttr) {
+        showMessage("❌ 当前块非任务状态，无法切换完成状态", 3000, "info");
+        return { success: false, detail: "Not a task" };
+    }
+
+    const newStatus = currentTaskAttr === "completed" ? "pending" : "completed";
+
+    await post("/api/attr/setBlockAttrs", {
+        id: targetBlockId,
+        attrs: {
+            "custom-index-task": newStatus
+        }
+    });
+
+    if (liveBlockEl) {
+        liveBlockEl.setAttribute("custom-index-task", newStatus);
+    }
+    if (rawBlockEl && rawBlockEl !== liveBlockEl) {
+        rawBlockEl.setAttribute("custom-index-task", newStatus);
+    }
+
+    if (liveBlockEl) {
+        SupertagRenderer.renderSingleBlockElement(liveBlockEl);
+    }
+    if (editorEl) {
+        const pageDocId = editorEl.querySelector(".protyle-title")?.getAttribute("data-node-id");
+        if (pageDocId) {
+            await SupertagRenderer.renderDocumentTags(pageDocId, editorEl);
+        }
+    }
+
+    showMessage(newStatus === "completed" ? "🎉 任务已完成" : "⏳ 任务重新标为未完成");
+    return { success: true, status: newStatus };
+}

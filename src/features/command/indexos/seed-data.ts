@@ -87,7 +87,7 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
     return [
         { rowID: "20260526204605-v11e2ta", supertag: "task", iconMenu: "", conditional: defaultTaskConditional },
         { rowID: "20260721140000-pipeline", supertag: "pipeline", iconMenu: "", conditional: defaultPipelineConditional },
-        { rowID: "20260721140000-permanent", supertag: "permanent", iconMenu: "plugin-index.command.safeUpdateBlock", conditional: defaultPermanentConditional }
+        { rowID: "20260721140000-permanent", supertag: "permanent", iconMenu: JSON.stringify({ menu: [{ id: "plugin-index.command.safeUpdateBlock" }], button: [] }), conditional: defaultPermanentConditional }
     ];
 }
 

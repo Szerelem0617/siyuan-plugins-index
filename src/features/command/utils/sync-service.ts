@@ -222,8 +222,22 @@ function refreshRegistryFromSeed() {
 
         const findBinding = (token: string) => {
             const lower = token.toLowerCase();
-            return Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower)
-                || Object.values(newCommandBindings).find(b => b.methodName.toLowerCase() === lower);
+            const exact = Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower);
+            if (exact) return exact;
+            const byName = Object.values(newCommandBindings).find(b => b.methodName.toLowerCase() === lower);
+            if (byName) return byName;
+
+            const sysCmd = commandRegistry.getCommand(token);
+            if (sysCmd) {
+                const hasOutputs = sysCmd.outputs && sysCmd.outputs.length > 0;
+                return {
+                    methodName: sysCmd.name,
+                    commandRef: sysCmd.id,
+                    inputMapping: "",
+                    outputMapping: hasOutputs ? "{}" : ""
+                };
+            }
+            return undefined;
         };
 
         // 1. Icon menu & button 列：menu → UI 菜单，button → 块下方按钮
@@ -387,7 +401,20 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                     const foundKey = Object.keys(newCommandBindings).find(k =>
                         k.toLowerCase().includes(lower) || newCommandBindings[k].commandRef.toLowerCase().includes(lower)
                     );
-                    return foundKey ? newCommandBindings[foundKey] : undefined;
+                    if (foundKey) return newCommandBindings[foundKey];
+
+                    // 兜底：直接从内置 commandRegistry 获取，防止思源 AV 未同步新命令导致抛弃
+                    const sysCmd = commandRegistry.getCommand(token);
+                    if (sysCmd) {
+                        const hasOutputs = sysCmd.outputs && sysCmd.outputs.length > 0;
+                        return {
+                            methodName: sysCmd.name,
+                            commandRef: sysCmd.id,
+                            inputMapping: "",
+                            outputMapping: hasOutputs ? "{}" : ""
+                        };
+                    }
+                    return undefined;
                 };
                 const pushEntry = (entry: { id: string; params?: Record<string, string> }, uiLocation: "IconMenu" | "Button") => {
                     const cmdInfo = resolveCmd(entry.id);

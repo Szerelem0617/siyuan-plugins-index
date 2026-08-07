@@ -193,8 +193,8 @@
   },
   "supertagManager": {
     "title": "超级标签管理",
-    "tabData": "数据tag",
-    "tabCommand": "命令tag",
+    "tabData": "数据标签",
+    "tabCommand": "命令标签",
     "colTag": "标签",
     "colBinding": "数据库",
     "colStatus": "启用",

@@ -37,7 +37,7 @@ import { version } from "../plugin.json";
 import { initSystemTables } from "./features/command/indexos/command-sqlite";
 import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
-import { triggerTurnIntoTask } from "./features/command/effect/turn-into-task";
+import { triggerTurnIntoTask, triggerToggleTaskStatus } from "./features/command/effect/turn-into-task";
 import { triggerSafeUpdateBlock } from "./features/command/effect/safe-update-block";
 
 export default class IndexPlugin extends Plugin {
@@ -80,6 +80,11 @@ export default class IndexPlugin extends Plugin {
         const turnIntoTaskCmd = commandRegistry.getCommand("plugin-index.command.turnIntoTask");
         if (turnIntoTaskCmd) {
             turnIntoTaskCmd.dispatch.executor = triggerTurnIntoTask;
+        }
+
+        const toggleTaskStatusCmd = commandRegistry.getCommand("plugin-index.command.toggleTaskStatus");
+        if (toggleTaskStatusCmd) {
+            toggleTaskStatusCmd.dispatch.executor = triggerToggleTaskStatus;
         }
 
         const safeUpdateCmd = commandRegistry.getCommand("plugin-index.command.safeUpdateBlock");

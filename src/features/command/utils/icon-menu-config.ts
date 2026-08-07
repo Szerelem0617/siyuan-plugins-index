@@ -35,20 +35,23 @@ function normalizeList(list: any): IconMenuEntry[] {
 export function parseIconMenuConfig(raw: string): IconMenuConfig {
     const text = String(raw || "").trim();
     if (!text) return { menu: [], button: [] };
-    if (text.startsWith("{")) {
-        try {
-            const parsed = JSON.parse(text);
+    
+    try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === "object") {
             return {
-                menu: normalizeList(parsed?.menu),
-                button: normalizeList(parsed?.button)
+                menu: normalizeList(parsed.menu),
+                button: normalizeList(parsed.button)
             };
-        } catch { /* 落到旧格式解析 */ }
+        }
+    } catch {
+        // 若存储的包含额外包裹或单字符命令ID，强转成标准化 JSON 尝试解析
+        if (text.includes("menu") || text.includes("button") || text.startsWith("{")) {
+            console.warn("[IconMenuConfig] Failed to parse iconMenu JSON DSL:", text);
+        }
     }
-    // 旧格式：逗号分隔的命令 ID
-    return {
-        menu: text.split(/[,，]/).map(s => s.trim()).filter(Boolean).map(id => ({ id })),
-        button: []
-    };
+
+    return { menu: [], button: [] };
 }
 
 export function serializeIconMenuConfig(cfg: IconMenuConfig): string {
