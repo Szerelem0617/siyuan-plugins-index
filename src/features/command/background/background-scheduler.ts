@@ -281,7 +281,8 @@ class BackgroundScheduler {
         try {
             const ctx: CommandContext = {
                 blockEl: document.createElement("div"),
-                protyleEl: null
+                protyleEl: null,
+                executionMode: "background"
             };
 
             // 沿用 Supertag 原始 Pipeline 逻辑：顺序依次执行命令，中途如果有命令返回 false 则阻断后续 Pipeline

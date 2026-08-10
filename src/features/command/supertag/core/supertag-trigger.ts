@@ -238,7 +238,8 @@ export async function triggerConditionalCommands(
                 blockEl,
                 protyleEl: protyle?.element || null,
                 supertag: cleanTag,
-                vars: pipelineVars
+                vars: pipelineVars,
+                executionMode: "background"
             };
 
             // 2. 判定是否为原生 TS/JS 动态脚本模式

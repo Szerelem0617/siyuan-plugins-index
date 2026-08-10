@@ -22,6 +22,9 @@ export { getBlockId };
 import { renderTemplate, formatDate, formatTime } from "./utils/template-engine";
 import { persistOutputVariablesToLayer4 } from "./supertag";
 
+import { evaluateCommandConstraints, type ExecutionMode } from "./utils/constraint-checker";
+export type { ExecutionMode };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,6 +35,7 @@ export interface CommandContext {
     supertag?: string;
     triggerEl?: HTMLElement;
     vars?: Record<string, any>;
+    executionMode?: ExecutionMode;
 }
 
 export interface DispatchResult {
@@ -69,6 +73,8 @@ export async function dispatchCommand(
         context.vars = {};
     }
 
+    const mode: ExecutionMode = context.executionMode || "foreground";
+
     // 1. 查询注册表
     const def = commandRegistry.getCommand(commandId);
 
@@ -78,13 +84,11 @@ export async function dispatchCommand(
         return dispatchByPrefix(commandId, rawParam, context);
     }
 
-    // 2. 约束检查
-    if (def.constraints.environment === "ui") {
-        // 前端 (ui) 专属命令必须在 UI 上下文（用户点击触发）中执行，
-        // 定时任务等后台环境调用时给出警告。
-        if (!context.blockEl) {
-            console.warn(`[Dispatcher] Command "${commandId}" is ui-only (environment: ui) but no blockEl provided.`);
-        }
+    // 2. 统一约束检查（使用独立约束检查模块）
+    const constraintCheck = evaluateCommandConstraints(def, mode);
+    if (!constraintCheck.allowed) {
+        console.warn(`[Dispatcher] ${constraintCheck.reason}`);
+        return { success: true, method: def.dispatch.method, detail: constraintCheck.reason || "Skipped by constraint check" };
     }
 
     // 2b. appliesTo 建议性检查（仅 warn，不阻断执行）
@@ -466,13 +470,19 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
 
     // 0. JIT 实时交互弹窗解析支持：{{prompt}} 或 {{prompt:提示文案}} (兼顾 {{interactive}} / {{input}})
     if (normalizedText.includes("{{prompt") || normalizedText.includes("{{interactive") || normalizedText.includes("{{input")) {
+        const isBackground = context.executionMode === "background";
         const promptRegex = /\{\{(prompt|interactive|input)(?::([^}]+))?\}\}/g;
         let match: RegExpExecArray | null;
         while ((match = promptRegex.exec(normalizedText)) !== null) {
             const fullPlaceholder = match[0];
-            const titlePrompt = match[2]?.trim() || "请输入参数内容";
-            const userInput = await promptUserModal(titlePrompt);
-            normalizedText = normalizedText.replace(fullPlaceholder, userInput ?? "");
+            if (isBackground) {
+                console.log(`[Dispatcher] 后台模式下解析到 ${fullPlaceholder}，为了避免打扰界面静默走默认回退`);
+                normalizedText = normalizedText.replace(fullPlaceholder, "");
+            } else {
+                const titlePrompt = match[2]?.trim() || "请输入参数内容";
+                const userInput = await promptUserModal(titlePrompt);
+                normalizedText = normalizedText.replace(fullPlaceholder, userInput ?? "");
+            }
         }
     }
 
