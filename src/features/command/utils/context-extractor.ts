@@ -14,7 +14,31 @@ import { getGlobalTypeConfigs } from "../../av/av-setting/db-config";
  * Gets the block ID from the current context.
  */
 export function getBlockId(context: CommandContext): string {
-    return context.blockEl?.getAttribute("data-node-id") ?? "";
+    if (!context) return "";
+
+    // 1. 从 context.vars 显式缓存中提取
+    if (context.vars?.block_id) return String(context.vars.block_id);
+    if (context.vars?.root_id) return String(context.vars.root_id);
+
+    // 2. 从 DOM 节点 data-node-id / data-id 提取
+    if (context.blockEl) {
+        const nodeId = context.blockEl.getAttribute("data-node-id") || context.blockEl.getAttribute("data-id");
+        if (nodeId) return nodeId;
+
+        // 若是页面 Title (.protyle-title) 向上追溯页面节点的 ID
+        const parentWysiwyg = context.blockEl.closest(".protyle-content, .protyle-wysiwyg");
+        if (parentWysiwyg) {
+            const pageId = parentWysiwyg.querySelector("[data-node-id]")?.getAttribute("data-node-id");
+            if (pageId) return pageId;
+        }
+    }
+
+    // 3. 从全局活动编辑器 Protyle 实例降级提取
+    const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
+    const docId = activeProtyle?.block?.id || activeProtyle?.blockId;
+    if (docId) return String(docId);
+
+    return "";
 }
 
 /**

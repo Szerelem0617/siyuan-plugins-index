@@ -23,6 +23,7 @@ import { renderTemplate, formatDate, formatTime } from "./utils/template-engine"
 import { persistOutputVariablesToLayer4 } from "./supertag";
 
 import { evaluateCommandConstraints, type ExecutionMode } from "./utils/constraint-checker";
+import { COMMAND_BINDINGS } from "./registration";
 export type { ExecutionMode };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -384,16 +385,26 @@ export function mergeParamSources(sources: ParamSources): Record<string, unknown
 /**
  * 统一参数解析入口：
  *   1. mergeParamSources 按 #1 > #2 > #3 逐键合并；
- *   2. schema 缺省值兜底（#5 seed/registry 仅作模板，不参与优先级）；
- *   3. 所有字符串值统一做占位符解析（#4 变量解析内嵌；template 模式强制转字符串）；
- *   4. 剔除空字符串，防止传给思源 API 时空值字段校验失败。
+ *   2. 实时查询 Command-DB (COMMAND_BINDINGS) 的最新配置数据；
+ *   3. schema 缺省值兜底（#5 seed/registry 仅作模板，不参与优先级）；
+ *   4. 所有字符串值统一做占位符解析（#4 变量解析内嵌；template 模式强制转字符串）；
+ *   5. 剔除空字符串，防止传给思源 API 时空值字段校验失败。
  */
 export async function resolveCommandParams(
     def: CommandDef,
     sources: ParamSources,
     context: CommandContext
 ): Promise<Record<string, unknown>> {
-    const raw = mergeParamSources(sources);
+    // 实时查询 Command-DB (COMMAND_BINDINGS) 中的最新 paramMapping，尊重 Command-DB 实时数据
+    const liveDbBinding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === def.id || b.label === def.name);
+    const liveDbParam = liveDbBinding?.inputMapping || liveDbBinding?.paramMapping;
+
+    const effectiveSources: ParamSources = {
+        ...sources,
+        commandDb: liveDbParam || sources.commandDb
+    };
+
+    const raw = mergeParamSources(effectiveSources);
     const result: Record<string, unknown> = {};
 
     // 预解析当前可用的 Auto-Context 变量集

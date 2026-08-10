@@ -39,6 +39,8 @@ import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
 import { triggerTurnIntoTask, triggerToggleTaskStatus } from "./features/command/effect/turn-into-task";
 import { triggerSafeUpdateBlock } from "./features/command/effect/safe-update-block";
+import { triggerAddSupertag } from "./features/command/effect/add-supertag";
+import { triggerInsertBlockBelow } from "./features/command/effect/insert-block-below";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -90,6 +92,16 @@ export default class IndexPlugin extends Plugin {
         const safeUpdateCmd = commandRegistry.getCommand("plugin-index.command.safeUpdateBlock");
         if (safeUpdateCmd) {
             safeUpdateCmd.dispatch.executor = triggerSafeUpdateBlock;
+        }
+
+        const addSupertagCmd = commandRegistry.getCommand("plugin-index.command.addSupertag");
+        if (addSupertagCmd) {
+            addSupertagCmd.dispatch.executor = triggerAddSupertag;
+        }
+
+        const insertBlockBelowCmd = commandRegistry.getCommand("plugin-index.command.insertBlockBelow");
+        if (insertBlockBelowCmd) {
+            insertBlockBelowCmd.dispatch.executor = triggerInsertBlockBelow;
         }
 
 

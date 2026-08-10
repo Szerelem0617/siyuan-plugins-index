@@ -42,6 +42,10 @@
             : (commandRegistry.getCommand(editingCmd)?.params || []))
         : [];
 
+    $: editingBgCheck = editingCmd && commandRegistry.getCommand(editingCmd)
+        ? evaluateCommandConstraints(commandRegistry.getCommand(editingCmd)!, "background")
+        : { allowed: true };
+
     $: visibleCommands = availableCommands.filter(cmd =>
         !searchQuery.trim()
         || cmd.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -233,14 +237,10 @@
                     on:click={() => { editingCmd = null; }}
                 >✕</button>
             </div>
-            {#if commandRegistry.getCommand(editingCmd)}
-                {@const def = commandRegistry.getCommand(editingCmd)}
-                {@const bgCheck = evaluateCommandConstraints(def, "background")}
-                {#if !bgCheck.allowed}
-                    <div style="font-size: 10px; color: #d97706; background: rgba(217, 119, 6, 0.1); border: 1px dashed rgba(217, 119, 6, 0.3); padding: 4px 6px; border-radius: 4px; line-height: 1.3;">
-                        ⚠️ 提示：{bgCheck.reason}
-                    </div>
-                {/if}
+            {#if !editingBgCheck.allowed}
+                <div style="font-size: 10px; color: #d97706; background: rgba(217, 119, 6, 0.1); border: 1px dashed rgba(217, 119, 6, 0.3); padding: 4px 6px; border-radius: 4px; line-height: 1.3;">
+                    ⚠️ 提示：{editingBgCheck.reason}
+                </div>
             {/if}
             {#if currentEditingParams.length > 0}
                 <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
