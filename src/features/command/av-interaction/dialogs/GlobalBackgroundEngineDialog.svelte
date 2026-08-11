@@ -2,6 +2,7 @@
     import { onMount } from "svelte";
     import { showMessage } from "siyuan";
     import { post } from "../../../../shared/api-client/request";
+    import { plugin } from "../../../../shared/utils";
     import { getCommandAvId } from "../../registration";
     import { commandRegistry } from "../../registry/command-registry";
     import { backgroundScheduler } from "../../background/background-scheduler";
@@ -287,13 +288,34 @@
     async function loadScriptAndRules() {
         loading = true;
         try {
+            let storedVal = "";
+            const LOCAL_BG_FILE = "background-engine.json";
+
+            // 1. 尝试从本地插件 JSON 数据文件读取
+            try {
+                if (plugin) {
+                    const localData = await plugin.loadData(LOCAL_BG_FILE);
+                    if (typeof localData === "string") {
+                        storedVal = localData;
+                    } else if (localData && typeof localData === "object" && localData.rules) {
+                        storedVal = String(localData.rules);
+                    }
+                }
+            } catch (_) {}
+
+            // 2. 若已实例化，尝试从 Command-DB 属性读取最新的规则
             const blockId = await resolveHostBlockId();
-            if (!blockId) {
-                rules = [];
-                return;
+            if (blockId) {
+                try {
+                    const res = await post("/api/attr/getBlockAttrs", { id: blockId });
+                    const dbVal = res?.["custom-indexos-background-rules"];
+                    if (dbVal) {
+                        storedVal = dbVal;
+                    }
+                } catch (e) {
+                    console.warn("[GlobalAutomation] 读取 Command-DB 属性失败，使用本地 JSON 配置", e);
+                }
             }
-            const res = await post("/api/attr/getBlockAttrs", { id: blockId });
-            const storedVal = res?.["custom-indexos-background-rules"] || "";
 
             if (storedVal.trim().startsWith("[")) {
                 try {
@@ -334,28 +356,14 @@
 
     async function saveScript() {
         try {
-            const blockId = await resolveHostBlockId();
-
-            if (!blockId) {
-                showMessage("未能在系统中找到打上了 custom-index-command-db 的数据库块，请先实例化 Command-DB", 3000, "error");
-                return;
-            }
-
             if (viewMode === "code") {
                 syncActiveRuleFromCode();
             }
 
             const finalScriptToSave = compileAllRulesToTsScript(rules);
+            await backgroundScheduler.saveRules(finalScriptToSave);
 
-            await post("/api/attr/setBlockAttrs", {
-                id: blockId,
-                attrs: {
-                    "custom-indexos-background-rules": finalScriptToSave
-                }
-            });
-
-            await backgroundScheduler.reloadTasks();
-            showMessage("✓ 后台自动化 TypeScript 脚本已成功存入数据库 Block 属性！");
+            showMessage("✓ 后台自动化规则配置已保存！");
             if (dialog) dialog.destroy();
         } catch (e: any) {
             console.error("[GlobalAutomation] Save script error:", e);

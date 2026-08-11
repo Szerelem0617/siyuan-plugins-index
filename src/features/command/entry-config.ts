@@ -8,6 +8,7 @@
  */
 
 import { post } from "../../shared/api-client/request";
+import { plugin } from "../../shared/utils";
 import { getCommandAvId } from "./registration";
 import type { ContextNeed } from "./registry/command-registry";
 
@@ -114,6 +115,7 @@ export async function resolveEntryConfigBlockId(): Promise<string> {
     return "";
 }
 
+const LOCAL_FILE_NAME = "entry-config.json";
 let g_entryConfigCache: EntryConfig = cloneDefault();
 
 export function getEntryConfigSync(): EntryConfig {
@@ -121,37 +123,59 @@ export function getEntryConfigSync(): EntryConfig {
 }
 
 export async function loadEntryConfig(): Promise<EntryConfig> {
-    const blockId = await resolveEntryConfigBlockId();
-    if (!blockId) {
-        g_entryConfigCache = cloneDefault();
-        return g_entryConfigCache;
-    }
+    let localCfg: EntryConfig | null = null;
     try {
-        const res = await post("/api/attr/getBlockAttrs", { id: blockId });
-        const raw = res?.[ENTRY_CONFIG_KEY];
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === "object" && parsed.positions) {
-                g_entryConfigCache = parsed as EntryConfig;
-                return g_entryConfigCache;
+        if (plugin) {
+            const data = await plugin.loadData(LOCAL_FILE_NAME);
+            if (data && typeof data === "object" && data.positions) {
+                localCfg = data as EntryConfig;
             }
         }
-    } catch (e) {
-        console.error("[EntryConfig] 读取数据库块属性失败:", e);
+    } catch (_) {}
+
+    const blockId = await resolveEntryConfigBlockId();
+    if (blockId) {
+        try {
+            const res = await post("/api/attr/getBlockAttrs", { id: blockId });
+            const raw = res?.[ENTRY_CONFIG_KEY];
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object" && parsed.positions) {
+                    g_entryConfigCache = parsed as EntryConfig;
+                    if (plugin) {
+                        plugin.saveData(LOCAL_FILE_NAME, g_entryConfigCache);
+                    }
+                    return g_entryConfigCache;
+                }
+            }
+        } catch (e) {
+            console.error("[EntryConfig] 读取数据库块属性失败:", e);
+        }
     }
-    g_entryConfigCache = cloneDefault();
+
+    g_entryConfigCache = localCfg || cloneDefault();
     return g_entryConfigCache;
 }
 
 export async function saveEntryConfig(cfg: EntryConfig): Promise<void> {
-    const blockId = await resolveEntryConfigBlockId();
-    if (!blockId) {
-        throw new Error("未找到 Command-DB 数据库块：请先将数据存到思源，入口配置会保存在数据库块属性中");
+    // 1. 独立写文件数据层 (插件 json 配置文件)，未实例化同样允许保存
+    if (plugin) {
+        await plugin.saveData(LOCAL_FILE_NAME, cfg);
     }
-    await post("/api/attr/setBlockAttrs", {
-        id: blockId,
-        attrs: { [ENTRY_CONFIG_KEY]: JSON.stringify(cfg) }
-    });
+
+    // 2. 若已实例化，双写至 Command-DB 属性中
+    const blockId = await resolveEntryConfigBlockId();
+    if (blockId) {
+        try {
+            await post("/api/attr/setBlockAttrs", {
+                id: blockId,
+                attrs: { [ENTRY_CONFIG_KEY]: JSON.stringify(cfg) }
+            });
+        } catch (e) {
+            console.error("[EntryConfig] 双写保存至数据库块属性失败:", e);
+        }
+    }
+
     g_entryConfigCache = cfg;
 }
 

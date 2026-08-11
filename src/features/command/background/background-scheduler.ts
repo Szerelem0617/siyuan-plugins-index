@@ -11,6 +11,7 @@
  */
 
 import { Plugin } from "siyuan";
+import { plugin } from "../../../shared/utils";
 import { post } from "../../../shared/api-client/request";
 import { dispatchCommand, type CommandContext } from "../command-dispatcher";
 import { getCommandAvId } from "../registration";
@@ -59,12 +60,11 @@ class BackgroundScheduler {
         this.isRunning = false;
     }
 
-    public async reloadTasks() {
-        console.log("[BackgroundScheduler-Debug] 🔄 Reloading TS rules from Command-DB Block custom attributes...");
+    public async resolveTargetCommandDbBlockId(): Promise<string> {
         let blockId = "";
         const commandAvId = getCommandAvId();
 
-        // 1. 尝试直接从 DOM 节点抓取 NodeAttributeView 的物理 data-node-id (真正的物理 Block ID)
+        // 1. 尝试从 DOM 抓取 NodeAttributeView 的物理 data-node-id
         if (commandAvId) {
             const avEl = document.querySelector(`[data-av-id="${commandAvId}"]`);
             if (avEl) {
@@ -75,7 +75,7 @@ class BackgroundScheduler {
             }
         }
 
-        // 2. 通过思源内核 API /api/query/sql 从 blocks 表查询 type = 'av' 对应的物理 Block ID
+        // 2. SQL 检索 type = 'av' 物理块
         if (!blockId && commandAvId) {
             try {
                 const res = await post("/api/query/sql", {
@@ -107,15 +107,45 @@ class BackgroundScheduler {
             } catch (_) {}
         }
 
-        if (!blockId) {
-            this.activeTasks.clear();
-            return;
+        return blockId;
+    }
+
+    public async reloadTasks() {
+        console.log("[BackgroundScheduler-Debug] 🔄 Reloading TS rules from Command-DB Block custom attributes...");
+        const blockId = await this.resolveTargetCommandDbBlockId();
+
+        let scriptText = "";
+        const LOCAL_BG_FILE = "background-engine.json";
+
+        // 1. 尝试从本地 JSON 文件读取规则
+        try {
+            if (plugin) {
+                const localData = await plugin.loadData(LOCAL_BG_FILE);
+                if (typeof localData === "string") {
+                    scriptText = localData;
+                } else if (localData && typeof localData === "object" && localData.rules) {
+                    scriptText = String(localData.rules);
+                }
+            }
+        } catch (_) {}
+
+        // 2. 若已实例化，尝试从数据库块属性中读取最新的双写规则
+        if (blockId) {
+            try {
+                const res = await post("/api/attr/getBlockAttrs", { id: blockId });
+                const dbAttrText = res?.["custom-indexos-background-rules"];
+                if (dbAttrText) {
+                    scriptText = dbAttrText;
+                    if (plugin) {
+                        plugin.saveData(LOCAL_BG_FILE, { rules: scriptText });
+                    }
+                }
+            } catch (e) {
+                console.warn("[BackgroundScheduler] 读取块属性规则失败，走本地规则 fallback:", e);
+            }
         }
 
         try {
-            const res = await post("/api/attr/getBlockAttrs", { id: blockId });
-            const scriptText = res?.["custom-indexos-background-rules"] || "";
-
             const tasks = this.parseTsScriptToTasks(scriptText);
             const activeTaskIds = new Set<string>();
 
@@ -314,6 +344,26 @@ class BackgroundScheduler {
             task.lastError = err.message || String(err);
             console.error(`[BackgroundScheduler-Debug] ❌ TS Script Execution Failed for "${task.name}":`, err);
         }
+    }
+
+    public async saveRules(scriptText: string): Promise<void> {
+        if (plugin) {
+            await plugin.saveData("background-engine.json", { rules: scriptText });
+        }
+
+        const blockId = await this.resolveTargetCommandDbBlockId();
+        if (blockId) {
+            try {
+                await post("/api/attr/setBlockAttrs", {
+                    id: blockId,
+                    attrs: { "custom-indexos-background-rules": scriptText }
+                });
+            } catch (e) {
+                console.error("[BackgroundScheduler] 双写规则至 Command-DB 失败:", e);
+            }
+        }
+
+        await this.reloadTasks();
     }
 }
 

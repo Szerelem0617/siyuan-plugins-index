@@ -88,10 +88,7 @@
 
     async function handleSave() {
         if (!cfg) return;
-        if (!isInstantiated) {
-            showMessage("未实例化状态下不能保存：请先将数据存到思源", 3000, "error");
-            return;
-        }
+        if (!cfg) return;
         saving = true;
         try {
             await saveEntryConfig(cfg);
@@ -112,8 +109,8 @@
         <div style="text-align: center; padding: 40px; opacity: 0.6; font-size: 12px;">加载中...</div>
     {:else if cfg}
         {#if !isInstantiated}
-            <div style="font-size: 11px; padding: 6px 10px; border-radius: 5px; background: rgba(240, 173, 78, 0.12); color: var(--indexos-text-warn, #e6a23c); flex-shrink: 0;">
-                ⓘ 当前为未实例化状态，显示种子默认配置（只读）。请先“将数据存到思源”，入口配置会保存在 Command-DB 数据库块属性中。
+            <div style="font-size: 11px; padding: 6px 10px; border-radius: 5px; background: rgba(59, 130, 246, 0.1); color: var(--indexos-primary, #3b82f6); flex-shrink: 0;">
+                ⓘ 当前为本地配置模式：保存后将立刻在本地生效。将数据“存到思源”后，会自动双写备份至 Command-DB 数据库属性中。
             </div>
         {/if}
         <div style="display: flex; gap: 12px; flex: 1; min-height: 0;">
@@ -199,7 +196,7 @@
 
         <div class="fn__flex" style="justify-content: flex-end; gap: 8px; flex-shrink: 0;">
             <button class="b3-button b3-button--cancel" on:click={() => dialog.destroy()}>取消</button>
-            <button class="b3-button b3-button--text" on:click={handleSave} disabled={saving || !isInstantiated}>保存并刷新</button>
+            <button class="b3-button b3-button--text" on:click={handleSave} disabled={saving}>保存并刷新</button>
         </div>
     {/if}
 </div>
