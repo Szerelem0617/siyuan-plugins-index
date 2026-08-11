@@ -11,6 +11,12 @@
     --indexos-ice-base: #DCEEFA;       /* 极浅冰蓝 (主要材质衬底/选中态) */
     --indexos-ice-highlight: #F2F8FF;  /* 冰高光 (卡片提亮/ Hover 衬底) */
     --indexos-ice-shadow: #A1C4E6;     /* 茵蒂克丝蓝阴影线 (边框/侧边指示线) */
+
+    /* 👑 茵蒂克丝刺绣金 (Index Gold - 专属用于脱钩按钮与脱钩卡片) */
+    --indexos-detached-gold: #D9A74A;
+    --indexos-detached-gold-bg: rgba(217, 167, 74, 0.09);
+    --indexos-detached-gold-border: rgba(217, 167, 74, 0.60);
+    --indexos-detached-gold-glow: rgba(217, 167, 74, 0.25);
 }
 
 /* ─── 1. ☀️ LIGHT MODE (Industrial Geek Tech 浅色控制台) ─── */

@@ -204,11 +204,21 @@ function injectButtonCSS() {
             box-shadow: 0 0 14px color-mix(in srgb, var(--btn-color) 40%, transparent 60%) !important;
         }
 
-        /* Detached commands styling (contains parameters) */
+        /* 👑 Detached commands styling (茵蒂克丝刺绣金 Index Gold - 包含独立参数 ?p=) */
         span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"][data-href*="?p="],
         span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="] {
-            border-color: var(--indexos-ice-shadow, #DCEEFA) !important;
-            color: var(--indexos-text-main, #0F172A) !important;
+            --btn-color: var(--indexos-detached-gold, #D9A74A) !important;
+            background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important;
+            border-color: var(--indexos-detached-gold-border, rgba(217, 167, 74, 0.60)) !important;
+            color: var(--indexos-detached-gold, #D9A74A) !important;
+            font-weight: 600 !important;
+        }
+
+        span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"][data-href*="?p="]:hover,
+        span[data-type~="a"][data-href^="siyuan-btn://"][data-href*="?p="]:hover {
+            background: rgba(217, 167, 74, 0.18) !important;
+            border-color: var(--indexos-detached-gold, #D9A74A) !important;
+            box-shadow: 0 0 12px var(--indexos-detached-gold-glow, rgba(217, 167, 74, 0.35)) !important;
         }
     `;
     document.head.appendChild(style);
@@ -332,16 +342,19 @@ export async function handleInlineButtonClick(event: MouseEvent) {
     }
 
     // Resolve Param Mapping dynamically with priority
-    let paramMapping: string | null = null;
+    let paramMapping: any = null;
     const parentBlock = linkEl.closest("[data-node-id]") as HTMLElement | null;
 
-    // Detached Command Priority: Respect baked parameter inside payload first
-    if (payload.param !== undefined && payload.param !== null) {
-        paramMapping = payload.param;
-        console.log(`[InlineButton-Debug] Detached command - respecting baked link param:`, paramMapping);
+    // 👑 Detached Command Highest Priority: 优先尊重脱钩按钮独立烘焙的硬参数
+    if (payload.param !== undefined && payload.param !== null && payload.param !== "") {
+        try {
+            paramMapping = JSON.parse(payload.param);
+        } catch (_) {
+            paramMapping = payload.param;
+        }
     } else {
         if (parentBlock) {
-            // Priority 1: Check if the parent block has any supertags, and use the parameter mapping of the matching supertag
+            // Priority 1: Check if the parent block has any supertags
             const ialString = parentBlock.getAttribute("custom-index-tags") || parentBlock.getAttribute("tag") || parentBlock.getAttribute("tags") || "";
             const blockTags = ialString.split(/[,\s]+/).map((t: string) => t.trim().replace(/#/g, "")).filter(Boolean);
             
@@ -351,7 +364,6 @@ export async function handleInlineButtonClick(event: MouseEvent) {
                 );
                 if (match) {
                     paramMapping = match.inputMapping ? JSON.stringify(match.inputMapping) : "";
-                    console.log(`[InlineButton-Debug] Found matching supertag mapping for tag "${tag}":`, paramMapping);
                     break;
                 }
             }
@@ -359,11 +371,9 @@ export async function handleInlineButtonClick(event: MouseEvent) {
 
         // Priority 2: Use mapping defined for the command globally in Command-DB
         if (paramMapping === null) {
-            // Look up by command ID in COMMAND_BINDINGS
             const cmdConfig = Object.values(COMMAND_BINDINGS).find(c => c.commandRef === def.id);
             if (cmdConfig) {
                 paramMapping = cmdConfig.inputMapping;
-                console.log(`[InlineButton-Debug] Found global command mapping:`, paramMapping);
             }
         }
     }

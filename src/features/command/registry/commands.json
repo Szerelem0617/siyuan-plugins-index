@@ -4,6 +4,70 @@
     "version": "1.0.0",
     "commands": [
         {
+            "id": "siyuan.open",
+            "name": "打开",
+            "description": "多态打开命令：在页签中打开指定的目标页面或块。如为普通内容块，自动平滑滚动并高亮该块。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "id",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": "",
+                    "description": "要打开的目标页面或块 ID。不填时默认自动绑定当前上下文块。"
+                },
+                {
+                    "key": "highlight",
+                    "type": "boolean",
+                    "paramMode": "template",
+                    "default": true,
+                    "description": "定位内容块时是否施加高亮动画效果。"
+                }
+            ],
+            "constraints": {
+                "environment": "ui",
+                "targetScope": "any",
+                "comment": "多态打开：既能在新页签打开页面，又能高亮定位到具体块"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "navigation",
+                "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-open0001",
+                "label": "📖 打开",
+                "paramMapping": ""
+            }
+        },
+        {
+            "id": "plugin-index.command.open",
+            "name": "打开 (别名)",
+            "description": "siyuan.open 命令的别名库引用。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "id",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": ""
+                }
+            ],
+            "constraints": {
+                "environment": "ui",
+                "targetScope": "any"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "navigation",
+                "source": "builtin"
+            }
+        },
+        {
             "id": "siyuan.view.graph",
             "name": "全局关系图",
             "description": "呼出全局块关系图面板。",

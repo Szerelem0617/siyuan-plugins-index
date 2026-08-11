@@ -41,6 +41,7 @@ import { triggerTurnIntoTask, triggerToggleTaskStatus } from "./features/command
 import { triggerSafeUpdateBlock } from "./features/command/effect/safe-update-block";
 import { triggerAddSupertag } from "./features/command/effect/add-supertag";
 import { triggerInsertBlockBelow } from "./features/command/effect/insert-block-below";
+import { handleOpenTargetCommand } from "./features/command/effect/open-target";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -97,6 +98,16 @@ export default class IndexPlugin extends Plugin {
         const addSupertagCmd = commandRegistry.getCommand("plugin-index.command.addSupertag");
         if (addSupertagCmd) {
             addSupertagCmd.dispatch.executor = triggerAddSupertag;
+        }
+
+        const openCmd = commandRegistry.getCommand("siyuan.open");
+        if (openCmd) {
+            openCmd.dispatch.executor = handleOpenTargetCommand;
+        }
+
+        const openAliasCmd = commandRegistry.getCommand("plugin-index.command.open");
+        if (openAliasCmd) {
+            openAliasCmd.dispatch.executor = handleOpenTargetCommand;
         }
 
         const insertBlockBelowCmd = commandRegistry.getCommand("plugin-index.command.insertBlockBelow");

@@ -25,26 +25,26 @@ export function configureDetachedCommand(linkEl: HTMLElement) {
         return;
     }
 
-    let currentParams = {};
+    let currentInputParams: Record<string, any> = {};
     if (payload.param) {
         try {
-            currentParams = JSON.parse(payload.param);
+            currentInputParams = JSON.parse(payload.param);
         } catch (_) {
-            currentParams = {};
+            currentInputParams = { param: payload.param };
         }
     } else if (cmdDef.seed?.paramMapping) {
         try {
-            currentParams = JSON.parse(cmdDef.seed.paramMapping);
+            currentInputParams = JSON.parse(cmdDef.seed.paramMapping);
         } catch (_) {
-            currentParams = {};
+            currentInputParams = {};
         }
     }
 
     const dialog = new Dialog({
-        title: "配置命令参数 (Detached)",
+        title: "配置脱钩按钮独立参数 (Detached)",
         content: `<div class="b3-dialog__content" id="detached-param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-        width: "480px",
-        height: "500px"
+        width: "520px",
+        height: "520px"
     });
     dialog.element.classList.add("indexos-dialog");
 
@@ -55,15 +55,16 @@ export function configureDetachedCommand(linkEl: HTMLElement) {
             commandName: cmdDef.name || payload.command,
             commandId: cmdDef.id,
             paramsSchema,
-            currentParams,
-            onSave: async (updated: Record<string, any>) => {
-                // Generate new href with parameters
+            currentInputParams,
+            contextSource: "entry",
+            onSave: async (updatedInput: Record<string, any>) => {
+                // 生成携带最新独立参数的脱钩 url
                 const newHref = encodeBtnHref({
                     command: cmdDef.id,
-                    param: JSON.stringify(updated)
+                    param: JSON.stringify(updatedInput)
                 });
                 
-                // Replace the element in the editor to ensure Siyuan saves the changes properly
+                // 替换编辑器中的 DOM 节点，确保思源自动持久化变更
                 const range = document.createRange();
                 range.selectNode(linkEl);
                 const selection = window.getSelection();
@@ -74,9 +75,10 @@ export function configureDetachedCommand(linkEl: HTMLElement) {
                     const labelText = linkEl.textContent || cmdDef.name;
                     const newInlineDOM = `<span data-type="a" data-href="${newHref}">${labelText}</span>&#8203;`;
                     document.execCommand("insertHTML", false, newInlineDOM);
-                    showMessage("已成功更新并保存脱钩(Detached)命令参数");
+                    showMessage("已成功更新并保存脱钩按钮独立参数 👑");
                 } else {
-                    showMessage("更新失败：未找到编辑器焦点", -1, "error");
+                    linkEl.setAttribute("data-href", newHref);
+                    showMessage("已更新底层属性");
                 }
             }
         }
