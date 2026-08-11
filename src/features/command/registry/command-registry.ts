@@ -104,12 +104,12 @@ export interface DispatchConfig {
     ) => Promise<unknown>;
 }
 
-export type ExecutionEnvironment = "ui" | "kernel" | "universal";
+export type ExecutionEnvironment = "ui" | "universal";
 export type TargetScope = "none" | "block" | "doc" | "any";
 
 /** 命令执行的约束条件，Dispatcher 在执行前做前置检查 */
 export interface CommandConstraints {
-    /** 执行环境：前端 UI 专属 (ui)、后端 Kernel 专属 (kernel)、双端通用 (universal) */
+    /** 执行环境：前端 UI 专属 (ui)、通用双端 (universal) */
     environment: ExecutionEnvironment;
     /** 目标节点作用域：全局无上下文 (none)、块专用 (block)、页面专用 (doc)、通用多态 (any) */
     targetScope: TargetScope;
@@ -400,9 +400,9 @@ class CommandRegistry {
         return this.getAllCommands().filter(c => c.meta.category === category);
     }
 
-    /** 只返回可定时调度的命令（作为定时任务引擎的候选集） */
+    /** 只返回可定时调度的命令（作为定时任务引擎的候选集：包含 universal 通用命令） */
     getSchedulableCommands(): CommandDef[] {
-        return this.getAllCommands().filter(c => c.constraints.environment === "kernel" || c.constraints.environment === "universal");
+        return this.getAllCommands().filter(c => c.constraints.environment === "universal");
     }
 
     /**

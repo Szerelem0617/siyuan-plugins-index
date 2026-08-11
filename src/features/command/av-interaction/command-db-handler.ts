@@ -429,6 +429,7 @@ export async function handleCommandDbAltClick(
                     initialTab,
                     currentInputParams,
                     currentOutputMapping,
+                    contextSource: "command-db",
                     onSave: async (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => {
                         if (inputColKeyId) {
                             await updateCellValue(null, avId, rowId, inputColKeyId, JSON.stringify(updatedInput, null, 2));
@@ -546,6 +547,7 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
                 paramsSchema,
                 currentInputParams,
                 currentOutputMapping,
+                contextSource: "command-db",
                 onSave: async (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => {
                     if (inputColKeyId) {
                         await updateCellValue(null, commandAvId, cmdRowItemId, inputColKeyId, JSON.stringify(updatedInput, null, 2));
@@ -721,8 +723,7 @@ async function handleAvMouseOver(event: MouseEvent) {
 
         const envMap: Record<string, string> = {
             "ui": "前端 (UI)",
-            "kernel": "后端 (Kernel)",
-            "universal": "双端通用 (Universal)"
+            "universal": "通用双端 (Universal)"
         };
 
         const scopeMap: Record<string, string> = {

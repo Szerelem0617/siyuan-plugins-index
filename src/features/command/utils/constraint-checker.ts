@@ -3,7 +3,7 @@
  * 命令约束与前后台执行上下文检查器 (Command Constraint & Execution Scope Evaluator)
  *
  * 统一评估命令在 前台 (foreground) / 后台 (background) 运行契约，
- * 以及目标节点作用域 targetScope ("block" | "doc" | "any") 的匹配状态。
+ * 以及目标节点作用域 targetScope ("none" | "block" | "doc" | "any") 的匹配状态。
  */
 
 import type { CommandDef } from "../registry/command-registry";
@@ -31,7 +31,9 @@ export function evaluateCommandConstraints(
     const envConstraint = constraints.environment || "universal";
     const targetScope = constraints.targetScope || "any";
 
-    // 1. 检查运行环境限制 (environment: "ui" | "kernel" | "universal")
+    // 1. 检查运行环境限制 (environment: "ui" | "universal")
+    // "ui" 仅限前台 UI 环境运行，后台静默触发时自动跳过；
+    // "universal" 为前后台双端通用，任何场景均可放心触发。
     if (mode === "background" && envConstraint === "ui") {
         return {
             allowed: false,
@@ -39,14 +41,7 @@ export function evaluateCommandConstraints(
         };
     }
 
-    if (mode === "foreground" && envConstraint === "kernel") {
-        return {
-            allowed: false,
-            reason: `命令 "${def.name}" (${def.id}) 限制仅能在后台 Kernel 环境运行，前台触发已跳过`
-        };
-    }
-
-    // 2. 检查目标节点作用域匹配 (targetScope: "block" | "doc" | "any")
+    // 2. 检查目标节点作用域匹配 (targetScope: "none" | "block" | "doc" | "any")
     if (targetNodeType) {
         const isDocNode = targetNodeType === "d";
         if (targetScope === "doc" && !isDocNode) {

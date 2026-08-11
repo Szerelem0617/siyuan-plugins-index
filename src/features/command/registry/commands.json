@@ -505,7 +505,7 @@
                 }
             ],
             "constraints": {
-                "environment": "kernel",
+                "environment": "universal",
                 "targetScope": "any",
                 "comment": "思源原生 HTTP API，完全支持后台与定时调度"
             },
@@ -545,7 +545,7 @@
                 }
             ],
             "constraints": {
-                "environment": "kernel",
+                "environment": "universal",
                 "targetScope": "any",
                 "comment": "思源原生 HTTP API，完全支持后台与定时调度"
             },

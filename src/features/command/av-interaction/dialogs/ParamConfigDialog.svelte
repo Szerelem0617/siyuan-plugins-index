@@ -9,6 +9,7 @@
     export let initialTab: "input" | "output" = "input";
     export let currentInputParams: Record<string, any> = {};
     export let currentOutputMapping: Record<string, string> = {};
+    export let contextSource: "command-db" | "supertag-db" | "pipeline" | "entry" = "pipeline";
     export let onSave: (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => Promise<void>;
 
     import { commandRegistry } from "../../registry/command-registry";
@@ -130,9 +131,10 @@
                                 </button>
                             </div>
                         {:else}
-                            {@const autoSuggest = (param.key === 'id' || param.type === 'blockid') 
+                            {@const isCommandDb = contextSource === "command-db"}
+                            {@const autoSuggest = (!isCommandDb && (param.key === 'id' || param.type === 'blockid'))
                                 ? '⚡ Auto-Context 推荐: {{var.createdblock}} (不填将自动智能匹配)' 
-                                : (param.key === 'enabled' 
+                                : (!isCommandDb && param.key === 'enabled'
                                     ? '⚡ Auto-Context 推荐: {{var.last_boolean_result}} (不填将由前一步控制)' 
                                     : (param.default !== undefined ? `Layer 2 默认: ${param.default}` : (param.description || '')))}
                             <input 
