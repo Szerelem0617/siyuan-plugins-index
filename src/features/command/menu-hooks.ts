@@ -25,12 +25,11 @@ function addMenuEntry(
     const label = `⚡ ${def?.name || entry.id}`;
 
     const click = async () => {
-        console.log(`🖱️ [MenuHooks Trace] 菜单项被点击触发命令: "${entry.id}" | label="${label}"`);
         try {
             const ctx = { blockEl: blockEl || document.body, protyleEl, supertag: "" };
             await dispatchCommand(entry.id, paramMapping, ctx as any);
         } catch (err) {
-            console.error(`💥 [MenuHooks Trace] 菜单项点击抛出异常:`, err);
+            console.error(`[MenuHooks] 菜单项点击执行异常:`, err);
         }
     };
 

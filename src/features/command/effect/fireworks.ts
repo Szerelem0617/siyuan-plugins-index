@@ -13,13 +13,6 @@ export async function triggerFireworks(
         startY = rect.top + rect.height / 2;
     }
 
-    console.log("[IndexOS-Fireworks] Starting fireworks animation.", {
-        startX,
-        startY,
-        hasTriggerEl: !!context.triggerEl,
-        hasBlockEl: !!context.blockEl
-    });
-
     // 2. Create canvas
     const canvas = document.createElement("canvas");
     canvas.style.position = "fixed";

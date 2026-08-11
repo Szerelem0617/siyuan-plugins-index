@@ -705,50 +705,35 @@ async function handleAvMouseOver(event: MouseEvent) {
             return;
         }
 
-        const cmdDef = commandRegistry.getCommand(commandId);
+        // 智能匹配：先按 ID 查找，找不到按中文名或模糊匹配查找
+        const cmdDef = commandRegistry.findByNameOrId(commandId);
         if (!cmdDef) {
             showTooltip(cell, `
                 <div style="font-family: monospace; font-size: 11px; font-weight: bold; color: var(--b3-theme-error); margin-bottom: 2px;">${commandId}</div>
-                <div style="color: var(--b3-theme-on-surface-mute); font-size: 10px;">未注册的命令 ID</div>
+                <div style="color: var(--b3-theme-on-surface-mute); font-size: 10px;">未找到对应命令 ID 或中文定义</div>
             `);
             return;
         }
 
         const requiresParams = cmdDef.params && cmdDef.params.length > 0;
-        const contextNeed = cmdDef.meta?.contextNeed || "none";
-        const ctxLabel: Record<string, string> = {
-            none: "全局（无需上下文）",
-            block: "需要块上下文",
-            doc: "需要文档上下文"
+        const env = cmdDef.constraints?.environment || "universal";
+        const scope = cmdDef.constraints?.targetScope || "any";
+
+        const envMap: Record<string, string> = {
+            "ui": "前端 (UI)",
+            "kernel": "后端 (Kernel)",
+            "universal": "双端通用 (Universal)"
         };
-        const ctxLabelText = ctxLabel[contextNeed] || contextNeed;
 
-        const uiOnly = cmdDef.constraints?.uiOnly ?? false;
-        const schedulable = cmdDef.constraints?.schedulable ?? false;
+        const scopeMap: Record<string, string> = {
+            "none": "全局独立 (None)",
+            "block": "块专用 (Block)",
+            "doc": "页面专用 (Doc)",
+            "any": "通用多态 (Any)"
+        };
 
-        let envLabel = "双端 (Universal)";
-        if (uiOnly) {
-            envLabel = "前端 (UI)";
-        } else if (schedulable && !uiOnly) {
-            envLabel = "后端 (Kernel)";
-        }
-
-        // appliesTo 标签映射
-        const appliesToRaw = cmdDef.meta?.appliesTo;
-        let appliesToHtml = "";
-        if (appliesToRaw && appliesToRaw.length > 0 && !appliesToRaw.includes("any")) {
-            const labelMap: Record<string, string> = {
-                "document": "文档", "paragraph": "段落", "heading": "标题",
-                "list": "列表", "blockquote": "引述", "code": "代码块",
-                "table": "表格", "super": "超级块", "embed": "嵌入块", "widget": "挂件"
-            };
-            const tags = appliesToRaw.map(t => labelMap[t] || t).join(", ");
-            appliesToHtml = `
-                <div style="font-size: 10px; color: var(--b3-theme-on-surface-mute); border-top: 1px dashed var(--b3-border-color); padding-top: 4px; margin-top: 4px;">
-                    适用于: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${tags}</code>
-                </div>
-            `;
-        }
+        const envText = envMap[env] || env;
+        const scopeText = scopeMap[scope] || scope;
 
         const content = `
             <div style="font-weight: 600; font-size: 12px; color: var(--b3-theme-primary); margin-bottom: 2px;">${cmdDef.name}</div>
@@ -757,11 +742,10 @@ async function handleAvMouseOver(event: MouseEvent) {
                 ${cmdDef.description || "无描述"}
             </div>
             <div style="font-size: 10px; display: flex; gap: 8px; color: var(--b3-theme-on-surface-mute); border-top: 1px dashed var(--b3-border-color); padding-top: 4px; flex-wrap: wrap;">
-                <span>上下文: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${ctxLabelText}</code></span>
-                <span>环境: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${envLabel}</code></span>
+                <span>环境: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${envText}</code></span>
+                <span>作用域: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${scopeText}</code></span>
                 <span>参数: <code style="background: var(--b3-theme-surface); padding: 1px 4px; border-radius: 2px;">${requiresParams ? "是" : "否"}</code></span>
             </div>
-            ${appliesToHtml}
         `;
         showTooltip(cell, content);
     } catch (err) {

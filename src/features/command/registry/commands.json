@@ -48,6 +48,44 @@
             }
         },
         {
+            "id": "siyuan.ui.toast",
+            "name": "消息提示",
+            "description": "呼出思源系统的气泡消息提示 (Toast Notification)。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "message",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "IndexOS 消息通知",
+                    "description": "要显示的消息文本，支持 {{time}} 等占位符"
+                },
+                {
+                    "key": "type",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "info",
+                    "description": "消息类型: info / error"
+                }
+            ],
+            "constraints": {
+                "environment": "ui",
+                "targetScope": "none"
+            },
+            "meta": {
+                "contextNeed": "none",
+                "category": "view",
+                "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-toast001",
+                "label": "💬 消息提示",
+                "paramMapping": "message=IndexOS 消息通知"
+            }
+        },
+        {
             "id": "siyuan.view.splitRight",
             "name": "在右侧分屏打开",
             "description": "将当前文档在右侧新面板打开。",
@@ -299,7 +337,7 @@
             }
         },
         {
-            "id": "plugin-index.command.convertToTask",
+            "id": "plugin-index.command.turnIntoTask",
             "name": "转为任务",
             "description": "将目标块快捷转换为带有勾选框的任务块。",
             "dispatch": {
@@ -326,6 +364,107 @@
                 "rowID": "20260526204558-cvttsk9",
                 "label": "☑️ 转为任务",
                 "paramMapping": ""
+            }
+        },
+        {
+            "id": "plugin-index.effect.fireworks",
+            "name": "烟花",
+            "description": "呼出五彩缤纷的烟花粒子视效，用于任务完成等庆贺场景。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [],
+            "constraints": {
+                "environment": "ui",
+                "targetScope": "none"
+            },
+            "meta": {
+                "contextNeed": "none",
+                "category": "view",
+                "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-firework",
+                "label": "🎆 烟花",
+                "paramMapping": ""
+            }
+        },
+        {
+            "id": "plugin-index.command.safeUpdateBlock",
+            "name": "安全更新块内容",
+            "description": "安全更新目标块的内容 (Markdown 格式)，自动脱敏与安全转换模板语法。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "id",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": ""
+                },
+                {
+                    "key": "data",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": ""
+                },
+                {
+                    "key": "dataType",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "markdown"
+                }
+            ],
+            "constraints": {
+                "environment": "universal",
+                "targetScope": "block"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "edit",
+                "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-safeupd",
+                "label": "📝 安全更新块内容",
+                "paramMapping": "dataType=markdown"
+            }
+        },
+        {
+            "id": "plugin-index.command.insertBlock",
+            "name": "插入块",
+            "description": "向目标位置快捷插入新 Markdown 块。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "id",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": ""
+                },
+                {
+                    "key": "data",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": ""
+                }
+            ],
+            "constraints": {
+                "environment": "universal",
+                "targetScope": "any"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "edit",
+                "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-insblk8",
+                "label": "⚡ 插入块",
+                "paramMapping": "dataType=markdown"
             }
         },
         {

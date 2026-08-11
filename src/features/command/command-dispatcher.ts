@@ -28,8 +28,6 @@ export async function dispatchCommand(
     context: CommandContext,
     sources?: ParamSources
 ): Promise<DispatchResult> {
-    console.log(`🚀 [Dispatcher STEP 1] 开始派发命令 "${commandId}" | rawParam:`, rawParam);
-
     if (!context) {
         context = { blockEl: document.body, protyleEl: null };
     }
@@ -40,37 +38,25 @@ export async function dispatchCommand(
     const mode: ExecutionMode = context.executionMode || "foreground";
 
     try {
-        // 1. 查询注册表
         const def = commandRegistry.getCommand(commandId);
         if (!def) {
-            console.warn(`[Dispatcher STEP 1a] 注册表中未找到 "${commandId}"，降级按前缀匹配`);
             return dispatchByPrefix(commandId, rawParam, context);
         }
 
-        console.log(`[Dispatcher STEP 2] 查得命令定义 "${def.name}" (${def.id}) | Method: ${def.dispatch.method}`);
-
-        // 2. 约束检查 (environment & targetScope)
         const targetNodeType = context.blockEl ? (context.blockEl.getAttribute("data-type") || "") : undefined;
         const constraintCheck = evaluateCommandConstraints(def, mode, targetNodeType);
         if (!constraintCheck.allowed) {
-            console.warn(`[Dispatcher STEP 2a] 约束检查未通过: ${constraintCheck.reason}`);
             return { success: true, method: def.dispatch.method, detail: constraintCheck.reason || "Skipped" };
         }
 
-        // 3. 构建参数
-        console.log(`[Dispatcher STEP 3] 开始解析参数...`);
         const resolvedParams = sources
             ? await resolveCommandParams(def, sources, context)
             : await resolveCommandParams(def, { commandDb: rawParam }, context);
 
-        console.log(`[Dispatcher STEP 3-Done] 参数解析完毕:`, resolvedParams);
-
         if (resolvedParams.enabled === false || resolvedParams.enabled === "false" || resolvedParams.enabled === 0) {
-            console.log(`[Dispatcher STEP 3a] 命令 enabled=false，跳过`);
             return { success: true, method: def.dispatch.method, detail: "Skipped via enabled=false" };
         }
 
-        console.log(`[Dispatcher STEP 4] 准备进入多态执行分支 Method="${def.dispatch.method}"...`);
         let result: DispatchResult;
         switch (def.dispatch.method) {
             case "keyboard":
@@ -89,7 +75,6 @@ export async function dispatchCommand(
                 result = { success: false, method: "unknown", detail: `Unknown method: ${(def.dispatch as any).method}` };
         }
 
-        console.log(`[Dispatcher STEP 5] 命令执行完全完成，返回值:`, result);
         return result;
 
     } catch (error: any) {

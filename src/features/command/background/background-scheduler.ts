@@ -38,17 +38,16 @@ class BackgroundScheduler {
     private activeTasks: Map<string, AutomationTask> = new Map();
     private isRunning = false;
 
-    public async init(_plugin: Plugin) {
-        this.stop();
-        console.log("%c[BackgroundScheduler-Debug] 🚀 Initializing Centralized TS Script Engine under Kernel Mode...", "color: #007acc; font-weight: bold;");
+    public async init() {
         await this.reloadTasks();
-        
-        // 启动后台心跳守护进程 (每 5 秒一次 Kernel 巡检)
-        this.timerId = setInterval(() => {
-            this.tick().catch(e => console.error("[BackgroundScheduler-Debug] Tick error:", e));
-        }, 5000);
 
-        console.log("%c[BackgroundScheduler-Debug] ✓ Centralized TS Script Engine Active under Kernel Mode (Siyuan 3.7+).", "color: #10b981; font-weight: bold;");
+        if (this.timerId) {
+            clearInterval(this.timerId);
+        }
+
+        this.timerId = setInterval(() => {
+            this.tick();
+        }, 1000);
     }
 
     public stop() {
@@ -308,8 +307,6 @@ class BackgroundScheduler {
         task.status = "running";
         task.lastRunTime = Date.now();
 
-        console.log(`[BackgroundScheduler-Debug] ⏰ Executing TS Script Automation: "${task.name}" (${task.type})`);
-
         try {
             const ctx: CommandContext = {
                 blockEl: document.createElement("div"),
@@ -317,18 +314,14 @@ class BackgroundScheduler {
                 executionMode: "background"
             };
 
-            // 沿用 Supertag 原始 Pipeline 逻辑：顺序依次执行命令，中途如果有命令返回 false 则阻断后续 Pipeline
             if (task.boundCommands && task.boundCommands.length > 0) {
                 for (const cmdId of task.boundCommands) {
-                    console.log(`[BackgroundScheduler-Debug] Executing Pipeline Command: ${cmdId}`);
                     const res = await dispatchCommand(cmdId, task.commandParams?.[cmdId] || {}, ctx);
                     if (res && res.success === false) {
-                        console.log(`[BackgroundScheduler-Debug] Pipeline halted by false result at command: ${cmdId}`);
                         break;
                     }
                 }
             } else {
-                // 纯极客 JS 沙盒脚本动态执行
                 const asyncFn = new Function("dispatch", "state", `return (async () => { ${task.scriptBlock} })();`);
                 await asyncFn(
                     (cmdId: string, params?: any) => dispatchCommand(cmdId, null, ctx, { manual: params || {} }),
@@ -338,11 +331,10 @@ class BackgroundScheduler {
 
             task.status = "idle";
             task.lastError = undefined;
-            console.log(`%c[BackgroundScheduler-Debug] ✓ TS Script Execution Success: "${task.name}"`, "color: #10b981; font-weight: bold;");
         } catch (err: any) {
             task.status = "error";
             task.lastError = err.message || String(err);
-            console.error(`[BackgroundScheduler-Debug] ❌ TS Script Execution Failed for "${task.name}":`, err);
+            console.error(`[BackgroundScheduler] Execution Failed for "${task.name}":`, err);
         }
     }
 
