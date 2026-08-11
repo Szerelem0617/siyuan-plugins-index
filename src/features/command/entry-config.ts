@@ -91,8 +91,9 @@ export async function resolveEntryConfigBlockId(): Promise<string> {
             const res = await post("/api/query/sql", {
                 stmt: `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${commandAvId}%' OR ial LIKE '%${commandAvId}%') LIMIT 1`
             });
-            if (res && res.code === 0 && Array.isArray(res.data) && res.data.length > 0) {
-                const blockId = String(res.data[0].id || "");
+            const rows: any[] = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+            if (rows.length > 0) {
+                const blockId = String(rows[0].id || "");
                 if (blockId && blockId !== commandAvId) return blockId;
             }
         } catch (_) {}
@@ -103,8 +104,9 @@ export async function resolveEntryConfigBlockId(): Promise<string> {
         const res = await post("/api/query/sql", {
             stmt: `SELECT block_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`
         });
-        if (res && res.code === 0 && Array.isArray(res.data) && res.data.length > 0) {
-            const blockId = String(res.data[0].block_id || "");
+        const rows: any[] = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+        if (rows.length > 0) {
+            const blockId = String(rows[0].block_id || "");
             if (blockId) return blockId;
         }
     } catch (_) {}
@@ -112,22 +114,33 @@ export async function resolveEntryConfigBlockId(): Promise<string> {
     return "";
 }
 
+let g_entryConfigCache: EntryConfig = cloneDefault();
+
+export function getEntryConfigSync(): EntryConfig {
+    return g_entryConfigCache;
+}
+
 export async function loadEntryConfig(): Promise<EntryConfig> {
     const blockId = await resolveEntryConfigBlockId();
-    if (!blockId) return cloneDefault(); // 未实例化：种子默认（只读）
+    if (!blockId) {
+        g_entryConfigCache = cloneDefault();
+        return g_entryConfigCache;
+    }
     try {
         const res = await post("/api/attr/getBlockAttrs", { id: blockId });
         const raw = res?.[ENTRY_CONFIG_KEY];
         if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === "object" && parsed.positions) {
-                return parsed as EntryConfig;
+                g_entryConfigCache = parsed as EntryConfig;
+                return g_entryConfigCache;
             }
         }
     } catch (e) {
         console.error("[EntryConfig] 读取数据库块属性失败:", e);
     }
-    return cloneDefault();
+    g_entryConfigCache = cloneDefault();
+    return g_entryConfigCache;
 }
 
 export async function saveEntryConfig(cfg: EntryConfig): Promise<void> {
@@ -139,6 +152,7 @@ export async function saveEntryConfig(cfg: EntryConfig): Promise<void> {
         id: blockId,
         attrs: { [ENTRY_CONFIG_KEY]: JSON.stringify(cfg) }
     });
+    g_entryConfigCache = cfg;
 }
 
 /** 某位置的命令 ID 列表 */

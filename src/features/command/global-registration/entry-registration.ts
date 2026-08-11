@@ -37,10 +37,14 @@ function commandMeta(id: string): { label: string; commandParam: string; require
     };
 }
 
-function dispatchCommandById(id: string, param: string) {
-    console.log(`[Entry] 执行命令: ${id}`, param);
-    const mockContext = { blockEl: document.body, protyleEl: null };
-    dispatchCommand(id, param, mockContext as any);
+async function dispatchCommandById(id: string, param: string) {
+    console.log(`[Entry Trace] 触发命令入口执行: ${id}`, param);
+    try {
+        const mockContext = { blockEl: document.body, protyleEl: null };
+        await dispatchCommand(id, param, mockContext as any);
+    } catch (err) {
+        console.error(`💥 [Entry Trace] 入口执行捕获异常:`, err);
+    }
 }
 
 /** 顶栏/底栏/侧栏 位置映射 */

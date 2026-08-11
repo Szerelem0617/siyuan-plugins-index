@@ -115,16 +115,17 @@ export default class IndexPlugin extends Plugin {
             refreshSupertagRegistry();
             await refreshEntryRegistrations();
         }
-        //监听块菜单事件
+        // 监听块/页面/编辑器菜单事件
         this.eventBus.on("click-blockicon", buildDocNew);
         this.eventBus.on("click-blockicon", addDataMenuItems);
+        this.eventBus.on("click-blockicon", addBlockEntryMenuItems);
+        this.eventBus.on("open-menu-doctree", addPageEntryMenuItems);
+        this.eventBus.on("click-editortitleicon", addEditorEntryMenuItems);
+
         if (isDevInitSysEnabled()) {
             this.eventBus.on("click-blockicon", addCommandTestMenuItem);
-            this.eventBus.on("click-blockicon", addBlockEntryMenuItems);
             this.eventBus.on("open-menu-doctree", addDoctreeMenuItems);
-            this.eventBus.on("open-menu-doctree", addPageEntryMenuItems);
             this.eventBus.on("click-editortitleicon", addEditorTitleIconMenuItems);
-            this.eventBus.on("click-editortitleicon", addEditorEntryMenuItems);
         }
         this.eventBus.on("open-menu-av", addAVMenuItems);
         //监听文档载入事件

@@ -578,12 +578,12 @@
                 },
                 {
                     "key": "insertType",
-                    "label": "插入类型",
+                    "label": "插入块类型",
                     "type": "text",
                     "required": false,
                     "paramMode": "static",
                     "default": "p",
-                    "description": "新节点类型缩写: p(段落,默认) / h(标题) / c(代码块) / b(引述) / d(子页面) / l(列表) 等"
+                    "description": "内容块类型缩写: p(段落,默认) / h(标题) / c(代码块) / b(引述) / l(列表) / t(表格) / tb(分割线)"
                 },
                 {
                     "key": "pageInsertMode",

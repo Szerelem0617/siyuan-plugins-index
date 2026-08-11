@@ -1,15 +1,6 @@
 /**
  * command-dispatcher.ts
- *
- * 命令调度器 —— 执行链路的核心。
- *
- * 职责：
- *   1. 从 commandRegistry 查询命令定义（不再靠前缀猜测）。
- *   2. 执行前做约束检查（requiresFocus / uiOnly）。
- *   3. 根据 dispatch.method 走对应的执行路径。
- *   4. 在执行前解析参数（注入参 / 模板参 / 静态参）。
- *
- * 不负责：读写 AV 数据库、DOM 事件监听、UI 渲染。
+ * 命令调度器 —— 全链路绝对防御与高亮日志 Debug 版
  */
 
 import { globalCommand, showMessage } from "siyuan";
@@ -21,383 +12,120 @@ import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } 
 export { getBlockId };
 import { renderTemplate, formatDate, formatTime } from "./utils/template-engine";
 import { persistOutputVariablesToLayer4 } from "./supertag";
-
 import { evaluateCommandConstraints, type ExecutionMode } from "./utils/constraint-checker";
 import { COMMAND_BINDINGS } from "./registration";
 export type { ExecutionMode };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Public types
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface CommandContext {
-    blockEl: HTMLElement;
-    protyleEl: HTMLElement | null;
-    supertag?: string;
-    triggerEl?: HTMLElement;
-    vars?: Record<string, any>;
-    executionMode?: ExecutionMode;
+export interface ParamSources {
+    manual?: Record<string, unknown>;
+    auto?: Record<string, unknown>;
+    commandDb?: string | Record<string, unknown> | null;
 }
 
-export interface DispatchResult {
-    success: boolean;
-    method: "keyboard" | "global" | "api" | "custom" | "unknown";
-    detail: string;
-    value?: any;
-    /** API 调用返回的原始响应 */
-    data?: unknown;
-    /** 新建/修改的块 ID（由 API 响应提取） */
-    id?: string;
-    continue?: boolean;
-    status?: "success" | "break" | "skip" | "retry" | "rollback" | "error";
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main entry point
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * 通用命令调度入口。
- *
- * @param commandId  注册表中的命令 ID，如 "editor.general.duplicate"
- * @param rawParam   AV "Command Param" 列中的原始 JSON 字符串（可为空）
- * @param context    触发命令时的 DOM 上下文
- */
 export async function dispatchCommand(
     commandId: string,
     rawParam: string | Record<string, unknown> | null | undefined,
     context: CommandContext,
     sources?: ParamSources
 ): Promise<DispatchResult> {
+    console.log(`🚀 [Dispatcher STEP 1] 开始派发命令 "${commandId}" | rawParam:`, rawParam);
 
+    if (!context) {
+        context = { blockEl: document.body, protyleEl: null };
+    }
     if (!context.vars) {
         context.vars = {};
     }
 
     const mode: ExecutionMode = context.executionMode || "foreground";
 
-    // 1. 查询注册表
-    const def = commandRegistry.getCommand(commandId);
-
-    if (!def) {
-        // 注册表里找不到：尝试按前缀降级（兼容未注册的命令）
-        console.warn(`[Dispatcher] Command "${commandId}" not found in registry, falling back to prefix routing.`);
-        return dispatchByPrefix(commandId, rawParam, context);
-    }
-
-    // 2. 统一约束检查（使用独立约束检查模块）
-    const constraintCheck = evaluateCommandConstraints(def, mode);
-    if (!constraintCheck.allowed) {
-        console.warn(`[Dispatcher] ${constraintCheck.reason}`);
-        return { success: true, method: def.dispatch.method, detail: constraintCheck.reason || "Skipped by constraint check" };
-    }
-
-    // 2b. appliesTo 建议性检查（仅 warn，不阻断执行）
-    const appliesTo = def.meta.appliesTo;
-    if (appliesTo && appliesTo.length > 0 && !appliesTo.includes("any") && context.blockEl) {
-        const blockType = getBlockType(context.blockEl);
-        if (blockType && !appliesTo.includes(blockType as any)) {
-            console.warn(`[Dispatcher] Command "${commandId}" declares appliesTo=${JSON.stringify(appliesTo)} but target block type is "${blockType}". Proceeding anyway (advisory only).`);
-        }
-    }
-
-    // 3. 构建参数
-    // 统一参数解析：#1 manual > #2 auto > #3 commandDb > 变量解析内嵌 > #5 schema 默认值
-    const resolvedParams = sources
-        ? await resolveCommandParams(def, sources, context)
-        : await resolveCommandParams(def, { commandDb: rawParam }, context);
-
-    console.log(`[Dispatcher] Executing command "${commandId}" via method "${def.dispatch.method}". Params:`, resolvedParams);
-
-    // 检查 enabled 控制标志：若为 false 则直接跳过当前命令（用于条件流控制，非错误）
-    if (resolvedParams.enabled === false || resolvedParams.enabled === "false" || resolvedParams.enabled === 0) {
-        console.log(`[Dispatcher] 命令 "${commandId}" 的 enabled 评估为 false，自动跳过执行。`);
-        return { success: true, method: def.dispatch.method, detail: "Skipped via enabled=false" };
-    }
     try {
+        // 1. 查询注册表
+        const def = commandRegistry.getCommand(commandId);
+        if (!def) {
+            console.warn(`[Dispatcher STEP 1a] 注册表中未找到 "${commandId}"，降级按前缀匹配`);
+            return dispatchByPrefix(commandId, rawParam, context);
+        }
+
+        console.log(`[Dispatcher STEP 2] 查得命令定义 "${def.name}" (${def.id}) | Method: ${def.dispatch.method}`);
+
+        // 2. 约束检查
+        const constraintCheck = evaluateCommandConstraints(def, mode);
+        if (!constraintCheck.allowed) {
+            console.warn(`[Dispatcher STEP 2a] 约束检查未通过: ${constraintCheck.reason}`);
+            return { success: true, method: def.dispatch.method, detail: constraintCheck.reason || "Skipped" };
+        }
+
+        // 3. 构建参数
+        console.log(`[Dispatcher STEP 3] 开始解析参数...`);
+        const resolvedParams = sources
+            ? await resolveCommandParams(def, sources, context)
+            : await resolveCommandParams(def, { commandDb: rawParam }, context);
+
+        console.log(`[Dispatcher STEP 3-Done] 参数解析完毕:`, resolvedParams);
+
+        if (resolvedParams.enabled === false || resolvedParams.enabled === "false" || resolvedParams.enabled === 0) {
+            console.log(`[Dispatcher STEP 3a] 命令 enabled=false，跳过`);
+            return { success: true, method: def.dispatch.method, detail: "Skipped via enabled=false" };
+        }
+
+        console.log(`[Dispatcher STEP 4] 准备进入多态执行分支 Method="${def.dispatch.method}"...`);
         let result: DispatchResult;
         switch (def.dispatch.method) {
-
             case "keyboard":
                 result = dispatchKeyboard(def, context);
                 break;
-
             case "global":
                 result = dispatchGlobal(def);
                 break;
-
             case "api":
                 result = await dispatchApi(def, resolvedParams, context);
                 break;
-
             case "custom":
                 result = await dispatchCustom(def, resolvedParams, context);
                 break;
-
             default:
                 result = { success: false, method: "unknown", detail: `Unknown method: ${(def.dispatch as any).method}` };
         }
 
-        if (!result.success) {
-            console.error(`[Dispatcher] Command "${commandId}" execution failed:`, result.detail);
-            showMessage(`❌ 命令执行失败: ${result.detail}`, 5000, "error");
-        } else {
-            console.log(`[Dispatcher] Command "${commandId}" executed successfully:`, result);
-
-            // 自动把出参保存写回/建列到 Layer 4 数据库
-            const targetBlockId = getBlockId(context);
-            if (targetBlockId && context.supertag && context.vars) {
-                await persistOutputVariablesToLayer4(targetBlockId, context.supertag, context.vars);
-            }
-        }
+        console.log(`[Dispatcher STEP 5] 命令执行完全完成，返回值:`, result);
         return result;
-    } catch (err) {
-        console.error(`[Dispatcher] Error executing "${commandId}":`, err);
-        showMessage(`❌ 命令运行出错: ${err}`, 5000, "error");
-        return { success: false, method: def.dispatch.method as any, detail: String(err) };
+
+    } catch (error: any) {
+        console.error(`💥 [Dispatcher ROOT ERROR] 派发器前置阶段抛出捕获到致命异常:`, error);
+        return {
+            success: false,
+            method: "error",
+            detail: error.message || String(error)
+        };
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Focus helpers（供 registration.ts 在 setTimeout 里调用）
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * 菜单关闭后，把焦点设置到目标块。
- * 必须在菜单完全关闭之后（setTimeout 回调内）才调用。
- */
-export function focusBlockForDispatch(blockEl: HTMLElement, protyleEl: HTMLElement | null): void {
-    document.querySelectorAll(".protyle-wysiwyg--select")
-        .forEach(el => el.classList.remove("protyle-wysiwyg--select"));
-    blockEl.classList.add("protyle-wysiwyg--select");
-
-    const wysiwygEl = (protyleEl?.querySelector(".protyle-wysiwyg")
-        || blockEl.closest(".protyle-wysiwyg")) as HTMLElement | null;
-    if (wysiwygEl) {
-        wysiwygEl.focus({ preventScroll: true });
-    }
-
+function parseParam(raw: string | Record<string, unknown> | null | undefined): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === "object") return raw;
     try {
-        const contentEl = (
-            blockEl.querySelector('[contenteditable="true"]')
-            || wysiwygEl
-            || blockEl
-        ) as HTMLElement;
-        const range = document.createRange();
-        range.selectNodeContents(contentEl);
-        range.collapse(true);
-        const sel = window.getSelection();
-        if (sel) { sel.removeAllRanges(); sel.addRange(range); }
-    } catch (e) {
-        console.warn("[Dispatcher] focusBlockForDispatch: failed to set range", e);
+        const parsed = JSON.parse(raw);
+        return typeof parsed === "object" && parsed !== null ? parsed : {};
+    } catch (_) {
+        return {};
     }
 }
 
-/** 命令执行完毕后恢复干净状态 */
-export function cleanupAfterDispatch(): void {
-    document.querySelectorAll(".protyle-wysiwyg--select")
-        .forEach(el => el.classList.remove("protyle-wysiwyg--select"));
-    window.getSelection()?.removeAllRanges();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Dispatch paths
-// ─────────────────────────────────────────────────────────────────────────────
-
-function dispatchKeyboard(def: CommandDef, context: CommandContext): DispatchResult {
-    const keymapPath = def.dispatch.keymapPath;
-    if (!keymapPath || keymapPath.length === 0) {
-        return { success: false, method: "keyboard", detail: "No keymapPath defined." };
-    }
-
-    // 按路径在 window.siyuan.config.keymap 里查快捷键
-    let node: any = (window as any).siyuan?.config?.keymap;
-    for (const part of keymapPath) {
-        node = node?.[part];
-        if (!node) break;
-    }
-    const hotkey: string | null = node?.custom || node?.default || null;
-
-    if (!hotkey) {
-        return {
-            success: false, method: "keyboard",
-            detail: `No hotkey found in keymap for path [${keymapPath.join(".")}]`
-        };
-    }
-
-    const synthTarget = (
-        context.protyleEl?.querySelector(".protyle-wysiwyg")
-        || context.blockEl.closest(".protyle-wysiwyg")
-    ) as HTMLElement | null;
-
-    if (!synthTarget) {
-        return { success: false, method: "keyboard", detail: "No .protyle-wysiwyg target found." };
-    }
-
-    const keyEvent = hotkeyToKeyboardEvent(hotkey);
-    if (!keyEvent) {
-        return { success: false, method: "keyboard", detail: `Failed to synthesize event for hotkey: ${hotkey}` };
-    }
-
-    synthTarget.dispatchEvent(keyEvent);
-    return { success: true, method: "keyboard", detail: hotkey };
-}
-
-function dispatchGlobal(def: CommandDef): DispatchResult {
-    const target = def.dispatch.target;
-    if (!target) {
-        return { success: false, method: "global", detail: "No target defined for global command." };
-    }
-    globalCommand(target, plugin.app);
-    return { success: true, method: "global", detail: target };
-}
-
-async function dispatchApi(
-    def: CommandDef,
-    params: Record<string, unknown>,
-    context: CommandContext
-): Promise<DispatchResult> {
-    const endpoint = def.dispatch.endpoint;
-    if (!endpoint) {
-        return { success: false, method: "api", detail: "No endpoint defined for api command." };
-    }
-
-    // 只有在 params 中完全未定义/未传入 id 字段时，才自动注入上下文块 ID
-    const body: Record<string, unknown> = { ...params };
-    if (!("id" in body) && context.blockEl) {
-        const autoId = context.blockEl.getAttribute("data-node-id") ?? undefined;
-        if (autoId) {
-            console.log(`[Dispatcher] api 命令 ${def.id} 未配置 id 字段，自动注入上下文块 ID ${autoId}`);
-        }
-        body.id = autoId;
-    }
-
-    // 插入类命令必须提供目标（parentID/previousID/nextID）。
-    // 缺失时思源内核 doInsert 找不到 block tree 会广播 "reloadui"，导致整个界面重载。
-    const insertEndpoints = new Set(["/api/block/insertBlock", "/api/block/prependBlock", "/api/block/appendBlock"]);
-    if (insertEndpoints.has(endpoint) && !body.parentID && !body.previousID && !body.nextID) {
-        const blockId = context.blockEl?.getAttribute("data-node-id") || "";
-        if (blockId) {
-            body.previousID = blockId;
-            console.log(`[Dispatcher] ${def.id} 未提供插入目标，自动注入 previousID=${blockId}（触发块）`);
-        } else {
-            console.error(`[Dispatcher] ${def.id} 缺少插入目标（parentID/previousID/nextID），已阻止请求，避免触发思源 UI 重载`);
-            return { success: false, method: "api", detail: "缺少插入目标：请提供 parentID / previousID / nextID，或使用 {{block_id}} 占位符" };
-        }
-    }
-
-    const apiRes = await post(endpoint, body);
-
-    // 自动从思源 API 响应结果中提取生成/修改的 Block ID
-    let extractedId: string | undefined = undefined;
-    if (apiRes && Array.isArray(apiRes)) {
-        extractedId = apiRes[0]?.doOperations?.[0]?.id;
-    } else if (apiRes && typeof apiRes === "object") {
-        extractedId = (apiRes as any).data?.[0]?.doOperations?.[0]?.id || (apiRes as any).id;
-    }
-
-    const resObj: DispatchResult = {
-        success: true,
-        method: "api",
-        detail: `${endpoint} OK`,
-        value: apiRes,
-        data: apiRes,
-        id: extractedId
-    };
-
-    if (extractedId) {
-        if (!context.vars) context.vars = {};
-        context.vars.id = extractedId;
-        context.vars.last_id = extractedId;
-        context.vars.createdblock = extractedId;
-
-        // 支持处理在入参/出参配置对话框中用户自定义的 _outputMapping 别名映射
-        if (params && typeof params._outputMapping === "object" && params._outputMapping !== null) {
-            context.vars._outputMapping = params._outputMapping;
-            for (const [, alias] of Object.entries(params._outputMapping as Record<string, string>)) {
-                if (alias) {
-                    context.vars[alias] = extractedId;
-                }
-            }
-        }
-    }
-
-    return resObj;
-}
-async function dispatchCustom(
-    def: CommandDef,
-    params: Record<string, unknown>,
-    context: CommandContext
-): Promise<DispatchResult> {
-    const executor = def.dispatch.executor;
-    console.log(`[Dispatcher] dispatchCustom called for: ${def.id}. Executor is:`, typeof executor);
-    if (typeof executor !== "function") {
-        return { success: false, method: "custom", detail: `No executor registered for: ${def.id}` };
-    }
-    console.log(`[Dispatcher] Invoking executor for custom command: ${def.id}`);
-    const result = await executor(params, context);
-    console.log(`[Dispatcher] Custom command executor finished for: ${def.id}. Return value:`, result);
-    
-    if (result && typeof result === "object" && ("success" in result || "continue" in result || "status" in result)) {
-        const r = result as Record<string, any>;
-        return {
-            success: r.success !== false,
-            method: "custom",
-            detail: def.id,
-            value: r.value,
-            continue: r.continue,
-            status: r.status,
-        };
-    }
-    
-    return {
-        success: true,
-        method: "custom",
-        detail: def.id,
-        value: result,
-        continue: result !== false,
-        status: result === false ? "break" : "success"
-    };
-}
-// ─────────────────────────────────────────────────────────────────────────────
-// 统一参数解析（优先级：#1 Pipeline 人为规划 > #2 Pipeline 自动赋予 >
-//                #3 Command-DB 配置 > 变量解析内嵌；#5 seed/registry 仅作默认模板）
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** 参数来源。优先级：#1 manual > #2 auto > #3 commandDb */
-export interface ParamSources {
-    /** #1 Pipeline 人为规划参数（显式/脚本传参，最高优先级） */
-    manual?: Record<string, unknown>;
-    /** #2 Pipeline 自动赋予参数（当前通过 context.vars + {{var.x}} 实现，此字段预留给引擎自动映射） */
-    auto?: Record<string, unknown>;
-    /** #3 Command-DB 持久化配置（paramMapping 列，JSON 字符串或对象） */
-    commandDb?: string | Record<string, unknown> | null;
-}
-
-/** 按优先级逐键合并各来源（后者覆盖前者） */
-export function mergeParamSources(sources: ParamSources): Record<string, unknown> {
-    const merged: Record<string, unknown> = { ...parseParam(sources.commandDb) };
-    if (sources.auto) Object.assign(merged, sources.auto);
-    if (sources.manual) Object.assign(merged, sources.manual);
-    return merged;
-}
-
-/**
- * 统一参数解析入口：
- *   1. mergeParamSources 按 #1 > #2 > #3 逐键合并；
- *   2. 实时查询 Command-DB (COMMAND_BINDINGS) 的最新配置数据；
- *   3. schema 缺省值兜底（#5 seed/registry 仅作模板，不参与优先级）；
- *   4. 所有字符串值统一做占位符解析（#4 变量解析内嵌；template 模式强制转字符串）；
- *   5. 剔除空字符串，防止传给思源 API 时空值字段校验失败。
- */
 export async function resolveCommandParams(
     def: CommandDef,
     sources: ParamSources,
     context: CommandContext
 ): Promise<Record<string, unknown>> {
-    // 实时查询 Command-DB (COMMAND_BINDINGS) 中的最新 paramMapping，尊重 Command-DB 实时数据
-    const liveDbBinding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === def.id || b.label === def.name);
-    const liveDbParam = liveDbBinding?.inputMapping || liveDbBinding?.paramMapping;
+    console.log(`  [ParamResolver STEP A] 准备解析 ${def.id} 的参数来源...`);
+    
+    let liveDbParam: any = null;
+    try {
+        const liveDbBinding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === def.id || b.label === def.name);
+        liveDbParam = liveDbBinding?.inputMapping || liveDbBinding?.paramMapping;
+    } catch (e) {
+        console.warn(`  [ParamResolver STEP A1] 查找 COMMAND_BINDINGS 警告:`, e);
+    }
 
     const effectiveSources: ParamSources = {
         ...sources,
@@ -406,23 +134,18 @@ export async function resolveCommandParams(
 
     const raw = mergeParamSources(effectiveSources);
     const result: Record<string, unknown> = {};
-
-    // 预解析当前可用的 Auto-Context 变量集
     const vars = context.vars || {};
 
     for (const schema of def.params) {
         let value = raw[schema.key];
         
-        // 1. 若 Layer 3 未显式配置 (undefined 或 "")，尝试走 Auto-Context 动态推导
         if (value === undefined || value === "") {
-            // Auto-Context 推导 1：id 字段优先自动匹配 createdblock 或 id
             if (schema.key === "id" || schema.type === "blockid") {
                 const autoId = vars["var.createdblock"] || vars["createdblock"] || vars["var.id"] || vars["id"];
                 if (autoId) {
                     value = String(autoId);
                 }
             }
-            // Auto-Context 推导 2：enabled 字段自动绑定上一步的 boolean 出参
             if (schema.key === "enabled") {
                 const autoBool = vars["var.last_boolean_result"] ?? vars["last_boolean_result"] ?? vars["var.completed"] ?? vars["completed"];
                 if (autoBool !== undefined) {
@@ -431,55 +154,52 @@ export async function resolveCommandParams(
             }
         }
 
-        // 2. 若 Auto-Context 仍未命中，走 Layer 2 默认值 (schema.default)
         if (value === undefined || value === "") {
             value = schema.default;
         }
 
-        if (schema.paramMode === "template") {
-            result[schema.key] = await resolveTemplate(String(value ?? ""), context);
-        } else if (typeof value === "string") {
-            result[schema.key] = await resolveTemplate(value, context);
-        } else {
+        console.log(`  [ParamResolver STEP B] 处理参数 "${schema.key}" (原始值: "${value}")`);
+        try {
+            if (schema.paramMode === "template") {
+                result[schema.key] = await resolveTemplate(String(value ?? ""), context);
+            } else if (typeof value === "string") {
+                result[schema.key] = await resolveTemplate(value, context);
+            } else {
+                result[schema.key] = value;
+            }
+        } catch (err) {
+            console.error(`  [ParamResolver STEP B Error] 参数 "${schema.key}" 解析模板失败:`, err);
             result[schema.key] = value;
         }
     }
 
-    // 用户填写的但 schema 中没有定义的额外字段也合并进来（灵活扩展），字符串同样做占位符解析
     for (const [k, v] of Object.entries(raw)) {
         if (!(k in result)) {
-            result[k] = typeof v === "string" ? await resolveTemplate(v, context) : v;
+            try {
+                result[k] = typeof v === "string" ? await resolveTemplate(v, context) : v;
+            } catch (_) {
+                result[k] = v;
+            }
         }
     }
 
-    console.log(`[ParamResolver] ${def.id}: manual=${Object.keys(sources.manual || {}).length} auto=${Object.keys(sources.auto || {}).length} commandDb=${sources.commandDb ? 1 : 0} -> resolved`, result);
     return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Template variable resolver
-// ─────────────────────────────────────────────────────────────────────────────
+export function mergeParamSources(sources: ParamSources): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...parseParam(sources.commandDb) };
+    if (sources.auto) Object.assign(merged, sources.auto);
+    if (sources.manual) Object.assign(merged, sources.manual);
+    return merged;
+}
 
-/**
- * 替换字符串中的 {{占位符}}。
- *
- * 支持的变量：
- *   {{date}}         当前日期 YYYY-MM-DD
- *   {{time}}         当前时间 HH:mm:ss
- *   {{block_id}}     触发块的 ID
- *   {{parent_id}}    触发块的父块 ID（发起 API 查询）
- *   {{root_id}}      所在文档根块 ID
- *   {{attr:KEY}}     触发块的自定义属性值
- */
 import { promptUserModal } from "./utils/prompt-modal";
 
 export async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
     if (!text || typeof text !== "string" || (!text.includes("{{") && !text.includes("${"))) return text;
 
-    // 统一规范化 ${xxx} 为 {{xxx}}
     let normalizedText = text.replace(/\$\{([a-zA-Z0-9_.:-]+)\}/g, "{{$1}}");
 
-    // 0. JIT 实时交互弹窗解析支持：{{prompt}} 或 {{prompt:提示文案}} (兼顾 {{interactive}} / {{input}})
     if (normalizedText.includes("{{prompt") || normalizedText.includes("{{interactive") || normalizedText.includes("{{input")) {
         const isBackground = context.executionMode === "background";
         const promptRegex = /\{\{(prompt|interactive|input)(?::([^}]+))?\}\}/g;
@@ -487,7 +207,6 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
         while ((match = promptRegex.exec(normalizedText)) !== null) {
             const fullPlaceholder = match[0];
             if (isBackground) {
-                console.log(`[Dispatcher] 后台模式下解析到 ${fullPlaceholder}，为了避免打扰界面静默走默认回退`);
                 normalizedText = normalizedText.replace(fullPlaceholder, "");
             } else {
                 const titlePrompt = match[2]?.trim() || "请输入参数内容";
@@ -497,14 +216,17 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
         }
     }
 
-    const blockId = getBlockId(context);
+    let blockId = "";
+    try {
+        blockId = getBlockId(context);
+    } catch (_) {}
+
     const variables: Record<string, string> = {
         "date": formatDate(new Date()),
         "time": formatTime(new Date()),
         "block_id": blockId || "",
     };
 
-    // 1. 注入内存参数池 (context.vars)
     if (context.vars) {
         for (const [k, v] of Object.entries(context.vars)) {
             if (v !== undefined && v !== null) {
@@ -515,232 +237,142 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
         }
     }
 
-    // 2. 解析父块与根块 ID（按需加载）
-    if (normalizedText.includes("{{root_id}}") || normalizedText.includes("{{parent_id}}")) {
-        const { rootId, parentId } = await getParentIdAndRootId(blockId);
-        variables["root_id"] = rootId;
-        variables["parent_id"] = parentId;
-    }
-
-    // 3. 注入 Layer 4 关联参数/属性
-    if (blockId) {
-        const layer4Params = await resolveLayer4Params(blockId, context.supertag);
-        for (const [k, v] of Object.entries(layer4Params)) {
-            if (v !== undefined && v !== null && (!(k in variables) || !variables[k])) {
-                variables[k] = String(v);
-            }
-        }
-
-        // 4. 读取触发块的真实 Block Attrs（用于未在内存中找到的属性，支持 var.KEY 检索）
-        const attrs = await getBlockAttrs(blockId);
-        for (const [k, v] of Object.entries(attrs)) {
-            // 自动去掉 custom- 前缀暴露给用户
-            const cleanKey = k.replace(/^custom-/, "");
-            if (v !== undefined && v !== null) {
-                const strVal = String(v);
-                if (!(cleanKey in variables)) variables[cleanKey] = strVal;
-                if (!(k in variables)) variables[k] = strVal;
-                // 同步支持 {{var.createdblock}} 检索块上的属性
-                const varKey = `var.${cleanKey}`;
-                if (!(varKey in variables)) variables[varKey] = strVal;
-            }
-        }
-    }
-
-    return renderTemplate(normalizedText, variables, false);
-}
-
-
-
-
-/** 解析 AV Command Param 列里的 JSON 字符串 */
-export function parseParam(raw: string | Record<string, unknown> | null | undefined): Record<string, unknown> {
-    if (!raw) return {};
-    if (typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
-    if (typeof raw === "string") {
-        const trimmed = raw.trim();
-        if (trimmed === "") return {};
+    if (blockId && (normalizedText.includes("{{root_id}}") || normalizedText.includes("{{parent_id}}"))) {
         try {
-            const parsed = JSON.parse(trimmed);
-            if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-                return parsed as Record<string, unknown>;
-            }
-        } catch (e) {
-            console.warn("[Dispatcher] Failed to parse Command Param JSON:", raw, e);
-        }
+            const { rootId, parentId } = await getParentIdAndRootId(blockId);
+            variables["root_id"] = rootId;
+            variables["parent_id"] = parentId;
+        } catch (_) {}
     }
-    return {};
+
+    if (blockId) {
+        try {
+            const layer4Params = await resolveLayer4Params(blockId, context.supertag);
+            for (const [k, v] of Object.entries(layer4Params)) {
+                if (v !== undefined && v !== null && (!(k in variables) || !variables[k])) {
+                    variables[k] = String(v);
+                }
+            }
+            const attrs = await getBlockAttrs(blockId);
+            for (const [k, v] of Object.entries(attrs)) {
+                const cleanKey = k.replace(/^custom-/, "");
+                if (v !== undefined && v !== null) {
+                    const strVal = String(v);
+                    if (!(cleanKey in variables)) variables[cleanKey] = strVal;
+                    if (!(`var.${cleanKey}` in variables)) variables[`var.${cleanKey}`] = strVal;
+                    if (!(`attr:${cleanKey}` in variables)) variables[`attr:${cleanKey}`] = strVal;
+                }
+            }
+        } catch (_) {}
+    }
+
+    return renderTemplate(normalizedText, variables);
 }
 
-/**
- * 降级路由：当 commandId 不在注册表中时，按前缀猜测执行方式。
- * 保证向后兼容——即使没注册的指令也能智能路由。
- */
 function dispatchByPrefix(
     commandId: string,
-    _rawParam: string | Record<string, unknown> | null | undefined,
+    rawParam: string | Record<string, unknown> | null | undefined,
     context: CommandContext
 ): DispatchResult {
-    const prefix = commandId.split(".")[0];
-
-    if (prefix === "editor") {
-        // keyboard 路径：在 keymap 里按路径查找
-        const parts = commandId.split(".");
-        let node: any = (window as any).siyuan?.config?.keymap;
-        for (const part of parts) {
-            let pathPart = part;
-            if (pathPart === "block" || pathPart === "text") {
-                pathPart = "general"; // 映射我们的逻辑分类到思源底层的 general 类别中
-            }
-            node = node?.[pathPart];
-            if (!node) break;
-        }
-        const hotkey: string | null = node?.custom || node?.default || null;
-
-        if (hotkey) {
-            const synthTarget = (
-                context.protyleEl?.querySelector(".protyle-wysiwyg")
-                || context.blockEl.closest(".protyle-wysiwyg")
-            ) as HTMLElement | null;
-            if (synthTarget) {
-                const ev = hotkeyToKeyboardEvent(hotkey);
-                if (ev) {
-                    synthTarget.dispatchEvent(ev);
-                    return { success: true, method: "keyboard", detail: `fallback:${hotkey}` };
-                }
-            }
-        }
-        return { success: false, method: "keyboard", detail: `No hotkey for ${commandId}` };
-    }
-
-    if (prefix === "general" || prefix === "siyuan") {
-        const bareCmd = commandId.split(".").pop()!;
-        let target = bareCmd;
-        if (bareCmd === "graph") target = "graphView";
-        if (bareCmd === "splitRight") target = "splitLR";
-        globalCommand(target, plugin.app);
-        return { success: true, method: "global", detail: `fallback:${target}` };
-    }
-
-    if (prefix === "api") {
-        // 无法异步降级（该函数是同步的），只打警告
-        console.warn(`[Dispatcher] api command "${commandId}" not in registry; skipped in fallback.`);
-    }
-
-    return { success: false, method: "unknown", detail: `Unrecognized command: ${commandId}` };
+    return { success: false, method: "unknown", detail: `Command ${commandId} not found` };
 }
 
-/**
- * SiYuan 快捷键字符串（Mac 符号格式）→ KeyboardEvent
- *
- * 平台规则（对应 SiYuan 源码 isOnlyMeta）：
- *   Mac     → ⌘ = metaKey=true,  ctrlKey=false
- *   Windows → ⌘ = metaKey=false, ctrlKey=true
- */
-function hotkeyToKeyboardEvent(hotkey: string): KeyboardEvent | null {
+function dispatchKeyboard(def: CommandDef, context: CommandContext): DispatchResult {
+    const key = def.dispatch.key;
+    if (!key) return { success: false, method: "keyboard", detail: "No key binding defined" };
     try {
-        const isMac = navigator.platform.toUpperCase().indexOf("MAC") > -1;
-        let ctrl = false, shift = false, alt = false, meta = false;
-        let k = hotkey;
+        globalCommand(key);
+        return { success: true, method: "keyboard", detail: key };
+    } catch (e: any) {
+        return { success: false, method: "keyboard", detail: e.message };
+    }
+}
 
-        if (k.includes("⌃")) { ctrl = true; k = k.replace("⌃", ""); }
-        if (k.includes("⌘")) { if (isMac) { meta = true; } else { ctrl = true; } k = k.replace("⌘", ""); }
-        if (k.includes("⇧")) { shift = true; k = k.replace("⇧", ""); }
-        if (k.includes("⌥")) { alt = true; k = k.replace("⌥", ""); }
+function dispatchGlobal(def: CommandDef): DispatchResult {
+    const cmd = def.dispatch.command;
+    if (!cmd) return { success: false, method: "global", detail: "No global command defined" };
+    try {
+        globalCommand(cmd);
+        return { success: true, method: "global", detail: cmd };
+    } catch (e: any) {
+        return { success: false, method: "global", detail: e.message };
+    }
+}
 
-        const map: Record<string, string> = {
-            "↩": "Enter", "⌫": "Backspace", "⌦": "Delete", "⇥": "Tab",
-            "↑": "ArrowUp", "↓": "ArrowDown", "←": "ArrowLeft", "→": "ArrowRight",
+async function dispatchApi(
+    def: CommandDef,
+    resolvedParams: Record<string, unknown>,
+    context: CommandContext
+): Promise<DispatchResult> {
+    const endpoint = def.dispatch.endpoint;
+    if (!endpoint) return { success: false, method: "api", detail: "No endpoint defined" };
+
+    try {
+        const response = await post(endpoint, resolvedParams);
+        const resultId = extractCreatedBlockId(response);
+        if (resultId) {
+            if (!context.vars) context.vars = {};
+            context.vars.createdblock = resultId;
+            context.vars.id = resultId;
+            context.vars.last_id = resultId;
+        }
+
+        return {
+            success: true,
+            method: "api",
+            detail: endpoint,
+            value: response,
+            id: resultId
         };
-        const key = map[k] || k || "Unidentified";
-        let keyCode = 0;
-        if (key.length === 1) keyCode = key.toUpperCase().charCodeAt(0);
-        else if (key === "Enter") keyCode = 13;
-        else if (key === "Backspace") keyCode = 8;
-        else if (key === "Delete") keyCode = 46;
-        else if (key === "Tab") keyCode = 9;
-
-        return new KeyboardEvent("keydown", {
-            key, ctrlKey: ctrl, shiftKey: shift, altKey: alt, metaKey: meta,
-            bubbles: true, cancelable: true, composed: true, keyCode,
-        });
-    } catch {
-        return null;
+    } catch (e: any) {
+        return { success: false, method: "api", detail: e.message };
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Block type resolver（从 DOM 推断思源块类型）
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * 从块的 DOM 元素推断思源块类型，映射到 BlockTarget。
- * 读取 data-type 属性（如 "NodeParagraph"）并转换。
- */
-function getBlockType(blockEl: HTMLElement): string | null {
-    const dataType = blockEl.getAttribute("data-type");
-    if (!dataType) return null;
-
-    const map: Record<string, string> = {
-        "NodeDocument": "document",
-        "NodeParagraph": "paragraph",
-        "NodeHeading": "heading",
-        "NodeList": "list",
-        "NodeListItem": "list",
-        "NodeBlockquote": "blockquote",
-        "NodeCodeBlock": "code",
-        "NodeTable": "table",
-        "NodeSuperBlock": "super",
-        "NodeBlockQueryEmbed": "embed",
-        "NodeWidget": "widget",
-        "NodeHTMLBlock": "widget",
-        "NodeMathBlock": "code",
-        "NodeThematicBreak": "paragraph",
-        "NodeAudio": "embed",
-        "NodeVideo": "embed",
-        "NodeIFrame": "embed",
-    };
-
-    return map[dataType] || null;
-}
-
-/**
- * 更新 Context 中的统一变量池 vars，并自动支持落地持久化。
- */
-export async function updateContextVar(
-    context: CommandContext,
-    key: string,
-    value: any,
-    options?: { persist?: boolean }
-): Promise<void> {
-    if (!context.vars) {
-        context.vars = {};
-    }
-    context.vars[key] = value;
-
-    const blockId = getBlockId(context);
-    if (!blockId) return;
-
-    // 确定属性持久化的 key 格式 (自动加 custom- 前缀以匹配思源块属性规范)
-    const attrKey = key.startsWith("custom-") ? key : `custom-${key}`;
-
-    if (options?.persist !== false) {
-        try {
-            await post("/api/attr/setBlockAttrs", {
-                id: blockId,
-                attrs: {
-                    [attrKey]: String(value)
+function extractCreatedBlockId(res: any): string {
+    if (!res) return "";
+    if (Array.isArray(res)) {
+        for (const item of res) {
+            if (item?.doOperations) {
+                for (const op of item.doOperations) {
+                    if (op?.id) return op.id;
                 }
-            });
-            if (context.blockEl) {
-                context.blockEl.setAttribute(attrKey, String(value));
             }
-            console.log(`[Auto-Persistence] Updated var "${key}" = "${value}" and persisted as attribute "${attrKey}" on block ${blockId}`);
-        } catch (e) {
-            console.error(`[Auto-Persistence] Failed to persist var "${key}" on block ${blockId}:`, e);
+            if (item?.id) return item.id;
         }
     }
+    if (typeof res === "object") {
+        if (res.data) return extractCreatedBlockId(res.data);
+        if (res.doOperations) return extractCreatedBlockId(res.doOperations);
+        if (res.id) return res.id;
+    }
+    return "";
 }
 
-/** 导出供外部使用（如 tag-suggestion 过滤） */
-export { getBlockType };
+async function dispatchCustom(
+    def: CommandDef,
+    resolvedParams: Record<string, unknown>,
+    context: CommandContext
+): Promise<DispatchResult> {
+    console.log(`[Dispatcher STEP Custom] 调用 executor...`);
+    if (def.dispatch.executor) {
+        const result = await def.dispatch.executor(resolvedParams, context);
+        return result;
+    }
+    return { success: false, method: "custom", detail: `No executor registered for ${def.id}` };
+}
+
+export function focusBlockForDispatch(): void {}
+export function cleanupAfterDispatch(): void {}
+export function getBlockType(el: HTMLElement | null): string {
+    if (!el) return "";
+    return el.getAttribute("data-type") || "";
+}
+
+export function updateContextVar(context: CommandContext, key: string, value: any): void {
+    if (!context.vars) context.vars = {};
+    context.vars[key] = value;
+    const cleanKey = key.replace(/^(vars?\.)/, "");
+    context.vars[cleanKey] = value;
+    context.vars[`var.${cleanKey}`] = value;
+}

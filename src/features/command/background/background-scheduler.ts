@@ -81,10 +81,11 @@ class BackgroundScheduler {
                 const res = await post("/api/query/sql", {
                     stmt: `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${commandAvId}%' OR ial LIKE '%${commandAvId}%') LIMIT 1`
                 });
-                if (res && res.code === 0 && Array.isArray(res.data) && res.data.length > 0) {
-                    const realBlockId = String(res.data[0].id || "");
-                    if (realBlockId && realBlockId !== commandAvId) {
-                        blockId = realBlockId;
+                const rows: any[] = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+                if (rows.length > 0) {
+                    const blockIdCandidate = String(rows[0].id || "");
+                    if (blockIdCandidate && blockIdCandidate !== commandAvId) {
+                        blockId = blockIdCandidate;
                     }
                 }
             } catch (_) {}
@@ -96,8 +97,9 @@ class BackgroundScheduler {
                 const res = await post("/api/query/sql", {
                     stmt: `SELECT block_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`
                 });
-                if (res && res.code === 0 && Array.isArray(res.data) && res.data.length > 0) {
-                    const targetBlockId = String(res.data[0].block_id || "");
+                const rows: any[] = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+                if (rows.length > 0) {
+                    const targetBlockId = String(rows[0].block_id || "");
                     if (targetBlockId && targetBlockId !== commandAvId) {
                         blockId = targetBlockId;
                     }
