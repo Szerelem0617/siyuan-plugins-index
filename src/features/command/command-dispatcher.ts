@@ -49,8 +49,9 @@ export async function dispatchCommand(
 
         console.log(`[Dispatcher STEP 2] 查得命令定义 "${def.name}" (${def.id}) | Method: ${def.dispatch.method}`);
 
-        // 2. 约束检查
-        const constraintCheck = evaluateCommandConstraints(def, mode);
+        // 2. 约束检查 (environment & targetScope)
+        const targetNodeType = context.blockEl ? (context.blockEl.getAttribute("data-type") || "") : undefined;
+        const constraintCheck = evaluateCommandConstraints(def, mode, targetNodeType);
         if (!constraintCheck.allowed) {
             console.warn(`[Dispatcher STEP 2a] 约束检查未通过: ${constraintCheck.reason}`);
             return { success: true, method: def.dispatch.method, detail: constraintCheck.reason || "Skipped" };

@@ -209,29 +209,28 @@ export function blockTypeOf(dataType: string): string | null {
 
 export const BLOCK_TYPES = ["段落", "标题", "列表", "引述", "代码块", "表格", "超级块", "文档"];
 
-/**
- * 各入口位置的“典型命令上下文”：默认只显示大概率会用到的命令（“显示全部”可绕过）。
- * - 全局位置（顶栏/底栏/侧栏/快捷键）：只显示无需上下文的命令
- * - 块菜单 / /菜单：以块命令为主（全局视图/特效类命令大概率用不到）
- * - 命令按钮 / ;;菜单：显式触发器/快速启动器，保留全局命令（如按钮放烟花、启动器开视图）
- * - 页面菜单 / 编辑器菜单：块命令 + 文档命令
- */
-export const POSITION_EXPECTED: Record<string, ContextNeed[]> = {
-    "顶栏右": ["none"], "顶栏左": ["none"],
-    "底栏右": ["none"], "底栏左": ["none"],
-    "侧栏左": ["none"], "侧栏右": ["none"],
-    "快捷键": ["none"],
-    "命令按钮": ["none", "block"],
-    ";;菜单": ["none", "block"],
-    "/菜单": ["block"],
-    "块菜单": ["block"],
-    "页面菜单": ["block", "doc"],
-    "编辑器菜单": ["block", "doc"]
-};
+import type { TargetScope } from "./registry/command-registry";
 
-/** 命令裸绑定到某位置是否大概率合适（不匹配的仍可经“显示全部”查看） */
-export function suitableForPosition(contextNeed: ContextNeed, position: string): boolean {
-    const expected = POSITION_EXPECTED[position];
-    if (!expected) return true; // 未知位置放行
-    return expected.includes(contextNeed);
+/** 命令裸绑定到某位置是否合适（基于 targetScope 4 枚举分类智能匹配，非强制阻断） */
+export function suitableForPosition(targetScope: TargetScope | undefined, position: string): boolean {
+    const scope = targetScope || "any";
+    if (scope === "any") return true;
+
+    // 1. 顶栏/底栏/侧栏/快捷键：主要适合全局无需上下文的命令 (none)
+    if (position.includes("顶栏") || position.includes("底栏") || position.includes("侧栏") || position === "快捷键") {
+        return scope === "none" || scope === "any";
+    }
+
+    // 2. 页面菜单/编辑器菜单：适合页面命令 (doc) 及全局无上下文命令 (none)
+    if (position === "页面菜单" || position === "编辑器菜单") {
+        return scope === "doc" || scope === "none" || scope === "any";
+    }
+
+    // 3. 块菜单//菜单：适合内容块命令 (block) 及全局命令 (none)
+    if (position === "块菜单" || position === "/菜单") {
+        return scope === "block" || scope === "none" || scope === "any";
+    }
+
+    // 4. 命令按钮 / ;;菜单：允许任意匹配
+    return true;
 }

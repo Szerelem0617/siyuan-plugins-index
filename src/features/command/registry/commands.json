@@ -13,8 +13,8 @@
             },
             "params": [],
             "constraints": {
-                "requiresFocus": false,
                 "environment": "ui",
+                "targetScope": "none",
                 "comment": "依赖思源 UI 状态，无法定时触发"
             },
             "meta": {
@@ -38,8 +38,8 @@
             },
             "params": [],
             "constraints": {
-                "requiresFocus": false,
-                "environment": "ui"
+                "environment": "ui",
+                "targetScope": "none"
             },
             "meta": {
                 "contextNeed": "none",
@@ -57,8 +57,8 @@
             },
             "params": [],
             "constraints": {
-                "requiresFocus": false,
-                "environment": "ui"
+                "environment": "ui",
+                "targetScope": "doc"
             },
             "meta": {
                 "contextNeed": "none",
@@ -69,7 +69,7 @@
         {
             "id": "editor.block.duplicate",
             "name": "复制当前块",
-            "description": "将光标所在块复制一份，插入到其下方。依赖编辑器焦点，只能在当前可见块上触发，无法通过定时或远程调用任意块。",
+            "description": "将光标所在块复制一份，插入到其下方。依赖编辑器焦点，只能在当前可见块上触发。",
             "dispatch": {
                 "method": "keyboard",
                 "keymapPath": [
@@ -80,16 +80,15 @@
             },
             "params": [],
             "constraints": {
-                "requiresFocus": true,
                 "environment": "ui",
-                "comment": "快捷键实现，无法指定任意块ID；如需定时复制请改用 api.block.insertBlock"
+                "targetScope": "block",
+                "comment": "快捷键实现，如需定时复制请改用 api.block.insert"
             },
             "meta": {
                 "contextNeed": "block",
                 "category": "edit",
                 "source": "builtin",
-                "apiEquivalent": "api.block.insert",
-                "appliesTo": ["paragraph", "heading", "list", "blockquote", "code", "table", "super"]
+                "apiEquivalent": "api.block.insert"
             },
             "seed": {
                 "rowID": "20260526204558-zxrigm8",
@@ -98,34 +97,9 @@
             }
         },
         {
-            "id": "editor.block.insertBelow",
-            "name": "在下方插入同级块",
-            "description": "在当前块下方插入一个新的空块。依赖焦点。",
-            "dispatch": {
-                "method": "keyboard",
-                "keymapPath": [
-                    "editor",
-                    "general",
-                    "insertAfter"
-                ]
-            },
-            "params": [],
-            "constraints": {
-                "requiresFocus": true,
-                "environment": "ui"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "edit",
-                "source": "builtin",
-                "apiEquivalent": "api.block.insert",
-                "appliesTo": ["paragraph", "heading", "list", "blockquote", "code", "table", "super"]
-            }
-        },
-        {
             "id": "editor.block.copyRef",
             "name": "复制块引用",
-            "description": "将当前块的引用格式复制到剪贴板（((block-id '内容'))）。",
+            "description": "将当前块的引用链接 ((block_id 'content')) 复制到剪贴板。依赖编辑器焦点。",
             "dispatch": {
                 "method": "keyboard",
                 "keymapPath": [
@@ -136,148 +110,79 @@
             },
             "params": [],
             "constraints": {
-                "requiresFocus": true,
-                "environment": "ui"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "clipboard",
-                "source": "builtin",
-                "appliesTo": ["paragraph", "heading", "list", "blockquote", "code", "table", "super"]
-            }
-        },
-        {
-            "id": "api.block.insert",
-            "name": "API：插入块",
-            "description": "通过后端 API 在指定块前/后插入指定内容的块。完全不依赖 UI 焦点，支持定时任务和远程触发。",
-            "dispatch": {
-                "method": "api",
-                "endpoint": "/api/block/insertBlock"
-            },
-            "params": [
-                {
-                    "key": "dataType",
-                    "label": "内容类型",
-                    "type": "enum",
-                    "values": [
-                        "markdown",
-                        "dom"
-                    ],
-                    "default": "markdown",
-                    "required": true,
-                    "paramMode": "static",
-                    "description": "插入内容的格式"
-                },
-                {
-                    "key": "data",
-                    "label": "插入内容",
-                    "type": "text",
-                    "required": true,
-                    "paramMode": "template",
-                    "templateVars": [
-                        "{{date}}",
-                        "{{time}}",
-                        "{{block_id}}",
-                        "{{var.*}}"
-                    ],
-                    "description": "插入的 Markdown 或 DOM 字符串，支持 {{变量}} 占位符"
-                },
-                {
-                    "key": "previousID",
-                    "label": "前驱块 ID",
-                    "type": "blockid",
-                    "required": false,
-                    "paramMode": "template",
-                    "default": "{{block_id}}",
-                    "description": "留空时自动从触发上下文中注入当前块 ID"
-                },
-                {
-                    "key": "nextID",
-                    "label": "后继块 ID",
-                    "type": "blockid",
-                    "required": false,
-                    "paramMode": "template",
-                    "hidden": true,
-                    "description": "指定插入到某块之前"
-                }
-            ],
-            "outputs": [
-                {
-                    "key": "id",
-                    "label": "生成的新块 ID",
-                    "type": "text",
-                    "required": true,
-                    "paramMode": "template",
-                    "default": "createdblock",
-                    "description": "后创块在思源内核中生成的 14 位真实 Block ID"
-                }
-            ],
-            "constraints": {
-                "requiresFocus": false,
-                "environment": "kernel"
+                "environment": "ui",
+                "targetScope": "block"
             },
             "meta": {
                 "contextNeed": "block",
                 "category": "edit",
                 "source": "builtin"
-            },
-            "seed": {
-                "rowID": "20260527120000-insert",
-                "label": "⚡ 插入块",
-                "paramMapping": "{\"dataType\":\"markdown\",\"data\":\"[Auto Insert] Time: {{time}} | Date: {{date}}\"}"
             }
         },
         {
-            "id": "plugin-index.command.safeUpdateBlock",
-            "name": "📝 安全更新块内容",
-            "description": "无损更新目标块的 DOM/Markdown 内容，自动保留 Supertag 与数据库关联等全量自定义属性",
+            "id": "editor.task.toggle",
+            "name": "切换任务状态",
+            "description": "切换当前任务块的完成状态 (未完成 <-> 已完成)。依赖编辑器焦点。",
+            "dispatch": {
+                "method": "keyboard",
+                "keymapPath": [
+                    "editor",
+                    "task",
+                    "toggle"
+                ]
+            },
+            "params": [],
+            "constraints": {
+                "environment": "ui",
+                "targetScope": "block",
+                "comment": "快捷键实现，如需定时更新属性请改用 api.attr.setAttrs"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "edit",
+                "source": "builtin",
+                "apiEquivalent": "api.attr.setAttrs"
+            },
+            "seed": {
+                "rowID": "20260526204558-sw91kl2",
+                "label": "✅ 切换任务状态",
+                "paramMapping": ""
+            }
+        },
+        {
+            "id": "plugin-index.supertag.addTag",
+            "name": "添加超级标签",
+            "description": "为指定的块添加一个超级标签（更新 custom-supertags 属性并向 DOM 挂载内联 Tag 标头）。支持界面交互，也可供后台纯 API 调用。",
             "dispatch": {
                 "method": "custom"
             },
             "params": [
                 {
                     "key": "id",
-                    "label": "目标块 ID",
                     "type": "blockid",
-                    "required": true,
-                    "default": "",
-                    "description": "目标块 ID，默认自动注入当前块 ID"
-                },
-                {
-                    "key": "dataType",
-                    "label": "内容类型",
-                    "type": "enum",
-                    "required": true,
-                    "default": "markdown",
-                    "values": ["markdown", "dom"]
-                },
-                {
-                    "key": "data",
-                    "label": "新内容",
-                    "type": "text",
-                    "required": true,
                     "paramMode": "template",
-                    "templateVars": [
-                        "{{date}}",
-                        "{{time}}",
-                        "{{var.*}}"
-                    ]
+                    "default": "",
+                    "description": "目标块 ID。不填时自动绑定当前上下文块。"
+                },
+                {
+                    "key": "tag",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "",
+                    "description": "超级标签名称（无需带 # 号，例如 project/task）。"
                 }
             ],
             "outputs": [
                 {
-                    "key": "id",
-                    "label": "更新目标块 ID",
-                    "type": "text",
-                    "required": true,
-                    "paramMode": "template",
-                    "default": "updatedblock",
-                    "description": "被更新的块 ID"
+                    "key": "supertags",
+                    "type": "string",
+                    "description": "更新后的完整超级标签数组 JSON 字符串"
                 }
             ],
             "constraints": {
-                "requiresFocus": false,
-                "environment": "kernel"
+                "environment": "universal",
+                "targetScope": "any",
+                "comment": "支持前台交互注入与后台无界面静默调度"
             },
             "meta": {
                 "contextNeed": "block",
@@ -285,15 +190,201 @@
                 "source": "builtin"
             },
             "seed": {
-                "rowID": "20260527120000-update",
-                "label": "📝 安全更新块内容",
-                "paramMapping": "{\"id\":\"{{var.createdblock}}\",\"dataType\":\"markdown\",\"data\":\"[Auto Update] Updated at {{time}}\"}"
+                "rowID": "20260526204558-addtag9",
+                "label": "🏷️ 添加超级标签",
+                "paramMapping": "tag={{prompt:请输入标签名}}"
+            }
+        },
+        {
+            "id": "plugin-index.command.insertBlockBelow",
+            "name": "在下方插入块",
+            "description": "在指定的目标块/页面下方插入新块或子页面，支持短码 (p/h/c/b/l/t/tb) 与模板占位符。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "id",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": "",
+                    "description": "目标块或页面 ID。不填自动取当前触发块。"
+                },
+                {
+                    "key": "data",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "",
+                    "description": "新块的内容或子页面标题 (支持 {{prompt}} / {{time}} 占位符)"
+                },
+                {
+                    "key": "insertType",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "p",
+                    "description": "原生块类型短码 (p:段落, h:标题, c:代码块, b:引述, l:列表, t:表格, tb:分割线)"
+                },
+                {
+                    "key": "pageInsertMode",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "bottom",
+                    "description": "页面专有插入策略 (bottom:页面尾部, top:页面顶部, child_doc:创建子页面)"
+                }
+            ],
+            "outputs": [
+                {
+                    "key": "createdblock",
+                    "type": "string",
+                    "description": "成功插入的新块或新子页面的物理 Block ID"
+                }
+            ],
+            "constraints": {
+                "environment": "universal",
+                "targetScope": "any",
+                "comment": "双端多态通用：支持在任意块正下方插入或在页面下建子页面"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "edit",
+                "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-insbel9",
+                "label": "➕ 在下方插入块",
+                "paramMapping": "insertType=p"
+            }
+        },
+        {
+            "id": "plugin-index.command.insertSiblingBlockBelow",
+            "name": "在下方插入同级块",
+            "description": "查找目标块的顶级父块，在其同级下方快速插入新段落块。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "id",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": ""
+                },
+                {
+                    "key": "data",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": ""
+                }
+            ],
+            "outputs": [
+                {
+                    "key": "createdblock",
+                    "type": "string",
+                    "description": "新同级块 ID"
+                }
+            ],
+            "constraints": {
+                "environment": "universal",
+                "targetScope": "block"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "edit",
+                "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-sibblw9",
+                "label": "⏬ 在下方插入同级块",
+                "paramMapping": ""
+            }
+        },
+        {
+            "id": "plugin-index.command.convertToTask",
+            "name": "转为任务",
+            "description": "将目标块快捷转换为带有勾选框的任务块。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "id",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": ""
+                }
+            ],
+            "constraints": {
+                "environment": "universal",
+                "targetScope": "block"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "edit",
+                "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-cvttsk9",
+                "label": "☑️ 转为任务",
+                "paramMapping": ""
+            }
+        },
+        {
+            "id": "api.block.insert",
+            "name": "API：插入块",
+            "description": "向思源后端发送原生 POST /api/block/insertBlock，在指定 Block 之后追加 Markdown 块。",
+            "dispatch": {
+                "method": "api",
+                "endpoint": "/api/block/insertBlock"
+            },
+            "params": [
+                {
+                    "key": "previousID",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": "",
+                    "description": "在该块之后插入。不填默认绑定触发块。"
+                },
+                {
+                    "key": "dataType",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "markdown"
+                },
+                {
+                    "key": "data",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "",
+                    "description": "插入的内容 (Markdown 格式)"
+                }
+            ],
+            "outputs": [
+                {
+                    "key": "createdblock",
+                    "type": "string",
+                    "description": "生成的物理 Block ID"
+                }
+            ],
+            "constraints": {
+                "environment": "kernel",
+                "targetScope": "any",
+                "comment": "思源原生 HTTP API，完全支持后台与定时调度"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "api",
+                "source": "builtin"
+            },
+            "seed": {
+                "rowID": "20260526204558-apins01",
+                "label": "⚡ API：插入块",
+                "paramMapping": "dataType=markdown"
             }
         },
         {
             "id": "api.attr.setAttrs",
             "name": "API：设置块属性",
-            "description": "通过后端 API 为指定块写入或修改自定义属性键值对。",
+            "description": "向思源后端发送原生 POST /api/attr/setBlockAttrs，更新指定块的自定义属性 (IAL)。",
             "dispatch": {
                 "method": "api",
                 "endpoint": "/api/attr/setBlockAttrs"
@@ -301,342 +392,34 @@
             "params": [
                 {
                     "key": "id",
-                    "label": "目标块 ID",
                     "type": "blockid",
-                    "required": true,
                     "paramMode": "template",
-                    "default": "{{block_id}}"
+                    "default": "",
+                    "description": "目标块 ID"
                 },
                 {
                     "key": "attrs",
-                    "label": "属性键值对",
                     "type": "object",
-                    "required": true,
-                    "paramMode": "static",
-                    "description": "JSON 对象，如 {\"custom-status\": \"done\", \"custom-priority\": \"high\"}"
-                }
-            ],
-            "constraints": {
-                "requiresFocus": false,
-                "environment": "kernel"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "attribute",
-                "source": "builtin"
-            }
-        },
-        {
-            "id": "plugin-index.effect.fireworks",
-            "name": "烟花",
-            "description": "在命令按钮或当前光标块位置播放炫丽的放烟花动画特效。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [],
-            "constraints": {
-                "requiresFocus": false,
-                "environment": "ui"
-            },
-            "meta": {
-                "contextNeed": "none",
-                "category": "custom",
-                "source": "plugin",
-                "plugin": "index"
-            },
-            "seed": {
-                "rowID": "20260701100000-fireworks",
-                "label": "🎆 烟花",
-                "paramMapping": ""
-            }
-        },
-        {
-            "id": "siyuan.ui.toast",
-            "name": "消息提示 (showMessage)",
-            "description": "在思源右上角弹出气泡提示。支持自定义消息内容；无传参时显示默认内容。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [
-                {
-                    "key": "message",
-                    "label": "消息内容",
-                    "type": "text",
-                    "required": false,
-                    "paramMode": "template",
-                    "default": "看到这条消息会有好运～",
-                    "templateVars": ["{{date}}", "{{time}}", "{{block_id}}", "{{vars.KEY}}"]
-                },
-                {
-                    "key": "timeout",
-                    "label": "显示时长 (毫秒)",
-                    "type": "number",
-                    "required": false,
-                    "paramMode": "static",
-                    "default": 6000,
-                    "description": "提示悬浮时长（毫秒）。默认6000；0表示显示手动关闭按钮；-1表示永不自动淡出。"
-                },
-                {
-                    "key": "type",
-                    "label": "提示类型",
-                    "type": "enum",
-                    "values": ["info", "error"],
-                    "required": false,
-                    "paramMode": "static",
-                    "default": "info",
-                    "hidden": true,
-                    "description": "info（普通信息）或 error（红底错误）。"
-                },
-                {
-                    "key": "messageId",
-                    "label": "消息 ID",
-                    "type": "text",
-                    "required": false,
-                    "paramMode": "static",
-                    "hidden": true,
-                    "description": "指定唯一 ID。重复触发该 ID 时，气泡会在原地更新内容而非不断堆叠。"
-                }
-            ],
-            "constraints": {
-                "requiresFocus": false,
-                "environment": "universal"
-            },
-            "meta": {
-                "contextNeed": "none",
-                "category": "custom",
-                "source": "plugin",
-                "plugin": "index"
-            },
-            "seed": {
-                "rowID": "20260713120000-showmessage",
-                "label": "💬 消息提示",
-                "paramMapping": "{}"
-            }
-        },
-        {
-            "id": "plugin-index.command.turnIntoTask",
-            "name": "转为任务",
-            "description": "将选中的普通段落、标题、列表或页面转换为虚拟任务。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [
-                {
-                    "key": "id",
-                    "label": "目标块或页面 ID",
-                    "type": "blockid",
-                    "required": false,
-                    "paramMode": "template",
-                    "default": "{{block_id}}",
-                    "description": "目标块或页面的 ID (默认注入当前上下文的 block_id)"
-                }
-            ],
-            "outputs": [
-                {
-                    "key": "isTask",
-                    "label": "是否已转换为任务",
-                    "type": "boolean",
-                    "required": false,
-                    "paramMode": "template",
-                    "description": "转换后目标块是否为任务状态"
-                }
-            ],
-            "constraints": {
-                "requiresFocus": false,
-                "environment": "universal"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "edit",
-                "source": "plugin",
-                "plugin": "index",
-                "appliesTo": ["paragraph", "list"]
-            },
-            "seed": {
-                "rowID": "20260714160000-turnintotask",
-                "label": "☑ 转为任务",
-                "paramMapping": "{}"
-            }
-        },
-        {
-            "id": "plugin-index.command.toggleTaskStatus",
-            "name": "切换任务状态",
-            "description": "切换目标虚拟任务的完成状态（待办与已完成之间转换）。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [
-                {
-                    "key": "id",
-                    "label": "目标块 ID",
-                    "type": "blockid",
-                    "required": false,
-                    "paramMode": "template",
-                    "default": "{{block_id}}",
-                    "description": "目标任务块的 ID (默认注入当前上下文的 block_id)"
-                }
-            ],
-            "outputs": [
-                {
-                    "key": "status",
-                    "label": "最新任务状态",
-                    "type": "text",
-                    "required": false,
-                    "default": "task_status",
-                    "description": "切换后的最新任务状态 (pending / completed)"
-                }
-            ],
-            "constraints": {
-                "requiresFocus": false,
-                "environment": "universal"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "edit",
-                "source": "plugin",
-                "plugin": "index",
-                "appliesTo": ["paragraph", "list"]
-            },
-            "seed": {
-                "rowID": "20260807160000-toggletaskstatus",
-                "label": "🔄 切换任务状态",
-                "paramMapping": "{}"
-            }
-        },
-        {
-            "id": "plugin-index.command.addSupertag",
-            "name": "添加超级标签",
-            "description": "为指定块打上超级标签，并必定联动广播触发 tag_created 事件",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [
-                {
-                    "key": "id",
-                    "label": "目标块 ID",
-                    "type": "blockid",
-                    "required": false,
-                    "paramMode": "template",
-                    "default": "{{block_id}}",
-                    "description": "目标块 ID (默认注入当前上下文 block_id)"
-                },
-                {
-                    "key": "tag",
-                    "label": "标签名称",
-                    "type": "text",
-                    "required": true,
-                    "paramMode": "template",
-                    "default": "task",
-                    "description": "超级标签名称 (不带 # 前缀，例如 task / idea / project)"
-                }
-            ],
-            "outputs": [
-                {
-                    "key": "added_tag",
-                    "label": "成功添加的标签",
-                    "type": "text",
-                    "default": "added_tag"
-                }
-            ],
-            "constraints": {
-                "requiresFocus": false,
-                "environment": "universal"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "edit",
-                "source": "plugin",
-                "plugin": "index",
-                "appliesTo": ["any"]
-            }
-        },
-        {
-            "id": "plugin-index.command.insertBlockBelow",
-            "name": "在下方插入块",
-            "description": "在目标块下方插入新块；若目标是页面，默认在页面底部插入块，也可配置插入子页面。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [
-                {
-                    "key": "id",
-                    "label": "目标块或页面 ID",
-                    "type": "blockid",
-                    "required": false,
-                    "paramMode": "template",
-                    "default": "{{block_id}}",
-                    "description": "目标块或页面的 ID (默认注入当前上下文 block_id)"
-                },
-                {
-                    "key": "data",
-                    "label": "插入的内容",
-                    "type": "text",
-                    "required": false,
                     "paramMode": "template",
                     "default": "",
-                    "description": "新块文本或子页面标题 (可为空，或填入内容 / JIT 弹窗占位 {{prompt}})"
-                },
-                {
-                    "key": "insertType",
-                    "label": "插入块类型",
-                    "type": "text",
-                    "required": false,
-                    "paramMode": "static",
-                    "default": "p",
-                    "description": "内容块类型缩写: p(段落,默认) / h(标题) / c(代码块) / b(引述) / l(列表) / t(表格) / tb(分割线)"
-                },
-                {
-                    "key": "pageInsertMode",
-                    "label": "页面插入策略",
-                    "type": "text",
-                    "required": false,
-                    "paramMode": "static",
-                    "default": "bottom",
-                    "description": "目标为页面时的策略: bottom(页面底部插入块) / top(首行插入) / child_doc(创建子页面)"
-                }
-            ],
-            "outputs": [
-                {
-                    "key": "createdblock",
-                    "label": "新建块或子页面 ID",
-                    "type": "blockid",
-                    "default": "createdblock",
-                    "description": "最新创建出的块或子页面 ID"
+                    "description": "要更新的属性键值对 JSON，如 {\"custom-status\":\"done\"}"
                 }
             ],
             "constraints": {
-                "requiresFocus": false,
-                "environment": "universal"
+                "environment": "kernel",
+                "targetScope": "any",
+                "comment": "思源原生 HTTP API，完全支持后台与定时调度"
             },
             "meta": {
                 "contextNeed": "block",
-                "category": "edit",
-                "source": "plugin",
-                "plugin": "index",
-                "appliesTo": ["any"]
+                "category": "api",
+                "source": "builtin"
             },
             "seed": {
-                "rowID": "20260810170000-insertblockbelow",
-                "label": "➕ 在下方插入块",
-                "paramMapping": "{\"insertType\":\"p\",\"pageInsertMode\":\"bottom\"}"
+                "rowID": "20260526204558-apattr1",
+                "label": "⚡ API：设置块属性",
+                "paramMapping": ""
             }
         }
-    ],
-    "paramModes": {
-        "_doc": "参数获取方式的标准说明文档",
-        "static": "静态参：在 Command Param 列中写死，执行时直接使用",
-        "template": "模板参：字符串中含有 {{占位符}}，Dispatcher 在执行前实时计算并替换",
-        "interactive": "交互参：执行前弹出 UI 让用户输入，由 UI Generator 动态生成表单"
-    },
-    "templateVars": {
-        "_doc": "全局有效的模板变量，可在所有 template 类型参数中使用",
-        "{{date}}": "当前日期，格式 YYYY-MM-DD",
-        "{{time}}": "当前时间，格式 HH:mm:ss",
-        "{{block_id}}": "触发命令的块 ID",
-        "{{parent_id}}": "触发块的父块 ID（API 查询）",
-        "{{root_id}}": "所在文档的根块 ID",
-        "{{notebook_id}}": "所在笔记本 ID",
-        "{{vars.KEY}}": "统一变量池或属性值，如 {{vars.completed}} 或 {{vars.task_status}}",
-        "{{prompt}}": "JIT 实时交互弹窗输入，支持指定引导文案如 {{prompt:请输入标题}}"
-    }
+    ]
 }

@@ -45,13 +45,13 @@
     $: entries = cfg ? (cfg.positions[activePos] || []) : [];
     $: selectedMap = Object.fromEntries(entries.map(e => [typeof e === "string" ? e : e.id, true]));
     // 已绑定的命令始终显示（便于移除旧配置）；showAll 时展示全部并标注不适用
-    $: displayCommands = visibleCommands.filter(cmd => showAll || suitableForPosition(cmd.contextNeed, activePos) || !!selectedMap[cmd.id]);
+    $: displayCommands = visibleCommands.filter(cmd => showAll || suitableForPosition(cmd.constraints?.targetScope, activePos) || !!selectedMap[cmd.id]);
 
     function toggle(id: string) {
         const cmd = commands.find(c => c.id === id);
         // 只拦截"新增绑定"不适用命令；已绑定的允许取消
-        if (cmd && !suitableForPosition(cmd.contextNeed, activePos) && !selectedMap[id]) {
-            showMessage(`该命令${contextNeedText(cmd.contextNeed)}，不能绑定到「${activePos}」`, 2500, "info");
+        if (cmd && !suitableForPosition(cmd.constraints?.targetScope, activePos) && !selectedMap[id]) {
+            showMessage(`该命令不适用于「${activePos}」`, 2500, "info");
             return;
         }
         const list = [...(cfg.positions[activePos] || [])];
@@ -63,10 +63,11 @@
         cfg = { ...cfg, positions: { ...cfg.positions } };
     }
 
-    function contextNeedText(need: ContextNeed): string {
-        if (need === "block") return "需要块上下文";
-        if (need === "doc") return "需要文档上下文";
-        return "无需上下文";
+    function targetScopeText(scope: TargetScope | undefined): string {
+        if (scope === "block") return "块专用";
+        if (scope === "doc") return "页面专用";
+        if (scope === "none") return "全局独立";
+        return "通用多态";
     }
 
     function typesOf(id: string): string[] {
@@ -146,7 +147,7 @@
             <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding-right: 4px;">
                 {#each displayCommands as cmd}
                     {@const sel = !!selectedMap[cmd.id]}
-                    {@const suitable = suitableForPosition(cmd.contextNeed, activePos)}
+                    {@const suitable = suitableForPosition(cmd.constraints?.targetScope, activePos)}
                     <div
                         style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 5px; cursor: pointer; border-left: 3px solid {sel ? 'var(--indexos-accent-primary)' : 'transparent'}; background: {sel ? 'rgba(40, 81, 127, 0.06)' : 'transparent'}; opacity: {suitable ? 1 : 0.45};"
                         on:click={() => toggle(cmd.id)}
@@ -156,7 +157,7 @@
                         >{sel ? "✓" : ""}</span>
                         <span style="font-size: 12px; font-weight: 600; color: var(--indexos-text-main); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{cmd.name}</span>
                         {#if !suitable}
-                            <span style="font-size: 10px; padding: 1px 6px; border-radius: 3px; background: rgba(240, 173, 78, 0.14); color: var(--indexos-text-warn, #e6a23c); flex-shrink: 0;" title="该命令无法在无此上下文的位置使用">⚠ {contextNeedText(cmd.contextNeed)}</span>
+                            <span style="font-size: 10px; padding: 1px 6px; border-radius: 3px; background: rgba(240, 173, 78, 0.14); color: var(--indexos-text-warn, #e6a23c); flex-shrink: 0;" title="不适用于当前位置">⚠ {targetScopeText(cmd.constraints?.targetScope)}</span>
                         {/if}
                         {#if activePos === "块菜单" && sel}
                             <button

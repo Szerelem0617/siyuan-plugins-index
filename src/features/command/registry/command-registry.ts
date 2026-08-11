@@ -105,16 +105,14 @@ export interface DispatchConfig {
 }
 
 export type ExecutionEnvironment = "ui" | "kernel" | "universal";
+export type TargetScope = "none" | "block" | "doc" | "any";
 
 /** 命令执行的约束条件，Dispatcher 在执行前做前置检查 */
 export interface CommandConstraints {
-    /** 是否必须先把编辑器焦点设置到目标块才能执行 */
-    requiresFocus: boolean;
-    /** 执行环境：前端 (ui)、后端 (kernel)、双端通用 (universal) */
+    /** 执行环境：前端 UI 专属 (ui)、后端 Kernel 专属 (kernel)、双端通用 (universal) */
     environment: ExecutionEnvironment;
-    /** 旧版字段（已废弃）：前端 UI 专属 / 可调度标记。新代码请使用 environment。 */
-    uiOnly?: boolean;
-    schedulable?: boolean;
+    /** 目标节点作用域：全局无上下文 (none)、块专用 (block)、页面专用 (doc)、通用多态 (any) */
+    targetScope: TargetScope;
     /** 补充说明，供开发者阅读 */
     comment?: string;
 }
@@ -220,30 +218,20 @@ class CommandRegistry {
 
                 try {
                     const existing = this.store.get(id);
-                    let constraintsObj = constraintsRaw ? JSON.parse(constraintsRaw) : {};
-                    if (!constraintsObj.environment) {
-                        if (constraintsObj.uiOnly) {
-                            constraintsObj.environment = "ui";
-                        } else if (constraintsObj.schedulable) {
-                            constraintsObj.environment = "kernel";
-                        } else {
-                            constraintsObj.environment = "universal";
-                        }
-                    }
+                    const constraintsObj = constraintsRaw ? JSON.parse(constraintsRaw) : {};
 
                     const def: CommandDef = {
                         id,
                         name: name || "",
                         description: description || "",
-                        // SQLite 表未存 outputs/prompt：从内存中的既有定义保留（如 commands.json 声明的出参契约）
                         outputs: existing?.outputs,
                         prompt: existing?.prompt,
                         dispatch: dispatchRaw ? JSON.parse(dispatchRaw) : { method: "custom" },
                         params: paramsRaw ? JSON.parse(paramsRaw) : [],
                         constraints: {
-                            requiresFocus: constraintsObj.requiresFocus ?? false,
-                            environment: constraintsObj.environment,
-                            comment: constraintsObj.comment
+                            environment: constraintsObj.environment || existing?.constraints?.environment || "universal",
+                            targetScope: constraintsObj.targetScope || existing?.constraints?.targetScope || "any",
+                            comment: constraintsObj.comment || existing?.constraints?.comment
                         },
                         meta: metaRaw ? JSON.parse(metaRaw) : { contextNeed: "none", category: "custom", source: "plugin" }
                     };
@@ -272,7 +260,7 @@ class CommandRegistry {
      *     name: "做某事",
      *     dispatch: { method: "custom", executor: async (params, ctx) => { ... } },
      *     params: [],
-     *     constraints: { requiresFocus: false, uiOnly: false, schedulable: true },
+     *     constraints: { environment: "universal", targetScope: "any" },
      *     meta: { contextNeed: "none", category: "custom", source: "plugin", plugin: "myplugin" }
      * });
      */

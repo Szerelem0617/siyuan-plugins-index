@@ -1,8 +1,9 @@
 /**
  * constraint-checker.ts
- * 命令约束与前后台执行上下文检查器 (Command Constraint & Execution Mode Evaluator)
+ * 命令约束与前后台执行上下文检查器 (Command Constraint & Execution Scope Evaluator)
  *
- * 统一管理与评估命令在 前台 (foreground) / 后台 (background) 模式下的运行契约与限制。
+ * 统一评估命令在 前台 (foreground) / 后台 (background) 运行契约，
+ * 以及目标节点作用域 targetScope ("block" | "doc" | "any") 的匹配状态。
  */
 
 import type { CommandDef } from "../registry/command-registry";
@@ -19,30 +20,47 @@ export interface ConstraintCheckResult {
 }
 
 /**
- * 评估命令在特定上下文模式（前台/后台）下的可执行状态与约束行为
+ * 评估命令在特定上下文模式（前台/后台）下的可执行状态与 targetScope 作用域约束
  */
 export function evaluateCommandConstraints(
     def: CommandDef,
     mode: ExecutionMode = "foreground",
-    resolvedParams?: Record<string, unknown>
+    targetNodeType?: string
 ): ConstraintCheckResult {
     const constraints = def.constraints || {};
     const envConstraint = constraints.environment || "universal";
+    const targetScope = constraints.targetScope || "any";
 
-    // 1. 检查运行环境限制 (environment: "foreground" | "background" | "universal")
-    if (mode === "background" && envConstraint === "foreground") {
+    // 1. 检查运行环境限制 (environment: "ui" | "kernel" | "universal")
+    if (mode === "background" && envConstraint === "ui") {
         return {
             allowed: false,
-            reason: `命令 "${def.name}" (${def.id}) 限制仅能在前台 UI 环境运行，后台静默触发时已自动跳过`
+            reason: `命令 "${def.name}" (${def.id}) 限制仅能在前端 UI 环境运行，后台静默触发时已自动跳过`
         };
     }
 
-    // 2. 检查前台 DOM / 编辑器焦点依赖
-    if (mode === "background" && constraints.requiresFocus) {
+    if (mode === "foreground" && envConstraint === "kernel") {
         return {
             allowed: false,
-            reason: `命令 "${def.name}" (${def.id}) 依赖前台编辑器焦点，后台模式下已自动跳过`
+            reason: `命令 "${def.name}" (${def.id}) 限制仅能在后台 Kernel 环境运行，前台触发已跳过`
         };
+    }
+
+    // 2. 检查目标节点作用域匹配 (targetScope: "block" | "doc" | "any")
+    if (targetNodeType) {
+        const isDocNode = targetNodeType === "d";
+        if (targetScope === "doc" && !isDocNode) {
+            return {
+                allowed: false,
+                reason: `命令 "${def.name}" (${def.id}) 限制仅适用于文档页面 (doc)，当前目标块为普通内容块`
+            };
+        }
+        if (targetScope === "block" && isDocNode) {
+            return {
+                allowed: false,
+                reason: `命令 "${def.name}" (${def.id}) 限制仅适用于普通内容块 (block)，当前目标为文档页面`
+            };
+        }
     }
 
     // 3. 后台模式下且无显式传参时，对交互参 (prompt) 开启静默回退模式
