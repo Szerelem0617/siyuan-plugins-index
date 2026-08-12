@@ -49,11 +49,11 @@ export function getSeedCommandRows(): SeedCommandRow[] {
     return rows;
 }
 
-const defaultPipelineConditional = `// [打上标签时] -> ⚡ API 插入块测试, 📝 安全更新块内容
+const defaultPipelineConditional = `// [打上标签时] -> ➕ 在下方插入块, 📝 安全更新块内容
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        const step1 = await dispatch("api.block.insert", { dataType: "markdown", data: "[Pipeline Step 1] Time: {{time}}", previousID: "{{block_id}}" });
+        const step1 = await dispatch("plugin-index.command.insertBlockBelow", { insertType: "p", data: "[Pipeline Step 1] Time: {{time}}", id: "{{block_id}}" });
         const createdId = step1?.id || state.vars?.createdblock;
         if (createdId) {
             await dispatch("plugin-index.command.safeUpdateBlock", { id: createdId, dataType: "markdown", data: "[Pipeline Step 2] Updated newly created block at {{time}}" });
@@ -61,11 +61,11 @@ async ({ dispatch, state, eventName }) => {
     }
 }`;
 
-const defaultPermanentConditional = `// [打上标签时] -> ⚡ API 插入块测试
+const defaultPermanentConditional = `// [打上标签时] -> ➕ 在下方插入块
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        await dispatch("api.block.insert", { dataType: "markdown", data: "[Permanent Init] Inserted at {{time}}", previousID: "{{block_id}}" });
+        await dispatch("plugin-index.command.insertBlockBelow", { insertType: "p", data: "[Permanent Init] Inserted at {{time}}", id: "{{block_id}}" });
     }
 }`;
 
@@ -155,12 +155,12 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     {
         typeLabel: "pipeline",
         iconMenuCmdIds: [],
-        relationCmdIds: ["api.block.insert", "plugin-index.command.safeUpdateBlock"]
+        relationCmdIds: ["plugin-index.command.insertBlockBelow", "plugin-index.command.safeUpdateBlock"]
     },
     {
         typeLabel: "permanent",
         iconMenuCmdIds: ["plugin-index.command.safeUpdateBlock"],
-        relationCmdIds: ["api.block.insert", "plugin-index.command.safeUpdateBlock"]
+        relationCmdIds: ["plugin-index.command.insertBlockBelow", "plugin-index.command.safeUpdateBlock"]
     }
 ];
 

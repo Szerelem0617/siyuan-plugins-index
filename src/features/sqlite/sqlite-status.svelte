@@ -493,9 +493,6 @@
         border-color: var(--b3-theme-primary);
         box-shadow: var(--b3-point-shadow);
     }
-    .av-card.synced {
-        border-left: 3px solid #10b981;
-    }
     .av-card__header {
         display: flex;
         align-items: center;
@@ -511,13 +508,6 @@
         white-space: nowrap;
         flex: 1;
     }
-    .av-card__status {
-        font-size: 10px;
-        color: var(--b3-theme-on-surface-light);
-        opacity: 0.8;
-        white-space: nowrap;
-    }
-    .av-card__status.ready { color: #10b981; opacity: 1; font-weight: 500; }
     .av-card__table {
         font-family: var(--b3-font-family-code, monospace);
         font-size: 10px;

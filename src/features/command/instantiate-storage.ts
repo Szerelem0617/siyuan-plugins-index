@@ -177,11 +177,8 @@ export async function constructCommandStorage() {
                         });
                     }
 
-                    // 自动清洗与纠错：将旧有中文指令名转换为绝对 Command ID
+                    // 保留初始 Icon Menu 配置文本
                     let cleanIconMenuVal = String(row.iconMenu || "").trim();
-                    if (cleanIconMenuVal.includes("安全更新")) {
-                        cleanIconMenuVal = "plugin-index.command.safeUpdateBlock";
-                    }
 
                     populateOps.push({ keyID: keyMap["Icon menu & button"], itemID: row.rowID, value: { type: "text", text: { content: cleanIconMenuVal } } });
                     populateOps.push({ keyID: keyMap["Conditional"], itemID: row.rowID, value: { type: "text", text: { content: String(row.conditional || "") } } });
@@ -500,22 +497,30 @@ async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
             continue;
         }
 
-        // 1. Populate Icon Menu text column with exact Command IDs (NOT friendly Chinese label)
+        // 1. Populate Icon Menu text column ONLY if missing or empty
         if (iconMenuKey) {
-            const validCommandIds: string[] = [];
-            for (const cmdId of binding.iconMenuCmdIds) {
-                if (cmdId) validCommandIds.push(cmdId);
-            }
-            batchValues.push({
-                keyID: iconMenuKey.id,
-                itemID: typeRowId,
-                value: {
-                    type: "text",
-                    text: {
-                        content: validCommandIds.join(", ")
+            try {
+                const checkRes = await runQuery(`SELECT "${iconMenuKey.id}" FROM av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")} WHERE _itemID = ?`, [typeRowId]);
+                const existingVal = checkRes?.values?.[0]?.[0] || "";
+                if (!existingVal || !String(existingVal).trim()) {
+                    const validCommandIds: string[] = [];
+                    for (const cmdId of binding.iconMenuCmdIds) {
+                        if (cmdId) validCommandIds.push(cmdId);
+                    }
+                    if (validCommandIds.length > 0) {
+                        batchValues.push({
+                            keyID: iconMenuKey.id,
+                            itemID: typeRowId,
+                            value: {
+                                type: "text",
+                                text: {
+                                    content: JSON.stringify({ menu: validCommandIds.map(id => ({ id })), button: [] })
+                                }
+                            }
+                        });
                     }
                 }
-            });
+            } catch { /* ignore */ }
         }
 
         // 2. Populate 绑定命令 AV Relation column with relationCmdIds

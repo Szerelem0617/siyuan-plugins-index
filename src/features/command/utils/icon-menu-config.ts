@@ -2,7 +2,7 @@
  * icon-menu-config.ts
  * "Icon menu & button" 单元格格式：
  *   JSON: { "menu": [{ "id": "cmd1", "params": {...} }], "button": [...] }
- *   兼容旧格式：逗号分隔的命令 ID → 全部归入 menu
+ *   兼容旧格式：逗号/换行分隔的命令 ID → 全部归入 menu
  */
 
 export interface IconMenuEntry {
@@ -45,9 +45,13 @@ export function parseIconMenuConfig(raw: string): IconMenuConfig {
             };
         }
     } catch {
-        // 若存储的包含额外包裹或单字符命令ID，强转成标准化 JSON 尝试解析
-        if (text.includes("menu") || text.includes("button") || text.startsWith("{")) {
-            console.warn("[IconMenuConfig] Failed to parse iconMenu JSON DSL:", text);
+        // 若存储的非 JSON 格式（如旧格式逗号分隔或单命令 ID），自动转为 menu 列表
+        const ids = text.split(/[,，\n;；]/).map(s => s.trim()).filter(Boolean);
+        if (ids.length > 0) {
+            return {
+                menu: ids.map(id => ({ id })),
+                button: []
+            };
         }
     }
 

@@ -191,11 +191,6 @@
                 "category": "edit",
                 "source": "builtin",
                 "apiEquivalent": "api.block.insert"
-            },
-            "seed": {
-                "rowID": "20260526204558-zxrigm8",
-                "label": "📑 复制当前块",
-                "paramMapping": ""
             }
         },
         {
@@ -496,42 +491,6 @@
             }
         },
         {
-            "id": "plugin-index.command.insertBlock",
-            "name": "插入块",
-            "description": "向目标位置快捷插入新 Markdown 块。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [
-                {
-                    "key": "id",
-                    "type": "blockid",
-                    "paramMode": "template",
-                    "default": ""
-                },
-                {
-                    "key": "data",
-                    "type": "string",
-                    "paramMode": "template",
-                    "default": ""
-                }
-            ],
-            "constraints": {
-                "environment": "universal",
-                "targetScope": "any"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "edit",
-                "source": "builtin"
-            },
-            "seed": {
-                "rowID": "20260526204558-insblk8",
-                "label": "⚡ 插入块",
-                "paramMapping": "dataType=markdown"
-            }
-        },
-        {
             "id": "api.block.insert",
             "name": "API：插入块",
             "description": "向思源后端发送原生 POST /api/block/insertBlock，在指定 Block 之后追加 Markdown 块。",
@@ -577,11 +536,6 @@
                 "contextNeed": "block",
                 "category": "api",
                 "source": "builtin"
-            },
-            "seed": {
-                "rowID": "20260526204558-apins01",
-                "label": "⚡ API：插入块",
-                "paramMapping": "dataType=markdown"
             }
         },
         {
@@ -617,11 +571,6 @@
                 "contextNeed": "block",
                 "category": "api",
                 "source": "builtin"
-            },
-            "seed": {
-                "rowID": "20260526204558-apattr1",
-                "label": "⚡ API：设置块属性",
-                "paramMapping": ""
             }
         }
     ]

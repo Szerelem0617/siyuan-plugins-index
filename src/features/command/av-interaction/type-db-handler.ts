@@ -339,7 +339,16 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
             currentIconMenuVal,
             onSave: async (updatedVal: string) => {
                 await updateCellValue(null, avId, rowId, colId, updatedVal);
-                showMessage(`✓ 已更新 Supertag #${supertagLabel} 的 Icon Menu 配置`);
+                
+                // 核心 Root Cause 修复：写入数据库后，必须强制刷新 SUPERTAG_REGISTRY 内存表
+                try {
+                    const { refreshSupertagRegistry } = await import("../utils/sync-service");
+                    await refreshSupertagRegistry();
+                } catch (e) {
+                    console.error("[AltClick-IconMenu] 刷新 Supertag 注册表失败:", e);
+                }
+
+                showMessage(`✓ 已更新 Supertag #${supertagLabel} 的 Icon Menu & Button 配置并全盘生效 ⚡`);
             }
         }
     });

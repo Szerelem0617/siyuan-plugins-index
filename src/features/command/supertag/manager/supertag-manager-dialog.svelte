@@ -17,7 +17,7 @@
     import { plugin } from "../../../../shared/utils";
 
     export let dialog: any;
-    export let supertagManager: any;
+    export let supertagManager: any = null;
 
     let loading = true;
     let activeTab: "data" | "command" = "data";
