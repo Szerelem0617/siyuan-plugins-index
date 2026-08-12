@@ -8,7 +8,8 @@ import { post } from "../../../shared/api-client/request";
 import { getInputColKeyId, getOutputColKeyId } from "./query-helper";
 import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDialog.svelte";
 import { readPipelineRow, openPipelineEditorForRow } from "../pipeline/manager";
-import ParamConfigDialog from "./dialogs/ParamConfigDialog.svelte";
+import InputConfigDialog from "./dialogs/InputConfigDialog.svelte";
+import OutputConfigDialog from "./dialogs/OutputConfigDialog.svelte";
 import GlobalBackgroundEngineDialog from "./dialogs/GlobalBackgroundEngineDialog.svelte";
 
 export function openGlobalAutomationDialog() {
@@ -423,31 +424,42 @@ export async function handleCommandDbAltClick(
             });
             dialog.element.classList.add("indexos-dialog");
 
-            new ParamConfigDialog({
-                target: dialog.element.querySelector("#param-config-container")!,
-                props: {
-                    dialog,
-                    commandName: cmdDef.name || cleanLabel,
-                    commandId: resolvedCommand,
-                    paramsSchema,
-                    initialTab,
-                    currentInputParams,
-                    currentOutputMapping,
-                    contextSource: "command-db",
-                    onSave: async (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => {
-                        const hasParams = paramsSchema && paramsSchema.length > 0;
-                        const hasOutputs = outputsSchema && outputsSchema.length > 0;
-                        const inputJson = hasParams ? (Object.keys(updatedInput).length > 0 ? JSON.stringify(updatedInput, null, 2) : "{}") : "";
-                        const outputJson = hasOutputs ? (Object.keys(updatedOutput).length > 0 ? JSON.stringify(updatedOutput, null, 2) : "{}") : "";
-                        if (inputColKeyId) {
-                            await updateCellValue(null, avId, rowId, inputColKeyId, inputJson);
-                        }
-                        if (outputColKeyId) {
-                            await updateCellValue(null, avId, rowId, outputColKeyId, outputJson);
+            if (initialTab === "input") {
+                new InputConfigDialog({
+                    target: dialog.element.querySelector("#param-config-container")!,
+                    props: {
+                        dialog,
+                        commandName: cmdDef.name || cleanLabel,
+                        commandId: resolvedCommand,
+                        paramsSchema,
+                        currentInputParams,
+                        onSave: async (updatedInput: Record<string, any>) => {
+                            const hasParams = paramsSchema && paramsSchema.length > 0;
+                            const inputJson = hasParams ? (Object.keys(updatedInput).length > 0 ? JSON.stringify(updatedInput, null, 2) : "{}") : "";
+                            if (inputColKeyId) {
+                                await updateCellValue(null, avId, rowId, inputColKeyId, inputJson);
+                            }
                         }
                     }
-                }
-            });
+                });
+            } else {
+                new OutputConfigDialog({
+                    target: dialog.element.querySelector("#param-config-container")!,
+                    props: {
+                        dialog,
+                        commandName: cmdDef.name || cleanLabel,
+                        commandId: resolvedCommand,
+                        currentOutputMapping,
+                        onSave: async (updatedOutput: Record<string, string>) => {
+                            const hasOutputs = outputsSchema && outputsSchema.length > 0;
+                            const outputJson = hasOutputs ? (Object.keys(updatedOutput).length > 0 ? JSON.stringify(updatedOutput, null, 2) : "{}") : "";
+                            if (outputColKeyId) {
+                                await updateCellValue(null, avId, rowId, outputColKeyId, outputJson);
+                            }
+                        }
+                    }
+                });
+            }
             return;
         }
     }
@@ -546,7 +558,7 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
         });
         dialog.element.classList.add("indexos-dialog");
 
-        new ParamConfigDialog({
+        new InputConfigDialog({
             target: dialog.element.querySelector("#param-config-container")!,
             props: {
                 dialog,
@@ -554,14 +566,9 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
                 commandId: cmdDef.id,
                 paramsSchema,
                 currentInputParams,
-                currentOutputMapping,
-                contextSource: "command-db",
-                onSave: async (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => {
+                onSave: async (updatedInput: Record<string, any>) => {
                     if (inputColKeyId) {
                         await updateCellValue(null, commandAvId, cmdRowItemId, inputColKeyId, JSON.stringify(updatedInput, null, 2));
-                    }
-                    if (outputColKeyId) {
-                        await updateCellValue(null, commandAvId, cmdRowItemId, outputColKeyId, JSON.stringify(updatedOutput, null, 2));
                     }
                 }
             }

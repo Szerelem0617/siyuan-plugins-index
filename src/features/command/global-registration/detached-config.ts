@@ -1,7 +1,7 @@
 import { Dialog, showMessage } from "siyuan";
 import { commandRegistry } from "../registry/command-registry";
 import { decodeBtnHref, encodeBtnHref } from "./inline-button";
-import ParamConfigDialog from "../av-interaction/dialogs/ParamConfigDialog.svelte";
+import InputConfigDialog from "../av-interaction/dialogs/InputConfigDialog.svelte";
 
 export function configureDetachedCommand(linkEl: HTMLElement) {
     const href = linkEl.getAttribute("data-href");
@@ -48,7 +48,7 @@ export function configureDetachedCommand(linkEl: HTMLElement) {
     });
     dialog.element.classList.add("indexos-dialog");
 
-    new ParamConfigDialog({
+    new InputConfigDialog({
         target: dialog.element.querySelector("#detached-param-config-container")!,
         props: {
             dialog,
