@@ -33,7 +33,7 @@
         .sort((a, b) => a.name.localeCompare(b.name, "zh"));
 
     $: availableCommands = allowedCommands
-        ? commands.filter(cmd => allowedCommands.includes(cmd.id))
+        ? commands.filter(cmd => allowedCommands.includes(cmd.id) || allowedCommands.includes(cmd.name))
         : commands;
 
     $: currentEditingParams = editingCmd
@@ -52,8 +52,18 @@
         || cmd.id.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    $: if (onScriptChange) {
-        onScriptChange(generateRuleScript(name, checked.map(cmdId => ({ commandRef: cmdId, params: paramsByCmd[cmdId] || {} }))));
+    let isInitialized = false;
+    let lastLoadedScript: string | null = null;
+
+    $: if (initialScript !== undefined && initialScript !== lastLoadedScript) {
+        lastLoadedScript = initialScript;
+        loadScript(initialScript || "");
+    }
+
+    $: if (onScriptChange && isInitialized) {
+        const outScript = generateRuleScript(name, checked.map(cmdId => ({ commandRef: cmdId, params: paramsByCmd[cmdId] || {} })));
+        console.log("[SequenceEditor-Debug] 📤 触发 onScriptChange，向外输出脚本:", JSON.stringify(outScript), "checked:", checked);
+        onScriptChange(outScript);
     }
 
     function commandName(id: string): string {
@@ -139,20 +149,35 @@
     }
 
     function loadScript(script: string) {
+        isInitialized = false;
+        console.log("[SequenceEditor-Debug] 📥 内部 loadScript 接收脚本:", JSON.stringify(script));
         const rule = parseRuleScript(script);
-        if (!rule) return;
-        name = rule.name || "";
-        checked = rule.commands.map(c => c.commandRef);
-        const params: Record<string, Record<string, string>> = {};
-        for (const cmd of rule.commands) {
-            params[cmd.commandRef] = { ...cmd.params };
+        console.log("[SequenceEditor-Debug] parseRuleScript 结果:", rule);
+        if (rule) {
+            name = rule.name || "";
+            checked = rule.commands.map(c => {
+                const def = commandRegistry.getCommand(c.commandRef) || commandRegistry.findByNameOrId(c.commandRef);
+                return def?.id || c.commandRef;
+            });
+            const params: Record<string, Record<string, string>> = {};
+            for (const cmd of rule.commands) {
+                const def = commandRegistry.getCommand(cmd.commandRef) || commandRegistry.findByNameOrId(cmd.commandRef);
+                const realId = def?.id || cmd.commandRef;
+                params[realId] = { ...cmd.params };
+            }
+            paramsByCmd = params;
+            editingCmd = null;
+        } else {
+            checked = [];
+            paramsByCmd = {};
+            editingCmd = null;
         }
-        paramsByCmd = params;
-        editingCmd = null;
-    }
+        console.log("[SequenceEditor-Debug] 装载完成，checked 项:", checked);
 
-    if (initialScript) {
-        loadScript(initialScript);
+        // 状态装载完毕后，开启变更回调
+        queueMicrotask(() => {
+            isInitialized = true;
+        });
     }
 
     function getAutoSuggestion(cmdId: string, schema: any): { varName: string; note: string } | null {

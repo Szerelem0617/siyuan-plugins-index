@@ -163,6 +163,7 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
         const supertagLabel = String(supertagQuery[0].values[0][0] || "").trim();
         const relationRaw = String(supertagQuery[0].values[0][1] || "");
         const currentConditionalVal = String(supertagQuery[0].values[0][2] || "").trim();
+        console.log("[Conditional-Debug] Alt+Click 读取数据库单元格原文 currentConditionalVal:", JSON.stringify(currentConditionalVal));
 
         // 3. Resolve linked rowIDs
         let linkedRowIds: string[] = [];
@@ -188,10 +189,12 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
                 cmdsQuery[0].values.forEach((row: any) => {
                     const label = String(row[1] || "").trim();
                     const cmdInfo = COMMAND_BINDINGS[label];
+                    const cmdDef = commandRegistry.getCommand(label) || commandRegistry.findByNameOrId(label);
+                    const realCmdId = cmdDef?.id || cmdInfo?.commandRef || label;
                     boundCommands.push({
                         rowId: String(row[0]),
                         label: label,
-                        commandRef: cmdInfo?.commandRef || label
+                        commandRef: realCmdId
                     });
                 });
             }

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Dialog, showMessage } from "siyuan";
     import CommandSequenceEditor from "../../pipeline/CommandSequenceEditor.svelte";
-    import { generateRuleScript, parseRuleScript } from "../../pipeline/script-dsl";
+    import { generateMultiEventRuleScript, parseMultiEventRuleScript, generateRuleScript, parseDispatchCallsFromText, type RuleCommand } from "../../pipeline/script-dsl";
     import { createPipelineRow, registerPipelineCommand, pipelineCommandId } from "../../pipeline/manager";
     import { refreshSupertagRegistry } from "../../utils/sync-service";
 
@@ -12,34 +12,114 @@
     export let onSave: (updatedValue: string) => Promise<void>;
 
     const ALL_EVENT_TYPES = [
-        { id: "tag_created", label: "添加标签时" },
-        { id: "tag_removed", label: "移除标签时" },
-        { id: "block_content_changed", label: "内容变动时" },
-        { id: "block_attribute_changed", label: "属性变动时" },
-        { id: "task_completed", label: "任务完成时" }
+        { id: "tag_created", label: "添加标签时", icon: "⚡" },
+        { id: "tag_removed", label: "移除标签时", icon: "🗑️" },
+        { id: "block_content_changed", label: "内容变动时", icon: "✍️" },
+        { id: "block_attribute_changed", label: "属性变动时", icon: "🏷️" },
+        { id: "task_completed", label: "任务完成时", icon: "☑" }
     ];
 
-    let script = currentValue || "";
+    import { commandRegistry } from "../../registry/command-registry";
+
+    /** Conditional 只允许勾选“绑定命令”中存在的命令 */
+    const allowed = Array.from(new Set(
+        boundCommands
+            .flatMap(b => {
+                const def = commandRegistry.getCommand(b.commandRef || b.label) || commandRegistry.findByNameOrId(b.commandRef || b.label);
+                return [def?.id, b.commandRef, b.label].filter(Boolean) as string[];
+            })
+    ));
+
     let selectedEvents: string[] = ["tag_created"];
+    let activeEventTab: string = "tag_created";
+    /** 每个事件 Tab 对应的命令列表 */
+    let eventCommandsMap: Record<string, RuleCommand[]> = {
+        "tag_created": []
+    };
+
     let error = "";
     let saving = false;
     let savingAsCommand = false;
+    let showAddEventPicker = false;
 
-    /** Conditional 只允许勾选“绑定命令”中存在的命令 */
-    const allowed = boundCommands
-        .map(b => b.commandRef || b.label)
-        .filter(Boolean);
-
-    // 绝妙反向解析：从单元格既有脚本反向解包还原事件列表
-    const existing = parseRuleScript(currentValue || "");
-    if (existing?.events && existing.events.length > 0) {
-        selectedEvents = existing.events;
+    /** 核心提取函数：从单序列脚本文本中提取 commands 数组 (绝无遗漏) */
+    function extractCommandsFromScript(text: string): RuleCommand[] {
+        return parseDispatchCallsFromText(text);
     }
 
-    function toggleEvent(id: string) {
-        selectedEvents = selectedEvents.includes(id)
-            ? selectedEvents.filter(x => x !== id)
-            : [...selectedEvents, id];
+    // 初次挂载时：从既有脚本中拆解多事件与命令映射
+    console.log("[ConditionalDialog-Debug] 初始化挂载，currentValue:", JSON.stringify(currentValue), "boundCommands:", boundCommands);
+    const parsed = parseMultiEventRuleScript(currentValue || "");
+    console.log("[ConditionalDialog-Debug] parseMultiEventRuleScript 结果:", parsed);
+    if (parsed && parsed.events && parsed.events.length > 0) {
+        selectedEvents = parsed.events;
+        activeEventTab = selectedEvents[0] || "tag_created";
+        eventCommandsMap = { ...parsed.eventCommandsMap };
+        for (const ev of selectedEvents) {
+            if (!eventCommandsMap[ev]) eventCommandsMap[ev] = [];
+        }
+    }
+
+    // 防错兜底：如果解析后默认选中的 Tab 在 eventCommandsMap 中依然为空，尝试整体解包文本
+    if (currentValue && (!eventCommandsMap[activeEventTab] || eventCommandsMap[activeEventTab].length === 0)) {
+        const fallbackCmds = extractCommandsFromScript(currentValue);
+        console.log("[ConditionalDialog-Debug] 兜底解包命令列表:", fallbackCmds);
+        if (fallbackCmds.length > 0) {
+            eventCommandsMap[activeEventTab] = fallbackCmds;
+        }
+    }
+    console.log("[ConditionalDialog-Debug] 最终初始化 eventCommandsMap:", JSON.parse(JSON.stringify(eventCommandsMap)));
+
+    $: unselectedEvents = ALL_EVENT_TYPES.filter(ev => !selectedEvents.includes(ev.id));
+
+    function switchTab(eventId: string) {
+        console.log(`[ConditionalDialog-Debug] 🔀 切换 Tab 从 ${activeEventTab} -> ${eventId}`, "当前 eventCommandsMap:", JSON.parse(JSON.stringify(eventCommandsMap)));
+        activeEventTab = eventId;
+        showAddEventPicker = false;
+    }
+
+    function addEventTab(eventId: string) {
+        if (!selectedEvents.includes(eventId)) {
+            selectedEvents = [...selectedEvents, eventId];
+            if (!eventCommandsMap[eventId]) {
+                eventCommandsMap = { ...eventCommandsMap, [eventId]: [] };
+            }
+        }
+        activeEventTab = eventId;
+        showAddEventPicker = false;
+        console.log(`[ConditionalDialog-Debug] ➕ 添加 Tab ${eventId}`, "当前 eventCommandsMap:", JSON.parse(JSON.stringify(eventCommandsMap)));
+    }
+
+    function removeEventTab(eventId: string, e: MouseEvent) {
+        e.stopPropagation();
+        if (selectedEvents.length <= 1) {
+            showMessage("请至少保留一个触发事件", 3000, "info");
+            return;
+        }
+        selectedEvents = selectedEvents.filter(id => id !== eventId);
+        delete eventCommandsMap[eventId];
+        if (activeEventTab === eventId) {
+            activeEventTab = selectedEvents[0] || "";
+        }
+        console.log(`[ConditionalDialog-Debug] 🗑️ 删除 Tab ${eventId}`, "当前 eventCommandsMap:", JSON.parse(JSON.stringify(eventCommandsMap)));
+    }
+
+    /** 当前选中 Tab 的 Script 文本更新回调 */
+    function handleActiveScriptChange(scriptText: string) {
+        if (!activeEventTab) return;
+        const newCmds = extractCommandsFromScript(scriptText);
+        console.log(`[ConditionalDialog-Debug] 📩 子组件 onScriptChange 触发 (Tab=${activeEventTab})`, "提取新命令:", newCmds);
+        eventCommandsMap = {
+            ...eventCommandsMap,
+            [activeEventTab]: newCmds
+        };
+    }
+
+    function buildScriptForActiveTab(evId: string): string {
+        const cmds = eventCommandsMap[evId] || [];
+        const builtScript = generateRuleScript("", cmds);
+        console.log(`[ConditionalDialog-Debug] 🛠️ 为 Tab=${evId} 构筑 initialScript:`, JSON.stringify(builtScript), "命令数:", cmds.length);
+        return builtScript;
     }
 
     async function handleSave() {
@@ -48,19 +128,23 @@
             error = "请至少选择一个触发事件";
             return;
         }
-        const rule = parseRuleScript(script);
-        if (!rule || rule.commands.length === 0) {
-            error = "请至少勾选一个命令";
+
+        let totalCmds = 0;
+        for (const ev of selectedEvents) {
+            totalCmds += (eventCommandsMap[ev] || []).length;
+        }
+        if (totalCmds === 0) {
+            error = "请至少在一个事件 Tab 中勾选配置至少一条命令";
             return;
         }
 
         saving = true;
         try {
-            const updated = generateRuleScript("", rule.commands, selectedEvents);
-            await onSave(updated);
+            const finalScript = generateMultiEventRuleScript("", eventCommandsMap);
+            await onSave(finalScript);
             await refreshSupertagRegistry();
-            console.log(`[ConditionalEditor] 保存 #${supertag} 条件脚本，事件:`, selectedEvents);
-            showMessage(`✓ 已保存 #${supertag} 的条件触发配置 ⚡`);
+            console.log(`[ConditionalEditor] 成功保存 #${supertag} 的多事件 Tab 条件脚本:`, selectedEvents);
+            showMessage(`✓ 已成功保存 #${supertag} 的条件触发配置 ⚡`);
             dialog.destroy();
         } catch (e: any) {
             error = `保存失败: ${e.message}`;
@@ -69,24 +153,22 @@
         }
     }
 
-    /** 另存为复合命令（不改动 Conditional 单元格） */
     async function handleSaveAsCommand() {
         error = "";
-        const rule = parseRuleScript(script);
-        if (!rule || rule.commands.length === 0) {
-            error = "请至少勾选一个命令";
+        const finalScript = generateMultiEventRuleScript("", eventCommandsMap);
+        if (!finalScript) {
+            error = "请至少配置一条命令";
             return;
         }
         savingAsCommand = true;
         try {
-            const name = `#${supertag} 条件`;
-            const rowId = await createPipelineRow(name, script);
+            const name = `#${supertag} 条件触发`;
+            const rowId = await createPipelineRow(name, finalScript);
             const commandId = pipelineCommandId(rowId);
-            registerPipelineCommand(commandId, name, script, "{}");
+            registerPipelineCommand(commandId, name, finalScript, "{}");
             await refreshSupertagRegistry();
-            console.log(`[ConditionalEditor] 已另存为复合命令 ${commandId}`);
             showMessage(`✓ 已另存为复合命令：${commandId}`);
-        } catch (e) {
+        } catch (e: any) {
             error = `另存失败: ${e.message}`;
         } finally {
             savingAsCommand = false;
@@ -94,34 +176,85 @@
     }
 </script>
 
-<div class="fn__flex-column" style="height: 100%; padding: 16px; box-sizing: border-box; gap: 10px;">
-    <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); flex-shrink: 0;">
-        🏷️ 配置 Supertag <span style="color: var(--indexos-accent-primary);">#{supertag}</span> 的条件触发
+<div class="fn__flex-column" style="height: 100%; padding: 16px; box-sizing: border-box; gap: 12px;">
+    <!-- 标题 -->
+    <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;">
+        <span>🏷️ 配置 Supertag <span style="color: var(--indexos-accent-primary);">#{supertag}</span> 的条件触发</span>
     </div>
 
-    <div style="flex-shrink: 0; display: flex; flex-direction: column; gap: 6px;">
-        <div style="font-size: 11px; color: var(--indexos-text-muted);">触发事件（勾选的命令序列会在这些事件发生时执行）</div>
-        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            {#each ALL_EVENT_TYPES as ev}
-                <button
-                    type="button"
-                    class="indexos-btn-bordered"
-                    style="font-size: 11px; padding: 3px 10px; {selectedEvents.includes(ev.id) ? 'background: var(--indexos-accent-primary); color: #fff; border-color: var(--indexos-accent-primary);' : ''}"
-                    on:click={() => toggleEvent(ev.id)}
-                >{ev.label}</button>
-            {/each}
+    <!-- 触发事件 Tab 选项卡 -->
+    <div style="flex-shrink: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: var(--indexos-bg-surface); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--indexos-border-subtle);">
+        <div style="font-size: 11px; font-weight: 600; color: var(--indexos-text-muted); margin-right: 4px;">触发事件:</div>
+
+        {#each selectedEvents as evId}
+            {@const evObj = ALL_EVENT_TYPES.find(x => x.id === evId)}
+            {@const cmdCount = (eventCommandsMap[evId] || []).length}
+            {#if evObj}
+                <div
+                    style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; border: 1px solid {activeEventTab === evId ? 'var(--indexos-accent-primary)' : 'var(--indexos-border-subtle)'}; background: {activeEventTab === evId ? 'var(--indexos-bg-card)' : 'transparent'}; color: {activeEventTab === evId ? 'var(--indexos-accent-primary)' : 'var(--indexos-text-main)'}; font-weight: {activeEventTab === evId ? '700' : 'normal'}; box-shadow: {activeEventTab === evId ? '0 2px 6px rgba(0, 0, 0, 0.08)' : 'none'};"
+                    on:click={() => switchTab(evId)}
+                >
+                    <span>{evObj.icon} {evObj.label}</span>
+                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 10px; background: {activeEventTab === evId ? 'var(--indexos-accent-primary)' : 'rgba(161, 196, 230, 0.3)'}; color: {activeEventTab === evId ? '#FFFFFF' : 'var(--indexos-text-muted)'};">
+                        {cmdCount}
+                    </span>
+                    {#if selectedEvents.length > 1}
+                        <span
+                            style="opacity: 0.5; font-weight: bold; margin-left: 2px; line-height: 1;"
+                            title="关闭并删除该事件配置"
+                            on:click={(e) => removeEventTab(evId, e)}
+                        >&times;</span>
+                    {/if}
+                </div>
+            {/if}
+        {/each}
+
+        <!-- ➕ 启用新事件 Tab 按钮 -->
+        <div style="position: relative;">
+            <button
+                type="button"
+                class="b3-button b3-button--outline"
+                style="font-size: 11px; padding: 4px 10px; height: 26px; line-height: 24px; display: inline-flex; align-items: center; gap: 4px;"
+                on:click={() => showAddEventPicker = !showAddEventPicker}
+            >
+                <span>➕ 启用新事件</span>
+            </button>
+
+            {#if showAddEventPicker}
+                <div style="position: absolute; top: 30px; left: 0; z-index: 100; background: var(--indexos-bg-card); border: 1px solid var(--indexos-border-light); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 6px; min-width: 150px; display: flex; flex-direction: column; gap: 4px;">
+                    {#if unselectedEvents.length === 0}
+                        <div style="font-size: 11px; color: var(--indexos-text-muted); padding: 4px 8px; text-align: center;">已启用全部事件</div>
+                    {:else}
+                        {#each unselectedEvents as ev}
+                            <button
+                                type="button"
+                                style="font-size: 11px; padding: 6px 10px; border-radius: 4px; border: none; background: transparent; color: var(--indexos-text-main); text-align: left; cursor: pointer; display: flex; align-items: center; gap: 6px; width: 100%; transition: background 0.15s ease;"
+                                on:click={() => addEventTab(ev.id)}
+                            >
+                                <span>{ev.icon}</span>
+                                <span>{ev.label}</span>
+                            </button>
+                        {/each}
+                    {/if}
+                </div>
+            {/if}
         </div>
     </div>
 
-    <CommandSequenceEditor
-        initialScript={currentValue || null}
-        showName={false}
-        allowedCommands={allowed}
-        onScriptChange={s => { script = s; }}
-    />
+    <!-- 当前事件 Tab 的专属命令序列编辑器 -->
+    {#key activeEventTab}
+        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
+            <CommandSequenceEditor
+                initialScript={buildScriptForActiveTab(activeEventTab)}
+                showName={false}
+                allowedCommands={allowed}
+                onScriptChange={handleActiveScriptChange}
+            />
+        </div>
+    {/key}
 
     <div style="font-size: 10px; color: var(--indexos-text-muted); flex-shrink: 0; line-height: 1.5;">
-        勾选命令后点“⚙ 入参”配置参数，可引用前序出参与环境变量。生成的脚本与复合命令/后台任务同格式，可互相提升复用。
+        提示：每个事件 Tab 可配置专属命令。在当前事件下勾选命令并点“⚙ 入参”调整参数，保存后将按事件自动分发执行。
     </div>
 
     {#if error}
