@@ -14,6 +14,7 @@
 
     import { commandRegistry } from "../../registry/command-registry";
     import { openIndexDropdown } from "../../../../ui/components/index-dropdown";
+    import { getCommandDbTokens, getCommandDbPlaceholder } from "../command-db-auto-context";
 
     let activeTab: "input" | "output" = initialTab;
     let values: Record<string, any> = {};
@@ -131,22 +132,31 @@
                                 </button>
                             </div>
                         {:else}
-                            {@const isCommandDb = contextSource === "command-db"}
-                            {@const hasMeaningfulDefault = param.default !== undefined && String(param.default).trim() !== ""}
-                            {@const defaultHint = hasMeaningfulDefault ? `默认: ${param.default}` : ""}
-                            {@const isBlockIdParam = param.key === 'id' || param.type === 'blockid'}
-                            {@const autoSuggest = (!isCommandDb && isBlockIdParam)
-                                ? '⚡ Auto-Context: 留空将自动绑定当前上下文块' 
-                                : (!isCommandDb && param.key === 'enabled'
-                                    ? '⚡ Auto-Context: 留空将由上一步运行结果控制' 
-                                    : (defaultHint || (isBlockIdParam ? '留空自动绑定当前上下文块' : (param.description || ''))))}
                             <input 
                                 type="text" 
                                 class="b3-input fn__block" 
                                 style="box-sizing: border-box; width: 100%; max-width: 100%;"
-                                placeholder={autoSuggest}
+                                placeholder={getCommandDbPlaceholder(param.key, param.type, param.default, param.description)}
                                 bind:value={values[param.key]} 
                             />
+                            <!-- ⚡ Command-DB 专属快捷 Token 胶囊栏 -->
+                            {@const tokens = getCommandDbTokens(param.key, param.type)}
+                            {#if tokens.length > 0}
+                                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
+                                    {#each tokens as tok}
+                                        <button
+                                            type="button"
+                                            class="indexos-btn-bordered"
+                                            style="font-size: 10px; padding: 1px 6px; border-radius: 3px; cursor: pointer; color: var(--indexos-accent-primary); border-color: var(--indexos-border-light);"
+                                            title={tok.description}
+                                            on:click={() => {
+                                                const cur = values[param.key] || "";
+                                                values[param.key] = cur ? `${cur} ${tok.token}` : tok.token;
+                                            }}
+                                        >{tok.label}</button>
+                                    {/each}
+                                </div>
+                            {/if}
                         {/if}
 
                         {#if param.description}
