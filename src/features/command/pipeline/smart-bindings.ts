@@ -24,27 +24,32 @@ import { commandRegistry } from "../registry/command-registry";
 
 /** 出参在参数池中的名字：用户配置的别名 (outputMapping) 优先，其次为 schema.default (如 createdblock)，最后用规范 key */
 export function outputName(commandRef: string, canonicalKey: string): string {
+    let name = canonicalKey;
     try {
         // 1. 优先从 COMMAND_BINDINGS (即 Command-DB 真实数据源) 获取用户在 Output 列保存的名
         for (const binding of Object.values(COMMAND_BINDINGS)) {
             if (binding.commandRef === commandRef && binding.outputMapping) {
                 const parsed = JSON.parse(binding.outputMapping);
                 if (parsed && typeof parsed === "object" && parsed[canonicalKey]) {
-                    return String(parsed[canonicalKey]);
+                    name = String(parsed[canonicalKey]);
+                    break;
                 }
             }
         }
-
-        // 2. 只有当 Command-DB 中未修改/为空时，才降级读取 commandRegistry 内置 Schema 默认别名 (如 createdblock)
-        const def = commandRegistry.getCommand(commandRef);
-        if (def && def.outputs) {
-            const outSchema = def.outputs.find(o => o.key === canonicalKey);
-            if (outSchema && outSchema.default) {
-                return String(outSchema.default);
+        if (name === canonicalKey) {
+            // 2. 只有当 Command-DB 中未修改/为空时，才降级读取 commandRegistry 内置 Schema 默认别名 (如 createdblock)
+            const def = commandRegistry.getCommand(commandRef);
+            if (def && def.outputs) {
+                const outSchema = def.outputs.find(o => o.key === canonicalKey);
+                if (outSchema && outSchema.default) {
+                    name = String(outSchema.default);
+                }
             }
         }
     } catch { /* ignore */ }
-    return canonicalKey;
+    
+    // 规范化命名空间：为出参变量追加 var. 前缀（避免与系统环境变量冲突）
+    return name.startsWith("var.") ? name : `var.${name}`;
 }
 
 /** 入参 schema 与出参端点是否类型兼容 */

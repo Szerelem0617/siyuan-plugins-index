@@ -125,13 +125,16 @@
                     <div style="font-family: monospace; font-size: 10px; opacity: 0.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{cmd.id}</div>
                 </div>
                 {#if sel}
+                    {@const itemData = (activeTab === 'menu' ? config.menu : config.button).find(e => e.id === cmd.id)}
+                    <!-- 👑 茵蒂克丝刺绣金 (Index Gold): 专属用于标注用户进行了 Layer 3 客制化参数配置的命令按钮 -->
+                    {@const isCustomized = !!(itemData && itemData.params && Object.values(itemData.params).some(v => v !== undefined && String(v).trim() !== ''))}
                     <button
                         type="button"
                         class="indexos-btn-bordered"
-                        style="font-size: 10px; padding: 1px 7px; flex-shrink: 0;"
-                        title="配置该命令的参数"
+                        style="font-size: 10px; padding: 1px 7px; flex-shrink: 0; {isCustomized ? 'border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important; font-weight: 600;' : ''}"
+                        title={isCustomized ? '👑 已配置客制化入参 (Golden Customization)' : '配置该命令的参数'}
                         on:click={e => { e.stopPropagation(); e.preventDefault(); openParams(activeTab, cmd.id); }}
-                    >⚙ 参数</button>
+                    >⚙ 参数{isCustomized ? " •" : ""}</button>
                 {/if}
             </div>
         {/each}
@@ -157,7 +160,7 @@
                 {#each (editingDef?.params || []) as p}
                     {@const isBlockIdParam = p.key === 'id' || p.type === 'blockid'}
                     {@const autoPh = isBlockIdParam 
-                        ? '⚡ Auto-Context 感知出参: {{createdblock}} (留空自动继承)' 
+                        ? '⚡ Auto-Context 感知出参: {{var.createdblock}} (留空自动继承)' 
                         : '空 = 用 Command-DB 配置；可写 {{变量}}'}
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 10px; color: var(--indexos-text-muted); flex-shrink: 0; width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{p.label || p.key}</span>
@@ -174,8 +177,8 @@
                                 class="indexos-btn-bordered"
                                 style="font-size: 10px; padding: 1px 6px; flex-shrink: 0; white-space: nowrap; color: var(--indexos-accent-primary);"
                                 title="一键充填打标签创块产出的 Block ID 出参"
-                                on:click={() => setEntryParam(editingEntry.id, p.key, "{{createdblock}}")}
-                            >⚡ 填 &#123;&#123;createdblock&#125;&#125;</button>
+                                on:click={() => setEntryParam(editingEntry.id, p.key, "{{var.createdblock}}")}
+                            >⚡ 填 &#123;&#123;var.createdblock&#125;&#125;</button>
                         {/if}
                     </div>
                 {/each}

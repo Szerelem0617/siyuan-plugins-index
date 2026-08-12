@@ -236,17 +236,19 @@
                     >{checked.includes(cmd.id) ? checked.indexOf(cmd.id) + 1 : ""}</span>
                     <span style="font-size: 12px; font-weight: 600; color: var(--indexos-text-main); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{cmd.name}</span>
                     {#if checked.includes(cmd.id)}
+                        {@const hasCustomParams = !!(paramsByCmd[cmd.id] && Object.values(paramsByCmd[cmd.id]).some(v => v !== undefined && String(v).trim() !== ''))}
+                        <!-- 👑 茵蒂克丝刺绣金 (Index Gold): 专属用于标注用户进行了 Layer 3 客制化参数配置的命令按钮 -->
                         <button
                             type="button"
                             class="indexos-btn-bordered"
-                            style="font-size: 10px; padding: 1px 8px; flex-shrink: 0; {editingCmd === cmd.id ? 'background: var(--indexos-accent-primary); color: #fff; border-color: var(--indexos-accent-primary);' : ''}"
-                            title="配置该命令的入参"
+                            style="font-size: 10px; padding: 1px 8px; flex-shrink: 0; {editingCmd === cmd.id ? 'background: var(--indexos-accent-primary); color: #fff; border-color: var(--indexos-accent-primary);' : (hasCustomParams ? 'border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important; font-weight: 600;' : '')}"
+                            title={hasCustomParams ? '👑 已配置客制化入参 (Golden Customization)' : '配置该命令的入参'}
                             on:click={e => {
                                 e.stopPropagation();
                                 e.preventDefault();
                                 openSettings(cmd.id);
                             }}
-                        >⚙ 入参</button>
+                        >⚙ 入参{hasCustomParams ? " •" : ""}</button>
                     {/if}
                 </div>
             {/each}
