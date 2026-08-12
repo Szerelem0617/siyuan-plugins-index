@@ -19,7 +19,7 @@
         { id: "task_completed", label: "任务完成时" }
     ];
 
-    let script = "";
+    let script = currentValue || "";
     let selectedEvents: string[] = ["tag_created"];
     let error = "";
     let saving = false;
@@ -30,7 +30,7 @@
         .map(b => b.commandRef || b.label)
         .filter(Boolean);
 
-    // 从现有单元格脚本还原事件选择（新版格式）
+    // 绝妙反向解析：从单元格既有脚本反向解包还原事件列表
     const existing = parseRuleScript(currentValue || "");
     if (existing?.events && existing.events.length > 0) {
         selectedEvents = existing.events;
@@ -58,10 +58,11 @@
         try {
             const updated = generateRuleScript("", rule.commands, selectedEvents);
             await onSave(updated);
+            await refreshSupertagRegistry();
             console.log(`[ConditionalEditor] 保存 #${supertag} 条件脚本，事件:`, selectedEvents);
-            showMessage(`✓ 已保存 #${supertag} 的条件触发配置`);
+            showMessage(`✓ 已保存 #${supertag} 的条件触发配置 ⚡`);
             dialog.destroy();
-        } catch (e) {
+        } catch (e: any) {
             error = `保存失败: ${e.message}`;
         } finally {
             saving = false;

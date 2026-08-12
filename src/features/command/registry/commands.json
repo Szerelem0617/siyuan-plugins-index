@@ -85,11 +85,6 @@
                 "contextNeed": "none",
                 "category": "navigation",
                 "source": "builtin"
-            },
-            "seed": {
-                "rowID": "20260526204558-bp28zp8",
-                "label": "🌐 全局关系图",
-                "paramMapping": ""
             }
         },
         {
@@ -345,11 +340,6 @@
                 "contextNeed": "block",
                 "category": "edit",
                 "source": "builtin"
-            },
-            "seed": {
-                "rowID": "20260526204558-insbel9",
-                "label": "➕ 在下方插入块",
-                "paramMapping": "insertType=p"
             }
         },
         {
@@ -388,11 +378,6 @@
                 "contextNeed": "block",
                 "category": "edit",
                 "source": "builtin"
-            },
-            "seed": {
-                "rowID": "20260526204558-sibblw9",
-                "label": "⏬ 在下方插入同级块",
-                "paramMapping": ""
             }
         },
         {

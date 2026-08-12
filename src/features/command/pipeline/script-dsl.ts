@@ -1,22 +1,6 @@
 /**
  * script-dsl.ts
- * 统一规则脚本 DSL：编辑器生成 / 反向解析
- *
- * 三种表面（Conditional 列、全局后台、复合命令）共用同一脚本工件：
- *
- *   // 名称: 创建任务并更新
- *   async ({ dispatch, state, eventName }) => {
- *       await dispatch("api.block.insert", {
- *           "data": "[新任务] {{time}}",
- *           "previousID": "{{block_id}}"
- *       });
- *       await dispatch("plugin-index.command.safeUpdateBlock", {
- *           "id": "{{createdblock}}"
- *       });
- *   }
- *
- * 运行于统一沙箱环境（dispatch / state / delay / context / eventName）。
- * 由于是编辑器生成的固定形态，反向解析（提取 dispatch 调用）是确定性的。
+ * 统一规则脚本 DSL：编辑器生成 / 强大鲁棒反向解析
  */
 
 export interface RuleCommand {
@@ -38,12 +22,19 @@ export function generateRuleScript(
     events?: string[]
 ): string {
     const lines = commands.map(cmd => {
-        const paramsText = JSON.stringify(cmd.params || {}, null, 2);
-        return `    await dispatch(${JSON.stringify(cmd.commandRef)}, ${paramsText});`;
+        const hasParams = cmd.params && Object.keys(cmd.params).length > 0;
+        if (hasParams) {
+            const paramsText = JSON.stringify(cmd.params || {}, null, 2);
+            return `    await dispatch(${JSON.stringify(cmd.commandRef)}, ${paramsText});`;
+        } else {
+            return `    await dispatch(${JSON.stringify(cmd.commandRef)});`;
+        }
     });
+
     const head: string[] = [];
     if (name.trim()) head.push(`// 名称: ${name}`);
     if (events && events.length > 0) head.push(`// 事件: ${events.join(", ")}`);
+
     const body = events && events.length > 0
         ? [
             `async ({ dispatch, state, eventName }) => {`,
@@ -61,59 +52,76 @@ export function generateRuleScript(
 }
 
 /**
- * 反向解析规则脚本：提取所有 dispatch("id", {json}) 调用。
- * 只解析我们生成/认识的形态；解析失败返回 null。
+ * 强大鲁棒的反向解析规则脚本：提取事件与所有 dispatch("id", {...}) 调用。
  */
 export function parseRuleScript(text: string): RuleScript | null {
-    if (!text || typeof text !== "string" || !text.includes("dispatch(")) return null;
+    if (!text || typeof text !== "string" || !text.includes("dispatch")) return null;
 
     const nameMatch = text.match(/\/\/\s*名称\s*:\s*(.+)/);
     const name = nameMatch ? nameMatch[1].trim() : "";
+
+    // 1. 提取事件 (Events)
+    const eventsSet = new Set<string>();
     const eventsMatch = text.match(/\/\/\s*事件\s*:\s*(.+)/);
-    const events = eventsMatch
-        ? eventsMatch[1].split(/[,，]/).map(s => s.trim()).filter(Boolean)
-        : undefined;
-
-    const commands: RuleCommand[] = [];
-    const scanRe = /dispatch\(\s*["']([^"']+)["']\s*,\s*/g;
-    let scan: RegExpExecArray | null;
-    while ((scan = scanRe.exec(text)) !== null) {
-        const commandRef = scan[1];
-        const braceStart = text.indexOf("{", scanRe.lastIndex);
-        if (braceStart === -1) continue;
-
-        // 括号平衡（忽略字符串内的花括号）
-        let depth = 0;
-        let inStr = false;
-        let quote = "";
-        let end = -1;
-        for (let j = braceStart; j < text.length; j++) {
-            const ch = text[j];
-            if (inStr) {
-                if (ch === "\\") { j++; continue; }
-                if (ch === quote) inStr = false;
-                continue;
-            }
-            if (ch === '"' || ch === "'" || ch === "`") { inStr = true; quote = ch; continue; }
-            if (ch === "{") depth++;
-            else if (ch === "}") {
-                depth--;
-                if (depth === 0) { end = j + 1; break; }
-            }
-        }
-        if (end === -1) continue;
-
+    if (eventsMatch) {
+        eventsMatch[1].split(/[,，]/).map(s => s.trim()).filter(Boolean).forEach(e => eventsSet.add(e));
+    }
+    const includesMatch = text.match(/\[([^\]]+)\]\.includes\(eventName\)/);
+    if (includesMatch) {
         try {
-            const jsonText = text.slice(braceStart, end);
-            const parsed = JSON.parse(jsonText) as Record<string, unknown>;
-            const params: Record<string, string> = {};
-            for (const [k, v] of Object.entries(parsed)) {
-                params[k] = typeof v === "string" ? v : JSON.stringify(v);
-            }
-            commands.push({ commandRef, params });
-        } catch { /* 非我们生成的形态，跳过 */ }
+            const arr = JSON.parse(`[${includesMatch[1]}]`);
+            if (Array.isArray(arr)) arr.forEach(e => eventsSet.add(String(e)));
+        } catch (_) {}
+    }
+    const eventEqMatches = text.matchAll(/eventName\s*===\s*["']([^"']+)["']/g);
+    for (const m of eventEqMatches) {
+        eventsSet.add(m[1]);
     }
 
-    if (commands.length === 0) return null;
-    return { name, commands, events };
+    // 2. 提取所有的 dispatch(...) 调用
+    const commands: RuleCommand[] = [];
+    const dispatchRegex = /dispatch\(\s*["']([^"']+)["']\s*(?:,\s*([\s\S]*?))?\s*\)/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = dispatchRegex.exec(text)) !== null) {
+        const commandRef = match[1];
+        const rawArgs = match[2];
+        let params: Record<string, string> = {};
+
+        if (rawArgs && rawArgs.trim().startsWith("{")) {
+            try {
+                const braceStart = text.indexOf("{", match.index);
+                if (braceStart !== -1) {
+                    let depth = 0, inStr = false, quote = "", end = -1;
+                    for (let j = braceStart; j < text.length; j++) {
+                        const ch = text[j];
+                        if (inStr) {
+                            if (ch === "\\") { j++; continue; }
+                            if (ch === quote) inStr = false;
+                            continue;
+                        }
+                        if (ch === '"' || ch === "'" || ch === "`") { inStr = true; quote = ch; continue; }
+                        if (ch === "{") depth++;
+                        else if (ch === "}") {
+                            depth--;
+                            if (depth === 0) { end = j; break; }
+                        }
+                    }
+                    if (end !== -1) {
+                        const jsonStr = text.slice(braceStart, end + 1);
+                        params = JSON.parse(jsonStr);
+                    }
+                }
+            } catch (_) {
+                params = {};
+            }
+        }
+        commands.push({ commandRef, params });
+    }
+
+    return {
+        name,
+        commands,
+        events: Array.from(eventsSet)
+    };
 }
