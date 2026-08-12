@@ -2,7 +2,7 @@
     import { evaluateCommandConstraints } from "../utils/constraint-checker";
     import { commandRegistry } from "../registry/command-registry";
     import { generateRuleScript, parseRuleScript } from "./script-dsl";
-    import { buildSmartBindings, outputsOf, outputName } from "./smart-bindings";
+    import { buildSmartBindings, outputsOf, outputName, getTagCreatedOutputPool } from "./smart-bindings";
 
     /** 可复用的命令序列编辑器：勾选命令（顺序号）+ 每命令入参设置 + 快捷配置 */
     export let initialScript: string | null = null;
@@ -136,13 +136,22 @@
 
     function previousOutputs(cmdId: string): { name: string; source: string }[] {
         const idx = checked.indexOf(cmdId);
-        if (idx <= 0) return [];
         const out: { name: string; source: string }[] = [];
-        for (let i = 0; i < idx; i++) {
-            const prevId = checked[i];
-            const def = commandRegistry.getCommand(prevId);
-            for (const o of outputsOf(def)) {
-                out.push({ name: outputName(prevId, o.key), source: `${commandName(prevId)}.${o.key}` });
+        if (idx > 0) {
+            for (let i = 0; i < idx; i++) {
+                const prevId = checked[i];
+                const def = commandRegistry.getCommand(prevId);
+                for (const o of outputsOf(def)) {
+                    out.push({ name: outputName(prevId, o.key), source: `${commandName(prevId)}.${o.key}` });
+                }
+            }
+        }
+        if (out.length === 0) {
+            const pool = getTagCreatedOutputPool();
+            for (const item of pool) {
+                if (!out.some(x => x.name === item.varName)) {
+                    out.push({ name: item.varName, source: "TagCreated.createdblock" });
+                }
             }
         }
         return out;

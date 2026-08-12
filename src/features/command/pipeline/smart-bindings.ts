@@ -71,7 +71,30 @@ export function suggestBinding(prevDef: CommandDef | undefined, paramKey: string
 }
 
 /**
+ * 检索 Supertag 在 tag_created 事件阶段可能产生的全局出参变量池
+ */
+export function getTagCreatedOutputPool(): { commandRef: string; canonicalKey: string; varName: string }[] {
+    const pool: { commandRef: string; canonicalKey: string; varName: string }[] = [];
+    const tagCreatedCmds = [
+        "plugin-index.command.insertBlockBelow",
+        "api.block.insert"
+    ];
+
+    for (const cmdId of tagCreatedCmds) {
+        const def = commandRegistry.getCommand(cmdId);
+        if (def && def.outputs) {
+            for (const out of def.outputs) {
+                const varName = outputName(cmdId, out.key);
+                pool.push({ commandRef: cmdId, canonicalKey: out.key, varName });
+            }
+        }
+    }
+    return pool;
+}
+
+/**
  * 为某个命令生成建议绑定（只填空参数），引用使用参数池名字 {{<别名或key>}}。
+ * 具备 tag_created 出参全局感知能力。
  */
 export function buildSmartBindings(
     commands: { commandRef: string }[],
@@ -82,13 +105,23 @@ export function buildSmartBindings(
     const def = registry.getCommand(commands[stepIndex].commandRef);
     if (!def || !def.params) return result;
     for (const schema of def.params) {
+        let matched = false;
+        // 1. 优先从同序列的前置步骤搜寻
         for (let i = stepIndex - 1; i >= 0; i--) {
             const prev = commands[i];
             const prevDef = registry.getCommand(prev.commandRef);
             const outKey = suggestBinding(prevDef, schema.key, schema.type);
             if (outKey) {
                 result[schema.key] = `{{${outputName(prev.commandRef, outKey)}}}`;
+                matched = true;
                 break;
+            }
+        }
+        // 2. 若前置未匹配到，触发 tag_created 出参全局感应 (如 createdblock)
+        if (!matched && (schema.key === "id" || schema.type === "blockid")) {
+            const pool = getTagCreatedOutputPool();
+            if (pool.length > 0) {
+                result[schema.key] = `{{${pool[0].varName}}}`;
             }
         }
     }

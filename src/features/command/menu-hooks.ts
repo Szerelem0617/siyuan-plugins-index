@@ -98,10 +98,10 @@ function addSupertagIconMenuItems(menu: any, blockEl: HTMLElement | null, protyl
     const addedCmdIds = new Set<string>();
 
     for (const tag of tags) {
-        // 在 SUPERTAG_REGISTRY 中匹配该 Supertag 绑定的所有非仅按钮命令
+        // 在 SUPERTAG_REGISTRY 中匹配该 Supertag 显式绑定到 Icon Menu 的命令
         const matchedEntries = SUPERTAG_REGISTRY.filter(item =>
             item.typeTag.toLowerCase() === tag &&
-            item.uiLocation !== "Button" &&
+            item.uiLocation === "IconMenu" &&
             item.commandRef
         );
 

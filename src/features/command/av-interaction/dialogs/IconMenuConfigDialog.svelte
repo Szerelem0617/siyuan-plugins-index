@@ -155,15 +155,28 @@
                 <div style="font-size: 11px; color: var(--indexos-text-muted);">该命令没有可配置参数。</div>
             {:else}
                 {#each (editingDef?.params || []) as p}
+                    {@const isBlockIdParam = p.key === 'id' || p.type === 'blockid'}
+                    {@const autoPh = isBlockIdParam 
+                        ? '⚡ Auto-Context 感知出参: {{createdblock}} (留空自动继承)' 
+                        : '空 = 用 Command-DB 配置；可写 {{变量}}'}
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 10px; color: var(--indexos-text-muted); flex-shrink: 0; width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{p.label || p.key}</span>
                         <input
                             type="text"
                             style="flex: 1; min-width: 0; font-size: 11px; padding: 2px 6px; border: 1px solid {editingParams[p.key] ? 'rgba(40, 81, 127, 0.55)' : 'var(--indexos-border-light)'}; border-radius: 3px; background: var(--indexos-bg-container); color: var(--indexos-text-main);"
                             value={editingParams[p.key] || ""}
-                            placeholder="空 = 用 Command-DB 配置；可写 &#123;&#123;变量&#125;&#125;"
+                            placeholder={autoPh}
                             on:input={e => setEntryParam(editingEntry.id, p.key, e.currentTarget.value)}
                         />
+                        {#if isBlockIdParam}
+                            <button
+                                type="button"
+                                class="indexos-btn-bordered"
+                                style="font-size: 10px; padding: 1px 6px; flex-shrink: 0; white-space: nowrap; color: var(--indexos-accent-primary);"
+                                title="一键充填打标签创块产出的 Block ID 出参"
+                                on:click={() => setEntryParam(editingEntry.id, p.key, "{{createdblock}}")}
+                            >⚡ 填 &#123;&#123;createdblock&#125;&#125;</button>
+                        {/if}
                     </div>
                 {/each}
             {/if}

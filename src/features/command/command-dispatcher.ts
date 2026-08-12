@@ -114,8 +114,8 @@ export async function resolveCommandParams(
     }
 
     const effectiveSources: ParamSources = {
-        ...sources,
-        commandDb: liveDbParam || sources.commandDb
+        commandDb: liveDbParam || undefined,
+        ...sources
     };
 
     const raw = mergeParamSources(effectiveSources);
@@ -175,7 +175,14 @@ export async function resolveCommandParams(
 export function mergeParamSources(sources: ParamSources): Record<string, unknown> {
     const merged: Record<string, unknown> = { ...parseParam(sources.commandDb) };
     if (sources.auto) Object.assign(merged, sources.auto);
-    if (sources.manual) Object.assign(merged, sources.manual);
+    if (sources.manual) {
+        const parsedManual = parseParam(sources.manual);
+        for (const [k, v] of Object.entries(parsedManual)) {
+            if (v !== undefined && v !== "") {
+                merged[k] = v;
+            }
+        }
+    }
     return merged;
 }
 
