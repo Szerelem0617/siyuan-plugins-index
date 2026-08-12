@@ -4,7 +4,7 @@
     "version": "1.0.0",
     "commands": [
         {
-            "id": "siyuan.open",
+            "id": "plugin-index.command.open",
             "name": "打开",
             "description": "多态打开命令：在页签中打开指定的目标页面或块。如为普通内容块，自动平滑滚动并高亮该块。",
             "dispatch": {
@@ -39,32 +39,7 @@
             "seed": {
                 "rowID": "20260526204558-open0001",
                 "label": "📖 打开",
-                "paramMapping": ""
-            }
-        },
-        {
-            "id": "plugin-index.command.open",
-            "name": "打开 (别名)",
-            "description": "siyuan.open 命令的别名库引用。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [
-                {
-                    "key": "id",
-                    "type": "blockid",
-                    "paramMode": "template",
-                    "default": ""
-                }
-            ],
-            "constraints": {
-                "environment": "ui",
-                "targetScope": "any"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "navigation",
-                "source": "builtin"
+                "paramMapping": "{}"
             }
         },
         {
@@ -141,7 +116,7 @@
             "seed": {
                 "rowID": "20260526204558-toast001",
                 "label": "💬 消息提示",
-                "paramMapping": "message=IndexOS 消息通知"
+                "paramMapping": "{\"message\":\"IndexOS 消息通知\"}"
             }
         },
         {
@@ -223,7 +198,15 @@
                     "toggle"
                 ]
             },
-            "params": [],
+            "params": [
+                {
+                    "key": "id",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": "",
+                    "description": "要切换任务状态的目标块 ID。不填时自动绑定当前上下文块。"
+                }
+            ],
             "constraints": {
                 "environment": "ui",
                 "targetScope": "block",
@@ -238,7 +221,7 @@
             "seed": {
                 "rowID": "20260526204558-sw91kl2",
                 "label": "✅ 切换任务状态",
-                "paramMapping": ""
+                "paramMapping": "{}"
             }
         },
         {
@@ -284,7 +267,7 @@
             "seed": {
                 "rowID": "20260526204558-addtag9",
                 "label": "🏷️ 添加超级标签",
-                "paramMapping": "tag={{prompt:请输入标签名}}"
+                "paramMapping": "{\"tag\":\"{{prompt:请输入标签名}}\"}"
             }
         },
         {
@@ -340,44 +323,11 @@
                 "contextNeed": "block",
                 "category": "edit",
                 "source": "builtin"
-            }
-        },
-        {
-            "id": "plugin-index.command.insertSiblingBlockBelow",
-            "name": "在下方插入同级块",
-            "description": "查找目标块的顶级父块，在其同级下方快速插入新段落块。",
-            "dispatch": {
-                "method": "custom"
             },
-            "params": [
-                {
-                    "key": "id",
-                    "type": "blockid",
-                    "paramMode": "template",
-                    "default": ""
-                },
-                {
-                    "key": "data",
-                    "type": "string",
-                    "paramMode": "template",
-                    "default": ""
-                }
-            ],
-            "outputs": [
-                {
-                    "key": "createdblock",
-                    "type": "string",
-                    "description": "新同级块 ID"
-                }
-            ],
-            "constraints": {
-                "environment": "universal",
-                "targetScope": "block"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "edit",
-                "source": "builtin"
+            "seed": {
+                "rowID": "20260526204558-insblk1",
+                "label": "➕ 在下方插入块",
+                "paramMapping": "{}"
             }
         },
         {
@@ -435,8 +385,8 @@
         },
         {
             "id": "plugin-index.command.safeUpdateBlock",
-            "name": "安全更新块内容",
-            "description": "安全更新目标块的内容 (Markdown 格式)，自动脱敏与安全转换模板语法。",
+            "name": "更新块内容",
+            "description": "更新目标块的内容 (Markdown 格式)，自动脱敏与安全转换模板语法。",
             "dispatch": {
                 "method": "custom"
             },
@@ -451,7 +401,7 @@
                     "key": "data",
                     "type": "string",
                     "paramMode": "template",
-                    "default": ""
+                    "default": "已成功更新"
                 },
                 {
                     "key": "dataType",
@@ -471,8 +421,8 @@
             },
             "seed": {
                 "rowID": "20260526204558-safeupd",
-                "label": "📝 安全更新块内容",
-                "paramMapping": "dataType=markdown"
+                "label": "📝 更新块内容",
+                "paramMapping": "{\"dataType\":\"markdown\",\"data\":\"已成功更新\"}"
             }
         },
         {

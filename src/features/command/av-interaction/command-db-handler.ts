@@ -218,9 +218,13 @@ async function insertCommandIntoAv(avId: string, cmd: any) {
             pkColName = String(schemaCols[0].values[0][1] || "主键");
         }
 
+        const hasOutputs = cmd.outputs && Array.isArray(cmd.outputs) && cmd.outputs.length > 0;
+        const inputVal = hasParams ? "{}" : "";
+        const outputVal = hasOutputs ? "{}" : "";
+
         // 3. 执行 SQL 插入
         const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-        const insertSql = `INSERT INTO ${tableName} ("${pkColName}", "Command ID") VALUES ('${finalName}', '${finalId}')`;
+        const insertSql = `INSERT INTO ${tableName} ("${pkColName}", "Command ID", "Input", "Output") VALUES ('${finalName}', '${finalId}', '${inputVal}', '${outputVal}')`;
         
         console.log("[av-interaction] Running hijacked INSERT sql:", insertSql);
         await executeWritableSql(insertSql);
@@ -431,11 +435,15 @@ export async function handleCommandDbAltClick(
                     currentOutputMapping,
                     contextSource: "command-db",
                     onSave: async (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => {
+                        const hasParams = paramsSchema && paramsSchema.length > 0;
+                        const hasOutputs = outputsSchema && outputsSchema.length > 0;
+                        const inputJson = hasParams ? (Object.keys(updatedInput).length > 0 ? JSON.stringify(updatedInput, null, 2) : "{}") : "";
+                        const outputJson = hasOutputs ? (Object.keys(updatedOutput).length > 0 ? JSON.stringify(updatedOutput, null, 2) : "{}") : "";
                         if (inputColKeyId) {
-                            await updateCellValue(null, avId, rowId, inputColKeyId, JSON.stringify(updatedInput, null, 2));
+                            await updateCellValue(null, avId, rowId, inputColKeyId, inputJson);
                         }
                         if (outputColKeyId) {
-                            await updateCellValue(null, avId, rowId, outputColKeyId, JSON.stringify(updatedOutput, null, 2));
+                            await updateCellValue(null, avId, rowId, outputColKeyId, outputJson);
                         }
                     }
                 }

@@ -100,14 +100,9 @@ export default class IndexPlugin extends Plugin {
             addSupertagCmd.dispatch.executor = triggerAddSupertag;
         }
 
-        const openCmd = commandRegistry.getCommand("siyuan.open");
+        const openCmd = commandRegistry.getCommand("plugin-index.command.open");
         if (openCmd) {
             openCmd.dispatch.executor = handleOpenTargetCommand;
-        }
-
-        const openAliasCmd = commandRegistry.getCommand("plugin-index.command.open");
-        if (openAliasCmd) {
-            openAliasCmd.dispatch.executor = handleOpenTargetCommand;
         }
 
         const insertBlockBelowCmd = commandRegistry.getCommand("plugin-index.command.insertBlockBelow");

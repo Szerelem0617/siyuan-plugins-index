@@ -132,11 +132,14 @@
                             </div>
                         {:else}
                             {@const isCommandDb = contextSource === "command-db"}
-                            {@const autoSuggest = (!isCommandDb && (param.key === 'id' || param.type === 'blockid'))
-                                ? '⚡ Auto-Context 推荐: {{var.createdblock}} (不填将自动智能匹配)' 
+                            {@const hasMeaningfulDefault = param.default !== undefined && String(param.default).trim() !== ""}
+                            {@const defaultHint = hasMeaningfulDefault ? `默认: ${param.default}` : ""}
+                            {@const isBlockIdParam = param.key === 'id' || param.type === 'blockid'}
+                            {@const autoSuggest = (!isCommandDb && isBlockIdParam)
+                                ? '⚡ Auto-Context: 留空将自动绑定当前上下文块' 
                                 : (!isCommandDb && param.key === 'enabled'
-                                    ? '⚡ Auto-Context 推荐: {{var.last_boolean_result}} (不填将由前一步控制)' 
-                                    : (param.default !== undefined ? `Layer 2 默认: ${param.default}` : (param.description || '')))}
+                                    ? '⚡ Auto-Context: 留空将由上一步运行结果控制' 
+                                    : (defaultHint || (isBlockIdParam ? '留空自动绑定当前上下文块' : (param.description || ''))))}
                             <input 
                                 type="text" 
                                 class="b3-input fn__block" 
