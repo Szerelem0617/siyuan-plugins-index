@@ -191,12 +191,7 @@
             "name": "切换任务状态",
             "description": "切换当前任务块的完成状态 (未完成 <-> 已完成)。依赖编辑器焦点。",
             "dispatch": {
-                "method": "keyboard",
-                "keymapPath": [
-                    "editor",
-                    "task",
-                    "toggle"
-                ]
+                "method": "custom"
             },
             "params": [
                 {

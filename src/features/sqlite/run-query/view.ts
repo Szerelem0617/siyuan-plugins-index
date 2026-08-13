@@ -260,3 +260,114 @@ export async function executeAlterView(processedSql: string, db: any, options?: 
         message: `Column '${colName}' in view '${viewName}' updated successfully to hidden=${isHidden}.` 
     };
 }
+
+/**
+ * 为 Command-DB 自动创建两个专有视图：
+ * 1. "普通命令" 视图：仅显示非 Pipeline 的常规命令，隐藏 Pipeline_定义 列；
+ * 2. "复合命令" 视图：仅显示配置了 Pipeline_定义 的复合命令，展开显示 Pipeline_定义 列。
+ */
+export async function createCommandDbViews(avID: string, avBlockID: string, db: any): Promise<void> {
+    try {
+        console.log(`[ViewManager] 正在为 Command-DB (avID: ${avID}) 自动构建普通命令与复合命令视图...`);
+
+        // 1. 获取思源生成的默认初始视图
+        const avData = await post("/api/av/renderAttributeView", { id: avID });
+        const viewsList = avData.views || avData.view?.views || [];
+        const defaultView = viewsList.length > 0 ? viewsList[0] : null;
+        const defaultViewID = defaultView ? defaultView.id : generateNodeId();
+
+        // 2. 查找 Pipeline_定义 列的 keyID
+        const pipelineColRes = db.exec(`SELECT key_id, key_type FROM _av_schema WHERE av_id = ? AND (col_name LIKE '%Pipeline%' OR key_name LIKE '%Pipeline%')`, [avID]);
+        let pipelineColKeyId = "";
+        if (pipelineColRes.length > 0 && pipelineColRes[0].values.length > 0) {
+            pipelineColKeyId = String(pipelineColRes[0].values[0][0]);
+        }
+
+        // 过滤器定义（使用思源标准操作符 "Is empty" 和 "Is not empty"）
+        const filterNormal = pipelineColKeyId ? [
+            {
+                combination: "and",
+                filters: [
+                    {
+                        column: pipelineColKeyId,
+                        operator: "Is empty",
+                        value: { type: "text", text: { content: "" } }
+                    }
+                ]
+            }
+        ] : [];
+
+        const filterPipeline = pipelineColKeyId ? [
+            {
+                combination: "and",
+                filters: [
+                    {
+                        column: pipelineColKeyId,
+                        operator: "Is not empty",
+                        value: { type: "text", text: { content: "" } }
+                    }
+                ]
+            }
+        ] : [];
+
+        // ---------------------------------------------------------------------
+        // 步骤 A: 直接将默认视图重命名为 "普通命令"，并施加 Is empty 过滤与隐藏 Pipeline 列
+        // ---------------------------------------------------------------------
+        const opsNormal: any[] = [];
+        if (!defaultView) {
+            opsNormal.push({ action: "addAttrViewView", avID, id: defaultViewID, blockID: avBlockID, layout: "table" });
+        }
+        opsNormal.push(
+            { action: "setAttrViewViewName", avID, id: defaultViewID, blockID: avBlockID, data: "普通命令" },
+            { action: "setAttrViewBlockView", avID, id: defaultViewID, blockID: avBlockID }
+        );
+        if (filterNormal.length > 0) {
+            opsNormal.push({ action: "setAttrViewFilters", avID, data: filterNormal, blockID: avBlockID });
+        }
+        if (pipelineColKeyId) {
+            opsNormal.push({ action: "setAttrViewColHidden", id: pipelineColKeyId, avID, data: true, blockID: avBlockID });
+        }
+
+        await post("/api/transactions", {
+            reqId: Date.now(),
+            app: "plugin-index",
+            transactions: [{ doOperations: opsNormal }]
+        });
+
+        // ---------------------------------------------------------------------
+        // 步骤 B: 创建第二个视图 "复合命令"，并施加 Is not empty 过滤与展开 Pipeline 列
+        // ---------------------------------------------------------------------
+        const viewPipelineID = generateNodeId();
+        const opsPipeline: any[] = [
+            { action: "addAttrViewView", avID, id: viewPipelineID, blockID: avBlockID, layout: "table" },
+            { action: "setAttrViewViewName", avID, id: viewPipelineID, blockID: avBlockID, data: "复合命令" }
+        ];
+        if (filterPipeline.length > 0) {
+            opsPipeline.push({ action: "setAttrViewFilters", avID, data: filterPipeline, blockID: avBlockID });
+        }
+        if (pipelineColKeyId) {
+            opsPipeline.push({ action: "setAttrViewColHidden", id: pipelineColKeyId, avID, data: false, blockID: avBlockID });
+        }
+
+        await post("/api/transactions", {
+            reqId: Date.now(),
+            app: "plugin-index",
+            transactions: [{ doOperations: opsPipeline }]
+        });
+
+        // 默认激活 "普通命令" 视图
+        await post("/api/transactions", {
+            reqId: Date.now(),
+            app: "plugin-index",
+            transactions: [{
+                doOperations: [
+                    { action: "setAttrViewBlockView", avID, id: defaultViewID, blockID: avBlockID }
+                ]
+            }]
+        });
+
+        console.log(`[ViewManager] Command-DB 视图重构完成：仅保留 "普通命令" 与 "复合命令" 双视图！`);
+    } catch (err: any) {
+        console.error(`[ViewManager] 构建 Command-DB 双视图失败:`, err);
+    }
+}

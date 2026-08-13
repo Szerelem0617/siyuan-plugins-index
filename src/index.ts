@@ -85,7 +85,7 @@ export default class IndexPlugin extends Plugin {
             turnIntoTaskCmd.dispatch.executor = triggerTurnIntoTask;
         }
 
-        const toggleTaskStatusCmd = commandRegistry.getCommand("plugin-index.command.toggleTaskStatus");
+        const toggleTaskStatusCmd = commandRegistry.getCommand("editor.task.toggle");
         if (toggleTaskStatusCmd) {
             toggleTaskStatusCmd.dispatch.executor = triggerToggleTaskStatus;
         }

@@ -3,7 +3,8 @@ import { client } from "../../shared/api-client";
 import { showMessage } from "siyuan";
 import { sleep } from "../../shared/utils";
 import { setCommandAvId, setTypeAvId, setCommandDocId, setTypeDocId } from "./registration";
-import { instantiateAV } from "../sqlite/sqlite-manager";
+import { instantiateAV, getSqliteEngine } from "../sqlite/sqlite-manager";
+import { createCommandDbViews } from "../sqlite/run-query/view";
 import {
     NOTEBOOK_NAME, 
     NOTEBOOK_ICON, 
@@ -205,6 +206,15 @@ export async function constructCommandStorage() {
             // Sync the newly created AVs into SQLite av_ tables
             await instantiateAV(commandDb.avId, true);
             await instantiateAV(typeDb.avId, true);
+
+            // 自动为 Command-DB 创建 "普通命令" (隐藏 Pipeline 列) 与 "复合命令" (展示 Pipeline 列) 双表格视图
+            const sqlFindBlock = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${commandDb.avId}%' OR ial LIKE '%${commandDb.avId}%')`;
+            const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
+            if (resFind && resFind.length > 0) {
+                const avBlockId = resFind[0].id;
+                const { db } = await getSqliteEngine();
+                await createCommandDbViews(commandDb.avId, avBlockId, db);
+            }
         }
 
         showMessage(`[IndexOS] 系统存储库初始化完成！`, 3000);

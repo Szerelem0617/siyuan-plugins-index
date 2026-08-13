@@ -118,11 +118,7 @@ export async function triggerToggleTaskStatus(
         currentTaskAttr = attrs["custom-index-task"] || "";
     }
 
-    if (!currentTaskAttr) {
-        showMessage("❌ 当前块非任务状态，无法切换完成状态", 3000, "info");
-        return { success: false, detail: "Not a task" };
-    }
-
+    // 若原本非任务状态，默认切为 completed；若原本是 completed，切为 pending；否则切为 completed
     const newStatus = currentTaskAttr === "completed" ? "pending" : "completed";
 
     await post("/api/attr/setBlockAttrs", {
