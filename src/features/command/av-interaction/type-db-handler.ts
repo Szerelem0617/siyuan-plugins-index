@@ -35,6 +35,14 @@ export async function handleTypeDbAltClick(
     event.preventDefault();
     event.stopPropagation();
 
+    // 核心：在 Alt+Click 点开弹窗的第一时间，强制实时拉取思源最新 AV 数据并同步刷新 SQLite 内存表
+    try {
+        const { refreshSupertagRegistry } = await import("../utils/sync-service");
+        await refreshSupertagRegistry();
+    } catch (syncErr) {
+        console.warn("[AltClick-TypeDB] 实时刷新注册表告警:", syncErr);
+    }
+
     const { db } = await getSqliteEngine();
 
     // Check column type / name in Siyuan
@@ -228,10 +236,13 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
     }
 }
 
+
+
 async function openIconMenuSelector(avId: string, rowId: string, colId: string, clickedColName: string, cellEl: HTMLElement) {
     let currentIconMenuVal = "";
     let supertagLabel = "supertag";
     let boundCommandRowIds: string[] = [];
+    let conditionalVal = "";
 
     try {
         const { db } = await getSqliteEngine();
@@ -251,15 +262,28 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
             typeRelationCol = relColRes[0].values[0][0];
         }
 
-        const valRes = db.exec(`SELECT "${supertagCol}", "${clickedColName}"${typeRelationCol ? `, "${typeRelationCol}"` : ""} FROM ${tableName} WHERE _itemID = ?`, [rowId]);
+        let condColName = "";
+        try {
+            const condColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Conditional' OR key_name = '条件')`, [avId]);
+            if (condColRes.length > 0 && condColRes[0].values.length > 0) {
+                condColName = String(condColRes[0].values[0][0]);
+            }
+        } catch (_) {}
+
+        const valRes = db.exec(`SELECT "${supertagCol}", "${clickedColName}"${typeRelationCol ? `, "${typeRelationCol}"` : ""}${condColName ? `, "${condColName}"` : ""} FROM ${tableName} WHERE _itemID = ?`, [rowId]);
         if (valRes.length > 0 && valRes[0].values.length > 0) {
             supertagLabel = String(valRes[0].values[0][0] || "supertag").trim();
             currentIconMenuVal = String(valRes[0].values[0][1] || "");
-            const relationRaw = String(valRes[0].values[0][2] || "");
-            if (relationRaw) {
-                try {
-                    boundCommandRowIds = JSON.parse(relationRaw);
-                } catch (_) {}
+            let idx = 2;
+            if (typeRelationCol) {
+                const relationRaw = String(valRes[0].values[0][idx] || "");
+                if (relationRaw) {
+                    try { boundCommandRowIds = JSON.parse(relationRaw); } catch (_) {}
+                }
+                idx++;
+            }
+            if (condColName) {
+                conditionalVal = String(valRes[0].values[0][idx] || "");
             }
         }
     } catch (e) {
@@ -329,7 +353,7 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
     });
     dialog.element.classList.add("indexos-dialog");
 
-    console.log(`[IconMenu-Dialog] openIconMenuSelector avId=${avId} rowId=${rowId} supertag="${supertagLabel}" currentIconMenuVal="${currentIconMenuVal}" boundRows=${boundCommandRowIds.length} selectable=${selectableCommands.length}`);
+    console.log(`[IconMenu-Dialog] openIconMenuSelector avId=${avId} rowId=${rowId} supertag="${supertagLabel}" currentIconMenuVal="${currentIconMenuVal}"`);
 
     const IconMenuConfigDialog = (await import("./dialogs/IconMenuConfigDialog.svelte")).default;
 
@@ -340,6 +364,7 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
             supertag: supertagLabel,
             availableCommands: selectableCommands,
             currentIconMenuVal,
+            conditionalVal,
             onSave: async (updatedVal: string) => {
                 await updateCellValue(null, avId, rowId, colId, updatedVal);
                 

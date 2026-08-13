@@ -1,15 +1,52 @@
 /**
  * supertag-persister.ts
  *
- * 将命令执行后产出的变量 (例如 createdblock = "20260721...")
- * 自动写入 Layer 4 对应 Supertag 的数据库中。
- * 如果对应列 (Column) 不存在，自动建列落盘；若未实例化，自动写回块的 custom-* 属性中。
+ * 将命令执行后动态产出的变量全白盒落盘保存。
+ * 规则：仅当出参存在下游消费场景 (Layer 4 AV 数据库 / IconMenu 绑定命令 / 后续 Pipeline 步骤) 时才落盘写物理属性。
  */
 
 import { post } from "../../../../shared/api-client/request";
 import { getGlobalTypeConfigs } from "../../../av/av-setting/db-config";
 import { getColIDMap } from "../../../../shared/utils/av-utils";
 import { sleep } from "../../../../shared/utils";
+
+import { sanitizeBlockAttrName } from "../../utils/attribute-sanitizer";
+import { SUPERTAG_REGISTRY } from "../../registration";
+
+/**
+ * 校验出参变量是否在下游有实际消费使用者 (IconMenu / Button 绑定命令或 Pipeline 后续步骤)
+ */
+function isOutputUsedByDownstream(supertagLabel: string, varName: string): boolean {
+    const cleanTag = (supertagLabel || "").replace(/#/g, "").trim().toLowerCase();
+    const cleanVar = varName.replace(/^\{\{\s*/, "").replace(/\s*\}\}$/, "").replace(/^var\./, "").trim();
+
+    // 1. 检查在该 Tag 绑定的 Icon Menu / Button 命令中，是否有命令需要消费该出参
+    const boundEntries = SUPERTAG_REGISTRY.filter(item => 
+        item.typeTag.replace(/#/g, "").trim().toLowerCase() === cleanTag &&
+        item.commandRef
+    );
+
+    for (const entry of boundEntries) {
+        // 若绑定了 safeUpdateBlock 等更新块命令，默认需要消费创块 ID 出参
+        if (entry.commandRef.includes("safeUpdateBlock") || entry.commandRef.includes("updateBlock")) {
+            return true;
+        }
+        if (entry.inputMapping && (entry.inputMapping.includes(cleanVar) || entry.inputMapping.includes(`var.${cleanVar}`))) {
+            return true;
+        }
+    }
+
+    // 2. 检查 Conditional 脚本后续步骤中是否有显式引用
+    const regMatch = SUPERTAG_REGISTRY.find(item => item.typeTag.replace(/#/g, "").trim().toLowerCase() === cleanTag);
+    if (regMatch?.conditionalScript) {
+        const script = regMatch.conditionalScript;
+        if (script.includes(cleanVar) || script.includes(`var.${cleanVar}`)) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 export async function persistOutputVariablesToLayer4(
     blockId: string,
@@ -20,43 +57,57 @@ export async function persistOutputVariablesToLayer4(
     if (!blockId || !cleanTag || !outputVars || Object.keys(outputVars).length === 0) return;
 
     try {
-        // 1. 查找此 supertag 对应的 Layer 4 AV 数据库
         const configs = await getGlobalTypeConfigs();
         const tagMatch = configs.find(c => c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag.toLowerCase());
         
-        // 仅收集在 _outputMapping 中被用户显式命名/映射的出参变量！
-        const mappingAliases = (outputVars._outputMapping || {}) as Record<string, string>;
         const targetOutputEntries: [string, string][] = [];
 
-        for (const [outKey, alias] of Object.entries(mappingAliases)) {
-            if (!alias) continue;
-            const val = outputVars[alias] ?? outputVars[outKey] ?? outputVars.id ?? outputVars.createdblock ?? outputVars.last_id;
-            if (val !== undefined && val !== null && String(val).trim() !== "") {
-                targetOutputEntries.push([alias, String(val).trim()]);
-            }
-        }
+        const SYSTEM_ENV_KEYS = new Set(["date", "time", "block_id", "root_id", "parent_id", "id", "last_id"]);
 
-        // 兜底：若未显式指定 _outputMapping 但存在 createdblock 出参，也记录为 createdblock
-        if (targetOutputEntries.length === 0 && outputVars.createdblock) {
-            targetOutputEntries.push(["createdblock", String(outputVars.createdblock).trim()]);
+        // 1. 全白盒精准收集：只保存以 var. 开头且有值的出参变量
+        for (const [k, v] of Object.entries(outputVars)) {
+            if (k.startsWith("_")) continue;
+            if (SYSTEM_ENV_KEYS.has(k)) continue;
+            if (!k.startsWith("var.")) continue;
+            if (v !== undefined && v !== null && String(v).trim() !== "") {
+                targetOutputEntries.push([k, String(v).trim()]);
+            }
         }
 
         if (targetOutputEntries.length === 0) return;
 
-        // 若未选择实例化（未创建数据库）或未找到对应的 Layer 4 AV 数据库，直接落盘写回块的 custom-* 属性中！
+        // 2. 若未实例化 AV 数据库，检查是否存在下游消费使用；若无消费依赖，跳过持久化！
         if (!tagMatch) {
-            console.log(`[Supertag-Output] Layer 4 AV for supertag #${cleanTag} not found. Persisting ${targetOutputEntries.length} output variables to block custom attributes instead.`);
+            const activeEntries = targetOutputEntries.filter(([k]) => isOutputUsedByDownstream(cleanTag, k));
+            if (activeEntries.length === 0) {
+                console.log(`[Supertag-Output] 🍃 Supertag #${cleanTag} 出参无下游 (IconMenu/Button/Pipeline) 消费依赖，不进行无谓的物理属性持久化。`);
+                return;
+            }
+
+            console.log(`[Supertag-Output] Layer 4 AV for supertag #${cleanTag} not found. Persisting ${activeEntries.length} output variables to block custom attributes instead.`);
             const customAttrs: Record<string, string> = {};
-            for (const [alias, valStr] of targetOutputEntries) {
-                const attrName = alias.startsWith("custom-") ? alias : `custom-${alias}`;
+            for (const [varName, valStr] of activeEntries) {
+                const attrName = sanitizeBlockAttrName(varName);
                 customAttrs[attrName] = valStr;
             }
             if (Object.keys(customAttrs).length > 0) {
-                await post("/api/attr/setBlockAttrs", {
-                    id: blockId,
-                    attrs: customAttrs
-                });
-                console.log(`[Supertag-Output] Successfully set custom attributes on block ${blockId}:`, customAttrs);
+                try {
+                    await post("/api/attr/setBlockAttrs", {
+                        id: blockId,
+                        attrs: customAttrs
+                    });
+                    console.log(`[Supertag-Output] Successfully set custom attributes on block ${blockId}:`, customAttrs);
+                } catch (attrErr) {
+                    console.warn(`[Supertag-Output] Bulk setBlockAttrs failed, falling back to item-by-item safe set:`, attrErr);
+                    for (const [k, v] of Object.entries(customAttrs)) {
+                        try {
+                            await post("/api/attr/setBlockAttrs", {
+                                id: blockId,
+                                attrs: { [k]: v }
+                            });
+                        } catch (_) {}
+                    }
+                }
             }
             return;
         }
@@ -77,14 +128,12 @@ export async function persistOutputVariablesToLayer4(
             itemId = refreshedMap.blockToItem.get(blockId) || newGenItemId;
         }
 
-        // 2. 获取当前 AV 的全量列定义 (Keys)
         const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
         const existingKeys: any[] = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
         let lastKeyId = existingKeys.length > 0 ? existingKeys[existingKeys.length - 1].id : "";
 
         console.log(`[Supertag-Output] 📤 Persisting ${targetOutputEntries.length} explicit output variables to Layer 4 AV #${cleanTag} (${avId}):`, targetOutputEntries);
 
-        // 3. 逐个检查并自动建列 (Auto-create missing Column)
         for (const [colName, valStr] of targetOutputEntries) {
             let keyObj = existingKeys.find((k: any) => k.name === colName);
             let keyId = keyObj?.id;
@@ -108,8 +157,6 @@ export async function persistOutputVariablesToLayer4(
                 await new Promise(r => setTimeout(r, 200));
             }
 
-            // 4. 将出参数据写入对应列的单元格中！
-            console.log(`[Supertag-Output] 💾 Writing cell value for Column "${colName}": ${valStr}`);
             await post("/api/av/batchSetAttributeViewBlockAttrs", {
                 avID: avId,
                 values: [{

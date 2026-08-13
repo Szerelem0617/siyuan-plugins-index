@@ -8,6 +8,7 @@ import { plugin } from "../../shared/utils";
 import { post } from "../../shared/api-client/request";
 import { commandRegistry } from "./registry/command-registry";
 import type { CommandDef } from "./registry/command-registry";
+import { getSupertagAutoContextInfo, getCommandOutputToken } from "./supertag/core/supertag-auto-context";
 import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } from "./utils/context-extractor";
 export { getBlockId };
 import { renderTemplate, formatDate, formatTime } from "./utils/template-engine";
@@ -21,6 +22,8 @@ export interface ParamSources {
     auto?: Record<string, unknown>;
     commandDb?: string | Record<string, unknown> | null;
 }
+
+import { sanitizeBlockAttrName } from "./utils/attribute-sanitizer";
 
 export async function dispatchCommand(
     commandId: string,
@@ -75,6 +78,40 @@ export async function dispatchCommand(
                 result = { success: false, method: "unknown", detail: `Unknown method: ${(def.dispatch as any).method}` };
         }
 
+        if (result.success) {
+            if (!result.outputs) result.outputs = {};
+            if (result.id && !result.outputs.createdblock) result.outputs.createdblock = result.id;
+            if (result.value && typeof result.value === "object" && (result.value as any).id && !result.outputs.createdblock) {
+                result.outputs.createdblock = (result.value as any).id;
+            }
+
+            for (const schemaOut of (def.outputs || [])) {
+                const rawVal = result.outputs[schemaOut.key];
+                if (rawVal !== undefined && rawVal !== null) {
+                    const token = getCommandOutputToken(def.id, schemaOut.key, schemaOut.default);
+                    const cleanVarName = token.replace(/^\{\{\s*/, "").replace(/\s*\}\}$/, "").trim();
+                    
+                    context.vars[cleanVarName] = String(rawVal);
+                    context.vars[token] = String(rawVal);
+                    console.log(`[Dispatcher] ⚡ 依照 Command-DB 配置存入出参: ${cleanVarName} (${token}) = "${rawVal}"`);
+
+                    const attrKey = sanitizeBlockAttrName(token);
+                    if (context.blockEl) {
+                        context.blockEl.setAttribute(attrKey, String(rawVal));
+                    }
+                    try {
+                        const targetBlockId = getBlockId(context);
+                        if (targetBlockId) {
+                            post("/api/attr/setBlockAttrs", {
+                                id: targetBlockId,
+                                attrs: { [attrKey]: String(rawVal) }
+                            }).catch(() => {});
+                        }
+                    } catch (_) {}
+                }
+            }
+        }
+
         return result;
 
     } catch (error: any) {
@@ -105,6 +142,10 @@ export async function resolveCommandParams(
 ): Promise<Record<string, unknown>> {
     console.log(`  [ParamResolver STEP A] 准备解析 ${def.id} 的参数来源...`);
     
+    // Layer 3 客制化入参 (最高优先级)
+    const layer3Params = parseParam(sources.sources || sources.manual);
+
+    // Layer 2 默认入参
     let liveDbParam: any = null;
     try {
         const liveDbBinding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === def.id || b.label === def.name);
@@ -112,39 +153,66 @@ export async function resolveCommandParams(
     } catch (e) {
         console.warn(`  [ParamResolver STEP A1] 查找 COMMAND_BINDINGS 警告:`, e);
     }
+    const layer2Params = parseParam(liveDbParam || sources.commandDb);
 
     const effectiveSources: ParamSources = {
         commandDb: liveDbParam || undefined,
         ...sources
     };
-
     const raw = mergeParamSources(effectiveSources);
+
     const result: Record<string, unknown> = {};
     const vars = context.vars || {};
+    const autoContextInfo = context.supertag ? getSupertagAutoContextInfo(context.supertag, def.id) : {};
 
     for (const schema of def.params) {
-        let value = raw[schema.key];
+        const layer3Val = layer3Params[schema.key];
+        const layer2Val = layer2Params[schema.key];
         
-        if (value === undefined || value === "") {
-            if (schema.key === "id" || schema.type === "blockid") {
-                const autoId = vars["var.createdblock"] || vars["createdblock"] || vars["var.id"] || vars["id"];
-                if (autoId) {
-                    value = String(autoId);
+        let value: any = undefined;
+        const isLayer3Specified = layer3Val !== undefined && String(layer3Val).trim() !== "";
+
+        if (isLayer3Specified) {
+            // 1. 显式客制化配置 (Layer 3) 拥有最高优先级
+            value = layer3Val;
+        } else {
+            // 2. 若 Layer 3 留空，依据单一真理源 Auto-Context 分析获取覆盖值
+            const autoMatch = autoContextInfo[schema.key];
+            let autoVal: any = undefined;
+            if (autoMatch && autoMatch.matched && autoMatch.token) {
+                autoVal = await resolveTemplate(autoMatch.token, context);
+            }
+
+            // 防守双重保障：若 autoVal 尚未获取且当前参数是 ID 参数，实时白盒感应物理属性与 vars 中的 Block ID 出参
+            if ((!autoVal || String(autoVal).includes("{{")) && (schema.key === "id" || schema.type === "blockid")) {
+                for (const [vKey, vVal] of Object.entries(vars)) {
+                    if ((vKey.startsWith("var.") || vKey.startsWith("custom-")) && typeof vVal === "string" && /^\d{14}-[a-z0-9]{7}$/.test(vVal.trim())) {
+                        autoVal = vVal.trim();
+                        console.log(`  [ParamResolver Auto-Context-Sensing] ⚡ 成功从 vars 动态感应到前置创块 ID (${vKey}): "${autoVal}"`);
+                        break;
+                    }
+                }
+                if ((!autoVal || String(autoVal).includes("{{")) && context.blockEl && context.blockEl.attributes) {
+                    for (const attr of Array.from(context.blockEl.attributes)) {
+                        if (attr.name.startsWith("custom-") && attr.name !== "custom-supertags" && typeof attr.value === "string" && /^\d{14}-[a-z0-9]{7}$/.test(attr.value.trim())) {
+                            autoVal = attr.value.trim();
+                            console.log(`  [ParamResolver Auto-Context-Sensing] ⚡ 成功从 DOM 物理属性 ${attr.name} 动态感应到前置创块 ID: "${autoVal}"`);
+                            break;
+                        }
+                    }
                 }
             }
-            if (schema.key === "enabled") {
-                const autoBool = vars["var.last_boolean_result"] ?? vars["last_boolean_result"] ?? vars["var.completed"] ?? vars["completed"];
-                if (autoBool !== undefined) {
-                    value = autoBool;
-                }
+
+            if (autoVal !== undefined && String(autoVal).trim() !== "") {
+                value = String(autoVal);
+                console.log(`  [ParamResolver Auto-Context] ⚡ 依据单一真理源成功自动覆盖 ${schema.key}: "${value}" (优先于 Layer 2 默认值)`);
+            } else {
+                // 3. 使用 Layer 2 配置值或 Schema 注册默认值
+                value = (layer2Val !== undefined && String(layer2Val).trim() !== "") ? layer2Val : schema.default;
             }
         }
 
-        if (value === undefined || value === "") {
-            value = schema.default;
-        }
-
-        console.log(`  [ParamResolver STEP B] 处理参数 "${schema.key}" (原始值: "${value}")`);
+        console.log(`  [ParamResolver STEP B] 处理参数 "${schema.key}" (原始模板值: "${value}")`);
         try {
             if (schema.paramMode === "template") {
                 result[schema.key] = await resolveTemplate(String(value ?? ""), context);

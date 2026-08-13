@@ -24,15 +24,8 @@ export async function triggerSafeUpdateBlock(params: Record<string, unknown>, co
         id = await resolveTemplate(rawId, ctx);
     }
 
-    // 容错兜底：如果模板解析未替换掉 {{（说明数据库中存的是空字符串），优先从上下文变量池提取新创建块的 ID
     if (!id || id.includes("{{") || id.includes("${")) {
-        const fallbackId = String(ctx?.vars?.createdblock || ctx?.vars?.last_id || ctx?.vars?.id || "").trim();
-        if (fallbackId && !fallbackId.includes("{{")) {
-            console.log(`[SafeUpdateBlock] Fallback: Used context.vars createdblock/last_id "${fallbackId}" instead of empty template resolution.`);
-            id = fallbackId;
-        } else if (!id || id.includes("{{")) {
-            id = getBlockId(ctx);
-        }
+        id = getBlockId(ctx);
     }
 
     console.log(`[SafeUpdateBlock] Target block ID resolved to: "${id}" (rawId was: "${rawId}")`);

@@ -2,11 +2,13 @@
     import { Dialog } from "siyuan";
     import { commandRegistry } from "../../registry/command-registry";
     import { parseIconMenuConfig, serializeIconMenuConfig, type IconMenuConfig, type IconMenuEntry } from "../../utils/icon-menu-config";
+    import { getSupertagAutoContextInfo } from "../../supertag/core/supertag-auto-context";
 
     export let dialog: Dialog;
     export let supertag: string = "";
     export let availableCommands: { id: string; name: string; description: string; params?: any[] }[] = [];
     export let currentIconMenuVal: string = "";
+    export let conditionalVal: string = "";
     export let onSave: (updatedVal: string) => Promise<void>;
 
     let config: IconMenuConfig = parseIconMenuConfig(currentIconMenuVal);
@@ -113,8 +115,11 @@
         {#each filteredCommands as cmd}
             {@const sel = !!selectedMap[cmd.id]}
             <div
+                role="button"
+                tabindex="0"
                 style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 5px; cursor: pointer; border-left: 3px solid {sel ? 'var(--indexos-accent-primary)' : 'transparent'}; background: {sel ? 'rgba(40, 81, 127, 0.06)' : 'transparent'};"
                 on:click={() => toggle(cmd.id)}
+                on:keydown={e => { if (e.key === "Enter" || e.key === " ") { toggle(cmd.id); } }}
             >
                 <span
                     style="width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; background: {sel ? 'var(--indexos-accent-primary)' : 'var(--indexos-border-light)'}; color: #fff;"
@@ -126,13 +131,15 @@
                 </div>
                 {#if sel}
                     {@const itemData = (activeTab === 'menu' ? config.menu : config.button).find(e => e.id === cmd.id)}
-                    <!-- 👑 茵蒂克丝刺绣金 (Index Gold): 专属用于标注用户进行了 Layer 3 客制化参数配置的命令按钮 -->
-                    {@const isCustomized = !!(itemData && itemData.params && Object.values(itemData.params).some(v => v !== undefined && String(v).trim() !== ''))}
+                    {@const hasLayer3Params = !!(itemData && itemData.params && Object.values(itemData.params).some(v => v !== undefined && String(v).trim() !== ''))}
+                    {@const autoAnalysis = getSupertagAutoContextInfo(supertag, cmd.id, conditionalVal)}
+                    {@const hasAutoContextMatch = Object.values(autoAnalysis).some(m => m.matched)}
+                    {@const isCustomized = hasLayer3Params || hasAutoContextMatch}
                     <button
                         type="button"
                         class="indexos-btn-bordered"
                         style="font-size: 10px; padding: 1px 7px; flex-shrink: 0; {isCustomized ? 'border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important; font-weight: 600;' : ''}"
-                        title={isCustomized ? '👑 已配置客制化入参 (Golden Customization)' : '配置该命令的参数'}
+                        title={isCustomized ? (hasLayer3Params ? '👑 已配置客制化入参 (Golden Customization)' : '⚡ 已激活 Auto-Context 出参匹配感应') : '配置该命令的参数'}
                         on:click={e => { e.stopPropagation(); e.preventDefault(); openParams(activeTab, cmd.id); }}
                     >⚙ 参数{isCustomized ? " •" : ""}</button>
                 {/if}
@@ -149,6 +156,7 @@
         {@const editingData = editingList.find(e => e.id === editingEntry.id)}
         {@const editingDef = commandRegistry.getCommand(editingEntry.id)}
         {@const editingParams = editingData?.params || {}}
+        {@const editingAnalysis = getSupertagAutoContextInfo(supertag, editingEntry.id, conditionalVal)}
         <div style="flex-shrink: 0; border: 1px solid var(--indexos-accent-primary); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 4px; background: rgba(40, 81, 127, 0.04);">
             <div style="font-size: 11px; font-weight: 600; color: var(--indexos-text-main); display: flex; align-items: center;">
                 ⚙ {editingEntry.id} 参数
@@ -159,26 +167,28 @@
             {:else}
                 {#each (editingDef?.params || []) as p}
                     {@const isBlockIdParam = p.key === 'id' || p.type === 'blockid'}
-                    {@const autoPh = isBlockIdParam 
-                        ? '⚡ Auto-Context 感知出参: {{var.createdblock}} (留空自动继承)' 
-                        : '空 = 用 Command-DB 配置；可写 {{变量}}'}
+                    {@const autoMatch = editingAnalysis[p.key]}
+                    {@const placeholderText = autoMatch && autoMatch.matched 
+                        ? `⚡ Auto-Context 感知出参: ${autoMatch.token} (留空自动继承)` 
+                        : "空 = 用 Command-DB 配置；可写 {{变量}}"}
+                    {@const capsuleToken = autoMatch && autoMatch.matched ? autoMatch.token : "{{block_id}}"}
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 10px; color: var(--indexos-text-muted); flex-shrink: 0; width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{p.label || p.key}</span>
                         <input
                             type="text"
                             style="flex: 1; min-width: 0; font-size: 11px; padding: 2px 6px; border: 1px solid {editingParams[p.key] ? 'rgba(40, 81, 127, 0.55)' : 'var(--indexos-border-light)'}; border-radius: 3px; background: var(--indexos-bg-container); color: var(--indexos-text-main);"
                             value={editingParams[p.key] || ""}
-                            placeholder={autoPh}
+                            placeholder={placeholderText}
                             on:input={e => setEntryParam(editingEntry.id, p.key, e.currentTarget.value)}
                         />
-                        {#if isBlockIdParam}
+                        {#if autoMatch && autoMatch.matched && autoMatch.token}
                             <button
                                 type="button"
                                 class="indexos-btn-bordered"
                                 style="font-size: 10px; padding: 1px 6px; flex-shrink: 0; white-space: nowrap; color: var(--indexos-accent-primary);"
-                                title="一键充填打标签创块产出的 Block ID 出参"
-                                on:click={() => setEntryParam(editingEntry.id, p.key, "{{var.createdblock}}")}
-                            >⚡ 填 &#123;&#123;var.createdblock&#125;&#125;</button>
+                                title={`一键充填前置出参: ${autoMatch.token}`}
+                                on:click={() => setEntryParam(editingEntry.id, p.key, autoMatch.token)}
+                            >⚡ 填 {autoMatch.token}</button>
                         {/if}
                     </div>
                 {/each}

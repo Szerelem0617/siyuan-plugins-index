@@ -71,7 +71,23 @@ function addMenuEntry(
 
     const click = async () => {
         try {
-            const ctx = { blockEl: blockEl || document.body, protyleEl, supertag: "" };
+            const vars: Record<string, any> = {};
+            if (blockEl && blockEl.attributes) {
+                for (const attr of Array.from(blockEl.attributes)) {
+                    if (attr.name.startsWith("custom-")) {
+                        const rawClean = attr.name.replace(/^custom-/, "");
+                        const baseKey = rawClean.replace(/^var-/, "");
+                        vars[attr.name] = attr.value;
+                        vars[rawClean] = attr.value;
+                        vars[baseKey] = attr.value;
+                        vars[`var.${baseKey}`] = attr.value;
+                        vars[`{{var.${baseKey}}}`] = attr.value;
+                    }
+                }
+            }
+            const tags = extractSupertagsFromBlock(blockEl, protyleEl);
+            const activeSupertag = tags.length > 0 ? tags[0] : "";
+            const ctx = { blockEl: blockEl || document.body, protyleEl, supertag: activeSupertag, vars };
             await dispatchCommand(entry.id, paramMapping, ctx as any);
         } catch (err) {
             console.error(`[MenuHooks] 菜单项点击执行异常:`, err);
@@ -116,7 +132,21 @@ function addSupertagIconMenuItems(menu: any, blockEl: HTMLElement | null, protyl
                 icon: "iconTags",
                 label,
                 click: async () => {
-                    const ctx = { blockEl: blockEl || document.body, protyleEl, supertag: tag };
+                    const vars: Record<string, any> = {};
+                    if (blockEl && blockEl.attributes) {
+                        for (const attr of Array.from(blockEl.attributes)) {
+                            if (attr.name.startsWith("custom-")) {
+                                const rawClean = attr.name.replace(/^custom-/, "");
+                                const baseKey = rawClean.replace(/^var-/, "");
+                                vars[attr.name] = attr.value;
+                                vars[rawClean] = attr.value;
+                                vars[baseKey] = attr.value;
+                                vars[`var.${baseKey}`] = attr.value;
+                                vars[`{{var.${baseKey}}}`] = attr.value;
+                            }
+                        }
+                    }
+                    const ctx = { blockEl: blockEl || document.body, protyleEl, supertag: tag, vars };
                     await dispatchCommand(entry.commandRef, entry.inputMapping || "", ctx as any);
                 }
             });

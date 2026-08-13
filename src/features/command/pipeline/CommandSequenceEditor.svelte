@@ -80,33 +80,18 @@
             if (editingCmd === id) editingCmd = null;
         } else {
             checked = [...checked, id];
-            smartFill(id);
         }
     }
 
     function smartFill(cmdId: string) {
-        const idx = checked.indexOf(cmdId);
-        if (idx === -1) return;
-        const suggestions = buildSmartBindings(checked.map(c => ({ commandRef: c })), idx, commandRegistry);
-        const current = { ...paramsOf(cmdId) };
-        const filled: string[] = [];
-        for (const [key, val] of Object.entries(suggestions)) {
-            if (!current[key]) {
-                current[key] = val;
-                filled.push(key);
-            }
-        }
-        if (filled.length > 0) {
-            paramsByCmd = { ...paramsByCmd, [cmdId]: current };
-            console.log(`[RuleEditor] step${idx}(${cmdId}) 智能填充:`, filled);
-        }
+        // 彻底停用偷摸往参数框中自动硬填变量的行为，保持输入框纯净留空
+        return;
     }
 
     function openSettings(cmdId: string) {
         editingCmd = cmdId;
         const def = commandRegistry.getCommand(cmdId);
         activeParam = def?.params?.[0]?.key || "";
-        smartFill(cmdId);
     }
 
     function setParam(cmdId: string, key: string, value: string) {
@@ -117,6 +102,16 @@
             current[key] = value;
         }
         paramsByCmd = { ...paramsByCmd, [cmdId]: current };
+    }
+
+    function formatVarToken(raw: string): string {
+        if (!raw) return "";
+        let clean = String(raw).trim();
+        while (/^\{\{\s*/.test(clean) || /\s*\}\}$/.test(clean) || /^var\./i.test(clean)) {
+            clean = clean.replace(/^\{\{\s*/, "").replace(/\s*\}\}$/, "").replace(/^var\./i, "").trim();
+        }
+        if (!clean) return "";
+        return `{{var.${clean}}}`;
     }
 
     function insertQuick(cmdId: string, token: string) {
@@ -130,7 +125,7 @@
         }
         const current = paramsOf(cmdId);
         const existing = current[activeParam] || "";
-        const ref = `{{${token}}}`;
+        const ref = (token.startsWith("var.") || token.includes("{{")) ? formatVarToken(token) : `{{${token}}}`;
         setParam(cmdId, activeParam, existing ? `${existing} ${ref}` : ref);
     }
 
@@ -142,15 +137,11 @@
                 const prevId = checked[i];
                 const def = commandRegistry.getCommand(prevId);
                 for (const o of outputsOf(def)) {
-                    out.push({ name: outputName(prevId, o.key), source: `${commandName(prevId)}.${o.key}` });
-                }
-            }
-        }
-        if (out.length === 0) {
-            const pool = getTagCreatedOutputPool();
-            for (const item of pool) {
-                if (!out.some(x => x.name === item.varName)) {
-                    out.push({ name: item.varName, source: "TagCreated.createdblock" });
+                    const rawName = outputName(prevId, o.key);
+                    const normToken = formatVarToken(rawName);
+                    if (!out.some(x => x.name === normToken)) {
+                        out.push({ name: normToken, source: `${commandName(prevId)}.${o.key}` });
+                    }
                 }
             }
         }
@@ -236,13 +227,15 @@
                     >{checked.includes(cmd.id) ? checked.indexOf(cmd.id) + 1 : ""}</span>
                     <span style="font-size: 12px; font-weight: 600; color: var(--indexos-text-main); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{cmd.name}</span>
                     {#if checked.includes(cmd.id)}
-                        {@const hasCustomParams = !!(paramsByCmd[cmd.id] && Object.values(paramsByCmd[cmd.id]).some(v => v !== undefined && String(v).trim() !== ''))}
-                        <!-- 👑 茵蒂克丝刺绣金 (Index Gold): 专属用于标注用户进行了 Layer 3 客制化参数配置的命令按钮 -->
+                        {@const hasExplicitParams = !!(paramsByCmd[cmd.id] && Object.values(paramsByCmd[cmd.id]).some(v => v !== undefined && String(v).trim() !== ''))}
+                        {@const hasAutoSuggestion = (cmd.params || []).some(p => getAutoSuggestion(cmd.id, p) !== null)}
+                        {@const hasCustomParams = hasExplicitParams || hasAutoSuggestion}
+                        <!-- 👑 茵蒂克丝刺绣金 (Index Gold): 用于标注 Layer 3 客制化参数配置或 Auto-Context 自动推导 -->
                         <button
                             type="button"
                             class="indexos-btn-bordered"
                             style="font-size: 10px; padding: 1px 8px; flex-shrink: 0; {editingCmd === cmd.id ? 'background: var(--indexos-accent-primary); color: #fff; border-color: var(--indexos-accent-primary);' : (hasCustomParams ? 'border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important; font-weight: 600;' : '')}"
-                            title={hasCustomParams ? '👑 已配置客制化入参 (Golden Customization)' : '配置该命令的入参'}
+                            title={hasCustomParams ? (hasExplicitParams ? '👑 已配置客制化入参 (Golden Customization)' : '⚡ 已激活 Auto-Context 智能推荐感应') : '配置该命令的入参'}
                             on:click={e => {
                                 e.stopPropagation();
                                 e.preventDefault();
@@ -350,7 +343,7 @@
                                 style="font-size: 10px; padding: 1px 7px; color: var(--indexos-status-success);"
                                 title="{po.source}"
                                 on:click={() => insertQuick(editingCmd, po.name)}
-                            >&#123;&#123;{po.name}&#125;&#125;</button>
+                            >{po.name}</button>
                         {/each}
                     </div>
                 {/if}
