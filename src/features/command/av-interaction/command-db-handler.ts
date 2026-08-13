@@ -7,10 +7,47 @@ import { getSqliteEngine, executeWritableSql } from "../../sqlite/sqlite-manager
 import { post } from "../../../shared/api-client/request";
 import { getInputColKeyId, getOutputColKeyId } from "./query-helper";
 import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDialog.svelte";
-import { readPipelineRow, openPipelineEditorForRow } from "../pipeline/manager";
+import { readPipelineRow, openPipelineEditorForRow, openPipelineEditor } from "../pipeline/manager";
 import InputConfigDialog from "./dialogs/InputConfigDialog.svelte";
 import OutputConfigDialog from "./dialogs/OutputConfigDialog.svelte";
 import GlobalBackgroundEngineDialog from "./dialogs/GlobalBackgroundEngineDialog.svelte";
+
+/** 检测当前 command-db 视图是否处于“复合命令”View 切页 */
+function isPipelineViewActive(avContainer: HTMLElement): boolean {
+    try {
+        const viewsContainer = avContainer.querySelector(".av__views");
+        if (viewsContainer) {
+            const activeViewItem = Array.from(viewsContainer.querySelectorAll("div, span, button")).find(el => 
+                el.classList.contains("item--focus") || 
+                el.classList.contains("item--active") || 
+                el.classList.contains("active") || 
+                el.getAttribute("data-active") === "true" ||
+                el.getAttribute("aria-selected") === "true"
+            );
+            
+            if (activeViewItem) {
+                const text = activeViewItem.textContent?.trim() || "";
+                if (text.includes("复合命令") || text.includes("Pipeline")) {
+                    return true;
+                }
+                if (text.includes("普通命令")) {
+                    return false;
+                }
+            }
+        }
+
+        // 双重兜底：校验表头列名是否包含 Pipeline 定义列
+        const headerCells = Array.from(avContainer.querySelectorAll(".av__row--header .av__cell"));
+        const hasPipelineCol = headerCells.some(cell => {
+            const text = cell.textContent?.trim() || "";
+            return text.includes("Pipeline") || text.includes("复合");
+        });
+        if (hasPipelineCol) return true;
+    } catch (e) {
+        console.warn("[CommandDB-ViewCheck] Error checking view:", e);
+    }
+    return false;
+}
 
 export function openGlobalAutomationDialog() {
     const dialog = new Dialog({
@@ -50,8 +87,10 @@ export async function handleAvFooterClick(event: MouseEvent) {
 
     // 拦截 Supertag-DB 上的 Alt + Click 快捷导入预设 Supertag 按钮
     if (avId === typeAvId) {
-        const addRowBtn = target.closest('[data-type="av-add-bottom"]') || target.closest(".av__row--util");
-        if ((addRowBtn || txt.includes("添加条目")) && event.altKey) {
+        const addRowBtn = target.closest('[data-type="av-add-bottom"]') || 
+                          target.closest('.av__row--util .b3-button') || 
+                          (target.classList.contains("b3-button") && txt.includes("添加条目"));
+        if (addRowBtn && event.altKey) {
             console.log("%c[IndexOS-AV-Click-Debug] 🎯 Intercepted Alt+Click on Supertag-DB add row -> Opening Preset Import Dialog!", "color: #10b981; font-weight: bold;");
             event.preventDefault();
             event.stopPropagation();
@@ -63,12 +102,12 @@ export async function handleAvFooterClick(event: MouseEvent) {
 
     if (avId !== commandAvId) return;
 
-    // 1. 匹配“添加字段”按钮 (data-type="av-header-add" 或包含"添加字段"提示)
+    // 1. 匹配“添加字段”按钮 (精准限定为按钮本身，防止滚动条误触)
     const addColBtn = target.closest('[data-type="av-header-add"]') || 
                       target.closest('[data-type="av-add-column"]') || 
                       target.closest('.av__col-add') || 
                       target.closest('.av__header-add');
-    if (addColBtn || txt.includes("添加列") || txt.includes("添加字段")) {
+    if (addColBtn || (target.classList.contains("b3-button") && (txt.includes("添加列") || txt.includes("添加字段")))) {
         console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Column (av-header-add)' click on command-db -> Opening Global Automation Dialog!", "color: #10b981; font-weight: bold;");
         event.preventDefault();
         event.stopPropagation();
@@ -76,12 +115,25 @@ export async function handleAvFooterClick(event: MouseEvent) {
         return;
     }
 
-    // 2. 匹配“添加条目”按钮
-    const addRowBtn = target.closest('[data-type="av-add-bottom"]') || target.closest(".av__row--util");
-    if (addRowBtn || txt.includes("添加条目")) {
-        console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Row (av-add-bottom)' click on command-db!", "color: #007acc; font-weight: bold;");
+    // 2. 匹配“添加条目”按钮（收紧范围至按钮本身，排除整行空白与 Scroller 滚动条）
+    const addRowBtn = target.closest('[data-type="av-add-bottom"]') || 
+                      target.closest('.av__row--util .b3-button') || 
+                      target.closest('.av__row--util button') || 
+                      (target.classList.contains("b3-button") && txt.includes("添加条目"));
+
+    if (addRowBtn) {
+        console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Row' button click on command-db!", "color: #007acc; font-weight: bold;");
         event.preventDefault();
         event.stopPropagation();
+
+        // 核心亮点：若在“复合命令”View 切页下点击“+ 添加条目”，直接调起复合命令配置 Dialog！
+        if (isPipelineViewActive(avContainer as HTMLElement)) {
+            console.log("%c[IndexOS-AV-Click-Debug] 🎯 Composite Command View active -> Opening Pipeline Editor Dialog!", "color: #d97706; font-weight: bold;");
+            openPipelineEditor();
+            return;
+        }
+
+        // 普通命令视图 ➔ 调起内置命令选择器
         await triggerRegistryCommandSelectorForInsert(avId);
         return;
     }
