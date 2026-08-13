@@ -196,9 +196,25 @@ CREATE [KANBAN|GALLERY|TABLE] VIEW "视图名称" AS SELECT * FROM "原表名" [
   CREATE TABLE VIEW "高优先级任务" AS SELECT * FROM "任务列表" WHERE "优先级" = '高';
   ```
 
-### 2. 修改视图条件与名称 (`ALTER VIEW`)
+### 2. 修改视图与显隐控制 (`ALTER VIEW`) (支持思源 3.8.0+)
+支持通过 SQL 灵活控制指定视图在选项卡中的隐藏与暴露、调整列隐藏状态或修改视图图标：
+
 ```sql
--- 修改视图名称与筛选条件
+-- 1. 控制视图显隐 (支持思源 3.8.0+ 视图隐匿功能)
+-- 隐藏 "复合命令" 视图 (使该视图不在界面选项卡中暴露，至少保留 1 个可见视图)
+ALTER VIEW "复合命令" ON "command-db" SET VISIBLE false;
+
+-- 重新暴露/显示 "复合命令" 视图
+ALTER VIEW "复合命令" ON "command-db" SET VISIBLE true;
+
+-- 2. 设置视图图标 (支持设置思源 Icon 标识或 Emoji 字符)
+ALTER VIEW "普通命令" ON "command-db" SET ICON '⚡';
+
+-- 3. 控制指定列在视图中的隐藏/展开
+ALTER VIEW "普通命令" ON "command-db" SET COLUMN "Pipeline_定义" HIDDEN true;
+ALTER VIEW "普通命令" ON "command-db" SET COLUMN "Pipeline_定义" HIDDEN false;
+
+-- 4. 修改视图名称与筛选条件
 ALTER VIEW "任务看板" ON "任务列表" SET RENAME TO "进行中看板", WHERE "状态" = '进行中';
 ```
 

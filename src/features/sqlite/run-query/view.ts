@@ -172,16 +172,141 @@ export async function executeCreateView(processedSql: string, db: any, _options?
 }
 
 export async function executeAlterView(processedSql: string, db: any, options?: any): Promise<any> {
-    // Pattern: ALTER VIEW [viewName] ON [tableName] SET COLUMN [colName] HIDDEN [0|1|true|false]
-    const alterMatch = processedSql.match(/^\s*ALTER\s+VIEW\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+ON\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+SET\s+COLUMN\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+HIDDEN\s+([0-1]|true|false)\s*;?\s*$/is);
-    if (!alterMatch) {
+    // Pattern 1: ALTER VIEW [viewName] ON [tableName] SET COLUMN [colName] HIDDEN [0|1|true|false]
+    const alterColMatch = processedSql.match(/^\s*ALTER\s+VIEW\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+ON\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+SET\s+COLUMN\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+HIDDEN\s+([0-1]|true|false)\s*;?\s*$/is);
+
+    // Pattern 2 (Siyuan 3.8.0): ALTER VIEW [viewName] ON [tableName] SET VISIBLE [0|1|true|false]
+    const alterVisibleMatch = processedSql.match(/^\s*ALTER\s+VIEW\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+ON\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+SET\s+VISIBLE\s+([0-1]|true|false)\s*;?\s*$/is);
+
+    // Pattern 3 (Siyuan 3.8.0): ALTER VIEW [viewName] ON [tableName] SET ICON ['icon_or_emoji']
+    const alterIconMatch = processedSql.match(/^\s*ALTER\s+VIEW\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+ON\s+(?:["'`]([^\n\r"'`]+)["'`]|([a-zA-Z0-9_\-\u4e00-\u9fa5]+))\s+SET\s+ICON\s+['"`]?([^\n\r'"`]+)['"`]?\s*;?\s*$/is);
+
+    if (!alterColMatch && !alterVisibleMatch && !alterIconMatch) {
         return null;
     }
 
-    const viewName = (alterMatch[1] || alterMatch[2] || "").trim();
-    const tableName = (alterMatch[3] || alterMatch[4] || "").trim();
-    const colName = (alterMatch[5] || alterMatch[6] || "").trim();
-    const hiddenRaw = alterMatch[7].trim().toLowerCase();
+    // --- 处理 Pattern 2: SET VISIBLE ---
+    if (alterVisibleMatch) {
+        const viewName = (alterVisibleMatch[1] || alterVisibleMatch[2] || "").trim();
+        const tableName = (alterVisibleMatch[3] || alterVisibleMatch[4] || "").trim();
+        const visibleRaw = alterVisibleMatch[5].trim().toLowerCase();
+        const isVisible = visibleRaw === "1" || visibleRaw === "true";
+
+        console.log(`[SQLiteManager] executeAlterView: Setting view '${viewName}' of table '${tableName}' visible=${isVisible}`);
+
+        const avID = resolveTableAvId(tableName);
+        if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+
+        await instantiateAV(avID, true);
+
+        const sqlFindBlock = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%')`;
+        const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
+        if (!resFind || resFind.length === 0) throw new Error(`No Attribute View block found in Siyuan documents for table '${tableName}'.`);
+        const avBlockID = resFind[0].id;
+
+        const avData = await post("/api/av/renderAttributeView", { id: avID });
+        const viewsList: any[] = avData.views || avData.view?.views || [];
+        const targetView = viewsList.find((v: any) => v.name === viewName || v.id === viewName);
+        if (!targetView) throw new Error(`View '${viewName}' not found in table '${tableName}'.`);
+
+        const currentVisibleIDs: string[] = avData.view?.visibleViews || viewsList.map((v: any) => v.id);
+        let newVisibleIDs: string[];
+        if (isVisible) {
+            if (!currentVisibleIDs.includes(targetView.id)) {
+                newVisibleIDs = [...currentVisibleIDs, targetView.id];
+            } else {
+                newVisibleIDs = currentVisibleIDs;
+            }
+        } else {
+            newVisibleIDs = currentVisibleIDs.filter(id => id !== targetView.id);
+            if (newVisibleIDs.length === 0) {
+                throw new Error(`无法隐匿视图 '${viewName}'：思源至少需要保留一个可见视图。`);
+            }
+        }
+
+        const txRes = await post("/api/transactions", {
+            reqId: Date.now(),
+            app: "plugin-index",
+            transactions: [{
+                doOperations: [{
+                    action: "setAttrViewBlockVisibleViews",
+                    avID,
+                    blockID: avBlockID,
+                    viewIDs: newVisibleIDs
+                }]
+            }]
+        });
+
+        if (txRes && txRes.code && txRes.code !== 0) {
+            throw new Error(`Failed to set view visible status in Siyuan: ${txRes.msg || "Unknown error"}`);
+        }
+
+        tableSyncTimes.delete(avID);
+        await instantiateAV(avID, true);
+        if (!options?.skipRender) await triggerAvBlockRender(avID);
+
+        return {
+            success: true,
+            message: `View '${viewName}' in table '${tableName}' updated to visible=${isVisible}.`
+        };
+    }
+
+    // --- 处理 Pattern 3: SET ICON ---
+    if (alterIconMatch) {
+        const viewName = (alterIconMatch[1] || alterIconMatch[2] || "").trim();
+        const tableName = (alterIconMatch[3] || alterIconMatch[4] || "").trim();
+        const iconVal = alterIconMatch[5].trim();
+
+        console.log(`[SQLiteManager] executeAlterView: Setting view '${viewName}' icon in table '${tableName}' to '${iconVal}'`);
+
+        const avID = resolveTableAvId(tableName);
+        if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved.`);
+
+        await instantiateAV(avID, true);
+
+        const sqlFindBlock = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%')`;
+        const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
+        if (!resFind || resFind.length === 0) throw new Error(`No AV block found for table '${tableName}'.`);
+        const avBlockID = resFind[0].id;
+
+        const avData = await post("/api/av/renderAttributeView", { id: avID });
+        const viewsList = avData.views || avData.view?.views || [];
+        const targetView = viewsList.find((v: any) => v.name === viewName || v.id === viewName);
+        if (!targetView) throw new Error(`View '${viewName}' not found in table '${tableName}'.`);
+
+        const txRes = await post("/api/transactions", {
+            reqId: Date.now(),
+            app: "plugin-index",
+            transactions: [{
+                doOperations: [{
+                    action: "setAttrViewViewIcon",
+                    avID,
+                    id: targetView.id,
+                    blockID: avBlockID,
+                    data: iconVal
+                }]
+            }]
+        });
+
+        if (txRes && txRes.code && txRes.code !== 0) {
+            throw new Error(`Failed to set view icon: ${txRes.msg || "Unknown error"}`);
+        }
+
+        tableSyncTimes.delete(avID);
+        await instantiateAV(avID, true);
+        if (!options?.skipRender) await triggerAvBlockRender(avID);
+
+        return {
+            success: true,
+            message: `View '${viewName}' icon in table '${tableName}' updated to '${iconVal}'.`
+        };
+    }
+
+    // --- 处理 Pattern 1: SET COLUMN HIDDEN ---
+    const viewName = (alterColMatch![1] || alterColMatch![2] || "").trim();
+    const tableName = (alterColMatch![3] || alterColMatch![4] || "").trim();
+    const colName = (alterColMatch![5] || alterColMatch![6] || "").trim();
+    const hiddenRaw = alterColMatch![7].trim().toLowerCase();
     const isHidden = hiddenRaw === "1" || hiddenRaw === "true";
 
     console.log(`[SQLiteManager] executeAlterView: Setting column '${colName}' in view '${viewName}' of table '${tableName}' to hidden=${isHidden}`);
