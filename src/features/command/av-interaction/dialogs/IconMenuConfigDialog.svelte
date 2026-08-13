@@ -138,10 +138,10 @@
                     <button
                         type="button"
                         class="indexos-btn-bordered"
-                        style="font-size: 10px; padding: 1px 7px; flex-shrink: 0; {isCustomized ? 'border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important; font-weight: 600;' : ''}"
+                        style="font-size: 10px; padding: 1px 7px; flex-shrink: 0; {isCustomized ? (editingEntry?.commandId === cmd.id ? 'background: var(--indexos-detached-gold, #D9A74A) !important; color: #fff !important; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; font-weight: 700;' : 'border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important; font-weight: 600;') : (editingEntry?.commandId === cmd.id ? 'background: var(--indexos-accent-primary); color: #fff; border-color: var(--indexos-accent-primary);' : '')}"
                         title={isCustomized ? (hasLayer3Params ? '👑 已配置客制化入参 (Golden Customization)' : '⚡ 已激活 Auto-Context 出参匹配感应') : '配置该命令的参数'}
                         on:click={e => { e.stopPropagation(); e.preventDefault(); openParams(activeTab, cmd.id); }}
-                    >⚙ 参数{isCustomized ? " •" : ""}</button>
+                    >⚙ 参数</button>
                 {/if}
             </div>
         {/each}

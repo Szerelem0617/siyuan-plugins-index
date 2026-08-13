@@ -60,7 +60,7 @@ export function getSeedCommandRows(): SeedCommandRow[] {
     return rows;
 }
 
-const defaultPipelineConditional = `// [打上标签时] -> ➕ 在下方插入块, 📝 安全更新块内容
+const defaultPipelineConditional = `// [打上标签时] -> ➕ 在下方插入块, 📝 更新块内容
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {

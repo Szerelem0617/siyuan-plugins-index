@@ -173,12 +173,33 @@ export function parseMultiEventRuleScript(text: string): MultiEventRuleScript | 
 
     // 针对每个事件提取其专属的 dispatch 调用
     for (const ev of events) {
-        // 尝试搜寻该事件的分支代码段 `if (["ev"].includes(eventName)) { ... }`
-        const blockRegex = new RegExp(`if\\s*\\([^\n]*${ev}[^\n]*\\)\\s*\\{([\\s\\S]*?)\\}(?=\\s*(?:if|\\}|$))`, "g");
-        let blockMatch = blockRegex.exec(text);
-        const searchText = blockMatch ? blockMatch[1] : text;
+        let blockText = text;
+        const evIndex = text.indexOf(ev);
+        if (evIndex !== -1) {
+            const braceStart = text.indexOf("{", evIndex);
+            if (braceStart !== -1) {
+                let depth = 0, inStr = false, quote = "", end = -1;
+                for (let j = braceStart; j < text.length; j++) {
+                    const ch = text[j];
+                    if (inStr) {
+                        if (ch === "\\") { j++; continue; }
+                        if (ch === quote) inStr = false;
+                        continue;
+                    }
+                    if (ch === '"' || ch === "'" || ch === "`") { inStr = true; quote = ch; continue; }
+                    if (ch === "{") depth++;
+                    else if (ch === "}") {
+                        depth--;
+                        if (depth === 0) { end = j; break; }
+                    }
+                }
+                if (end !== -1) {
+                    blockText = text.slice(braceStart, end + 1);
+                }
+            }
+        }
 
-        eventCommandsMap[ev] = parseDispatchCallsFromText(searchText);
+        eventCommandsMap[ev] = parseDispatchCallsFromText(blockText);
     }
 
     return {

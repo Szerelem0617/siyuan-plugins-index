@@ -2,7 +2,7 @@
     import { evaluateCommandConstraints } from "../utils/constraint-checker";
     import { commandRegistry } from "../registry/command-registry";
     import { generateRuleScript, parseRuleScript } from "./script-dsl";
-    import { buildSmartBindings, outputsOf, outputName, getTagCreatedOutputPool } from "./smart-bindings";
+    import { buildPipelineAutoContextBindings, outputsOf, outputName, getTagCreatedOutputPool } from "./pipeline-auto-context";
 
     /** 可复用的命令序列编辑器：勾选命令（顺序号）+ 每命令入参设置 + 快捷配置 */
     export let initialScript: string | null = null;
@@ -129,13 +129,28 @@
         setParam(cmdId, activeParam, existing ? `${existing} ${ref}` : ref);
     }
 
+    function getCmdDef(idOrRef: string): CommandDef | undefined {
+        return commandRegistry.getCommand(idOrRef) || commandRegistry.findByNameOrId(idOrRef);
+    }
+
+    function getCheckedIndex(cmdId: string): number {
+        let idx = checked.indexOf(cmdId);
+        if (idx !== -1) return idx;
+        const targetDef = getCmdDef(cmdId);
+        if (!targetDef) return -1;
+        return checked.findIndex(item => {
+            const itemDef = getCmdDef(item);
+            return itemDef?.id === targetDef.id;
+        });
+    }
+
     function previousOutputs(cmdId: string): { name: string; source: string }[] {
-        const idx = checked.indexOf(cmdId);
+        const idx = getCheckedIndex(cmdId);
         const out: { name: string; source: string }[] = [];
         if (idx > 0) {
             for (let i = 0; i < idx; i++) {
                 const prevId = checked[i];
-                const def = commandRegistry.getCommand(prevId);
+                const def = getCmdDef(prevId);
                 for (const o of outputsOf(def)) {
                     const rawName = outputName(prevId, o.key);
                     const normToken = formatVarToken(rawName);
@@ -181,19 +196,38 @@
     }
 
     function getAutoSuggestion(cmdId: string, schema: any): { varName: string; note: string } | null {
-        const idx = checked.indexOf(cmdId);
+        const idx = getCheckedIndex(cmdId);
         if (idx > 0) {
             const prevOutputs = previousOutputs(cmdId);
             if (schema.key === "id" || schema.type === "blockid") {
-                const matched = prevOutputs.find(po => po.name.includes("createdblock") || po.name === "id");
-                const suggestedVar = matched ? matched.name : "createdblock";
-                return { varName: `{{var.${suggestedVar}}}`, note: "(不填自动推导)" };
+                const matched = prevOutputs.find(po => po.name.includes("block") || po.name.includes("id")) || prevOutputs[0];
+                if (matched) {
+                    return { varName: formatVarToken(matched.name), note: "(不填自动推导)" };
+                }
             }
             if (schema.key === "enabled") {
                 return { varName: `{{var.last_boolean_result}}`, note: "(不填受前一步控制)" };
             }
         }
         return null;
+    }
+
+    function isCommandGoldHighlighted(cmdId: string, _checked: string[], _params: Record<string, Record<string, string>>): boolean {
+        const targetDef = getCmdDef(cmdId);
+        const realId = targetDef?.id || cmdId;
+
+        // 1. 手填参数检测
+        const cmdParams = _params[realId] || _params[cmdId] || {};
+        if (Object.values(cmdParams).some(v => v !== undefined && String(v).trim() !== "")) {
+            return true;
+        }
+
+        // 2. 自动推导胶囊检测 (与右侧推荐胶囊 100% 同源)
+        if (targetDef && targetDef.params) {
+            return targetDef.params.some(p => getAutoSuggestion(realId, p) !== null);
+        }
+
+        return false;
     }
 </script>
 
@@ -227,21 +261,19 @@
                     >{checked.includes(cmd.id) ? checked.indexOf(cmd.id) + 1 : ""}</span>
                     <span style="font-size: 12px; font-weight: 600; color: var(--indexos-text-main); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{cmd.name}</span>
                     {#if checked.includes(cmd.id)}
-                        {@const hasExplicitParams = !!(paramsByCmd[cmd.id] && Object.values(paramsByCmd[cmd.id]).some(v => v !== undefined && String(v).trim() !== ''))}
-                        {@const hasAutoSuggestion = (cmd.params || []).some(p => getAutoSuggestion(cmd.id, p) !== null)}
-                        {@const hasCustomParams = hasExplicitParams || hasAutoSuggestion}
+                        {@const isGold = isCommandGoldHighlighted(cmd.id, checked, paramsByCmd)}
                         <!-- 👑 茵蒂克丝刺绣金 (Index Gold): 用于标注 Layer 3 客制化参数配置或 Auto-Context 自动推导 -->
                         <button
                             type="button"
                             class="indexos-btn-bordered"
-                            style="font-size: 10px; padding: 1px 8px; flex-shrink: 0; {editingCmd === cmd.id ? 'background: var(--indexos-accent-primary); color: #fff; border-color: var(--indexos-accent-primary);' : (hasCustomParams ? 'border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important; font-weight: 600;' : '')}"
-                            title={hasCustomParams ? (hasExplicitParams ? '👑 已配置客制化入参 (Golden Customization)' : '⚡ 已激活 Auto-Context 智能推荐感应') : '配置该命令的入参'}
+                            style="font-size: 10px; padding: 1px 8px; flex-shrink: 0; {isGold ? (editingCmd === cmd.id ? 'background: var(--indexos-detached-gold, #D9A74A) !important; color: #fff !important; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; font-weight: 700;' : 'border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important; font-weight: 600;') : (editingCmd === cmd.id ? 'background: var(--indexos-accent-primary); color: #fff; border-color: var(--indexos-accent-primary);' : '')}"
+                            title={isGold ? '👑 已激活 Auto-Context 智能推荐感应或客制化入参' : '配置该命令的入参'}
                             on:click={e => {
                                 e.stopPropagation();
                                 e.preventDefault();
                                 openSettings(cmd.id);
                             }}
-                        >⚙ 入参{hasCustomParams ? " •" : ""}</button>
+                        >⚙ 入参</button>
                     {/if}
                 </div>
             {/each}
