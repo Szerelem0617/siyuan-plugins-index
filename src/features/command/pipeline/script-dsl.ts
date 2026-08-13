@@ -212,6 +212,9 @@ export function parseMultiEventRuleScript(text: string): MultiEventRuleScript | 
 export function parseRuleScript(text: string): RuleScript | null {
     if (!text || typeof text !== "string" || !text.includes("dispatch")) return null;
 
+    const nameMatch = text.match(/\/\/\s*名称\s*:\s*(.+)/);
+    const extractedName = nameMatch ? nameMatch[1].trim() : "";
+
     const multi = parseMultiEventRuleScript(text);
     if (multi && multi.events.length > 0) {
         const allCmds: RuleCommand[] = [];
@@ -219,16 +222,16 @@ export function parseRuleScript(text: string): RuleScript | null {
             cmds.forEach(c => allCmds.push(c));
         }
         return {
-            name: multi.name,
+            name: extractedName || multi.name,
             commands: allCmds,
             events: multi.events
         };
     }
 
-    // 兜底直接解析全部 dispatch 调用
+    // 兜底直接解析全部 dispatch 调用，保留提取到的名称
     const directCmds = parseDispatchCallsFromText(text);
     return {
-        name: "",
+        name: extractedName || (multi ? multi.name : ""),
         commands: directCmds,
         events: []
     };

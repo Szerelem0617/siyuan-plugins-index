@@ -60,10 +60,16 @@
         loadScript(initialScript || "");
     }
 
-    $: if (onScriptChange && isInitialized) {
+    /** 供外部直接调取的白盒脚本提取器 */
+    export function getScript(): string {
+        return generateRuleScript(name, checked.map(cmdId => ({ commandRef: cmdId, params: paramsByCmd[cmdId] || {} })));
+    }
+
+    $: {
         const outScript = generateRuleScript(name, checked.map(cmdId => ({ commandRef: cmdId, params: paramsByCmd[cmdId] || {} })));
-        console.log("[SequenceEditor-Debug] 📤 触发 onScriptChange，向外输出脚本:", JSON.stringify(outScript), "checked:", checked);
-        onScriptChange(outScript);
+        if (onScriptChange) {
+            onScriptChange(outScript);
+        }
     }
 
     function commandName(id: string): string {

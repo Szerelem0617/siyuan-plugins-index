@@ -122,13 +122,11 @@ export async function handleAvFooterClick(event: MouseEvent) {
                       (target.classList.contains("b3-button") && txt.includes("添加条目"));
 
     if (addRowBtn) {
-        console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Row' button click on command-db!", "color: #007acc; font-weight: bold;");
         event.preventDefault();
         event.stopPropagation();
 
-        // 核心亮点：若在“复合命令”View 切页下点击“+ 添加条目”，直接调起复合命令配置 Dialog！
+        // 若在“复合命令”View 切页下点击“+ 添加条目”，直接调起复合命令配置 Dialog
         if (isPipelineViewActive(avContainer as HTMLElement)) {
-            console.log("%c[IndexOS-AV-Click-Debug] 🎯 Composite Command View active -> Opening Pipeline Editor Dialog!", "color: #d97706; font-weight: bold;");
             openPipelineEditor();
             return;
         }
