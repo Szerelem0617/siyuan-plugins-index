@@ -8,8 +8,6 @@ import { post } from "../../../shared/api-client/request";
 import { getInputColKeyId, getOutputColKeyId } from "./query-helper";
 import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDialog.svelte";
 import { readPipelineRow, openPipelineEditorForRow, openPipelineEditor } from "../pipeline/manager";
-import InputConfigDialog from "./dialogs/InputConfigDialog.svelte";
-import OutputConfigDialog from "./dialogs/OutputConfigDialog.svelte";
 import GlobalBackgroundEngineDialog from "./dialogs/GlobalBackgroundEngineDialog.svelte";
 
 /** 检测当前 command-db 视图是否处于“复合命令”View 切页 */
@@ -367,7 +365,7 @@ export async function handleCommandDbAltClick(
             showMessage("复制链接失败", 2000, "error");
         });
     } else {
-        // 解析点击列名，用于区分 Pipeline 定义 / Param Mapping 的 Alt+Click 行为
+        // 解析点击列名，用于区分 Pipeline 定义 / Input / Output 的 Alt+Click 行为
         let clickedKeyName = "";
         try {
             const { db } = await getSqliteEngine();
@@ -379,21 +377,25 @@ export async function handleCommandDbAltClick(
             console.error("[AltClick] Failed to resolve column schema details:", e);
         }
 
-        if (clickedKeyName === "Pipeline 定义" || clickedKeyName === "Pipeline Config") {
-            // --- 行为 0: Alt+Click Pipeline 定义单元格 → 可视化编辑复合命令 ---
+        // 优先检查当前行是否为复合命令 (Pipeline) 行
+        const pipelineRow = await readPipelineRow(rowId);
+        const isPipeline = Boolean(pipelineRow && pipelineRow.script) || (resolvedCommand && resolvedCommand.startsWith("pipeline."));
+
+        if (isPipeline || clickedKeyName === "Pipeline 定义" || clickedKeyName === "Pipeline Config") {
+            // --- 行为 0: Pipeline 行不论 Alt+Click 哪一列（Input/Output/Pipeline 定义），均唤起一站式 Pipeline 编排器 ---
             event.preventDefault();
             event.stopPropagation();
-            const row = await readPipelineRow(rowId);
-            if (!row) {
-                showMessage("该行没有有效的 Pipeline 定义（或列不存在）", 3000, "info");
+            if (!pipelineRow || !pipelineRow.script) {
+                // 如果是新行但点击了 Pipeline 定义列，打开新建编辑器
+                openPipelineEditor();
                 return;
             }
-            openPipelineEditorForRow(rowId, row.script);
+            openPipelineEditorForRow(rowId, pipelineRow.script);
             return;
         }
 
         if (clickedKeyName === "Input" || clickedKeyName === "Input Mapping" || clickedKeyName === "入参映射" || clickedKeyName === "Output" || clickedKeyName === "Output Mapping" || clickedKeyName === "出参映射" || clickedKeyName === "Param Mapping" || clickedKeyName === "参数映射") {
-            // --- 行为 2: 弹窗可视化配置参数 ---
+            // --- 行为 2: 普通命令弹窗可视化配置参数与出参（双 Tab 联动一体化） ---
             event.preventDefault();
             event.stopPropagation();
 
@@ -409,27 +411,8 @@ export async function handleCommandDbAltClick(
             const paramsSchema = cmdDef.params || [];
             const outputsSchema = (cmdDef && cmdDef.outputs && Array.isArray(cmdDef.outputs)) ? cmdDef.outputs : [];
 
-            if (initialTab === "input" && paramsSchema.length === 0) {
-                showMessage(`命令 "${cmdDef.name || cleanLabel}" 不包含可配置的输入参数`);
-                return;
-            }
-
-            if (initialTab === "output" && outputsSchema.length === 0) {
-                showMessage(`命令 "${cmdDef.name || cleanLabel}" 不包含可配置的导出的出参变量`);
-                return;
-            }
-
             const inputColKeyId = await getInputColKeyId(avId);
             const outputColKeyId = await getOutputColKeyId(avId);
-
-            if (initialTab === "input" && !inputColKeyId) {
-                showMessage("未能在表中找到 'Input' 列", 3000, "error");
-                return;
-            }
-            if (initialTab === "output" && !outputColKeyId) {
-                showMessage("未能在表中找到 'Output' 列", 3000, "error");
-                return;
-            }
 
             // 获取当前单元格的参数 JSON 字符串
             let currentInputStr = "{}";
@@ -465,51 +448,43 @@ export async function handleCommandDbAltClick(
             try { currentInputParams = JSON.parse(currentInputStr); } catch (_) {}
             try { currentOutputMapping = JSON.parse(currentOutputStr); } catch (_) {}
 
-            console.log(`[ParamConfig] Dialog opened with tab "${initialTab}". paramsSchema:`, paramsSchema, "outputsSchema:", outputsSchema);
+            console.log(`[UnifiedConfig] Dialog opened. initialTab: "${initialTab}", paramsSchema:`, paramsSchema, "outputsSchema:", outputsSchema);
             const dialog = new Dialog({
-                title: initialTab === "input" ? "配置命令入参" : "配置出参别名",
+                title: "配置命令参数 & 出参",
                 content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-                width: "520px",
-                height: "520px"
+                width: "560px",
+                height: "540px"
             });
             dialog.element.classList.add("indexos-dialog");
 
-            if (initialTab === "input") {
-                new InputConfigDialog({
-                    target: dialog.element.querySelector("#param-config-container")!,
-                    props: {
-                        dialog,
-                        commandName: cmdDef.name || cleanLabel,
-                        commandId: resolvedCommand,
-                        paramsSchema,
-                        currentInputParams,
-                        onSave: async (updatedInput: Record<string, any>) => {
-                            const hasParams = paramsSchema && paramsSchema.length > 0;
-                            const inputJson = hasParams ? (Object.keys(updatedInput).length > 0 ? JSON.stringify(updatedInput, null, 2) : "{}") : "";
-                            if (inputColKeyId) {
-                                await updateCellValue(null, avId, rowId, inputColKeyId, inputJson);
-                            }
+            const { default: UnifiedCommandConfigDialog } = await import("./dialogs/UnifiedCommandConfigDialog.svelte");
+
+            new UnifiedCommandConfigDialog({
+                target: dialog.element.querySelector("#param-config-container")!,
+                props: {
+                    dialog,
+                    commandName: cmdDef.name || cleanLabel,
+                    commandId: resolvedCommand,
+                    initialTab,
+                    paramsSchema,
+                    outputsSchema,
+                    currentInputParams,
+                    currentOutputMapping,
+                    onSave: async (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => {
+                        const hasParams = paramsSchema && paramsSchema.length > 0;
+                        const inputJson = hasParams ? (Object.keys(updatedInput).length > 0 ? JSON.stringify(updatedInput, null, 2) : "{}") : "";
+                        if (inputColKeyId) {
+                            await updateCellValue(null, avId, rowId, inputColKeyId, inputJson);
+                        }
+
+                        const hasOutputs = outputsSchema && outputsSchema.length > 0;
+                        const outputJson = hasOutputs ? (Object.keys(updatedOutput).length > 0 ? JSON.stringify(updatedOutput, null, 2) : "{}") : "";
+                        if (outputColKeyId) {
+                            await updateCellValue(null, avId, rowId, outputColKeyId, outputJson);
                         }
                     }
-                });
-            } else {
-                new OutputConfigDialog({
-                    target: dialog.element.querySelector("#param-config-container")!,
-                    props: {
-                        dialog,
-                        commandName: cmdDef.name || cleanLabel,
-                        commandId: resolvedCommand,
-                        currentOutputMapping,
-                        onSave: async (updatedOutput: Record<string, string>) => {
-                            const hasOutputs = outputsSchema && outputsSchema.length > 0;
-                            const outputJson = hasOutputs ? (Object.keys(updatedOutput).length > 0 ? JSON.stringify(updatedOutput, null, 2) : "{}") : "";
-                            if (outputColKeyId) {
-                                await updateCellValue(null, avId, rowId, outputColKeyId, outputJson);
-                            }
-                        }
-                    }
-                });
-            }
+                }
+            });
             return;
         }
     }
@@ -599,26 +574,35 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
         try { currentOutputMapping = JSON.parse(currentOutputStr); } catch (_) {}
 
         // 5. 唤起配置弹窗
-        console.log("[ParamConfig] Dialog opened via openConfigForCommand. paramsSchema:", paramsSchema);
+        console.log("[UnifiedConfig] Dialog opened via openConfigForCommand. paramsSchema:", paramsSchema);
         const dialog = new Dialog({
-            title: "配置命令参数 & 出参控制",
+            title: "配置命令参数 & 出参",
             content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
-            width: "520px",
-            height: "520px"
+            width: "560px",
+            height: "540px"
         });
         dialog.element.classList.add("indexos-dialog");
 
-        new InputConfigDialog({
+        const { default: UnifiedCommandConfigDialog } = await import("./dialogs/UnifiedCommandConfigDialog.svelte");
+        const outputsSchema = (cmdDef && cmdDef.outputs && Array.isArray(cmdDef.outputs)) ? cmdDef.outputs : [];
+
+        new UnifiedCommandConfigDialog({
             target: dialog.element.querySelector("#param-config-container")!,
             props: {
                 dialog,
                 commandName: cmdDef.name || cleanLabel,
                 commandId: cmdDef.id,
+                initialTab: "input",
                 paramsSchema,
+                outputsSchema,
                 currentInputParams,
-                onSave: async (updatedInput: Record<string, any>) => {
+                currentOutputMapping,
+                onSave: async (updatedInput: Record<string, any>, updatedOutput: Record<string, string>) => {
                     if (inputColKeyId) {
                         await updateCellValue(null, commandAvId, cmdRowItemId, inputColKeyId, JSON.stringify(updatedInput, null, 2));
+                    }
+                    if (outputColKeyId && Object.keys(updatedOutput).length > 0) {
+                        await updateCellValue(null, commandAvId, cmdRowItemId, outputColKeyId, JSON.stringify(updatedOutput, null, 2));
                     }
                 }
             }

@@ -182,22 +182,22 @@
         <span>🏷️ 配置 Supertag <span style="color: var(--indexos-accent-primary);">#{supertag}</span> 的条件触发</span>
     </div>
 
-    <!-- 触发事件 Tab 选项卡 -->
-    <div style="flex-shrink: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: var(--indexos-bg-surface); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--indexos-border-subtle);">
+    <!-- 触发事件 Tab 选项卡 (规范级 Segmented TabBar) -->
+    <div class="indexos-tabbar" style="flex-wrap: wrap;">
         <div style="font-size: 11px; font-weight: 600; color: var(--indexos-text-muted); margin-right: 4px;">触发事件:</div>
 
         {#each selectedEvents as evId}
             {@const evObj = ALL_EVENT_TYPES.find(x => x.id === evId)}
             {@const cmdCount = (eventCommandsMap[evId] || []).length}
             {#if evObj}
-                <div
-                    style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; border: 1px solid {activeEventTab === evId ? 'var(--indexos-accent-primary)' : 'var(--indexos-border-subtle)'}; background: {activeEventTab === evId ? 'var(--indexos-bg-card)' : 'transparent'}; color: {activeEventTab === evId ? 'var(--indexos-accent-primary)' : 'var(--indexos-text-main)'}; font-weight: {activeEventTab === evId ? '700' : 'normal'}; box-shadow: {activeEventTab === evId ? '0 2px 6px rgba(0, 0, 0, 0.08)' : 'none'};"
+                <button
+                    type="button"
+                    class="indexos-tab-item"
+                    class:active={activeEventTab === evId}
                     on:click={() => switchTab(evId)}
                 >
                     <span>{evObj.icon} {evObj.label}</span>
-                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 10px; background: {activeEventTab === evId ? 'var(--indexos-accent-primary)' : 'rgba(161, 196, 230, 0.3)'}; color: {activeEventTab === evId ? '#FFFFFF' : 'var(--indexos-text-muted)'};">
-                        {cmdCount}
-                    </span>
+                    <span class="indexos-tab-badge">{cmdCount}</span>
                     {#if selectedEvents.length > 1}
                         <span
                             style="opacity: 0.5; font-weight: bold; margin-left: 2px; line-height: 1;"
@@ -205,7 +205,7 @@
                             on:click={(e) => removeEventTab(evId, e)}
                         >&times;</span>
                     {/if}
-                </div>
+                </button>
             {/if}
         {/each}
 

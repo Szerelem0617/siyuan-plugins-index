@@ -83,11 +83,14 @@ function parseGlobalParams(raw: string): Record<string, unknown> {
     } catch { return {}; }
 }
 
+import { inferPipelineIO } from "./pipeline-io-infer";
+
 /** 获取 Command-DB 的关键列 keyID */
 export async function getCommandDbKeyIds(): Promise<{
     pkKeyId: string;
     cmdIdKeyId: string;
-    paramKeyId: string;
+    inputKeyId: string;
+    outputKeyId: string;
     pipelineKeyId: string;
 } | null> {
     const cmdAvId = getCommandAvId();
@@ -105,14 +108,20 @@ export async function getCommandDbKeyIds(): Promise<{
     const result = {
         pkKeyId: pk?.id ? String(pk.id) : (keys[0]?.id ? String(keys[0].id) : ""),
         cmdIdKeyId: findId("Command ID", "Command_ID"),
-        paramKeyId: findId("Param Mapping", "参数映射"),
+        inputKeyId: findId("Input", "Input Mapping", "Param Mapping", "参数映射", "入参映射"),
+        outputKeyId: findId("Output", "Output Mapping", "出参映射"),
         pipelineKeyId: findId("Pipeline 定义", "Pipeline Config")
     };
     return result.pipelineKeyId ? result : null;
 }
 
-/** 在 Command-DB 创建一行复合命令记录（Pipeline 定义列存统一规则脚本） */
-export async function createPipelineRow(name: string, script: string, globalParams = "{}"): Promise<string> {
+/** 在 Command-DB 创建一行复合命令记录（自动填充 Input, Output, Pipeline 定义） */
+export async function createPipelineRow(
+    name: string,
+    script: string,
+    inputParams?: string,
+    outputParams?: string
+): Promise<string> {
     const cmdAvId = getCommandAvId();
     if (!cmdAvId) {
         throw new Error("请先将数据存储到思源（Command-DB 不存在）");
@@ -120,6 +129,18 @@ export async function createPipelineRow(name: string, script: string, globalPara
     const keys = await getCommandDbKeyIds();
     if (!keys) {
         throw new Error("Command-DB 缺少 'Pipeline 定义' 列：请删除 IndexOS 笔记本后重新“将数据存到思源”");
+    }
+
+    const rule = parseRuleScript(script);
+    let finalInputJson = inputParams;
+    let finalOutputJson = outputParams;
+
+    if ((!finalInputJson || finalInputJson === "{}") && rule) {
+        const inferred = inferPipelineIO(rule);
+        finalInputJson = Object.keys(inferred.input).length > 0 ? JSON.stringify(inferred.input, null, 2) : "{}";
+        if (!finalOutputJson || finalOutputJson === "{}") {
+            finalOutputJson = Object.keys(inferred.output).length > 0 ? JSON.stringify(inferred.output, null, 2) : "{}";
+        }
     }
 
     // @ts-ignore
@@ -134,14 +155,22 @@ export async function createPipelineRow(name: string, script: string, globalPara
     const ops: any[] = [];
     if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
     if (keys.cmdIdKeyId) ops.push({ keyID: keys.cmdIdKeyId, itemID: rowId, value: { type: "text", text: { content: commandId } } });
-    if (keys.paramKeyId) ops.push({ keyID: keys.paramKeyId, itemID: rowId, value: { type: "text", text: { content: globalParams } } });
+    if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: finalInputJson || "{}" } } });
+    if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: finalOutputJson || "{}" } } });
     if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
+    
     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
     return rowId;
 }
 
-/** 读取一行复合命令的脚本 */
-export async function readPipelineRow(rowId: string): Promise<{ name: string; script: string; rule: RuleScript | null } | null> {
+/** 读取一行复合命令的脚本与 Input/Output */
+export async function readPipelineRow(rowId: string): Promise<{
+    name: string;
+    script: string;
+    inputStr: string;
+    outputStr: string;
+    rule: RuleScript | null;
+} | null> {
     const cmdAvId = getCommandAvId();
     if (!cmdAvId) return null;
     const { db } = await getSqliteEngine();
@@ -149,32 +178,65 @@ export async function readPipelineRow(rowId: string): Promise<{ name: string; sc
 
     const pkRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [cmdAvId]);
     const pkCol = pkRes.length > 0 && pkRes[0].values.length > 0 ? String(pkRes[0].values[0][0]) : "label";
+    
     const pipeRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Pipeline 定义' OR key_name = 'Pipeline Config')`, [cmdAvId]);
     if (pipeRes.length === 0 || pipeRes[0].values.length === 0) return null;
     const pipeCol = String(pipeRes[0].values[0][0]);
-    const paramRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Param Mapping' OR key_name = '参数映射')`, [cmdAvId]);
-    const paramCol = paramRes.length > 0 && paramRes[0].values.length > 0 ? String(paramRes[0].values[0][0]) : "Param_Mapping";
 
-    const rows = db.exec(`SELECT "${pkCol}", "${pipeCol}", "${paramCol}" FROM "${tableName}" WHERE _itemID = ?`, [rowId]);
+    const inputRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Input' OR key_name = 'Input Mapping' OR key_name = 'Param Mapping' OR key_name = '参数映射' OR key_name = '入参映射')`, [cmdAvId]);
+    const inputCol = inputRes.length > 0 && inputRes[0].values.length > 0 ? String(inputRes[0].values[0][0]) : "";
+
+    const outputRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Output' OR key_name = 'Output Mapping' OR key_name = '出参映射')`, [cmdAvId]);
+    const outputCol = outputRes.length > 0 && outputRes[0].values.length > 0 ? String(outputRes[0].values[0][0]) : "";
+
+    const selectCols = [`"${pkCol}"`, `"${pipeCol}"`];
+    if (inputCol) selectCols.push(`"${inputCol}"`);
+    if (outputCol) selectCols.push(`"${outputCol}"`);
+
+    const rows = db.exec(`SELECT ${selectCols.join(", ")} FROM "${tableName}" WHERE _itemID = ?`, [rowId]);
     if (rows.length === 0 || rows[0].values.length === 0) return null;
     const r = rows[0].values[0];
     const name = String(r[0] || "");
     const script = String(r[1] || "").trim();
+    const inputStr = inputCol && r[2] !== undefined ? String(r[2] || "{}") : "{}";
+    const outputStr = outputCol ? (inputCol ? String(r[3] || "{}") : String(r[2] || "{}")) : "{}";
+
     if (!script) return null;
-    return { name, script, rule: parseRuleScript(script) };
+    return { name, script, inputStr, outputStr, rule: parseRuleScript(script) };
 }
 
-/** 更新一行复合命令的名称与脚本 */
-export async function updatePipelineRow(rowId: string, name: string, script: string, globalParams = "{}"): Promise<void> {
+/** 更新一行复合命令的名称、脚本与 Input/Output */
+export async function updatePipelineRow(
+    rowId: string,
+    name: string,
+    script: string,
+    inputParams?: string,
+    outputParams?: string
+): Promise<void> {
     const cmdAvId = getCommandAvId();
     const keys = await getCommandDbKeyIds();
     if (!cmdAvId || !keys) {
         throw new Error("Command-DB 不可用或缺少 Pipeline 列");
     }
+
+    const rule = parseRuleScript(script);
+    let finalInputJson = inputParams;
+    let finalOutputJson = outputParams;
+
+    if ((!finalInputJson || finalInputJson === "{}") && rule) {
+        const inferred = inferPipelineIO(rule);
+        finalInputJson = Object.keys(inferred.input).length > 0 ? JSON.stringify(inferred.input, null, 2) : "{}";
+        if (!finalOutputJson || finalOutputJson === "{}") {
+            finalOutputJson = Object.keys(inferred.output).length > 0 ? JSON.stringify(inferred.output, null, 2) : "{}";
+        }
+    }
+
     const ops: any[] = [];
     if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
-    if (keys.paramKeyId) ops.push({ keyID: keys.paramKeyId, itemID: rowId, value: { type: "text", text: { content: globalParams } } });
+    if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: finalInputJson || "{}" } } });
+    if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: finalOutputJson || "{}" } } });
     if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
+    
     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
 }
 

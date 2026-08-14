@@ -78,28 +78,28 @@
         🏷️ 配置 Supertag <span style="color: var(--indexos-accent-primary);">#{supertag}</span> Icon menu &amp; Button
     </div>
 
-    <!-- 极客工业风高光 TabBar -->
-    <div style="display: flex; gap: 8px; flex-shrink: 0; background: var(--indexos-bg-surface); padding: 4px; border-radius: 8px; border: 1px solid var(--indexos-border-subtle);">
+    <!-- 规范级 Segmented TabBar -->
+    <div class="indexos-tabbar">
         <button
             type="button"
-            style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; padding: 7px 14px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; border: 1px solid {activeTab === 'menu' ? 'var(--indexos-accent-primary)' : 'transparent'}; background: {activeTab === 'menu' ? 'var(--indexos-bg-card)' : 'transparent'}; color: {activeTab === 'menu' ? 'var(--indexos-accent-primary)' : 'var(--indexos-text-muted)'}; font-weight: {activeTab === 'menu' ? '700' : '500'}; box-shadow: {activeTab === 'menu' ? '0 2px 6px rgba(0, 0, 0, 0.08)' : 'none'};"
+            class="indexos-tab-item"
+            style="flex: 1;"
+            class:active={activeTab === 'menu'}
             on:click={() => { activeTab = "menu"; editingEntry = null; }}
         >
             <span>📌 Icon Menu 菜单栏</span>
-            <span style="font-size: 10px; padding: 1px 6px; border-radius: 10px; background: {activeTab === 'menu' ? 'var(--indexos-accent-primary)' : 'rgba(161, 196, 230, 0.3)'}; color: {activeTab === 'menu' ? '#FFFFFF' : 'var(--indexos-text-muted)'};">
-                {config.menu.length}
-            </span>
+            <span class="indexos-tab-badge">{config.menu.length}</span>
         </button>
 
         <button
             type="button"
-            style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; padding: 7px 14px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; border: 1px solid {activeTab === 'button' ? 'var(--indexos-accent-primary)' : 'transparent'}; background: {activeTab === 'button' ? 'var(--indexos-bg-card)' : 'transparent'}; color: {activeTab === 'button' ? 'var(--indexos-accent-primary)' : 'var(--indexos-text-muted)'}; font-weight: {activeTab === 'button' ? '700' : '500'}; box-shadow: {activeTab === 'button' ? '0 2px 6px rgba(0, 0, 0, 0.08)' : 'none'};"
+            class="indexos-tab-item"
+            style="flex: 1;"
+            class:active={activeTab === 'button'}
             on:click={() => { activeTab = "button"; editingEntry = null; }}
         >
             <span>🔘 Button 块下方按钮</span>
-            <span style="font-size: 10px; padding: 1px 6px; border-radius: 10px; background: {activeTab === 'button' ? 'var(--indexos-accent-primary)' : 'rgba(161, 196, 230, 0.3)'}; color: {activeTab === 'button' ? '#FFFFFF' : 'var(--indexos-text-muted)'};">
-                {config.button.length}
-            </span>
+            <span class="indexos-tab-badge">{config.button.length}</span>
         </button>
     </div>
 

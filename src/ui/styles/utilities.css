@@ -225,16 +225,70 @@
     box-shadow: none !important;
 }
 
-/* 激活 Tab 旁边的 Count 胶囊 (Badge) */
-.indexos-dialog .b3-chip,
-.indexos-dialog .tab-count {
-    background-color: var(--indexos-accent-badge-bg) !important;  /* 浅色碧落 / 深色微光 */
-    color: var(--indexos-accent-badge-text) !important;          /* 浅色皇家蓝 / 深色天蓝 */
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    border-radius: 2px !important;                              /* 2px 圆角胶囊 */
+/* ─── 🏛️ IndexOS 规范级分段选项卡系统 (Segmented TabBar System) ─── */
+.indexos-tabbar {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+    background: var(--indexos-bg-surface);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--indexos-border-subtle);
+    box-sizing: border-box;
+}
+
+.indexos-tab-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--indexos-text-muted);
+    user-select: none;
+    outline: none;
+    line-height: 1.2;
+    box-sizing: border-box;
+}
+
+.indexos-tab-item:hover:not(.active) {
+    background: var(--indexos-bg-card-hover);
+    color: var(--indexos-text-main);
+}
+
+.indexos-tab-item.active,
+.indexos-tab-item[aria-selected="true"] {
+    background: var(--indexos-bg-card) !important;
+    border-color: var(--indexos-accent-primary) !important;
+    color: var(--indexos-accent-primary) !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 0 8px var(--indexos-accent-glow) !important;
+}
+
+/* Tab 内部计数小胶囊 (Count Badge) */
+.indexos-tab-badge {
+    font-size: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--indexos-accent-badge-bg);
+    color: var(--indexos-accent-badge-text, var(--indexos-text-muted));
+    font-weight: 500;
+    transition: all 0.18s ease;
+    line-height: 1.3;
+}
+
+.indexos-tab-item.active .indexos-tab-badge {
+    background: var(--indexos-accent-primary) !important;
+    color: #FFFFFF !important;
     font-weight: 600 !important;
-    font-size: 10px !important;
-    border: 1px solid var(--indexos-border-light) !important;
 }
 
 /* ─── 卡片 (av-card & cmd-item-card) 高光纯白/钛合金面板 ─── */

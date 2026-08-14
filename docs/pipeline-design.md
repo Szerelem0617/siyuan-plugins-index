@@ -112,15 +112,30 @@ async ({ dispatch, state, eventName }) => {
 
 ---
 
-## 5. 存储与注册
+## 5. 存储、注册与一站式 IO 体系
 
-### 5.1 存储
+### 5.1 存储表结构与自动同步
 
-- 位置：Command-DB 一行记录的 **"Pipeline 定义"列**（TS 代码字符串）。
-- Command ID 规范：`pipeline.<shortHash(rowID)>`。
-- 其他列：主键 = 名称，Param Mapping = 全局默认参数，UI 入口列决定展示位置。
+在 Command-DB（Layer 2）中，一行复合命令包含以下核心字段：
+- **主键 (Label)**：复合命令名称；
+- **Command ID**：`pipeline.<shortHash(rowID)>`；
+- **Input**：由 Pipeline 编排器自动推导/用户微调的入参映射（如 `{"title": ""}`）；
+- **Output**：由 Pipeline 编排器自动捕获的步骤产出变量（如 `{"createdblock": "{{var.createdblock}}"}`）；
+- **Pipeline 定义**：标准 DSL TS 脚本文本。
 
-### 5.2 注册
+在 Pipeline 编排面板点击保存时，**一次性自动批量回写上述全部列**，实现 100% 自动同步。
+
+### 5.2 一站式交互与双向回读 (Round-Trippable)
+
+1. **复合命令行 (Pipeline Row)**：
+   - 无论用户在表格中 Alt+Click `Input`、`Output` 还是 `Pipeline 定义` 列，均**统一唤起一站式 Pipeline 编排工作台**；
+   - 弹窗内包含 `[ 🧩 步骤编排 ]`、`[ 📥 输入参数 (自动推导) ]`、`[ 📤 输出变量 (自动捕获) ]` 三大 Tab，实现定义、连线与 IO 签名的完整闭环；
+   - 保证 100% 可回读：重新打开时精准反编译回显所有步骤与参数。
+2. **普通原子命令 (Atomic Command Row)**：
+   - Alt+Click `Input` 或 `Output` 列时，统一唤起 **`UnifiedCommandConfigDialog`**；
+   - 内部提供 `[ 📥 输入参数 ]` / `[ 📤 输出变量 ]` 双 Tab 随意切换，保存时两列同时更新，彻底告别频繁开关弹窗。
+
+### 5.3 注册
 
 ```ts
 commandRegistry.registerCommand({
@@ -146,5 +161,6 @@ commandRegistry.registerCommand({
 ## 6. 演进说明
 
 - 本设计作为测试版本的唯一标准架构，彻底废弃原草案中的 JSON Schema 编排与 `stepN.key` 作用域说明。
-- 后续如需增加步间控制（如忽略错误继续执行），可在 `dispatch` 辅助函数中增加可选配置参数（如 `dispatch("cmd", params, { ignoreError: true })`），保持整体代码精简一致。
+- 普通命令与复合命令均采用高内聚、零断层的交互模型，保持表结构清晰与操作流丝滑。
+
 

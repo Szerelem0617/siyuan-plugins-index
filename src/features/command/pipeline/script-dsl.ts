@@ -33,10 +33,13 @@ export function parseDispatchCallsFromText(text: string): RuleCommand[] {
         const afterMatchIndex = dispatchHeadRegex.lastIndex;
         let params: Record<string, string> = {};
 
-        const remaining = text.slice(afterMatchIndex).trim();
-        if (remaining.startsWith(",")) {
-            const braceStart = text.indexOf("{", afterMatchIndex);
-            if (braceStart !== -1 && braceStart - afterMatchIndex < 30) {
+        const nextCommaIndex = text.indexOf(",", afterMatchIndex);
+        const nextClosingParen = text.indexOf(")", afterMatchIndex);
+
+        // 如果在遇到右括号之前存在逗号，说明有第二个参数（params 对象）
+        if (nextCommaIndex !== -1 && (nextClosingParen === -1 || nextCommaIndex < nextClosingParen)) {
+            const braceStart = text.indexOf("{", nextCommaIndex);
+            if (braceStart !== -1 && (nextClosingParen === -1 || braceStart < nextClosingParen)) {
                 let depth = 0, inStr = false, quote = "", end = -1;
                 for (let j = braceStart; j < text.length; j++) {
                     const ch = text[j];
