@@ -110,10 +110,17 @@ export async function runRuleScript(
         };
 
         let body = script.trim();
-        if (body.startsWith("async ({") || body.startsWith("async (") || body.startsWith("({")) {
-            body = `return (${body})(arguments[0]);`;
-        } else if (body.startsWith("async function") || body.startsWith("function")) {
-            body = `return (${body})(arguments[0]);`;
+        // 剥离首部可能存在的单行或多行注释（如 // 名称: xxx 或 /* ... */）
+        const strippedBody = body.replace(/^\s*(\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*)*/, "").trim();
+
+        if (
+            strippedBody.startsWith("async ({") ||
+            strippedBody.startsWith("async (") ||
+            strippedBody.startsWith("({") ||
+            strippedBody.startsWith("async function") ||
+            strippedBody.startsWith("function")
+        ) {
+            body = `return (${strippedBody})(arguments[0]);`;
         } else {
             body = `return (async ({ dispatch, state, delay, context, eventName }) => {\n${body}\n})(arguments[0]);`;
         }
@@ -127,6 +134,7 @@ export async function runRuleScript(
             context,
             eventName
         };
+        console.log("[RuleEngine] 🚀 开始执行规则脚本, 携带 context:", { blockId: context.blockId, geometry: context.geometry });
         await fn(env);
 
         context.vars = { ...context.vars, ...vars };

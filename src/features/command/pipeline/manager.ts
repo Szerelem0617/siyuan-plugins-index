@@ -56,10 +56,7 @@ export function registerPipelineCommand(id: string, name: string, script: string
             executor: async (params, ctx) => {
                 const merged: Record<string, unknown> = { ...parseGlobalParams(globalParams), ...(params || {}) };
                 const runCtx: CommandContext = {
-                    blockEl: ctx.blockEl,
-                    protyleEl: ctx.protyleEl,
-                    supertag: ctx.supertag,
-                    triggerEl: ctx.triggerEl,
+                    ...ctx,
                     vars: { ...((ctx as any).vars || {}), ...merged }
                 };
                 const result = await runRuleScript(script, runCtx);
@@ -81,6 +78,17 @@ function parseGlobalParams(raw: string): Record<string, unknown> {
         const parsed = JSON.parse(raw || "{}");
         return parsed && typeof parsed === "object" ? parsed : {};
     } catch { return {}; }
+}
+
+function cleanJsonOrEmpty(jsonStr?: string): string {
+    if (!jsonStr) return "";
+    const trimmed = jsonStr.trim();
+    if (trimmed === "{}" || trimmed === "null" || trimmed === "") return "";
+    try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object" && Object.keys(parsed).length === 0) return "";
+    } catch (_) {}
+    return trimmed;
 }
 
 import { inferPipelineIO } from "./pipeline-io-infer";
@@ -135,11 +143,11 @@ export async function createPipelineRow(
     let finalInputJson = inputParams;
     let finalOutputJson = outputParams;
 
-    if ((!finalInputJson || finalInputJson === "{}") && rule) {
+    if ((!finalInputJson || finalInputJson === "{}" || finalInputJson === "") && rule) {
         const inferred = inferPipelineIO(rule);
-        finalInputJson = Object.keys(inferred.input).length > 0 ? JSON.stringify(inferred.input, null, 2) : "{}";
-        if (!finalOutputJson || finalOutputJson === "{}") {
-            finalOutputJson = Object.keys(inferred.output).length > 0 ? JSON.stringify(inferred.output, null, 2) : "{}";
+        finalInputJson = Object.keys(inferred.input).length > 0 ? JSON.stringify(inferred.input, null, 2) : "";
+        if (!finalOutputJson || finalOutputJson === "{}" || finalOutputJson === "") {
+            finalOutputJson = Object.keys(inferred.output).length > 0 ? JSON.stringify(inferred.output, null, 2) : "";
         }
     }
 
@@ -155,8 +163,8 @@ export async function createPipelineRow(
     const ops: any[] = [];
     if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
     if (keys.cmdIdKeyId) ops.push({ keyID: keys.cmdIdKeyId, itemID: rowId, value: { type: "text", text: { content: commandId } } });
-    if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: finalInputJson || "{}" } } });
-    if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: finalOutputJson || "{}" } } });
+    if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalInputJson) } } });
+    if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalOutputJson) } } });
     if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
     
     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
@@ -198,8 +206,8 @@ export async function readPipelineRow(rowId: string): Promise<{
     const r = rows[0].values[0];
     const name = String(r[0] || "");
     const script = String(r[1] || "").trim();
-    const inputStr = inputCol && r[2] !== undefined ? String(r[2] || "{}") : "{}";
-    const outputStr = outputCol ? (inputCol ? String(r[3] || "{}") : String(r[2] || "{}")) : "{}";
+    const inputStr = inputCol && r[2] !== undefined ? String(r[2] || "") : "";
+    const outputStr = outputCol ? (inputCol ? String(r[3] || "") : String(r[2] || "")) : "";
 
     if (!script) return null;
     return { name, script, inputStr, outputStr, rule: parseRuleScript(script) };
@@ -223,18 +231,18 @@ export async function updatePipelineRow(
     let finalInputJson = inputParams;
     let finalOutputJson = outputParams;
 
-    if ((!finalInputJson || finalInputJson === "{}") && rule) {
+    if ((!finalInputJson || finalInputJson === "{}" || finalInputJson === "") && rule) {
         const inferred = inferPipelineIO(rule);
-        finalInputJson = Object.keys(inferred.input).length > 0 ? JSON.stringify(inferred.input, null, 2) : "{}";
-        if (!finalOutputJson || finalOutputJson === "{}") {
-            finalOutputJson = Object.keys(inferred.output).length > 0 ? JSON.stringify(inferred.output, null, 2) : "{}";
+        finalInputJson = Object.keys(inferred.input).length > 0 ? JSON.stringify(inferred.input, null, 2) : "";
+        if (!finalOutputJson || finalOutputJson === "{}" || finalOutputJson === "") {
+            finalOutputJson = Object.keys(inferred.output).length > 0 ? JSON.stringify(inferred.output, null, 2) : "";
         }
     }
 
     const ops: any[] = [];
     if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
-    if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: finalInputJson || "{}" } } });
-    if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: finalOutputJson || "{}" } } });
+    if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalInputJson) } } });
+    if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalOutputJson) } } });
     if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
     
     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });

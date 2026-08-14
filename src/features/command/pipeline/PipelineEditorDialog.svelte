@@ -66,8 +66,8 @@
         const finalInputObj: Record<string, string> = { ...finalInferred.input, ...customInputMap };
         const finalOutputObj: Record<string, string> = { ...finalInferred.output, ...customOutputMap };
 
-        const finalInputJson = Object.keys(finalInputObj).length > 0 ? JSON.stringify(finalInputObj, null, 2) : "{}";
-        const finalOutputJson = Object.keys(finalOutputObj).length > 0 ? JSON.stringify(finalOutputObj, null, 2) : "{}";
+        const finalInputJson = Object.keys(finalInputObj).length > 0 ? JSON.stringify(finalInputObj, null, 2) : "";
+        const finalOutputJson = Object.keys(finalOutputObj).length > 0 ? JSON.stringify(finalOutputObj, null, 2) : "";
 
         saving = true;
         try {
