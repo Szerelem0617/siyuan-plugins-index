@@ -221,10 +221,9 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
                 const cleanKey = k.replace(/^custom-/, "");
                 if (v !== undefined && v !== null) {
                     const strVal = String(v);
-                    if (!(cleanKey in variables)) variables[cleanKey] = strVal;
-                    if (!(`var.${cleanKey}` in variables)) variables[`var.${cleanKey}`] = strVal;
-                    if (!(`attr:${cleanKey}` in variables)) variables[`attr:${cleanKey}`] = strVal;
-                    if (!(k in variables)) variables[k] = strVal;
+                    variables[cleanKey] = strVal;
+                    variables[`attr.${cleanKey}`] = strVal;
+                    variables[k] = strVal;
                 }
             }
         } catch (_) {}
@@ -251,16 +250,6 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
             if (currentAttrName) {
                 const cleanKey = currentAttrName.replace(/^custom-/, "");
                 currentVal = variables[cleanKey] || variables[`custom-${cleanKey}`] || variables[currentAttrName] || "";
-            } else {
-                for (const opt of options) {
-                    for (const [vKey, vVal] of Object.entries(variables)) {
-                        if (vVal === opt && !vKey.startsWith("var.")) {
-                            currentVal = vVal;
-                            break;
-                        }
-                    }
-                    if (currentVal) break;
-                }
             }
 
             let nextVal = options[0];

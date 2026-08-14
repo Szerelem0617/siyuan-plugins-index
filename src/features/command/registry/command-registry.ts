@@ -61,16 +61,16 @@ export type BlockTarget =
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 一个参数的 Schema 描述（对应 commands.json 中 params[] 的每一项） */
+/** 一个参数的 Schema 描述（对应 builtin/*.json 中 params[] 的每一项） */
 export interface ParamSchema {
     /** 传给 API 时使用的字段名，如 "dataType" */
     key: string;
     /** 展示给用户看的名称，如 "内容类型" */
-    label: string;
+    label?: string;
     /** 数据类型 */
-    type: "text" | "blockid" | "enum" | "object" | "number" | "boolean";
+    type: "string" | "text" | "blockid" | "enum" | "object" | "number" | "boolean";
     /** 是否必填 */
-    required: boolean;
+    required?: boolean;
     /** 参数获取方式 */
     paramMode: ParamMode;
     /** type=enum 时的可选值 */
@@ -229,9 +229,9 @@ class CommandRegistry {
                         dispatch: dispatchRaw ? JSON.parse(dispatchRaw) : { method: "custom" },
                         params: paramsRaw ? JSON.parse(paramsRaw) : [],
                         constraints: {
-                            environment: constraintsObj.environment || existing?.constraints?.environment || "universal",
-                            targetScope: constraintsObj.targetScope || existing?.constraints?.targetScope || "any",
-                            comment: constraintsObj.comment || existing?.constraints?.comment
+                            environment: constraintsObj.environment || "universal",
+                            targetScope: constraintsObj.targetScope || "any",
+                            comment: constraintsObj.comment
                         },
                         meta: metaRaw ? JSON.parse(metaRaw) : { contextNeed: "none", category: "custom", source: "plugin" }
                     };
@@ -251,18 +251,6 @@ class CommandRegistry {
 
     /**
      * 供第三方插件调用，动态注册一个自定义命令。
-     *
-     * @example
-     * // 在第三方插件的 onload() 里：
-     * const indexOS = app.plugins.find(p => p.name === "siyuan-plugins-index") as any;
-     * indexOS?.commandRegistry.registerCommand({
-     *     id: "myplugin.doSomething",
-     *     name: "做某事",
-     *     dispatch: { method: "custom", executor: async (params, ctx) => { ... } },
-     *     params: [],
-     *     constraints: { environment: "universal", targetScope: "any" },
-     *     meta: { contextNeed: "none", category: "custom", source: "plugin", plugin: "myplugin" }
-     * });
      */
     registerCommand(def: CommandDef): void {
         if (!def.id) throw new Error("[Registry] registerCommand: 'id' is required.");
@@ -311,7 +299,7 @@ class CommandRegistry {
                 }
             },
             params: [],
-            constraints: { requiresFocus: false, environment: "universal", uiOnly: false, schedulable: true },
+            constraints: { environment: "universal", targetScope: "none" },
             meta: { contextNeed: "none", category: "user", source: "user", plugin: "user", icon: userCmd.icon || "iconSparkles" }
         };
 
@@ -406,22 +394,26 @@ class CommandRegistry {
     }
 
     /**
-     * 折中查找：先按 ID 精确匹配，找不到则按 name 模糊匹配（忽略大小写）。
-     * 用于解析 siyuan-btn 链接中可能是 ID 也可能是中文名的标识符。
+     * 精确与前缀查找：
+     * 1. 按 ID 精确匹配（最优先）
+     * 2. 按 name 完整精确匹配（忽略大小写）
+     * 3. 按 name 前缀/包含匹配（仅正向查找，严禁逆向匹配以防歧义误触发）
      */
     findByNameOrId(idOrName: string): CommandDef | undefined {
         const cleanIdOrName = idOrName.replace(/-\d+$/, "");
-        // 1. ID 精确匹配（最优先）
+        // 1. ID 精确匹配
         const byId = this.store.get(cleanIdOrName);
         if (byId) return byId;
-        // 2. name 精确匹配
+
+        // 2. name 完整精确匹配
         const lower = cleanIdOrName.toLowerCase();
         for (const def of this.store.values()) {
             if (def.name.toLowerCase() === lower) return def;
         }
-        // 3. name 包含匹配（最宽松的备选）
+
+        // 3. name 前缀/包含匹配（仅正向：命令名称包含查询词）
         for (const def of this.store.values()) {
-            if (def.name.toLowerCase().includes(lower) || lower.includes(def.name.toLowerCase())) return def;
+            if (def.name.toLowerCase().includes(lower)) return def;
         }
         return undefined;
     }

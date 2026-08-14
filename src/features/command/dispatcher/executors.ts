@@ -10,7 +10,7 @@ import type { CommandDef } from "../registry/command-registry";
 import type { CommandContext, DispatchResult } from "./types";
 
 export function dispatchKeyboard(def: CommandDef, _context: CommandContext): DispatchResult {
-    const key = def.dispatch.key;
+    const key = def.dispatch.keymapPath ? def.dispatch.keymapPath.join(":") : ((def.dispatch as any).key || "");
     if (!key) return { success: false, method: "keyboard", detail: "No key binding defined" };
     try {
         globalCommand(key);
@@ -21,7 +21,7 @@ export function dispatchKeyboard(def: CommandDef, _context: CommandContext): Dis
 }
 
 export function dispatchGlobal(def: CommandDef): DispatchResult {
-    const cmd = def.dispatch.command;
+    const cmd = def.dispatch.target || (def.dispatch as any).command || "";
     if (!cmd) return { success: false, method: "global", detail: "No global command defined" };
     try {
         globalCommand(cmd);

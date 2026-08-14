@@ -127,9 +127,6 @@ export function dispatchByPrefix(
     return { success: false, method: "unknown", detail: `Command ${commandId} not found` };
 }
 
-export function focusBlockForDispatch(): void {}
-export function cleanupAfterDispatch(): void {}
-
 export function getBlockType(el: HTMLElement | null): string {
     if (!el) return "";
     return el.getAttribute("data-type") || "";
@@ -137,8 +134,8 @@ export function getBlockType(el: HTMLElement | null): string {
 
 export function updateContextVar(context: CommandContext, key: string, value: any): void {
     if (!context.vars) context.vars = {};
+    const cleanKey = key.replace(/^vars?\./, "").replace(/^var\./, "");
     context.vars[key] = value;
-    const cleanKey = key.replace(/^(vars?\.)/, "");
     context.vars[cleanKey] = value;
     context.vars[`var.${cleanKey}`] = value;
 }
