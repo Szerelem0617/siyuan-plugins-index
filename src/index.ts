@@ -37,7 +37,6 @@ import { version } from "../plugin.json";
 import { initSystemTables } from "./features/command/indexos/command-sqlite";
 import { triggerFireworks } from "./features/command/effect/fireworks";
 import { triggerShowMessage } from "./features/command/effect/show-message";
-import { triggerTurnIntoTask, triggerToggleTaskStatus } from "./features/command/effect/turn-into-task";
 import { triggerSafeUpdateBlock } from "./features/command/effect/safe-update-block";
 import { triggerAddSupertag } from "./features/command/effect/add-supertag";
 import { triggerInsertBlockBelow } from "./features/command/effect/insert-block-below";
@@ -80,16 +79,6 @@ export default class IndexPlugin extends Plugin {
             showMsgCmd.dispatch.executor = triggerShowMessage;
         }
 
-        const turnIntoTaskCmd = commandRegistry.getCommand("plugin-index.command.turnIntoTask");
-        if (turnIntoTaskCmd) {
-            turnIntoTaskCmd.dispatch.executor = triggerTurnIntoTask;
-        }
-
-        const toggleTaskStatusCmd = commandRegistry.getCommand("editor.task.toggle");
-        if (toggleTaskStatusCmd) {
-            toggleTaskStatusCmd.dispatch.executor = triggerToggleTaskStatus;
-        }
-
         const safeUpdateCmd = commandRegistry.getCommand("plugin-index.command.safeUpdateBlock");
         if (safeUpdateCmd) {
             safeUpdateCmd.dispatch.executor = triggerSafeUpdateBlock;
@@ -108,6 +97,12 @@ export default class IndexPlugin extends Plugin {
         const insertBlockBelowCmd = commandRegistry.getCommand("plugin-index.command.insertBlockBelow");
         if (insertBlockBelowCmd) {
             insertBlockBelowCmd.dispatch.executor = triggerInsertBlockBelow;
+        }
+
+        const setAttrCmd = commandRegistry.getCommand("plugin-index.command.setBlockAttribute");
+        if (setAttrCmd) {
+            const { setBlockAttribute } = await import("./features/command/effect/set-block-attribute");
+            setAttrCmd.dispatch.executor = setBlockAttribute;
         }
 
 

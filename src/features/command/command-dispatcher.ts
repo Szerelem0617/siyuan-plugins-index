@@ -213,17 +213,28 @@ export async function resolveCommandParams(
         }
 
         console.log(`  [ParamResolver STEP B] 处理参数 "${schema.key}" (原始模板值: "${value}")`);
+        const attrNameVal = String(result["attrName"] || layer3Params["attrName"] || layer2Params["attrName"] || raw["attrName"] || "").trim();
+        const contextualContext = attrNameVal ? { ...context, _currentAttrName: attrNameVal } : context;
         try {
             if (schema.paramMode === "template") {
-                result[schema.key] = await resolveTemplate(String(value ?? ""), context);
+                result[schema.key] = await resolveTemplate(String(value ?? ""), contextualContext);
             } else if (typeof value === "string") {
-                result[schema.key] = await resolveTemplate(value, context);
+                result[schema.key] = await resolveTemplate(value, contextualContext);
             } else {
                 result[schema.key] = value;
             }
         } catch (err) {
             console.error(`  [ParamResolver STEP B Error] 参数 "${schema.key}" 解析模板失败:`, err);
             result[schema.key] = value;
+        }
+
+        // 自动统一处理：若参数为 id / blockid 且最终解析为空，系统自动填充当前上下文块 ID
+        if ((schema.key === "id" || schema.type === "blockid") && (!result[schema.key] || String(result[schema.key]).trim() === "")) {
+            const currentBlockId = getBlockId(context);
+            if (currentBlockId) {
+                result[schema.key] = currentBlockId;
+                console.log(`  [ParamResolver Auto-Context-Default] ⚡ 自动为 "${schema.key}" 参数应用当前上下文块 ID: "${currentBlockId}"`);
+            }
         }
     }
 
@@ -322,9 +333,56 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
                     if (!(cleanKey in variables)) variables[cleanKey] = strVal;
                     if (!(`var.${cleanKey}` in variables)) variables[`var.${cleanKey}`] = strVal;
                     if (!(`attr:${cleanKey}` in variables)) variables[`attr:${cleanKey}`] = strVal;
+                    if (!(k in variables)) variables[k] = strVal;
                 }
             }
         } catch (_) {}
+    }
+
+    // 🔄 状态轮转指令解析：{{cycle:v1,v2,v3}} 或 {{cycle}}
+    if (normalizedText.includes("{{cycle")) {
+        const cycleRegex = /\{\{cycle(?::([^}]+))?\}\}/g;
+        let cycleMatch: RegExpExecArray | null;
+        while ((cycleMatch = cycleRegex.exec(normalizedText)) !== null) {
+            const fullPlaceholder = cycleMatch[0];
+            const optionsRaw = cycleMatch[1]?.trim();
+
+            let options: string[] = [];
+            if (optionsRaw !== undefined && optionsRaw !== null) {
+                options = optionsRaw.split(",").map(s => s.trim().replace(/^["']|["']$/g, ""));
+            }
+            if (options.length === 0 || (options.length === 1 && !options[0])) {
+                options = ["pending", "done"];
+            }
+
+            let currentVal = "";
+            const currentAttrName = (context as any)?._currentAttrName || "";
+            if (currentAttrName) {
+                const cleanKey = currentAttrName.replace(/^custom-/, "");
+                currentVal = variables[cleanKey] || variables[`custom-${cleanKey}`] || variables[currentAttrName] || "";
+            } else {
+                for (const opt of options) {
+                    for (const [vKey, vVal] of Object.entries(variables)) {
+                        if (vVal === opt && !vKey.startsWith("var.")) {
+                            currentVal = vVal;
+                            break;
+                        }
+                    }
+                    if (currentVal) break;
+                }
+            }
+
+            let nextVal = options[0];
+            const currentIndex = options.indexOf(currentVal);
+            if (currentIndex >= 0) {
+                nextVal = options[(currentIndex + 1) % options.length];
+            } else {
+                nextVal = options[0];
+            }
+
+            console.log(`[TemplateEngine] 🔄 {{cycle}} 轮转计算: 当前值 "${currentVal}" ➔ 下一状态 "${nextVal}" (候选列表: [${options.join(", ")}])`);
+            normalizedText = normalizedText.replace(fullPlaceholder, nextVal);
+        }
     }
 
     return renderTemplate(normalizedText, variables);

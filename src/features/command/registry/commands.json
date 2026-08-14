@@ -187,39 +187,6 @@
             }
         },
         {
-            "id": "editor.task.toggle",
-            "name": "切换任务状态",
-            "description": "切换当前任务块的完成状态 (未完成 <-> 已完成)。依赖编辑器焦点。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [
-                {
-                    "key": "id",
-                    "type": "blockid",
-                    "paramMode": "template",
-                    "default": "",
-                    "description": "要切换任务状态的目标块 ID。不填时自动绑定当前上下文块。"
-                }
-            ],
-            "constraints": {
-                "environment": "ui",
-                "targetScope": "block",
-                "comment": "快捷键实现，如需定时更新属性请改用 api.attr.setAttrs"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "edit",
-                "source": "builtin",
-                "apiEquivalent": "api.attr.setAttrs"
-            },
-            "seed": {
-                "rowID": "20260526204558-sw91kl2",
-                "label": "✅ 切换任务状态",
-                "paramMapping": "{}"
-            }
-        },
-        {
             "id": "plugin-index.supertag.addTag",
             "name": "添加超级标签",
             "description": "为指定的块添加一个超级标签（更新 custom-supertags 属性并向 DOM 挂载内联 Tag 标头）。支持界面交互，也可供后台纯 API 调用。",
@@ -327,36 +294,6 @@
                 "rowID": "20260526204558-insblk1",
                 "label": "➕ 在下方插入块",
                 "paramMapping": "{}"
-            }
-        },
-        {
-            "id": "plugin-index.command.turnIntoTask",
-            "name": "转为任务",
-            "description": "将目标块快捷转换为带有勾选框的任务块。",
-            "dispatch": {
-                "method": "custom"
-            },
-            "params": [
-                {
-                    "key": "id",
-                    "type": "blockid",
-                    "paramMode": "template",
-                    "default": ""
-                }
-            ],
-            "constraints": {
-                "environment": "universal",
-                "targetScope": "block"
-            },
-            "meta": {
-                "contextNeed": "block",
-                "category": "edit",
-                "source": "builtin"
-            },
-            "seed": {
-                "rowID": "20260526204558-cvttsk9",
-                "label": "☑️ 转为任务",
-                "paramMapping": ""
             }
         },
         {
@@ -507,6 +444,72 @@
                 "category": "api",
                 "source": "builtin"
             }
+        },
+        {
+            "id": "plugin-index.command.setBlockAttribute",
+            "name": "设置块属性",
+            "description": "统一设置/更新块属性 (Upsert 模式：无则自动挂载创建，有则更新覆写)。支持设置 status、priority 等任意 custom 属性。",
+            "dispatch": {
+                "method": "custom"
+            },
+            "params": [
+                {
+                    "key": "id",
+                    "type": "blockid",
+                    "paramMode": "template",
+                    "default": "{{block_id}}",
+                    "description": "目标块 ID。留空默认取当前上下文块或前序创块。"
+                },
+                {
+                    "key": "attrName",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "custom-status",
+                    "description": "属性名称，如 status 或 custom-status。"
+                },
+                {
+                    "key": "attrValue",
+                    "type": "string",
+                    "paramMode": "template",
+                    "default": "pending",
+                    "description": "属性值，如 pending / done / {{time}}。"
+                }
+            ],
+            "outputs": [
+                {
+                    "key": "attrValue",
+                    "type": "string",
+                    "label": "更新后的属性值",
+                    "default": "attrValue"
+                }
+            ],
+            "constraints": {
+                "environment": "universal",
+                "targetScope": "block",
+                "comment": "统一设置块属性 (Upsert 模式)"
+            },
+            "meta": {
+                "contextNeed": "block",
+                "category": "manipulation",
+                "source": "builtin"
+            },
+            "seeds": [
+                {
+                    "rowID": "20260813180000-setattr0001",
+                    "label": "🏷️ 设置块属性",
+                    "paramMapping": "{}"
+                },
+                {
+                    "rowID": "20260526204558-cvttsk9",
+                    "label": "🔘 转换为任务",
+                    "paramMapping": "{\"attrName\":\"custom-index-task\",\"attrValue\":\"{{cycle:pending,}}\"}"
+                },
+                {
+                    "rowID": "20260526204558-sw91kl2",
+                    "label": "☑️ 切换任务状态",
+                    "paramMapping": "{\"attrName\":\"custom-index-task\",\"attrValue\":\"{{cycle:pending,completed}}\"}"
+                }
+            ]
         }
     ]
 }

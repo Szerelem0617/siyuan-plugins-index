@@ -30,32 +30,34 @@ export interface SeedSupertagRow {
     conditional: string;
 }
 
-/** Layer 2 种子行：从 commands.json 的 seed 字段派生 */
+/** Layer 2 种子行：从 commands.json 的 seed/seeds 字段派生 */
 export function getSeedCommandRows(): SeedCommandRow[] {
     const rows: SeedCommandRow[] = [];
     for (const cmd of (commandsData as any).commands) {
-        const s = cmd.seed;
-        if (!s) continue;
+        const seeds = Array.isArray(cmd.seeds) ? cmd.seeds : (cmd.seed ? [cmd.seed] : []);
+        if (seeds.length === 0) continue;
         const hasParams = cmd.params && Array.isArray(cmd.params) && cmd.params.length > 0;
         const hasOutputs = cmd.outputs && Array.isArray(cmd.outputs) && cmd.outputs.length > 0;
 
-        let inputMapping = (s.inputMapping || s.paramMapping || "").trim();
-        if (!inputMapping && hasParams) {
-            inputMapping = "{}";
-        }
+        for (const s of seeds) {
+            let inputMapping = (s.inputMapping || s.paramMapping || "").trim();
+            if (!inputMapping && hasParams) {
+                inputMapping = "{}";
+            }
 
-        let outputMapping = (s.outputMapping || "").trim();
-        if (!outputMapping && hasOutputs) {
-            outputMapping = "{}";
-        }
+            let outputMapping = (s.outputMapping || "").trim();
+            if (!outputMapping && hasOutputs) {
+                outputMapping = "{}";
+            }
 
-        rows.push({
-            rowID: s.rowID,
-            label: s.label,
-            commandID: cmd.id,
-            inputMapping,
-            outputMapping
-        });
+            rows.push({
+                rowID: s.rowID,
+                label: s.label,
+                commandID: cmd.id,
+                inputMapping,
+                outputMapping
+            });
+        }
     }
     return rows;
 }
@@ -160,18 +162,18 @@ export interface DefaultRelationRule {
 export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     {
         typeLabel: "task",
-        iconMenuCmdIds: [],
-        relationCmdIds: ["plugin-index.command.turnIntoTask", "plugin-index.effect.fireworks"]
+        iconMenuCmdIds: ["plugin-index.command.setBlockAttribute"],
+        relationCmdIds: ["plugin-index.command.turnIntoTask", "plugin-index.effect.fireworks", "plugin-index.command.setBlockAttribute"]
     },
     {
         typeLabel: "pipeline",
         iconMenuCmdIds: [],
-        relationCmdIds: ["plugin-index.command.insertBlockBelow", "plugin-index.command.safeUpdateBlock"]
+        relationCmdIds: ["plugin-index.command.insertBlockBelow", "plugin-index.command.safeUpdateBlock", "plugin-index.command.setBlockAttribute"]
     },
     {
         typeLabel: "permanent",
         iconMenuCmdIds: ["plugin-index.command.safeUpdateBlock"],
-        relationCmdIds: ["plugin-index.command.insertBlockBelow", "plugin-index.command.safeUpdateBlock"]
+        relationCmdIds: ["plugin-index.command.insertBlockBelow", "plugin-index.command.safeUpdateBlock", "plugin-index.command.setBlockAttribute"]
     }
 ];
 
