@@ -3,7 +3,7 @@
     import { Dialog, showMessage } from "siyuan";
     import { createPipelineRow, registerPipelineCommand, pipelineCommandId, updatePipelineRow, readPipelineRow } from "./manager";
     import { parseRuleScript } from "./script-dsl";
-    import { inferPipelineIO } from "./pipeline-io-infer";
+    import { inspectPipelineSteps, type StepSchemaItem } from "./pipeline-step-schema";
     import CommandSequenceEditor from "./CommandSequenceEditor.svelte";
     import { refreshSupertagRegistry } from "../utils/sync-service";
 
@@ -18,14 +18,24 @@
     let saving = false;
     let sequenceEditorRef: any;
 
-    let customInputMap: Record<string, string> = {};
-    let customOutputMap: Record<string, string> = {};
+    // 外部入参状态表：是否暴露勾选 + 暴露默认值
+    let exposedInputs: Record<string, boolean> = {};
+    let exposedInputDefaults: Record<string, string> = {};
 
-    // 实时推导
+    // 导 dangerous 变量状态表：是否导出勾选（默认 true）+ 出参别名
+    let exportedOutputs: Record<string, boolean> = {};
+    let outputAliases: Record<string, string> = {};
+
+    // 是否已从已存行数据中初始化过配置
+    let hasLoadedExistingConfig = false;
+
+    // 步骤结构分析
     $: currentRule = parseRuleScript(script);
-    $: inferredIO = currentRule ? inferPipelineIO(currentRule) : { input: {}, output: {} };
-    $: inferredInputKeys = Object.keys(inferredIO.input);
-    $: inferredOutputKeys = Object.keys(inferredIO.output);
+    $: stepSchemas = inspectPipelineSteps(currentRule);
+
+    // 动态计算激活的 Input / Output 数量 Badge
+    $: activeExposedInputCount = stepSchemas.flatMap(s => s.params).filter(p => exposedInputs[p.key] === true).length;
+    $: activeExportedOutputCount = stepSchemas.flatMap(s => s.outputs).filter(o => exportedOutputs[o.key] !== false).length;
 
     onMount(async () => {
         if (editRowId && !initialScript) {
@@ -33,14 +43,40 @@
                 const row = await readPipelineRow(editRowId);
                 if (row) {
                     initialScript = row.script;
-                    try { customInputMap = JSON.parse(row.inputStr || "{}"); } catch (_) {}
-                    try { customOutputMap = JSON.parse(row.outputStr || "{}"); } catch (_) {}
+                    loadExistingIO(row.inputStr, row.outputStr);
                 }
             } catch (e) {
                 console.error("[PipelineEditor] Error reading row:", e);
             }
         }
     });
+
+    function loadExistingIO(inputStr: string, outputStr: string) {
+        hasLoadedExistingConfig = true;
+        if (inputStr) {
+            try {
+                const parsedIn = JSON.parse(inputStr);
+                if (parsedIn && typeof parsedIn === "object") {
+                    for (const [k, v] of Object.entries(parsedIn)) {
+                        exposedInputs[k] = true;
+                        exposedInputDefaults[k] = String(v ?? "");
+                    }
+                }
+            } catch (_) {}
+        }
+
+        if (outputStr) {
+            try {
+                const parsedOut = JSON.parse(outputStr);
+                if (parsedOut && typeof parsedOut === "object") {
+                    for (const [k, v] of Object.entries(parsedOut)) {
+                        exportedOutputs[k] = true;
+                        outputAliases[k] = String(v ?? "");
+                    }
+                }
+            } catch (_) {}
+        }
+    }
 
     async function handleSave() {
         error = "";
@@ -61,12 +97,27 @@
             return;
         }
 
-        // 合并推导与用户自定义覆盖
-        const finalInferred = inferPipelineIO(rule);
-        const finalInputObj: Record<string, string> = { ...finalInferred.input, ...customInputMap };
-        const finalOutputObj: Record<string, string> = { ...finalInferred.output, ...customOutputMap };
-
+        // 1. 组装勾选暴露的外部入参
+        const finalInputObj: Record<string, string> = {};
+        for (const step of stepSchemas) {
+            for (const p of step.params) {
+                if (exposedInputs[p.key] === true) {
+                    const customDef = exposedInputDefaults[p.key];
+                    finalInputObj[p.key] = customDef !== undefined ? customDef : (p.stepConfigValue || p.defaultValue || "");
+                }
+            }
+        }
         const finalInputJson = Object.keys(finalInputObj).length > 0 ? JSON.stringify(finalInputObj, null, 2) : "";
+
+        // 2. 组装出参导出列表（默认全量勾选，仅排除用户显式取消勾选的）
+        const finalOutputObj: Record<string, string> = {};
+        for (const step of stepSchemas) {
+            for (const o of step.outputs) {
+                if (exportedOutputs[o.key] !== false) {
+                    finalOutputObj[o.key] = (outputAliases[o.key] || o.canonicalToken).trim();
+                }
+            }
+        }
         const finalOutputJson = Object.keys(finalOutputObj).length > 0 ? JSON.stringify(finalOutputObj, null, 2) : "";
 
         saving = true;
@@ -82,7 +133,7 @@
             registerPipelineCommand(commandId, rule.name.trim(), targetScript, finalInputJson);
             await refreshSupertagRegistry();
             console.log(`[PipelineEditor] saved ${commandId} (${rule.name.trim()})`);
-            showMessage(`✓ 复合命令已${editRowId ? "更新" : "创建"}并自动同步 Input/Output：${commandId}`);
+            showMessage(`✓ 复合命令已${editRowId ? "更新" : "创建"}：${commandId}`);
             onCreated?.(rowId, rule.name.trim());
             dialog.destroy();
         } catch (e: any) {
@@ -91,14 +142,27 @@
             saving = false;
         }
     }
-    function handleOutputInput(outKey: string, event: Event) {
-        const input = event.target as HTMLInputElement;
-        customOutputMap[outKey] = input.value;
+
+    function toggleExposeInput(paramKey: string, stepConfigValue: string, defaultValue: string, e: Event) {
+        const checked = (e.target as HTMLInputElement).checked;
+        exposedInputs[paramKey] = checked;
+        if (checked && exposedInputDefaults[paramKey] === undefined) {
+            exposedInputDefaults[paramKey] = stepConfigValue || defaultValue || "";
+        }
+    }
+
+    function toggleExportOutput(outKey: string, e: Event) {
+        const checked = (e.target as HTMLInputElement).checked;
+        exportedOutputs[outKey] = checked;
+    }
+
+    function handleOutputAliasInput(outKey: string, e: Event) {
+        outputAliases[outKey] = (e.target as HTMLInputElement).value;
     }
 </script>
 
 <div class="fn__flex-column" style="height: 100%; padding: 16px; box-sizing: border-box; gap: 10px;">
-    <!-- 头部标题与 Tab 导航 -->
+    <!-- 头部标题 -->
     <div style="display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
         <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); display: flex; align-items: center; gap: 6px;">
             <span>🧩</span>
@@ -125,9 +189,9 @@
             class:active={activeTab === 'input'}
             on:click={() => activeTab = "input"}
         >
-            <span>📥 输入参数 (Input)</span>
-            {#if inferredInputKeys.length > 0}
-                <span class="indexos-tab-badge">{inferredInputKeys.length}</span>
+            <span>📥 外部入参 (Input)</span>
+            {#if activeExposedInputCount > 0}
+                <span class="indexos-tab-badge">{activeExposedInputCount}</span>
             {/if}
         </button>
         <button 
@@ -136,9 +200,9 @@
             class:active={activeTab === 'output'}
             on:click={() => activeTab = "output"}
         >
-            <span>📤 输出变量 (Output)</span>
-            {#if inferredOutputKeys.length > 0}
-                <span class="indexos-tab-badge">{inferredOutputKeys.length}</span>
+            <span>📤 导出变量 (Output)</span>
+            {#if activeExportedOutputCount > 0}
+                <span class="indexos-tab-badge">{activeExportedOutputCount}</span>
             {/if}
         </button>
     </div>
@@ -155,71 +219,139 @@
             />
         </div>
 
-        <!-- Tab 2: 输入参数推导与微调 -->
+        <!-- Tab 2: 外部入参清单与按需暴露 -->
         {#if activeTab === "input"}
             <div style="height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 8px 4px;">
                 <div style="font-size: 12px; color: var(--b3-theme-on-surface-light); line-height: 1.5; background: var(--indexos-bg-card); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--indexos-border-light);">
-                    💡 <strong>自动推导说明</strong>：系统已根据步骤中出现的 <code>&#123;&#123;input.xxx&#125;&#125;</code>、<code>&#123;&#123;prompt:xxx&#125;&#125;</code> 自动生成以下输入参数。保存时将自动回写到 Command-DB 的 <strong>Input</strong> 列。
+                    💡 <strong>入参暴露说明</strong>：步骤内部配置的参数已默认在执行时生效。若您希望某些参数允许在外部调用时（如按钮链接传参、Supertag 绑定）传入值进行动态覆盖，请在此勾选暴露。默认无需外部传参，可全部留空。
                 </div>
 
-                {#if inferredInputKeys.length === 0}
+                {#if stepSchemas.length === 0}
                     <div style="text-align: center; color: var(--b3-theme-on-surface-light); padding: 40px 0; font-size: 13px;">
-                        🌱 当前步骤序列中未引用动态变量，本复合命令无需额外入参。
+                        🌱 暂无步骤，请先在【步骤编排】中勾选命令。
                     </div>
                 {:else}
-                    {#each inferredInputKeys as inKey}
-                        <div style="display: flex; flex-direction: column; gap: 6px; background: var(--indexos-bg-container); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--indexos-border-light);">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <span style="font-weight: 600; font-size: 13px; color: var(--b3-theme-on-surface); font-family: monospace;">
-                                    {inKey}
+                    {#each stepSchemas as step}
+                        <div style="display: flex; flex-direction: column; gap: 8px; background: var(--indexos-bg-container); padding: 12px; border-radius: 6px; border: 1px solid var(--indexos-border-light);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--indexos-border-divider); padding-bottom: 6px;">
+                                <span style="font-weight: 600; font-size: 13px; color: var(--indexos-text-main);">
+                                    📦 步骤 {step.stepIndex}：{step.commandName}
                                 </span>
-                                <span style="font-size: 11px; color: var(--indexos-accent-primary); background: rgba(59, 130, 246, 0.1); padding: 1px 6px; border-radius: 4px;">
-                                    自动推导
+                                <span style="font-family: monospace; font-size: 11px; opacity: 0.5;">
+                                    {step.commandId}
                                 </span>
                             </div>
-                            <input 
-                                type="text" 
-                                class="b3-input fn__block" 
-                                style="box-sizing: border-box; width: 100%; font-family: monospace;"
-                                placeholder="可选默认值 (留空则执行时动态提供)"
-                                bind:value={customInputMap[inKey]} 
-                            />
+
+                            {#if step.params.length === 0}
+                                <div style="font-size: 12px; color: var(--b3-theme-on-surface-light); padding: 4px 0;">
+                                    此命令无需输入参数。
+                                </div>
+                            {:else}
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    {#each step.params as param}
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--indexos-bg-surface); padding: 6px 10px; border-radius: 4px; border: 1px solid var(--indexos-border-subtle);">
+                                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; flex-shrink: 0;">
+                                                <input 
+                                                    type="checkbox" 
+                                                    class="b3-switch fn__flex-center" 
+                                                    checked={exposedInputs[param.key] === true}
+                                                    on:change={(e) => toggleExposeInput(param.key, param.stepConfigValue, param.defaultValue, e)}
+                                                />
+                                                <span style="font-size: 12px; font-weight: {exposedInputs[param.key] ? '600' : 'normal'}; color: {exposedInputs[param.key] ? 'var(--indexos-accent-primary)' : 'var(--b3-theme-on-surface)'};">
+                                                    {param.label || param.key}
+                                                    <span style="font-family: monospace; font-size: 10px; opacity: 0.6;">({param.key})</span>
+                                                </span>
+                                            </label>
+
+                                            {#if exposedInputs[param.key]}
+                                                <div style="flex: 1; max-width: 260px; display: flex; align-items: center; gap: 6px;">
+                                                    <input 
+                                                        type="text" 
+                                                        class="b3-input fn__block" 
+                                                        style="font-size: 11px; font-family: monospace; height: 26px; box-sizing: border-box; width: 100%;"
+                                                        placeholder="暴露默认值 (可选)"
+                                                        bind:value={exposedInputDefaults[param.key]}
+                                                    />
+                                                </div>
+                                            {:else}
+                                                <span style="font-size: 11px; color: var(--indexos-text-muted); opacity: 0.7;">
+                                                    {param.stepConfigValue ? `已内置: "${param.stepConfigValue}"` : "默认不外露"}
+                                                </span>
+                                            {/if}
+                                        </div>
+                                    {/each}
+                                </div>
+                            {/if}
                         </div>
                     {/each}
                 {/if}
             </div>
         {/if}
 
-        <!-- Tab 3: 输出变量推导与导出 -->
+        <!-- Tab 3: 输出变量清单与自选过滤 (默认全量勾选) -->
         {#if activeTab === "output"}
             <div style="height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 8px 4px;">
                 <div style="font-size: 12px; color: var(--b3-theme-on-surface-light); line-height: 1.5; background: var(--indexos-bg-card); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--indexos-border-light);">
-                    💡 <strong>出参导出说明</strong>：系统自动收集了全部步骤执行后产出的变量 Token。保存时将自动回写到 Command-DB 的 <strong>Output</strong> 列。
+                    💡 <strong>出参导出说明</strong>：复合命令执行后产出的变量已<strong>默认全量导出</strong>。如某些中间步骤变量无需向外提供，可取消勾选。
                 </div>
 
-                {#if inferredOutputKeys.length === 0}
+                {#if stepSchemas.length === 0}
                     <div style="text-align: center; color: var(--b3-theme-on-surface-light); padding: 40px 0; font-size: 13px;">
-                        🌿 当前步骤序列中暂无可导出的出参变量。
+                        🌿 暂无步骤，请先在【步骤编排】中勾选命令。
                     </div>
                 {:else}
-                    {#each inferredOutputKeys as outKey}
-                        <div style="display: flex; flex-direction: column; gap: 6px; background: var(--indexos-bg-container); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--indexos-border-light);">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <span style="font-weight: 600; font-size: 13px; color: var(--b3-theme-on-surface); font-family: monospace;">
-                                    {outKey}
+                    {#each stepSchemas as step}
+                        <div style="display: flex; flex-direction: column; gap: 8px; background: var(--indexos-bg-container); padding: 12px; border-radius: 6px; border: 1px solid var(--indexos-border-light);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--indexos-border-divider); padding-bottom: 6px;">
+                                <span style="font-weight: 600; font-size: 13px; color: var(--indexos-text-main);">
+                                    📦 步骤 {step.stepIndex}：{step.commandName}
                                 </span>
-                                <span style="font-size: 11px; color: var(--indexos-status-success); background: rgba(16, 185, 129, 0.1); padding: 1px 6px; border-radius: 4px;">
-                                    自动捕获
+                                <span style="font-family: monospace; font-size: 11px; opacity: 0.5;">
+                                    {step.commandId}
                                 </span>
                             </div>
-                            <input 
-                                type="text" 
-                                class="b3-input fn__block" 
-                                style="font-family: monospace; box-sizing: border-box; width: 100%;"
-                                placeholder="如: &#123;&#123;var.{outKey}&#125;&#125;"
-                                value={customOutputMap[outKey] || inferredIO.output[outKey]} 
-                                on:input={(e) => handleOutputInput(outKey, e)}
-                            />
+
+                            {#if step.outputs.length === 0}
+                                <div style="font-size: 12px; color: var(--b3-theme-on-surface-light); padding: 4px 0;">
+                                    此步骤无产出出参。
+                                </div>
+                            {:else}
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    {#each step.outputs as out}
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--indexos-bg-surface); padding: 6px 10px; border-radius: 4px; border: 1px solid var(--indexos-border-subtle);">
+                                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; flex-shrink: 0;">
+                                                <input 
+                                                    type="checkbox" 
+                                                    class="b3-switch fn__flex-center" 
+                                                    checked={exportedOutputs[out.key] !== false}
+                                                    on:change={(e) => toggleExportOutput(out.key, e)}
+                                                />
+                                                <span style="font-size: 12px; font-weight: {exportedOutputs[out.key] !== false ? '600' : 'normal'}; color: {exportedOutputs[out.key] !== false ? 'var(--indexos-status-success)' : 'var(--b3-theme-on-surface-light)'};">
+                                                    {out.label || out.key}
+                                                    <span style="font-family: monospace; font-size: 10px; opacity: 0.6;">({out.key})</span>
+                                                </span>
+                                            </label>
+
+                                            {#if exportedOutputs[out.key] !== false}
+                                                <div style="flex: 1; max-width: 260px; display: flex; align-items: center; gap: 6px;">
+                                                    <input 
+                                                        type="text" 
+                                                        class="b3-input fn__block" 
+                                                        style="font-size: 11px; font-family: monospace; height: 26px; box-sizing: border-box; width: 100%;"
+                                                        placeholder={out.canonicalToken}
+                                                        value={outputAliases[out.key] !== undefined ? outputAliases[out.key] : out.canonicalToken}
+                                                        on:input={(e) => handleOutputAliasInput(out.key, e)}
+                                                    />
+                                                </div>
+                                            {:else}
+                                                <span style="font-size: 11px; color: var(--indexos-text-muted); opacity: 0.6;">
+                                                    不导出
+                                                </span>
+                                            {/if}
+                                        </div>
+                                    {/each}
+                                </div>
+                            {/if}
                         </div>
                     {/each}
                 {/if}

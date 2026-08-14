@@ -93,7 +93,7 @@ export async function resolveCommandParams(
             // 防守双重保障：若 autoVal 尚未获取且当前参数是 ID 参数，实时白盒感应物理属性与 vars 中的 Block ID 出参
             if ((!autoVal || String(autoVal).includes("{{")) && (schema.key === "id" || schema.type === "blockid")) {
                 for (const [vKey, vVal] of Object.entries(vars)) {
-                    if ((vKey.startsWith("var.") || vKey.startsWith("custom-")) && typeof vVal === "string" && /^\d{14}-[a-z0-9]{7}$/.test(vVal.trim())) {
+                    if ((vKey.startsWith("var.") || vKey.startsWith("custom-") || vKey === "createdblock" || vKey === "id" || vKey === "last_id") && typeof vVal === "string" && /^\d{14}-[a-z0-9]{7}$/.test(vVal.trim())) {
                         autoVal = vVal.trim();
                         console.log(`  [ParamResolver Auto-Context-Sensing] ⚡ 成功从 vars 动态感应到前置创块 ID (${vKey}): "${autoVal}"`);
                         break;

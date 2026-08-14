@@ -84,7 +84,7 @@ export default class IndexPlugin extends Plugin {
             safeUpdateCmd.dispatch.executor = triggerSafeUpdateBlock;
         }
 
-        const addSupertagCmd = commandRegistry.getCommand("plugin-index.command.addSupertag");
+        const addSupertagCmd = commandRegistry.getCommand("plugin-index.supertag.addTag") || commandRegistry.getCommand("plugin-index.command.addSupertag");
         if (addSupertagCmd) {
             addSupertagCmd.dispatch.executor = triggerAddSupertag;
         }

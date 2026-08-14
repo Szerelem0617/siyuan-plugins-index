@@ -10,14 +10,14 @@
             "key": "id",
             "type": "blockid",
             "paramMode": "template",
-            "default": "",
-            "description": "目标块 ID。不填时自动绑定当前上下文块。"
+            "default": "{{block_id}}",
+            "description": "目标块 ID。不填时自动绑定当前上下文块或前置创块。"
         },
         {
             "key": "tag",
             "type": "string",
             "paramMode": "template",
-            "default": "",
+            "default": "{{prompt:请输入标签名}}",
             "description": "超级标签名称（无需带 # 号，例如 project/task）。"
         }
     ],

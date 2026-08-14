@@ -16,12 +16,14 @@ import { triggerConditionalCommands } from "../supertag/core/supertag-trigger";
 import { parseSupertags, serializeSupertags } from "../supertag/core/supertag-diff";
 import { globalSupertagsCache } from "../registration";
 
+import { SupertagRenderer } from "../supertag/renderer/SupertagRenderer";
+
 export async function triggerAddSupertag(
     resolvedParams: Record<string, unknown>,
     context: CommandContext
 ): Promise<DispatchResult> {
     const targetBlockId = String(resolvedParams.id || getBlockId(context) || "").trim();
-    let tagRaw = String(resolvedParams.tag || "task").trim();
+    let tagRaw = String(resolvedParams.tag ?? "").trim();
     const cleanTag = tagRaw.replace(/^#/, "").trim();
 
     if (!targetBlockId) {
@@ -51,16 +53,18 @@ export async function triggerAddSupertag(
         const newRawCustomTags = serializeSupertags(currentSupertags);
 
         if (updated) {
-            // A. 前端 DOM 属性更新 (若当前页面或元素可见)
+            // A. 前端 DOM 属性更新与即时渲染
             if (context.blockEl) {
                 context.blockEl.setAttribute("custom-supertags", newRawCustomTags);
+                SupertagRenderer.renderSingleBlockElement(context.blockEl);
             }
             const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
             const editorEl = activeProtyle?.element || document.querySelector(".protyle-content") || document.body;
             if (editorEl) {
-                const domBlock = editorEl.querySelector(`[data-node-id="${targetBlockId}"]`);
+                const domBlock = editorEl.querySelector(`[data-node-id="${targetBlockId}"]`) as HTMLElement | null;
                 if (domBlock) {
                     domBlock.setAttribute("custom-supertags", newRawCustomTags);
+                    SupertagRenderer.renderSingleBlockElement(domBlock);
                 }
             }
 

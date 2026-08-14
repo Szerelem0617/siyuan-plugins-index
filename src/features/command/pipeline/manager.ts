@@ -91,7 +91,7 @@ function cleanJsonOrEmpty(jsonStr?: string): string {
     return trimmed;
 }
 
-import { inferPipelineIO } from "./pipeline-io-infer";
+import { inspectPipelineSteps } from "./pipeline-step-schema";
 
 /** 获取 Command-DB 的关键列 keyID */
 export async function getCommandDbKeyIds(): Promise<{
@@ -140,15 +140,18 @@ export async function createPipelineRow(
     }
 
     const rule = parseRuleScript(script);
-    let finalInputJson = inputParams;
+    let finalInputJson = inputParams || "";
     let finalOutputJson = outputParams;
 
-    if ((!finalInputJson || finalInputJson === "{}" || finalInputJson === "") && rule) {
-        const inferred = inferPipelineIO(rule);
-        finalInputJson = Object.keys(inferred.input).length > 0 ? JSON.stringify(inferred.input, null, 2) : "";
-        if (!finalOutputJson || finalOutputJson === "{}" || finalOutputJson === "") {
-            finalOutputJson = Object.keys(inferred.output).length > 0 ? JSON.stringify(inferred.output, null, 2) : "";
+    if (finalOutputJson === undefined && rule) {
+        const stepSchemas = inspectPipelineSteps(rule);
+        const defaultOutputs: Record<string, string> = {};
+        for (const s of stepSchemas) {
+            for (const o of s.outputs) {
+                defaultOutputs[o.key] = o.canonicalToken;
+            }
         }
+        finalOutputJson = Object.keys(defaultOutputs).length > 0 ? JSON.stringify(defaultOutputs, null, 2) : "";
     }
 
     // @ts-ignore
@@ -228,15 +231,18 @@ export async function updatePipelineRow(
     }
 
     const rule = parseRuleScript(script);
-    let finalInputJson = inputParams;
+    let finalInputJson = inputParams !== undefined ? inputParams : "";
     let finalOutputJson = outputParams;
 
-    if ((!finalInputJson || finalInputJson === "{}" || finalInputJson === "") && rule) {
-        const inferred = inferPipelineIO(rule);
-        finalInputJson = Object.keys(inferred.input).length > 0 ? JSON.stringify(inferred.input, null, 2) : "";
-        if (!finalOutputJson || finalOutputJson === "{}" || finalOutputJson === "") {
-            finalOutputJson = Object.keys(inferred.output).length > 0 ? JSON.stringify(inferred.output, null, 2) : "";
+    if (finalOutputJson === undefined && rule) {
+        const stepSchemas = inspectPipelineSteps(rule);
+        const defaultOutputs: Record<string, string> = {};
+        for (const s of stepSchemas) {
+            for (const o of s.outputs) {
+                defaultOutputs[o.key] = o.canonicalToken;
+            }
         }
+        finalOutputJson = Object.keys(defaultOutputs).length > 0 ? JSON.stringify(defaultOutputs, null, 2) : "";
     }
 
     const ops: any[] = [];
