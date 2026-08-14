@@ -43,13 +43,50 @@ export async function triggerSafeUpdateBlock(params: Record<string, unknown>, co
         return { success: false, detail: "Missing update content data" };
     }
 
-    // 1. 备份原块的全部属性（特别保护 av-names, custom-avs, custom-* 等）
-    let oldAttrs: Record<string, any> = {};
+    // 0. 探测目标是否为文档 (Doc) 节点
+    let isDoc = false;
     try {
-        const oldAttrsRes = await post("/api/attr/getBlockAttrs", { id });
-        oldAttrs = oldAttrsRes?.data || oldAttrsRes || {};
-    } catch (e) {
-        console.warn("[SafeUpdateBlock] Failed to fetch old block attributes before update:", e);
+        const queryRes = await post("/api/query/sql", { stmt: `SELECT type FROM blocks WHERE id = '${id}' LIMIT 1` });
+        if (Array.isArray(queryRes) && queryRes.length > 0 && queryRes[0].type === "d") {
+            isDoc = true;
+        }
+    } catch (_) {
+        if (ctx.blockEl && (ctx.blockEl.classList?.contains("protyle-title") || ctx.blockEl.getAttribute?.("data-type") === "NodeDocument")) {
+            isDoc = true;
+        }
+    }
+
+    if (isDoc) {
+        console.log(`[SafeUpdateBlock] 目标节点 ${id} 为文档 (Doc)，执行重命名页面标题: "${data}"`);
+        try {
+            await post("/api/filetree/renameDocByID", { id, title: data });
+            
+            // 实时同步当前打开编辑器的标题 DOM
+            const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
+            const titleEl = (activeProtyle?.element?.querySelector(".protyle-title") || document.querySelector(".protyle-title")) as HTMLElement | null;
+            if (titleEl && (titleEl.getAttribute("data-node-id") === id || !titleEl.getAttribute("data-node-id"))) {
+                const titleInput = titleEl.querySelector(".protyle-title__input") as HTMLElement | null;
+                if (titleInput) {
+                    titleInput.textContent = data;
+                }
+            }
+
+            return {
+                success: true,
+                method: "custom",
+                detail: `Renamed document ${id} title to "${data}"`,
+                data: { id, title: data },
+                value: data,
+                id
+            };
+        } catch (docErr: any) {
+            console.error(`[SafeUpdateBlock] 重命名文档失败:`, docErr);
+            return {
+                success: false,
+                method: "custom",
+                detail: docErr.message || String(docErr)
+            };
+        }
     }
 
     const preserveAttrs: Record<string, string> = {};

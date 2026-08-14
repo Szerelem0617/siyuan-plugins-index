@@ -1,7 +1,7 @@
 {
     "id": "plugin-index.command.safeUpdateBlock",
-    "name": "更新块内容",
-    "description": "更新目标块的内容 (Markdown 格式)，自动脱敏与安全转换模板语法。",
+    "name": "更新块/页面内容",
+    "description": "更新目标块或页面的内容。若目标为页面(Doc)则自动重命名页面标题；若目标为普通块则更新块 Markdown 内容并保留自定义属性。",
     "dispatch": {
         "method": "custom"
     },
@@ -10,24 +10,27 @@
             "key": "id",
             "type": "blockid",
             "paramMode": "template",
-            "default": ""
+            "default": "{{block_id}}",
+            "description": "目标块或页面 ID。留空自动绑定当前上下文。"
         },
         {
             "key": "data",
             "type": "string",
             "paramMode": "template",
-            "default": "已成功更新"
+            "default": "已成功更新",
+            "description": "更新内容（若目标为页面则作为新标题；若为块则作为 Markdown 正文）。"
         },
         {
             "key": "dataType",
             "type": "string",
             "paramMode": "template",
-            "default": "markdown"
+            "default": "markdown",
+            "description": "内容格式 (markdown / dom)。仅在更新普通块时生效。"
         }
     ],
     "constraints": {
         "environment": "universal",
-        "targetScope": "block"
+        "targetScope": "any"
     },
     "meta": {
         "contextNeed": "block",

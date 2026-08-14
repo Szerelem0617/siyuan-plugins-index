@@ -28,14 +28,6 @@
             "description": "属性值，如 pending / done / {{time}}。"
         }
     ],
-    "outputs": [
-        {
-            "key": "attrValue",
-            "type": "string",
-            "label": "更新后的属性值",
-            "default": "attrValue"
-        }
-    ],
     "constraints": {
         "environment": "universal",
         "targetScope": "block",
