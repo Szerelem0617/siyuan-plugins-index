@@ -4,7 +4,7 @@ import { supertagMonitor } from "../core/supertag-listener";
 import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../../registration";
 import { SupertagRenderer } from "../renderer/SupertagRenderer";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
-import { findActiveBlock } from "../../utils/supertag-helper";
+import { findActiveBlock } from "../../utils/context-extractor";
 import { commandRegistry } from "../../registry/command-registry";
 import { getBlockType } from "../../command-dispatcher";
 import { getGlobalTypeConfigs } from "../../../av/av-setting/db-config";

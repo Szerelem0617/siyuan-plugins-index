@@ -182,21 +182,11 @@ export async function triggerConditionalCommands(
             }
         }
 
-        // 兜底 1：未实例化时（找不到 Type-DB AV）从种子常量读取 Conditional 脚本。
-        // 已实例化后种子不再参与任何运行时路径。
+        // 状态机规则：未实例化时（未创建 Type-DB AV）从种子常量读取 Conditional 脚本
         if (!conditionalVal && !typeAvId) {
             conditionalVal = getSeedConditionalScript(cleanTag);
             if (conditionalVal) {
                 console.log(`[Supertag-Trigger] Found conditional script in seed data for #${cleanTag}`);
-            }
-        }
-
-        // 兜底 2：使用 SUPERTAG_REGISTRY 内置定义的 conditionalScript！
-        if (!conditionalVal) {
-            const regMatch = SUPERTAG_REGISTRY.find(item => item.typeTag.replace(/#/g, "").trim().toLowerCase() === cleanTag);
-            if (regMatch && (regMatch as any).conditionalScript) {
-                conditionalVal = (regMatch as any).conditionalScript.trim();
-                console.log(`[Supertag-Trigger] Using built-in SUPERTAG_REGISTRY conditional script for #${cleanTag}`);
             }
         }
 

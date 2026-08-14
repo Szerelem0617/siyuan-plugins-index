@@ -10,8 +10,6 @@ export function isDevInitSysEnabled(): boolean {
     return !!settings.get("devMode");
 }
 
-export const DEV_ENABLE_INIT_SYS = false;
-
 // --- 内存缓存：Supertag 注册表 ---
 // Layer 2 的一行绑定（label → commandRef），不是命令定义。
 // 命令定义（Layer 1）见 ./registry/command-registry.ts 的 CommandDef。

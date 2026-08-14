@@ -7,7 +7,7 @@ const TABLE_REGISTRY = "sys_registry_db";
  * ⚠️ 系统架构说明（v1.11+）
  *
  * 1. sys_registry_db 是 Layer 1 命令定义的 SQLite 查询缓存/镜像，
- *    定义的真实来源是 commands.json + 内存注册表（executor 不可序列化）。
+ *    定义的真实来源是 builtin/*.json + 内存注册表（executor 不可序列化）。
  * 2. Layer 2（Command-DB）/ Layer 3（Type-DB）的种子数据已迁移到
  *    seed-data.ts 的 TS 常量中，不再有 sys_command_db / sys_type_db 表。
  * 3. 未实例化时运行时读 seed-data.ts；实例化后读思源 AV（经 av_ 镜像）。

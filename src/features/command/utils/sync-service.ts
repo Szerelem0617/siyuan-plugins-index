@@ -5,7 +5,7 @@ import { initSystemTables } from "../indexos/command-sqlite";
 import { getSeedCommandRows, getSeedSupertagRows } from "../indexos/seed-data";
 import { syncPipelinesFromCommandDb } from "../pipeline/manager";
 import { parseIconMenuConfig } from "./icon-menu-config";
-import { parseSupertags } from "./supertag-helper";
+import { parseSupertags } from "../supertag/core/supertag-diff";
 import { 
     isDevInitSysEnabled,
     getCommandAvId,

@@ -79,7 +79,7 @@ export async function executeTsScript(scriptText: string, context: CommandContex
             context,
             eventName,
             showMessage,
-            updateVar: (k: string, v: any, persist?: boolean) => updateContextVar(context, k, v, { persist })
+            updateVar: (k: string, v: any) => updateContextVar(context, k, v)
         };
 
         await fn(env);

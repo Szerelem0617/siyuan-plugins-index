@@ -20,9 +20,8 @@ import { dispatchCommand } from "./features/command/command-dispatcher";
 import { 
     supertagMonitor, 
     supertagManager, 
-    initTagSuggestion, 
-    destroyTagSuggestion,
-    setTagSuggestionEnabled,
+    initSupertagPalette, 
+    destroySupertagPalette,
     SupertagRenderer, 
     initTagMenuInterceptor 
 } from "./features/command/supertag";
@@ -155,7 +154,7 @@ export default class IndexPlugin extends Plugin {
         supertagMonitor.init(this);
         supertagManager.updateState();
         SupertagRenderer.initAutoObserver();
-        await initTagSuggestion(this);
+        await initSupertagPalette(this);
         initTagMenuInterceptor();
         backgroundScheduler.init(this);
 

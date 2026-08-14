@@ -1,7 +1,6 @@
 <script lang="ts">
     import SettingItem from "../setting-item.svelte";
     import { i18n } from "../../../shared/utils";
-    import { DEV_ENABLE_INIT_SYS } from "../../../features/command/registration";
 
     export let tabbarfocus: string;
     export let settingsStrings: any;

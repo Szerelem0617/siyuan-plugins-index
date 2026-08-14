@@ -81,7 +81,6 @@ function addMenuEntry(
                         vars[rawClean] = attr.value;
                         vars[baseKey] = attr.value;
                         vars[`var.${baseKey}`] = attr.value;
-                        vars[`{{var.${baseKey}}}`] = attr.value;
                     }
                 }
             }

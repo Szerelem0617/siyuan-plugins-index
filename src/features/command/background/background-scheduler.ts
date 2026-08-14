@@ -38,7 +38,7 @@ class BackgroundScheduler {
     private activeTasks: Map<string, AutomationTask> = new Map();
     private isRunning = false;
 
-    public async init() {
+    public async init(_plugin?: Plugin) {
         await this.reloadTasks();
 
         if (this.timerId) {

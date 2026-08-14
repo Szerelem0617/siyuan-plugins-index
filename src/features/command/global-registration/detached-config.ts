@@ -32,11 +32,11 @@ export function configureDetachedCommand(linkEl: HTMLElement) {
         } catch (_) {
             currentInputParams = { param: payload.param };
         }
-    } else if (cmdDef.seed?.paramMapping) {
-        try {
-            currentInputParams = JSON.parse(cmdDef.seed.paramMapping);
-        } catch (_) {
-            currentInputParams = {};
+    } else {
+        for (const p of paramsSchema) {
+            if (p.default !== undefined) {
+                currentInputParams[p.key] = p.default;
+            }
         }
     }
 

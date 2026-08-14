@@ -42,6 +42,28 @@ export function getBlockId(context: CommandContext): string {
 }
 
 /**
+ * 获取当前 Protyle 编辑器中光标所在的活跃块元素
+ */
+export function findActiveBlock(protyle: any): HTMLElement | null {
+    if (!protyle) return null;
+    const selection = window.getSelection();
+    const range = protyle.toolbar?.range || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null);
+    if (!range) return null;
+
+    let node: Node | null = range.startContainer;
+    while (node && node !== protyle.wysiwyg?.element) {
+        if (node.nodeType === 1) {
+            const el = node as HTMLElement;
+            if (el.getAttribute("data-node-id") && el.getAttribute("data-type")) {
+                return el;
+            }
+        }
+        node = node.parentNode;
+    }
+    return null;
+}
+
+/**
  * Retrieves the parent block ID and the root document block ID for a given block ID.
  */
 export async function getParentIdAndRootId(blockId: string): Promise<{ parentId: string; rootId: string }> {
