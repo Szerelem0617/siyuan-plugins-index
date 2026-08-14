@@ -19,9 +19,6 @@ export function findCommandDbInputMapping(commandRef: string): string {
     return binding?.inputMapping || "";
 }
 
-/** 兼容保留旧方法名 */
-export const findCommandDbParamMapping = findCommandDbInputMapping;
-
 /** 解析 outputMapping 里的用户出参别名（{ 规范key: 别名 }） */
 function parseOutputMapping(commandRef: string): Record<string, string> {
     const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === commandRef);

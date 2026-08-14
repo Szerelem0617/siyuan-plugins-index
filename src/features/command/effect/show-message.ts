@@ -1,10 +1,10 @@
 import { showMessage } from "siyuan";
-import type { CommandContext } from "../dispatcher";
+import type { CommandContext, DispatchResult } from "../dispatcher";
 
 export async function triggerShowMessage(
     params: Record<string, any>,
     _context?: CommandContext
-) {
+): Promise<DispatchResult> {
     const message = params.message || "看到这条消息会有好运～";
     const timeout = params.timeout !== undefined && params.timeout !== "" ? Number(params.timeout) : 6000;
     const type = params.type || "info";
@@ -12,4 +12,11 @@ export async function triggerShowMessage(
 
     console.log(`[ShowMessageCmd] Executing custom command showMessage: message="${message}", timeout=${timeout}, type="${type}", messageId="${messageId}"`);
     showMessage(message, timeout, type, messageId);
+
+    return {
+        success: true,
+        method: "custom",
+        detail: message,
+        value: message
+    };
 }

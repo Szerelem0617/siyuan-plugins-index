@@ -58,12 +58,6 @@ export async function setBlockAttribute(
         }
     }
 
-    if (context) {
-        if (!context.vars) context.vars = {};
-        context.vars.attrValue = rawVal;
-        context.vars["var.attrValue"] = rawVal;
-    }
-
     return {
         success: true,
         method: "custom",

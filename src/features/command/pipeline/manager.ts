@@ -66,7 +66,7 @@ export function registerPipelineCommand(id: string, name: string, script: string
             }
         },
         params: [],
-        constraints: { requiresFocus: false, environment: "universal" },
+        constraints: { environment: "universal", targetScope: "any" },
         meta: { contextNeed: "none", category: "custom", source: "user", plugin: "pipeline" }
     });
     registeredPipelines.add(id);
@@ -74,19 +74,22 @@ export function registerPipelineCommand(id: string, name: string, script: string
 }
 
 function parseGlobalParams(raw: string): Record<string, unknown> {
+    if (!raw) return {};
     try {
-        const parsed = JSON.parse(raw || "{}");
-        return parsed && typeof parsed === "object" ? parsed : {};
-    } catch { return {}; }
+        const parsed = JSON.parse(raw);
+        return typeof parsed === "object" && parsed !== null ? parsed : {};
+    } catch {
+        return {};
+    }
 }
 
 function cleanJsonOrEmpty(jsonStr?: string): string {
     if (!jsonStr) return "";
     const trimmed = jsonStr.trim();
-    if (trimmed === "{}" || trimmed === "null" || trimmed === "") return "";
+    if (!trimmed || trimmed === "{}" || trimmed === "null") return "";
     try {
         const parsed = JSON.parse(trimmed);
-        if (parsed && typeof parsed === "object" && Object.keys(parsed).length === 0) return "";
+        if (typeof parsed === "object" && parsed !== null && Object.keys(parsed).length === 0) return "";
     } catch (_) {}
     return trimmed;
 }
