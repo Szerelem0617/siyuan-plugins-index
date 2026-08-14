@@ -497,16 +497,19 @@
                 {
                     "rowID": "20260813180000-setattr0001",
                     "label": "🏷️ 设置块属性",
+                    "commandID": "plugin-index.command.setBlockAttribute",
                     "paramMapping": "{}"
                 },
                 {
                     "rowID": "20260526204558-cvttsk9",
                     "label": "🔘 转换为任务",
+                    "commandID": "plugin-index.command.setBlockAttribute-1",
                     "paramMapping": "{\"attrName\":\"custom-index-task\",\"attrValue\":\"{{cycle:pending,}}\"}"
                 },
                 {
                     "rowID": "20260526204558-sw91kl2",
                     "label": "☑️ 切换任务状态",
+                    "commandID": "plugin-index.command.setBlockAttribute-2",
                     "paramMapping": "{\"attrName\":\"custom-index-task\",\"attrValue\":\"{{cycle:pending,completed}}\"}"
                 }
             ]

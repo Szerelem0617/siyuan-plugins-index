@@ -69,11 +69,11 @@ export class SupertagRenderer {
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: docId });
             const attrs = attrsRes?.data || attrsRes || {};
             const rawTags = attrs["custom-supertags"];
-            const taskStatus = attrs["custom-index-task"];
-            const isTask = Boolean(taskStatus);
-
             const tags = parseSupertags(rawTags);
             globalSupertagsCache.set(docId, tags);
+
+            const taskStatus = attrs["custom-index-task"];
+            const isTask = Boolean(taskStatus);
 
             // Find or create document tags container
             let container = titleEl.querySelector(".index-doc-supertags") as HTMLElement;

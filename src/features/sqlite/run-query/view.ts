@@ -470,7 +470,14 @@ export async function createCommandDbViews(avID: string, avBlockID: string, db: 
         if (filterPipeline.length > 0) {
             opsPipeline.push({ action: "setAttrViewFilters", avID, data: filterPipeline, blockID: avBlockID });
         }
-        const cmdIdColKeyId = columns.find((c: any) => c.name === "Command ID" || c.name === "Command_ID")?.id || "";
+        let cmdIdColKeyId = "";
+        try {
+            const cmdIdColRes = db.exec(`SELECT key_id FROM _av_schema WHERE av_id = ? AND (col_name LIKE '%Command ID%' OR col_name LIKE '%Command_ID%' OR key_name LIKE '%Command ID%' OR key_name LIKE '%Command_ID%')`, [avID]);
+            if (cmdIdColRes.length > 0 && cmdIdColRes[0].values.length > 0) {
+                cmdIdColKeyId = String(cmdIdColRes[0].values[0][0]);
+            }
+        } catch { /* ignore */ }
+
         if (pipelineColKeyId) {
             opsPipeline.push({ action: "setAttrViewColHidden", id: pipelineColKeyId, avID, data: false, blockID: avBlockID });
         }

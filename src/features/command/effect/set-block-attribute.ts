@@ -48,7 +48,12 @@ export async function setBlockAttribute(
         if (cleanAttrName === "custom-index-task" || cleanAttrName === "custom-supertags") {
             try {
                 const { SupertagRenderer } = await import("../supertag");
-                SupertagRenderer.renderSingleBlockElement(liveBlockEl);
+                if (liveBlockEl.classList.contains("protyle-title") || liveBlockEl.closest(".protyle-title")) {
+                    const editorEl = (liveBlockEl.closest(".protyle") || document.querySelector(".protyle")) as HTMLElement;
+                    await SupertagRenderer.renderDocumentTags(rawId, editorEl);
+                } else {
+                    SupertagRenderer.renderSingleBlockElement(liveBlockEl);
+                }
             } catch (_) {}
         }
     }

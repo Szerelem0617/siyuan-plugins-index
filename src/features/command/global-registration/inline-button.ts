@@ -371,7 +371,7 @@ export async function handleInlineButtonClick(event: MouseEvent) {
 
         // Priority 2: Use mapping defined for the command globally in Command-DB
         if (paramMapping === null) {
-            const cmdConfig = Object.values(COMMAND_BINDINGS).find(c => c.commandRef === def.id);
+            const cmdConfig = Object.values(COMMAND_BINDINGS).find(c => c.commandRef === payload.command || c.commandRef === def.id);
             if (cmdConfig) {
                 paramMapping = cmdConfig.inputMapping;
             }
@@ -383,7 +383,7 @@ export async function handleInlineButtonClick(event: MouseEvent) {
         protyleEl: null,
         triggerEl: linkEl
     };
-    dispatchCommand(def.id, paramMapping, mockContext as any);
+    dispatchCommand(payload.command, paramMapping, mockContext as any);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -411,11 +411,16 @@ export function handleBtnPaste(event: CustomEvent) {
         return;
     }
 
-    // 查找命令，决定显示名称
+    // 查找命令，决定显示名称（优先从 Command-DB / COMMAND_BINDINGS 匹配精准别名）
     let displayName = payload.command;
     if (payload.command !== "sys.configure") {
-        const def = commandRegistry.findByNameOrId(payload.command);
-        if (def) displayName = def.name;
+        const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === payload.command);
+        if (binding?.methodName) {
+            displayName = binding.methodName;
+        } else {
+            const def = commandRegistry.findByNameOrId(payload.command);
+            if (def) displayName = def.name;
+        }
     }
 
     console.log("[BtnPaste] final displayName=", displayName);

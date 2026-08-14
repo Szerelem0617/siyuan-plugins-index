@@ -53,8 +53,8 @@ export async function dispatchCommand(
         }
 
         const resolvedParams = sources
-            ? await resolveCommandParams(def, sources, context)
-            : await resolveCommandParams(def, { commandDb: rawParam }, context);
+            ? await resolveCommandParams(def, sources, context, commandId)
+            : await resolveCommandParams(def, { commandDb: rawParam }, context, commandId);
 
         if (resolvedParams.enabled === false || resolvedParams.enabled === "false" || resolvedParams.enabled === 0) {
             return { success: true, method: def.dispatch.method, detail: "Skipped via enabled=false" };
@@ -138,17 +138,21 @@ function parseParam(raw: string | Record<string, unknown> | null | undefined): R
 export async function resolveCommandParams(
     def: CommandDef,
     sources: ParamSources,
-    context: CommandContext
+    context: CommandContext,
+    specificCommandId?: string
 ): Promise<Record<string, unknown>> {
-    console.log(`  [ParamResolver STEP A] 准备解析 ${def.id} 的参数来源...`);
+    const actualId = specificCommandId || (context as any)?.actualCommandId || def.id;
+    console.log(`  [ParamResolver STEP A] 准备解析 ${actualId} 的参数来源...`);
     
     // Layer 3 客制化入参 (最高优先级)
     const layer3Params = parseParam(sources.sources || sources.manual);
 
-    // Layer 2 默认入参
+    // Layer 2 默认入参（优先精准匹配当前分身 commandRef，如 plugin-index.command.setBlockAttribute-1）
     let liveDbParam: any = null;
     try {
-        const liveDbBinding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === def.id || b.label === def.name);
+        const liveDbBinding = Object.values(COMMAND_BINDINGS).find(b => 
+            b.commandRef === actualId || b.methodName === actualId || b.commandRef === def.id || b.methodName === def.name
+        );
         liveDbParam = liveDbBinding?.inputMapping || liveDbBinding?.paramMapping;
     } catch (e) {
         console.warn(`  [ParamResolver STEP A1] 查找 COMMAND_BINDINGS 警告:`, e);

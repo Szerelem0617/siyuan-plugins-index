@@ -39,7 +39,8 @@ export function getSeedCommandRows(): SeedCommandRow[] {
         const hasParams = cmd.params && Array.isArray(cmd.params) && cmd.params.length > 0;
         const hasOutputs = cmd.outputs && Array.isArray(cmd.outputs) && cmd.outputs.length > 0;
 
-        for (const s of seeds) {
+        for (let i = 0; i < seeds.length; i++) {
+            const s = seeds[i];
             let inputMapping = (s.inputMapping || s.paramMapping || "").trim();
             if (!inputMapping && hasParams) {
                 inputMapping = "{}";
@@ -50,10 +51,12 @@ export function getSeedCommandRows(): SeedCommandRow[] {
                 outputMapping = "{}";
             }
 
+            const commandID = s.commandID || (i === 0 ? cmd.id : `${cmd.id}-${i}`);
+
             rows.push({
                 rowID: s.rowID,
                 label: s.label,
-                commandID: cmd.id,
+                commandID,
                 inputMapping,
                 outputMapping
             });
