@@ -1,0 +1,59 @@
+{
+    "id": "plugin-index.effect.visualEffect",
+    "name": "视觉特效",
+    "description": "在当前位置触发粒子动画特效（支持烟花、流星、霓虹扫描、琉璃气泡、禅意流风等多种场景反馈）。",
+    "dispatch": {
+        "method": "custom"
+    },
+    "params": [
+        {
+            "key": "type",
+            "type": "enum",
+            "values": ["fireworks", "meteor", "neon_scan", "bubble", "breeze"],
+            "paramMode": "template",
+            "default": "fireworks",
+            "description": "特效类型: fireworks(庆贺烟花) / meteor(流星跃迁) / neon_scan(霓虹边框扫描) / bubble(琉璃微气泡) / breeze(禅意流风)"
+        }
+    ],
+    "constraints": {
+        "environment": "ui",
+        "targetScope": "none"
+    },
+    "meta": {
+        "contextNeed": "none",
+        "category": "view",
+        "source": "builtin"
+    },
+    "seeds": [
+        {
+            "rowID": "20260526204558-firework",
+            "label": "🎆 烟花",
+            "commandID": "plugin-index.effect.visualEffect",
+            "paramMapping": "{\"type\":\"fireworks\"}"
+        },
+        {
+            "rowID": "20260526204558-meteor01",
+            "label": "🌌 流星跃迁",
+            "commandID": "plugin-index.effect.visualEffect-1",
+            "paramMapping": "{\"type\":\"meteor\"}"
+        },
+        {
+            "rowID": "20260526204558-neon0001",
+            "label": "💫 霓虹扫描",
+            "commandID": "plugin-index.effect.visualEffect-2",
+            "paramMapping": "{\"type\":\"neon_scan\"}"
+        },
+        {
+            "rowID": "20260526204558-bubble01",
+            "label": "🫧 琉璃气泡",
+            "commandID": "plugin-index.effect.visualEffect-3",
+            "paramMapping": "{\"type\":\"bubble\"}"
+        },
+        {
+            "rowID": "20260526204558-breeze01",
+            "label": "🍃 禅意流风",
+            "commandID": "plugin-index.effect.visualEffect-4",
+            "paramMapping": "{\"type\":\"breeze\"}"
+        }
+    ]
+}

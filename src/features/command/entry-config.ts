@@ -39,9 +39,9 @@ export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
         "侧栏右": [],
         "命令按钮": [
             "plugin-index.command.safeUpdateBlock",
-            "plugin-index.effect.fireworks",
+            "plugin-index.effect.visualEffect",
             "siyuan.ui.toast",
-            "plugin-index.command.turnIntoTask",
+            "plugin-index.command.setBlockAttribute",
             "siyuan.view.graph"
         ],
         ";;菜单": [
@@ -49,9 +49,9 @@ export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
             "editor.block.duplicate",
             "api.block.insert",
             "plugin-index.command.safeUpdateBlock",
-            "plugin-index.effect.fireworks",
+            "plugin-index.effect.visualEffect",
             "siyuan.ui.toast",
-            "plugin-index.command.turnIntoTask"
+            "plugin-index.command.setBlockAttribute"
         ],
         "快捷键": [],
         "/菜单": [],

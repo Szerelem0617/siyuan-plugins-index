@@ -87,14 +87,14 @@ async ({ dispatch, state, eventName }) => {
 
 const defaultTaskConditional = `// [打上标签时] -> ☑ 转换为任务
 // [移除标签时] -> ☑ 转换为任务
-// [任务完成时] -> 🎆 烟花
+// [任务完成时] -> 🎆 视觉特效 (烟花)
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created" || eventName === "tag_removed") {
-        await dispatch("plugin-index.command.turnIntoTask");
+        await dispatch("plugin-index.command.setBlockAttribute-1");
     }
     if (eventName === "task_completed") {
-        await dispatch("plugin-index.effect.fireworks");
+        await dispatch("plugin-index.effect.visualEffect", { type: "fireworks" });
     }
 }`;
 
@@ -166,7 +166,7 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     {
         typeLabel: "task",
         iconMenuCmdIds: ["plugin-index.command.setBlockAttribute"],
-        relationCmdIds: ["plugin-index.command.turnIntoTask", "plugin-index.effect.fireworks", "plugin-index.command.setBlockAttribute"]
+        relationCmdIds: ["plugin-index.effect.visualEffect", "plugin-index.command.setBlockAttribute"]
     },
     {
         typeLabel: "pipeline",

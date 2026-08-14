@@ -35,7 +35,7 @@ import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
 import { getSqliteEngine, runQuery, executeWritableSql, instantiateAV, registerFriendlyTableName } from "./features/sqlite/sqlite-manager";
 import { version } from "../plugin.json";
 import { initSystemTables } from "./features/command/indexos/command-sqlite";
-import { triggerFireworks } from "./features/command/effect/fireworks";
+import { triggerVisualEffect } from "./features/command/effect/visual-effect";
 import { triggerShowMessage } from "./features/command/effect/show-message";
 import { triggerSafeUpdateBlock } from "./features/command/effect/safe-update-block";
 import { triggerAddSupertag } from "./features/command/effect/add-supertag";
@@ -69,9 +69,9 @@ export default class IndexPlugin extends Plugin {
         // 内置命令表先行加载，其他所有模块（Dispatcher、第三方插件）均可安全地调用 getCommand()
         commandRegistry.loadBuiltins();
         
-        const fireworksCmd = commandRegistry.getCommand("plugin-index.effect.fireworks");
-        if (fireworksCmd) {
-            fireworksCmd.dispatch.executor = triggerFireworks;
+        const visualEffectCmd = commandRegistry.getCommand("plugin-index.effect.visualEffect");
+        if (visualEffectCmd) {
+            visualEffectCmd.dispatch.executor = triggerVisualEffect;
         }
 
         const showMsgCmd = commandRegistry.getCommand("siyuan.ui.toast");

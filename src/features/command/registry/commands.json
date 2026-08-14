@@ -297,13 +297,22 @@
             }
         },
         {
-            "id": "plugin-index.effect.fireworks",
-            "name": "烟花",
-            "description": "呼出五彩缤纷的烟花粒子视效，用于任务完成等庆贺场景。",
+            "id": "plugin-index.effect.visualEffect",
+            "name": "视觉特效",
+            "description": "在当前位置触发粒子动画特效（如烟花、彩带等庆贺或反馈视效）。",
             "dispatch": {
                 "method": "custom"
             },
-            "params": [],
+            "params": [
+                {
+                    "key": "type",
+                    "type": "enum",
+                    "values": ["fireworks", "confetti"],
+                    "paramMode": "template",
+                    "default": "fireworks",
+                    "description": "特效类型: fireworks(烟花粒子) / confetti(彩带飘落)"
+                }
+            ],
             "constraints": {
                 "environment": "ui",
                 "targetScope": "none"
@@ -313,11 +322,20 @@
                 "category": "view",
                 "source": "builtin"
             },
-            "seed": {
-                "rowID": "20260526204558-firework",
-                "label": "🎆 烟花",
-                "paramMapping": ""
-            }
+            "seeds": [
+                {
+                    "rowID": "20260526204558-firework",
+                    "label": "🎆 烟花",
+                    "commandID": "plugin-index.effect.visualEffect",
+                    "paramMapping": "{\"type\":\"fireworks\"}"
+                },
+                {
+                    "rowID": "20260526204558-confetti",
+                    "label": "🎊 彩带",
+                    "commandID": "plugin-index.effect.visualEffect-1",
+                    "paramMapping": "{\"type\":\"confetti\"}"
+                }
+            ]
         },
         {
             "id": "plugin-index.command.safeUpdateBlock",
