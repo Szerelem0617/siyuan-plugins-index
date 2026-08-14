@@ -1,8 +1,9 @@
 import { showMessage } from "siyuan";
+import type { CommandContext } from "../dispatcher";
 
 export async function triggerShowMessage(
     params: Record<string, any>,
-    _context: any
+    _context?: CommandContext
 ) {
     const message = params.message || "看到这条消息会有好运～";
     const timeout = params.timeout !== undefined && params.timeout !== "" ? Number(params.timeout) : 6000;

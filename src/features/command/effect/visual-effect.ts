@@ -9,30 +9,30 @@
  * 5. breeze:    🍃 禅意流风（翡翠绿叶优雅抛物线波浪摇曳与 3D 翻转，用于笔记归档 / 番茄钟收工）
  */
 
+import type { CommandContext } from "../dispatcher";
+
 export async function triggerVisualEffect(
     params: { type?: string },
-    context: { blockEl?: HTMLElement; protyleEl?: HTMLElement | null; triggerEl?: HTMLElement }
+    context: CommandContext
 ) {
     const effectType = String(params?.type || "fireworks").toLowerCase().trim();
 
-    // 1. 获取目标元素几何信息与屏幕原点
-    let startX = window.innerWidth / 2;
-    let startY = window.innerHeight / 2;
-    let rectLeft = startX - 80;
-    let rectTop = startY - 20;
-    let targetWidth = 160;
-    let targetHeight = 40;
+    // 1. 直接读取调度器预计算的标准空间几何对象 (0 样板代码)
+    const geo = context.geometry || {
+        x: Math.round(window.innerWidth / 2 - 80),
+        y: Math.round(window.innerHeight / 2 - 20),
+        width: 160,
+        height: 40,
+        centerX: Math.round(window.innerWidth / 2),
+        centerY: Math.round(window.innerHeight / 2)
+    };
 
-    const el = context.triggerEl || context.blockEl;
-    if (el) {
-        const rect = el.getBoundingClientRect();
-        rectLeft = rect.left;
-        rectTop = rect.top;
-        targetWidth = rect.width;
-        targetHeight = rect.height;
-        startX = rect.left + rect.width / 2;
-        startY = rect.top + rect.height / 2;
-    }
+    const startX = geo.centerX;
+    const startY = geo.centerY;
+    const rectLeft = geo.x;
+    const rectTop = geo.y;
+    const targetWidth = geo.width;
+    const targetHeight = geo.height;
 
     // 2. 创建高层级全屏透明 Canvas
     const canvas = document.createElement("canvas");

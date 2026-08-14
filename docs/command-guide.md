@@ -217,8 +217,7 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
         typeLabel: "task",
         iconMenuCmdIds: ["plugin-index.command.setBlockAttribute"],
         relationCmdIds: [
-            "plugin-index.command.turnIntoTask",
-            "plugin-index.effect.fireworks",
+            "plugin-index.effect.visualEffect",
             "plugin-index.command.setBlockAttribute"
         ]
     }
@@ -227,7 +226,18 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
 
 ---
 
-## 3. 出入参设计与命名规范
+## 4. 双轨上下文体系 (Dual-Track Context)
+
+调度器分发命令时，提供统一标准化的双轨上下文 (`CommandContext`)：
+
+| 上下文轨道 | 包含字段 | 用途与消费规则 |
+| :--- | :--- | :--- |
+| **逻辑数据轨 (Logical Track)** | `blockId`, `supertag`, `vars`, `executionMode` | 专供纯数据命令（如 `setBlockAttribute`），由 Dispatcher 解析后注入 `params`。 |
+| **空间物理轨 (Spatial Track)** | `geometry: { x, y, width, height, centerX, centerY }`, `triggerEl`, `blockEl` | 专供视效与 UI 类命令（如 `visualEffect`），由 Dispatcher **自动预计算绝对屏幕坐标**，执行器 0 样板代码。 |
+
+---
+
+## 5. 出入参设计与命名规范
 
 | 规范项目 | 命名规则 | 说明与范例 |
 | :--- | :--- | :--- |
@@ -239,8 +249,9 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
 
 ---
 
-## 4. 调试与排错 CheckList
+## 6. 调试与排错 CheckList
 
 - [ ] **参数是否接收正常**：观察控制台 `[ParamResolver STEP B] 处理参数 "xxx" (原始模板值: "...")` 是否输出期望值；
+- [ ] **空间几何是否自动注入**：检查视效执行器中 `context.geometry` 是否能直接读到 `{ centerX, centerY, x, y }`；
 - [ ] **出参是否透传成功**：在 Pipeline 下游步骤中检查 `state.vars?.<outputKey>` 是否成功接力；
-- [ ] **执行器是否纯粹**：检查执行器内部是否没有冗余的 `getBlockId` 探测代码，纯粹依赖调度器传递的 `params`。
+- [ ] **执行器是否纯粹**：检查执行器内部是否没有冗余的 `getBlockId` 探测代码，纯粹依赖调度器传递的 `params` 或 `context.geometry`。

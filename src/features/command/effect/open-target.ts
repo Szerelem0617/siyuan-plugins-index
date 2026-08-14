@@ -9,10 +9,11 @@
 
 import { openTab } from "siyuan";
 import { plugin } from "../../../shared/utils";
+import type { CommandContext } from "../dispatcher";
 
 export async function handleOpenTargetCommand(
     params: Record<string, unknown>,
-    context: { blockEl?: HTMLElement; protyleEl?: HTMLElement | null }
+    context?: CommandContext
 ) {
     let targetId = String(params.id || "").trim();
 

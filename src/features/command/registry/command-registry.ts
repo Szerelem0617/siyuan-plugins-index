@@ -100,7 +100,7 @@ export interface DispatchConfig {
      */
     executor?: (
         params: Record<string, unknown>,
-        context: { blockEl: HTMLElement; protyleEl: HTMLElement | null; supertag?: string; triggerEl?: HTMLElement }
+        context: import("../dispatcher/types").CommandContext
     ) => Promise<unknown>;
 }
 
