@@ -1,9 +1,16 @@
+# IDE / Editor
 .idea
 .vscode
 .DS_Store
-pnpm-lock.yaml
-package.zip
+**/.DS_Store
+*.log
+
+# Dependencies
 node_modules
+pnpm-lock.yaml
+
+# Build & Dev Output
 dev
 dist
 build
+package.zip
