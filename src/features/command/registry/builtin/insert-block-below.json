@@ -1,0 +1,63 @@
+{
+    "id": "plugin-index.command.insertBlockBelow",
+    "name": "在下方插入块",
+    "description": "在指定的目标块/页面下方插入新块或子页面，支持短码 (p/h/c/b/l/t/tb) 与模板占位符。",
+    "dispatch": {
+        "method": "custom"
+    },
+    "params": [
+        {
+            "key": "id",
+            "type": "blockid",
+            "paramMode": "template",
+            "default": "",
+            "description": "目标块或页面 ID。不填自动取当前触发块。"
+        },
+        {
+            "key": "data",
+            "type": "string",
+            "paramMode": "template",
+            "default": "",
+            "description": "新块的内容或子页面标题 (支持 {{prompt}} / {{time}} 占位符)"
+        },
+        {
+            "key": "insertType",
+            "type": "enum",
+            "values": ["p", "h", "c", "b", "l", "t", "tb"],
+            "paramMode": "template",
+            "default": "p",
+            "description": "原生块类型短码 (p:段落, h:标题, c:代码块, b:引述, l:列表, t:表格, tb:分割线)"
+        },
+        {
+            "key": "pageInsertMode",
+            "type": "enum",
+            "values": ["bottom", "top", "child_doc"],
+            "paramMode": "template",
+            "default": "bottom",
+            "description": "页面专有插入策略 (bottom:页面尾部, top:页面顶部, child_doc:创建子页面)"
+        }
+    ],
+    "outputs": [
+        {
+            "key": "createdblock",
+            "type": "string",
+            "default": "var.createdblock",
+            "description": "成功插入的新块或新子页面的物理 Block ID"
+        }
+    ],
+    "constraints": {
+        "environment": "universal",
+        "targetScope": "any",
+        "comment": "双端多态通用：支持在任意块正下方插入或在页面下建子页面"
+    },
+    "meta": {
+        "contextNeed": "block",
+        "category": "edit",
+        "source": "builtin"
+    },
+    "seed": {
+        "rowID": "20260526204558-insblk1",
+        "label": "➕ 在下方插入块",
+        "paramMapping": "{}"
+    }
+}

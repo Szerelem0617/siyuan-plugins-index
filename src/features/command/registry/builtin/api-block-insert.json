@@ -1,0 +1,49 @@
+{
+    "id": "api.block.insert",
+    "name": "API：插入块",
+    "description": "向思源后端发送原生 POST /api/block/insertBlock，在指定 Block 之后追加 Markdown 块。",
+    "dispatch": {
+        "method": "api",
+        "endpoint": "/api/block/insertBlock"
+    },
+    "params": [
+        {
+            "key": "previousID",
+            "type": "blockid",
+            "paramMode": "template",
+            "default": "",
+            "description": "在该块之后插入。不填默认绑定触发块。"
+        },
+        {
+            "key": "dataType",
+            "type": "string",
+            "paramMode": "template",
+            "default": "markdown"
+        },
+        {
+            "key": "data",
+            "type": "string",
+            "paramMode": "template",
+            "default": "",
+            "description": "插入的内容 (Markdown 格式)"
+        }
+    ],
+    "outputs": [
+        {
+            "key": "createdblock",
+            "type": "string",
+            "default": "var.createdblock",
+            "description": "生成的物理 Block ID"
+        }
+    ],
+    "constraints": {
+        "environment": "universal",
+        "targetScope": "any",
+        "comment": "思源原生 HTTP API，完全支持后台与定时调度"
+    },
+    "meta": {
+        "contextNeed": "block",
+        "category": "api",
+        "source": "builtin"
+    }
+}

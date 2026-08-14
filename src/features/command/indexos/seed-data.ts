@@ -1,7 +1,7 @@
 export const NOTEBOOK_NAME = "IndexOS";
 export const NOTEBOOK_ICON = "1f42c"; // 🐬
 
-import commandsData from "../registry/commands.json";
+import commandsData from "../registry/builtin";
 
 // ════════════════════════════════════════════════════════════════════
 // 种子数据（唯一定义点）

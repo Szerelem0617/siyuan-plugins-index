@@ -1,0 +1,19 @@
+{
+    "id": "siyuan.view.inbox",
+    "name": "打开收集箱",
+    "description": "打开每日收集箱。",
+    "dispatch": {
+        "method": "global",
+        "target": "inbox"
+    },
+    "params": [],
+    "constraints": {
+        "environment": "ui",
+        "targetScope": "none"
+    },
+    "meta": {
+        "contextNeed": "none",
+        "category": "navigation",
+        "source": "builtin"
+    }
+}

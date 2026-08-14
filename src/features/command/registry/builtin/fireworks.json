@@ -1,0 +1,23 @@
+{
+    "id": "plugin-index.effect.fireworks",
+    "name": "烟花",
+    "description": "呼出五彩缤纷的烟花粒子视效，用于任务完成等庆贺场景。",
+    "dispatch": {
+        "method": "custom"
+    },
+    "params": [],
+    "constraints": {
+        "environment": "ui",
+        "targetScope": "none"
+    },
+    "meta": {
+        "contextNeed": "none",
+        "category": "view",
+        "source": "builtin"
+    },
+    "seed": {
+        "rowID": "20260526204558-firework",
+        "label": "🎆 烟花",
+        "paramMapping": ""
+    }
+}

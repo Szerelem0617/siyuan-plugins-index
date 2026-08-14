@@ -1,0 +1,25 @@
+{
+    "id": "editor.block.duplicate",
+    "name": "复制当前块",
+    "description": "将光标所在块复制一份，插入到其下方。依赖编辑器焦点，只能在当前可见块上触发。",
+    "dispatch": {
+        "method": "keyboard",
+        "keymapPath": [
+            "editor",
+            "general",
+            "duplicate"
+        ]
+    },
+    "params": [],
+    "constraints": {
+        "environment": "ui",
+        "targetScope": "block",
+        "comment": "快捷键实现，如需定时复制请改用 api.block.insert"
+    },
+    "meta": {
+        "contextNeed": "block",
+        "category": "edit",
+        "source": "builtin",
+        "apiEquivalent": "api.block.insert"
+    }
+}

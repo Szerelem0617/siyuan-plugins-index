@@ -1,0 +1,42 @@
+{
+    "id": "plugin-index.command.safeUpdateBlock",
+    "name": "更新块内容",
+    "description": "更新目标块的内容 (Markdown 格式)，自动脱敏与安全转换模板语法。",
+    "dispatch": {
+        "method": "custom"
+    },
+    "params": [
+        {
+            "key": "id",
+            "type": "blockid",
+            "paramMode": "template",
+            "default": ""
+        },
+        {
+            "key": "data",
+            "type": "string",
+            "paramMode": "template",
+            "default": "已成功更新"
+        },
+        {
+            "key": "dataType",
+            "type": "string",
+            "paramMode": "template",
+            "default": "markdown"
+        }
+    ],
+    "constraints": {
+        "environment": "universal",
+        "targetScope": "block"
+    },
+    "meta": {
+        "contextNeed": "block",
+        "category": "edit",
+        "source": "builtin"
+    },
+    "seed": {
+        "rowID": "20260526204558-safeupd",
+        "label": "📝 更新块内容",
+        "paramMapping": "{\"dataType\":\"markdown\",\"data\":\"已成功更新\"}"
+    }
+}

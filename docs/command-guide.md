@@ -10,7 +10,7 @@
 
 ```
                 ┌──────────────────────────────────────────────────┐
-                │          commands.json (单一真理源)               │
+                │      builtin/{command-name}.json (单一真理源)     │
                 │  - 定义命令元数据、输入参数 Schema、出参 Outputs     │
                 └────────────────────────┬─────────────────────────┘
                                          │
@@ -34,7 +34,7 @@
 ### 三大铁律：
 1. **严禁在命令执行器内部做上下文推导**：执行器不得私自调用 `getBlockId()` 或从 `context.vars` 中拼凑字段，一切参数均由调度器 `command-dispatcher` 在前置阶段完成解析与注入。
 2. **严禁写各种 `||` 兜底代码**：参数缺失应直接 throw Error 抛出问题，把逻辑漏洞暴露在阳光下。
-3. **块 ID 默认占位符必须标准化**：任何涉及块操作的命令，其 `id` 参数在 `commands.json` 中的 `default` 必须显式声明为 `"{{block_id}}"`。
+3. **块 ID 默认占位符必须标准化**：任何涉及块操作的命令，其 `id` 参数在 Schema 中的 `default` 必须显式声明为 `"{{block_id}}"`。
 
 ---
 
@@ -42,10 +42,10 @@
 
 创建或接入一个新命令，严格按照以下 4 步进行：
 
-### Step 1: 在 `commands.json` 中声明元数据
-文件位置：[src/features/command/registry/commands.json](file:///Users/feng/Desktop/项目/思源项目/siyuan-plugins-index/src/features/command/registry/commands.json)
+### Step 1: 在 `builtin/` 下创建独立的 `{command-name}.json`
+文件位置：`src/features/command/registry/builtin/{command-name}.json`
 
-在 `commands` 数组中添加标准配置：
+每个命令独立维护单一 json 文件，并在 `builtin/index.ts` 中完成聚合导入。标准 JSON 格式：
 
 ```json
 {

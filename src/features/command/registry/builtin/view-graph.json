@@ -1,0 +1,20 @@
+{
+    "id": "siyuan.view.graph",
+    "name": "全局关系图",
+    "description": "呼出全局块关系图面板。",
+    "dispatch": {
+        "method": "global",
+        "target": "graphView"
+    },
+    "params": [],
+    "constraints": {
+        "environment": "ui",
+        "targetScope": "none",
+        "comment": "依赖思源 UI 状态，无法定时触发"
+    },
+    "meta": {
+        "contextNeed": "none",
+        "category": "navigation",
+        "source": "builtin"
+    }
+}

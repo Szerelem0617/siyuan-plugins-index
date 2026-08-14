@@ -15,7 +15,7 @@
  * CommandBinding / COMMAND_BINDINGS，两者勿混用。
  */
 
-import commandsData from "./commands.json";
+import commandsData from "./builtin";
 import { runQuery } from "../../sqlite/sqlite-manager";
 import { getSystemTableNames } from "../indexos/command-sqlite";
 

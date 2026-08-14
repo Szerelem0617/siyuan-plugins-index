@@ -1,0 +1,38 @@
+{
+    "id": "siyuan.ui.toast",
+    "name": "消息提示",
+    "description": "呼出思源系统的气泡消息提示 (Toast Notification)。",
+    "dispatch": {
+        "method": "custom"
+    },
+    "params": [
+        {
+            "key": "message",
+            "type": "string",
+            "paramMode": "template",
+            "default": "IndexOS 消息通知",
+            "description": "要显示的消息文本，支持 {{time}} 等占位符"
+        },
+        {
+            "key": "type",
+            "type": "string",
+            "paramMode": "template",
+            "default": "info",
+            "description": "消息类型: info / error"
+        }
+    ],
+    "constraints": {
+        "environment": "ui",
+        "targetScope": "none"
+    },
+    "meta": {
+        "contextNeed": "none",
+        "category": "view",
+        "source": "builtin"
+    },
+    "seed": {
+        "rowID": "20260526204558-toast001",
+        "label": "💬 消息提示",
+        "paramMapping": "{\"message\":\"IndexOS 消息通知\"}"
+    }
+}

@@ -1,5 +1,5 @@
 import { getSqliteEngine, saveDatabaseToDisk } from "../../sqlite/sqlite-manager";
-import commandsData from "../registry/commands.json";
+import commandsData from "../registry/builtin";
 
 const TABLE_REGISTRY = "sys_registry_db";
 
