@@ -7,7 +7,7 @@
     /** 可复用的命令序列编辑器：勾选命令（顺序号）+ 每命令入参设置 + 快捷配置 */
     export let initialScript: string | null = null;
     export let showName = true;
-    export let namePlaceholder = "名称，例如：创建任务并更新";
+    export let namePlaceholder = "名称 (留空自动命名: 复合命令 N)";
     export let onScriptChange: ((script: string) => void) | undefined = undefined;
     /** 仅显示这些命令（如 Conditional 只显示绑定命令）；null = 全部 */
     export let allowedCommands: string[] | null = null;

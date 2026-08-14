@@ -298,8 +298,21 @@ export async function syncPipelinesFromCommandDb(): Promise<void> {
     }
 }
 
+/** 自动生成不重复的复合命令默认名称（复合命令 1, 复合命令 2, ...） */
+export function generateUniquePipelineName(): string {
+    const existingNames = new Set(commandRegistry.getAllCommands().map(c => c.name.trim()));
+    let index = 1;
+    while (existingNames.has(`复合命令 ${index}`) || existingNames.has(`复合命令${index}`)) {
+        index++;
+    }
+    return `复合命令 ${index}`;
+}
+
 /** 打开复合命令编辑器（新建） */
-export function openPipelineEditor(onCreated?: (rowId: string, name: string) => void): void {
+export function openPipelineEditor(
+    initialTab: "steps" | "input" | "output" = "steps",
+    onCreated?: (rowId: string, name: string) => void
+): void {
     const dialog = new Dialog({
         title: "创建复合命令 (Pipeline)",
         content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
@@ -311,7 +324,7 @@ export function openPipelineEditor(onCreated?: (rowId: string, name: string) => 
     import("./PipelineEditorDialog.svelte").then(m => {
         new m.default({
             target: dialog.element.querySelector("#pipeline-editor-container")!,
-            props: { dialog, onCreated }
+            props: { dialog, initialTab, onCreated }
         });
     }).catch(e => {
         console.error("[Pipeline] Failed to load editor:", e);
@@ -321,7 +334,12 @@ export function openPipelineEditor(onCreated?: (rowId: string, name: string) => 
 }
 
 /** 打开复合命令编辑器（编辑已有行，initialScript 为 Pipeline 定义列内容） */
-export function openPipelineEditorForRow(rowId: string, initialScript: string, onSaved?: (rowId: string, name: string) => void): void {
+export function openPipelineEditorForRow(
+    rowId: string, 
+    initialScript: string, 
+    initialTab: "steps" | "input" | "output" = "steps",
+    onSaved?: (rowId: string, name: string) => void
+): void {
     const dialog = new Dialog({
         title: "编辑复合命令 (Pipeline)",
         content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
@@ -333,7 +351,7 @@ export function openPipelineEditorForRow(rowId: string, initialScript: string, o
     import("./PipelineEditorDialog.svelte").then(m => {
         new m.default({
             target: dialog.element.querySelector("#pipeline-editor-container")!,
-            props: { dialog, initialScript, editRowId: rowId, onCreated: onSaved }
+            props: { dialog, initialScript, editRowId: rowId, initialTab, onCreated: onSaved }
         });
     }).catch(e => {
         console.error("[Pipeline] Failed to load editor:", e);

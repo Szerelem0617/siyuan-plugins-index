@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { Dialog, showMessage } from "siyuan";
-    import { createPipelineRow, registerPipelineCommand, pipelineCommandId, updatePipelineRow, readPipelineRow } from "./manager";
+    import { createPipelineRow, registerPipelineCommand, pipelineCommandId, updatePipelineRow, readPipelineRow, generateUniquePipelineName } from "./manager";
     import { parseRuleScript } from "./script-dsl";
     import { inspectPipelineSteps, type StepSchemaItem } from "./pipeline-step-schema";
     import CommandSequenceEditor from "./CommandSequenceEditor.svelte";
@@ -11,8 +11,9 @@
     export let onCreated: ((rowId: string, name: string) => void) | undefined = undefined;
     export let initialScript: string | null = null;
     export let editRowId: string | null = null;
+    export let initialTab: "steps" | "input" | "output" = "steps";
 
-    let activeTab: "steps" | "input" | "output" = "steps";
+    let activeTab: "steps" | "input" | "output" = initialTab;
     let script = "";
     let error = "";
     let saving = false;
@@ -88,13 +89,20 @@
         console.log("[PipelineSave-Debug] 💾 handleSave 触发！targetScript:", JSON.stringify(targetScript));
         const rule = parseRuleScript(targetScript);
 
-        if (!rule || !rule.name || !rule.name.trim()) {
-            error = "请填写名称并至少勾选一个命令";
-            return;
-        }
-        if (!rule.commands || rule.commands.length === 0) {
+        if (!rule || !rule.commands || rule.commands.length === 0) {
             error = "请至少勾选一个命令";
             return;
+        }
+
+        // 自动命名：若未填写名称，则自动生成唯一命名（复合命令 1, 复合命令 2...）
+        let finalName = (rule.name || "").trim();
+        if (!finalName) {
+            finalName = generateUniquePipelineName();
+            if (targetScript.includes("// 名称:")) {
+                targetScript = targetScript.replace(/\/\/\s*名称\s*:[^\n]*/, `// 名称: ${finalName}`);
+            } else {
+                targetScript = `// 名称: ${finalName}\n${targetScript}`;
+            }
         }
 
         // 1. 组装勾选暴露的外部入参
@@ -125,16 +133,16 @@
             let rowId: string;
             if (editRowId) {
                 rowId = editRowId;
-                await updatePipelineRow(rowId, rule.name.trim(), targetScript, finalInputJson, finalOutputJson);
+                await updatePipelineRow(rowId, finalName, targetScript, finalInputJson, finalOutputJson);
             } else {
-                rowId = await createPipelineRow(rule.name.trim(), targetScript, finalInputJson, finalOutputJson);
+                rowId = await createPipelineRow(finalName, targetScript, finalInputJson, finalOutputJson);
             }
             const commandId = pipelineCommandId(rowId);
-            registerPipelineCommand(commandId, rule.name.trim(), targetScript, finalInputJson);
+            registerPipelineCommand(commandId, finalName, targetScript, finalInputJson);
             await refreshSupertagRegistry();
-            console.log(`[PipelineEditor] saved ${commandId} (${rule.name.trim()})`);
-            showMessage(`✓ 复合命令已${editRowId ? "更新" : "创建"}：${commandId}`);
-            onCreated?.(rowId, rule.name.trim());
+            console.log(`[PipelineEditor] saved ${commandId} (${finalName})`);
+            showMessage(`✓ 复合命令已${editRowId ? "更新" : "创建"}：${finalName}`);
+            onCreated?.(rowId, finalName);
             dialog.destroy();
         } catch (e: any) {
             error = `保存失败: ${e.message}`;

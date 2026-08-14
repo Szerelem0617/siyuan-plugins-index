@@ -382,15 +382,20 @@ export async function handleCommandDbAltClick(
         const isPipeline = Boolean(pipelineRow && pipelineRow.script) || (resolvedCommand && resolvedCommand.startsWith("pipeline."));
 
         if (isPipeline || clickedKeyName === "Pipeline 定义" || clickedKeyName === "Pipeline Config") {
-            // --- 行为 0: Pipeline 行不论 Alt+Click 哪一列（Input/Output/Pipeline 定义），均唤起一站式 Pipeline 编排器 ---
+            // --- 行为 0: Pipeline 行根据 Alt+Click 的列智能打开对应 Tab ---
             event.preventDefault();
             event.stopPropagation();
+
+            const isOutputClick = clickedKeyName === "Output" || clickedKeyName === "Output Mapping" || clickedKeyName === "出参映射";
+            const isInputClick = clickedKeyName === "Input" || clickedKeyName === "Input Mapping" || clickedKeyName === "入参映射" || clickedKeyName === "Param Mapping" || clickedKeyName === "参数映射";
+            const initialTab: "steps" | "input" | "output" = isOutputClick ? "output" : isInputClick ? "input" : "steps";
+
             if (!pipelineRow || !pipelineRow.script) {
                 // 如果是新行但点击了 Pipeline 定义列，打开新建编辑器
-                openPipelineEditor();
+                openPipelineEditor(initialTab);
                 return;
             }
-            openPipelineEditorForRow(rowId, pipelineRow.script);
+            openPipelineEditorForRow(rowId, pipelineRow.script, initialTab);
             return;
         }
 
