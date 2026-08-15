@@ -49,11 +49,22 @@ export async function triggerVisualEffect(
 
     const ctx = canvas.getContext("2d")!;
     
+    let isCleanedUp = false;
+    const cleanup = () => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
+        window.removeEventListener("resize", handleResize);
+        canvas.remove();
+    };
+
     const handleResize = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
     };
     window.addEventListener("resize", handleResize);
+
+    // 全局防卡死最大生命周期守护定时器 (3 秒强制安全垃圾回收)
+    const safetyTimer = setTimeout(cleanup, 3000);
 
     // =========================================================================
     // 模式 1: 🌌 流星跃迁 (Meteor / Shooting Stars with Stardust)
@@ -494,6 +505,483 @@ export async function triggerVisualEffect(
 
         animateBreeze();
         return { success: true, method: "custom", detail: "Visual effect [breeze] played." };
+    }
+
+    // =========================================================================
+    // 模式 6: ⚡ 极速闪电 (Lightning / Thunder Bolt) - Local 纯粹局部电弧
+    // =========================================================================
+    if (effectType === "lightning" || effectType === "thunder") {
+        interface Point { x: number; y: number; }
+        interface BoltSegment { p1: Point; p2: Point; width: number; }
+
+        const createFractalBolt = (start: Point, end: Point, maxDisplace: number, width: number, depth = 0): BoltSegment[] => {
+            if (depth > 5 || Math.hypot(end.x - start.x, end.y - start.y) < 10) {
+                return [{ p1: start, p2: end, width }];
+            }
+            const midX = (start.x + end.x) / 2;
+            const midY = (start.y + end.y) / 2;
+            const nx = -(end.y - start.y);
+            const ny = end.x - start.x;
+            const len = Math.hypot(nx, ny) || 1;
+            const displace = (Math.random() - 0.5) * maxDisplace;
+            const mid: Point = {
+                x: midX + (nx / len) * displace,
+                y: midY + (ny / len) * displace
+            };
+            const left = createFractalBolt(start, mid, maxDisplace * 0.55, width * 0.88, depth + 1);
+            const right = createFractalBolt(mid, end, maxDisplace * 0.55, width * 0.88, depth + 1);
+            return left.concat(right);
+        };
+
+        const bolts: { segments: BoltSegment[]; colorCore: string; colorGlow: string; alpha: number }[] = [];
+
+        // 主闪电：从目标上方 260px 处直击目标中心
+        const startPoint: Point = {
+            x: startX + (Math.random() - 0.5) * 80,
+            y: Math.max(0, startY - 260)
+        };
+        const endPoint: Point = { x: startX, y: startY };
+
+        // 主电弧链 (晶亮浅冰蓝电晕 + 纯白核心)
+        const mainSegments = createFractalBolt(startPoint, endPoint, 55, 3.5);
+        bolts.push({
+            segments: mainSegments,
+            colorCore: "#FFFFFF",
+            colorGlow: "hsl(202, 100%, 66%)",
+            alpha: 1.0
+        });
+
+        // 2 道局部蔓延分叉分支电弧
+        for (let b = 0; b < 2; b++) {
+            const segIndex = Math.floor(mainSegments.length * (0.35 + b * 0.3));
+            const branchStart = mainSegments[segIndex]?.p1 || startPoint;
+            const branchAngle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x) + (b === 0 ? 0.65 : -0.65);
+            const branchLen = 50 + Math.random() * 60;
+            const branchEnd: Point = {
+                x: branchStart.x + Math.cos(branchAngle) * branchLen,
+                y: branchStart.y + Math.sin(branchAngle) * branchLen
+            };
+            bolts.push({
+                segments: createFractalBolt(branchStart, branchEnd, 28, 2.0),
+                colorCore: "#F5FAFF",
+                colorGlow: "hsl(255, 95%, 74%)",
+                alpha: 0.95
+            });
+        }
+
+        let flashAlpha = 0.18; // 瞬间全屏环境闪光
+        let frame = 0;
+
+        const animateLightning = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let alive = false;
+            frame++;
+
+            // 1. 全屏瞬间环境闪光
+            if (flashAlpha > 0.004) {
+                alive = true;
+                ctx.save();
+                ctx.fillStyle = `rgba(210, 235, 255, ${flashAlpha})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+                flashAlpha *= 0.68;
+            }
+
+            // 2. 绘制电弧主体
+            for (const bolt of bolts) {
+                if (bolt.alpha > 0.02) {
+                    alive = true;
+                    // 闪电脉冲闪烁
+                    const flicker = (frame % 2 === 0 ? 1.0 : 0.6) * bolt.alpha;
+
+                    ctx.save();
+                    ctx.lineCap = "round";
+                    ctx.lineJoin = "round";
+
+                    // 1. 外层晶亮浅蓝发光电晕
+                    ctx.shadowBlur = 16;
+                    ctx.shadowColor = bolt.colorGlow;
+                    ctx.strokeStyle = bolt.colorGlow;
+                    ctx.globalAlpha = flicker * 0.85;
+
+                    ctx.beginPath();
+                    for (const seg of bolt.segments) {
+                        ctx.lineWidth = seg.width * 2.6;
+                        ctx.moveTo(seg.p1.x, seg.p1.y);
+                        ctx.lineTo(seg.p2.x, seg.p2.y);
+                    }
+                    ctx.stroke();
+
+                    // 2. 内层纯白高能核心
+                    ctx.shadowBlur = 4;
+                    ctx.shadowColor = "#FFFFFF";
+                    ctx.strokeStyle = bolt.colorCore;
+                    ctx.globalAlpha = flicker;
+
+                    ctx.beginPath();
+                    for (const seg of bolt.segments) {
+                        ctx.lineWidth = seg.width;
+                        ctx.moveTo(seg.p1.x, seg.p1.y);
+                        ctx.lineTo(seg.p2.x, seg.p2.y);
+                    }
+                    ctx.stroke();
+                    ctx.restore();
+
+                    bolt.alpha -= 0.08;
+                }
+            }
+
+            if (alive) {
+                requestAnimationFrame(animateLightning);
+            } else {
+                clearTimeout(safetyTimer);
+                cleanup();
+            }
+        };
+
+        animateLightning();
+        return { success: true, method: "custom", detail: "Visual effect [lightning] played." };
+    }
+
+    // =========================================================================
+    // 模式 7: 🌧️ 沉浸细雨 (Rain / Raindrop & Ripple Splash) - 日夜双清晰水润质感
+    // =========================================================================
+    if (effectType === "rain" || effectType === "raindrop") {
+        interface Raindrop {
+            x: number;
+            y: number;
+            length: number;
+            speed: number;
+            thickness: number;
+            alpha: number;
+            targetY: number;
+            angle: number;
+            delay: number;
+        }
+
+        interface Ripple {
+            x: number;
+            y: number;
+            radius: number;
+            maxRadius: number;
+            alpha: number;
+            decay: number;
+        }
+
+        interface Splash {
+            x: number;
+            y: number;
+            vx: number;
+            vy: number;
+            size: number;
+            alpha: number;
+            decay: number;
+        }
+
+        const raindrops: Raindrop[] = [];
+        const ripples: Ripple[] = [];
+        const splashes: Splash[] = [];
+
+        const rainCount = 42;
+        const spreadWidth = Math.max(300, targetWidth + 180);
+        const startLeft = startX - spreadWidth / 2;
+
+        for (let i = 0; i < rainCount; i++) {
+            const dropX = startLeft + Math.random() * spreadWidth;
+            const hitTargetY = rectTop + targetHeight * 0.2 + Math.random() * (targetHeight * 0.7 + 45);
+
+            raindrops.push({
+                x: dropX,
+                y: Math.max(0, rectTop - 220 - Math.random() * 180),
+                length: 16 + Math.random() * 20,
+                speed: 13 + Math.random() * 7,
+                thickness: 1.4 + Math.random() * 0.8,
+                alpha: 0.75 + Math.random() * 0.25,
+                targetY: hitTargetY,
+                angle: Math.PI * 0.44, // ~79° 倾斜
+                delay: Math.floor(Math.random() * 26)
+            });
+        }
+
+        const animateRain = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let alive = false;
+
+            // 1. 更新与绘制雨丝 (高对比深湖天蓝，白底清澈透亮，黑底荧光流转)
+            for (const drop of raindrops) {
+                if (drop.delay > 0) {
+                    drop.delay--;
+                    alive = true;
+                    continue;
+                }
+
+                if (drop.y < drop.targetY) {
+                    alive = true;
+                    drop.x += Math.cos(drop.angle) * drop.speed;
+                    drop.y += Math.sin(drop.angle) * drop.speed;
+
+                    ctx.save();
+                    ctx.strokeStyle = `rgba(28, 120, 242, ${drop.alpha * 0.88})`;
+                    ctx.lineWidth = drop.thickness;
+                    ctx.lineCap = "round";
+                    ctx.beginPath();
+                    ctx.moveTo(drop.x, drop.y);
+                    ctx.lineTo(
+                        drop.x - Math.cos(drop.angle) * drop.length,
+                        drop.y - Math.sin(drop.angle) * drop.length
+                    );
+                    ctx.stroke();
+                    ctx.restore();
+
+                    if (drop.y >= drop.targetY) {
+                        ripples.push({
+                            x: drop.x,
+                            y: drop.targetY,
+                            radius: 2,
+                            maxRadius: 13 + Math.random() * 8,
+                            alpha: 0.8,
+                            decay: 0.028
+                        });
+                        const splashCount = 2 + Math.floor(Math.random() * 2);
+                        for (let s = 0; s < splashCount; s++) {
+                            const splashAngle = -Math.PI * (0.2 + Math.random() * 0.6);
+                            const splashSpeed = 1.4 + Math.random() * 2.2;
+                            splashes.push({
+                                x: drop.x,
+                                y: drop.targetY,
+                                vx: Math.cos(splashAngle) * splashSpeed,
+                                vy: Math.sin(splashAngle) * splashSpeed,
+                                size: 1.2 + Math.random() * 0.8,
+                                alpha: 0.85,
+                                decay: 0.038
+                            });
+                        }
+                    }
+                }
+            }
+
+            // 2. 绘制水环涟漪 (深水蓝边框)
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                const r = ripples[i];
+                if (r.alpha > 0.01) {
+                    alive = true;
+                    r.radius += 0.55;
+                    r.alpha -= r.decay;
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.ellipse(r.x, r.y, r.radius, r.radius * 0.45, 0, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(24, 115, 235, ${Math.max(0, r.alpha)})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    ctx.restore();
+                } else {
+                    ripples.splice(i, 1);
+                }
+            }
+
+            // 3. 绘制飞溅水珠
+            for (let i = splashes.length - 1; i >= 0; i--) {
+                const sp = splashes[i];
+                if (sp.alpha > 0.01) {
+                    alive = true;
+                    sp.vy += 0.12;
+                    sp.x += sp.vx;
+                    sp.y += sp.vy;
+                    sp.alpha -= sp.decay;
+
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, sp.alpha);
+                    ctx.fillStyle = "rgba(32, 130, 250, 0.9)";
+                    ctx.beginPath();
+                    ctx.arc(sp.x, sp.y, sp.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                } else {
+                    splashes.splice(i, 1);
+                }
+            }
+
+            if (alive) {
+                requestAnimationFrame(animateRain);
+            } else {
+                clearTimeout(safetyTimer);
+                cleanup();
+            }
+        };
+
+        animateRain();
+        return { success: true, method: "custom", detail: "Visual effect [rain] played." };
+    }
+
+    // =========================================================================
+    // 模式 8: 🔥 温暖篝火 (Bonfire / Wind Sway & Flying Embers)
+    // =========================================================================
+    if (effectType === "flame" || effectType === "fire") {
+        interface BonfireFlame {
+            x: number;
+            y: number;
+            baseX: number;
+            vx: number;
+            vy: number;
+            size: number;
+            initialSize: number;
+            alpha: number;
+            decay: number;
+            hue: number; // 52 (金黄) ➔ 18 (暖橙) ➔ 0 (火红)
+            age: number;
+            swayFreq: number;
+        }
+
+        interface BonfireEmber {
+            x: number;
+            y: number;
+            vx: number;
+            vy: number;
+            size: number;
+            alpha: number;
+            decay: number;
+            hue: number;
+            age: number;
+            swayFreq: number;
+        }
+
+        const flames: BonfireFlame[] = [];
+        const embers: BonfireEmber[] = [];
+
+        const bonfireCenterX = startX;
+        const bonfireBaseY = rectTop + targetHeight + 2;
+        const bonfireBaseWidth = 60; // 聚拢为一团篝火
+
+        let spawnFrames = 42; // 持续生成形成生动篝火
+        let frameCount = 0;
+
+        const spawnBonfire = () => {
+            if (spawnFrames <= 0) return;
+            spawnFrames--;
+
+            // 1. 每帧喷涌 3~5 团篝火火舌粒子 (聚拢在篝火堆中心)
+            const count = 3 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < count; i++) {
+                const offset = (Math.random() - 0.5 + (Math.random() - 0.5)) * bonfireBaseWidth * 0.5;
+                const pSize = 15 + Math.random() * 16;
+                flames.push({
+                    x: bonfireCenterX + offset,
+                    y: bonfireBaseY + (Math.random() - 0.5) * 6,
+                    baseX: bonfireCenterX + offset,
+                    vx: 0.6 + Math.random() * 0.8, // 随风向右倾斜
+                    vy: -(2.8 + Math.random() * 3.2), // 向上升腾
+                    size: pSize,
+                    initialSize: pSize,
+                    alpha: 0.9,
+                    decay: 0.018 + Math.random() * 0.012,
+                    hue: 52 + Math.random() * 8, // 初始明亮金黄
+                    age: 0,
+                    swayFreq: 0.09 + Math.random() * 0.05
+                });
+            }
+
+            // 2. 每帧喷射 1~3 颗随风高扬的飞舞火星 (Flying Embers)
+            const emberCount = 1 + Math.floor(Math.random() * 2);
+            for (let e = 0; e < emberCount; e++) {
+                const offset = (Math.random() - 0.5) * bonfireBaseWidth * 0.6;
+                embers.push({
+                    x: bonfireCenterX + offset,
+                    y: bonfireBaseY - Math.random() * 8,
+                    vx: 1.2 + Math.random() * 1.6, // 被风吹向右方
+                    vy: -(3.5 + Math.random() * 4.0), // 高速飘升
+                    size: 1.5 + Math.random() * 1.8,
+                    alpha: 1.0,
+                    decay: 0.014 + Math.random() * 0.012,
+                    hue: 35 + Math.random() * 25,
+                    age: 0,
+                    swayFreq: 0.07 + Math.random() * 0.06
+                });
+            }
+        };
+
+        const animateFlame = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let alive = spawnFrames > 0;
+            frameCount++;
+
+            spawnBonfire();
+
+            // 风力动态摆动函数 (吹向右上方)
+            const wind = 1.0 + Math.sin(frameCount * 0.08) * 0.5;
+
+            // 1. 绘制篝火火焰等离子体
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+
+            for (let i = flames.length - 1; i >= 0; i--) {
+                const p = flames[i];
+                if (p.alpha > 0.03 && p.size > 0.8) {
+                    alive = true;
+                    p.age++;
+                    // 随风向右摇曳并上升
+                    p.x += p.vx * wind + Math.sin(p.age * p.swayFreq) * 1.2;
+                    p.y += p.vy;
+                    p.vy *= 0.97;
+                    p.alpha -= p.decay;
+                    p.size = Math.max(0.5, p.initialSize * (p.alpha / 0.9));
+                    p.hue = Math.max(0, p.hue - 1.3); // 金黄 ➔ 烈橙 ➔ 赤红
+
+                    const lightness = 48 + (p.hue / 60) * 22;
+                    const color = `hsla(${p.hue}, 100%, ${lightness}%, ${Math.max(0, p.alpha * 0.8)})`;
+
+                    const safeRadius = Math.max(0.8, p.size);
+                    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, safeRadius);
+                    grad.addColorStop(0, `hsla(${Math.min(60, p.hue + 14)}, 100%, 88%, ${p.alpha})`);
+                    grad.addColorStop(0.35, color);
+                    grad.addColorStop(1, `hsla(${p.hue}, 100%, 25%, 0)`);
+
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, safeRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    flames.splice(i, 1);
+                }
+            }
+            ctx.restore();
+
+            // 2. 绘制随风盘旋飞舞的火星 (Flying Embers)
+            for (let i = embers.length - 1; i >= 0; i--) {
+                const em = embers[i];
+                if (em.alpha > 0.02) {
+                    alive = true;
+                    em.age++;
+                    // 随风摇曳上升
+                    em.x += em.vx * wind + Math.sin(em.age * em.swayFreq) * 1.5;
+                    em.y += em.vy;
+                    em.vy *= 0.985;
+                    em.alpha -= em.decay;
+
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, em.alpha);
+                    ctx.fillStyle = `hsl(${em.hue}, 100%, 75%)`;
+                    ctx.shadowBlur = 6;
+                    ctx.shadowColor = `hsl(${em.hue}, 100%, 60%)`;
+                    ctx.beginPath();
+                    ctx.arc(em.x, em.y, Math.max(0.5, em.size), 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                } else {
+                    embers.splice(i, 1);
+                }
+            }
+
+            if (alive) {
+                requestAnimationFrame(animateFlame);
+            } else {
+                clearTimeout(safetyTimer);
+                cleanup();
+            }
+        };
+
+        animateFlame();
+        return { success: true, method: "custom", detail: "Visual effect [flame] played." };
     }
 
     // =========================================================================
