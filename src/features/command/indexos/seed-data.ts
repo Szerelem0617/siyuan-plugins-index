@@ -69,10 +69,10 @@ const defaultPipelineConditional = `// [打上标签时] -> ➕ 在下方插入�
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        const step1 = await dispatch("plugin-index.command.insertBlockBelow", { insertType: "p", data: "[Pipeline Step 1] Time: {{time}}", id: "{{block_id}}" });
+        const step1 = await dispatch("index.insertBlockBelow", { insertType: "p", data: "[Pipeline Step 1] Time: {{time}}", id: "{{block_id}}" });
         const createdId = step1?.id || state.vars?.createdblock;
         if (createdId) {
-            await dispatch("plugin-index.command.safeUpdateBlock", { id: createdId, dataType: "markdown", data: "[Pipeline Step 2] Updated newly created block at {{time}}" });
+            await dispatch("index.safeUpdateBlock", { id: createdId, dataType: "markdown", data: "[Pipeline Step 2] Updated newly created block at {{time}}" });
         }
     }
 }`;
@@ -81,7 +81,7 @@ const defaultPermanentConditional = `// [打上标签时] -> ➕ 在下方插入
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        await dispatch("plugin-index.command.insertBlockBelow", { insertType: "p", data: "[Permanent Init] Inserted at {{time}}", id: "{{block_id}}" });
+        await dispatch("index.insertBlockBelow", { insertType: "p", data: "[Permanent Init] Inserted at {{time}}", id: "{{block_id}}" });
     }
 }`;
 
@@ -91,10 +91,10 @@ const defaultTaskConditional = `// [打上标签时] -> ☑ 转换为任务
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created" || eventName === "tag_removed") {
-        await dispatch("plugin-index.command.setBlockAttribute-1");
+        await dispatch("index.setBlockAttribute-1");
     }
     if (eventName === "task_completed") {
-        await dispatch("plugin-index.effect.visualEffect", { type: "fireworks" });
+        await dispatch("index.visualEffect", { type: "fireworks" });
     }
 }`;
 
@@ -103,7 +103,7 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
     return [
         { rowID: "20260526204605-v11e2ta", supertag: "task", iconMenu: "", conditional: defaultTaskConditional },
         { rowID: "20260721140000-pipeline", supertag: "pipeline", iconMenu: "", conditional: defaultPipelineConditional },
-        { rowID: "20260721140000-permanent", supertag: "permanent", iconMenu: JSON.stringify({ menu: [{ id: "plugin-index.command.safeUpdateBlock" }], button: [] }), conditional: defaultPermanentConditional }
+        { rowID: "20260721140000-permanent", supertag: "permanent", iconMenu: JSON.stringify({ menu: [{ id: "index.safeUpdateBlock" }], button: [] }), conditional: defaultPermanentConditional }
     ];
 }
 
@@ -165,18 +165,18 @@ export interface DefaultRelationRule {
 export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     {
         typeLabel: "task",
-        iconMenuCmdIds: ["plugin-index.command.setBlockAttribute"],
-        relationCmdIds: ["plugin-index.effect.visualEffect", "plugin-index.command.setBlockAttribute"]
+        iconMenuCmdIds: ["index.setBlockAttribute"],
+        relationCmdIds: ["index.visualEffect", "index.setBlockAttribute"]
     },
     {
         typeLabel: "pipeline",
         iconMenuCmdIds: [],
-        relationCmdIds: ["plugin-index.command.insertBlockBelow", "plugin-index.command.safeUpdateBlock", "plugin-index.command.setBlockAttribute"]
+        relationCmdIds: ["index.insertBlockBelow", "index.safeUpdateBlock", "index.setBlockAttribute"]
     },
     {
         typeLabel: "permanent",
-        iconMenuCmdIds: ["plugin-index.command.safeUpdateBlock"],
-        relationCmdIds: ["plugin-index.command.insertBlockBelow", "plugin-index.command.safeUpdateBlock", "plugin-index.command.setBlockAttribute"]
+        iconMenuCmdIds: ["index.safeUpdateBlock"],
+        relationCmdIds: ["index.insertBlockBelow", "index.safeUpdateBlock", "index.setBlockAttribute"]
     }
 ];
 

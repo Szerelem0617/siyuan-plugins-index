@@ -1,6 +1,6 @@
 {
-    "id": "api.attr.setAttrs",
-    "name": "API：设置块属性",
+    "id": "index.setAttributes",
+    "name": "批量设置块属性",
     "description": "向思源后端发送原生 POST /api/attr/setBlockAttrs，更新指定块的自定义属性 (IAL)。",
     "dispatch": {
         "method": "api",

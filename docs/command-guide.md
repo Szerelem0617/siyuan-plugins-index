@@ -64,26 +64,49 @@
 
 ---
 
-### 边界律速查清单 (Pre-flight Checklist)
-新增或修改命令前，必须过一遍：
-- [ ] **一句话检验**：能否用一句不含“并且/然后”的话描述该命令？
-- [ ] **无困惑检验**：命令列表中是否存在另一个让用户犹豫“该用哪个”的相似命令？
-- [ ] **参数极简检验**：必填参数是否 ≤ 3 个？高级参数是否都有合理默认值？
+## 3. 两层扁平命名空间规范 (Two-Tier Namespace RFC)
+
+IndexOS 采用极简的两层扁平动宾体系 `[namespace].[verbNoun]`：
+
+```
+规范格式:  [namespace].[verbNoun]
+```
+
+### 命名空间划分：
+1. **`index.*`**：IndexOS 内置增强原子命令（源自 `builtin/*.json`，如 `index.insertBlockBelow`）；
+2. **`user.*`**：用户在界面自建的客制化原子命令（如 `user.dailyArchive`）；
+3. **`pipeline.*`**：复合命令编排流水线（具有沙箱规则脚本与多步骤调度特性）；
+4. **`[plugin-id].*`**：第三方插件扩展接入命令。
+
+### 内置原子命令全量矩阵表：
+
+| 命令 ID | 显示名称 | 类别 (`category`) | 目标作用域 (`targetScope`) | 说明 |
+|---|---|---|---|---|
+| `index.insertBlockBelow` | ➕ 在下方插入块 | edit | any | 在指定块/页面下方插入新块或子页面 |
+| `index.safeUpdateBlock` | 📝 更新块内容 | edit | any | 安全更新块 Markdown 或页面标题，保留自定义属性 |
+| `index.setBlockAttribute`| 🏷️ 设置块属性 | manipulation | block | 统一设置/更新块属性 (Upsert 模式) |
+| `index.openTarget` | 🚀 打开目标 | navigation | any | 在页签中打开页面或定位高亮内容块 |
+| `index.addSupertag` | 🏷️ 添加超级标签 | edit | any | 为块添加 Supertag 并挂载 DOM 标头 |
+| `index.visualEffect` | 🎆 视觉特效 | view | none | 触发粒子动画特效（烟花/流星/扫描/气泡/微风/细雨/篝火） |
+| `index.showToast` | 💬 弹出提示消息 | view | none | 呼出系统气泡消息提示 |
+| `index.openGraph` | 🕸️ 全局关系图 | navigation | none | 呼出全局块关系图面板 |
+| `index.openInbox` | 📥 打开收集箱 | navigation | none | 打开每日收集箱 |
+| `index.splitRight` | 📑 在右侧分屏打开 | view | doc | 将当前文档在右侧新面板打开 |
+| `index.copyBlockRef` | 🔗 复制块引用 | edit | block | 将块引用链接复制到剪贴板 |
+| `index.duplicateBlock` | 📑 复制当前块 | edit | block | 快速复制当前块并插入其下方 |
+| `index.insertBlock` | 🧩 插入原生块 | api | any | 调用原生 API 插入块 |
+| `index.setAttributes` | ⚙️ 批量设置块属性 | api | any | 调用原生 API 批量写入 IAL 属性 |
 
 ---
 
-## 3. 新增命令的标准 4 步 SOP
-
-创建或接入一个新命令，严格按照以下 4 步进行：
+## 4. 新增命令的标准 4 步 SOP
 
 ### Step 1: 在 `builtin/` 下创建独立的 `{command-name}.json`
 文件位置：`src/features/command/registry/builtin/{command-name}.json`
 
-每个命令独立维护单一 json 文件，并在 `builtin/index.ts` 中完成聚合导入。标准 JSON 格式：
-
 ```json
 {
-    "id": "plugin-index.command.setBlockAttribute",
+    "id": "index.setBlockAttribute",
     "name": "设置块属性",
     "description": "统一设置/更新块属性 (Upsert 模式)。",
     "dispatch": {
@@ -130,11 +153,14 @@
         "category": "manipulation",
         "source": "builtin"
     },
-    "seed": {
-        "rowID": "20260813180000-setattr0001",
-        "label": "🏷️ 设置块属性",
-        "paramMapping": "{}"
-    }
+    "seeds": [
+        {
+            "rowID": "20260813180000-setattr0001",
+            "label": "🏷️ 设置块属性",
+            "commandID": "index.setBlockAttribute",
+            "paramMapping": "{}"
+        }
+    ]
 }
 ```
 
@@ -143,12 +169,10 @@
 ### Step 2: 编写纯粹的命令执行器 (Effect)
 文件位置：`src/features/command/effect/<command-name>.ts`
 
-执行器编写规范范例：
-
 ```ts
 import { post } from "../../../shared/api-client/request";
 import { sanitizeBlockAttrName } from "../utils/attribute-sanitizer";
-import type { CommandContext, DispatchResult } from "../command-dispatcher";
+import type { CommandContext, DispatchResult } from "../dispatcher";
 
 export async function setBlockAttribute(
     params: { id?: string; attrName?: string; attrValue?: string },
@@ -175,7 +199,6 @@ export async function setBlockAttribute(
     if (context) {
         if (!context.vars) context.vars = {};
         context.vars.attrValue = rawVal;
-        context.vars["var.attrValue"] = rawVal;
     }
 
     // 5. 返回标准 DispatchResult
@@ -197,7 +220,7 @@ export async function setBlockAttribute(
 在 `onload` 阶段完成动态绑定：
 
 ```ts
-const setAttrCmd = commandRegistry.getCommand("plugin-index.command.setBlockAttribute");
+const setAttrCmd = commandRegistry.getCommand("index.setBlockAttribute");
 if (setAttrCmd) {
     const { setBlockAttribute } = await import("./features/command/effect/set-block-attribute");
     setAttrCmd.dispatch.executor = setBlockAttribute;
@@ -209,16 +232,14 @@ if (setAttrCmd) {
 ### Step 4: 注册默认关系与 Seed 数据 (可选)
 文件位置：[src/features/command/indexos/seed-data.ts](file:///Users/feng/Desktop/项目/思源项目/siyuan-plugins-index/src/features/command/indexos/seed-data.ts)
 
-将新命令的 ID 登记到相关 Supertag 的预设关系中：
-
 ```ts
 export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
     {
         typeLabel: "task",
-        iconMenuCmdIds: ["plugin-index.command.setBlockAttribute"],
+        iconMenuCmdIds: ["index.setBlockAttribute"],
         relationCmdIds: [
-            "plugin-index.effect.visualEffect",
-            "plugin-index.command.setBlockAttribute"
+            "index.visualEffect",
+            "index.setBlockAttribute"
         ]
     }
 ];
@@ -226,7 +247,7 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
 
 ---
 
-## 4. 双轨上下文体系 (Dual-Track Context)
+## 5. 双轨上下文体系 (Dual-Track Context)
 
 调度器分发命令时，提供统一标准化的双轨上下文 (`CommandContext`)：
 
@@ -237,11 +258,11 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
 
 ---
 
-## 5. 出入参设计与命名规范
+## 6. 出入参设计与命名规范
 
 | 规范项目 | 命名规则 | 说明与范例 |
 | :--- | :--- | :--- |
-| **命令 ID** | `plugin-index.command.<actionName>` | 统一小驼峰，如 `setBlockAttribute`、`insertBlockBelow` |
+| **命令 ID** | `[namespace].[verbNoun]` | 统一两层动宾小驼峰，如 `index.setBlockAttribute`、`index.insertBlockBelow` |
 | **块 ID 参数** | `key: "id"`, `type: "blockid"` | 默认值必须统一为 `default: "{{block_id}}"` |
 | **普通入参** | `key: "data"`, `key: "attrName"` 等 | 小驼峰，如需模板解析设置 `paramMode: "template"` |
 | **出参定义** | `key: "<name>"`, `type: "string"` | 出参 key 会自动暴露为 `{{var.<key>}}`（如 `{{var.createdblock}}`） |
@@ -249,7 +270,7 @@ export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
 
 ---
 
-## 6. 调试与排错 CheckList
+## 7. 调试与排错 CheckList
 
 - [ ] **参数是否接收正常**：观察控制台 `[ParamResolver STEP B] 处理参数 "xxx" (原始模板值: "...")` 是否输出期望值；
 - [ ] **空间几何是否自动注入**：检查视效执行器中 `context.geometry` 是否能直接读到 `{ centerX, centerY, x, y }`；

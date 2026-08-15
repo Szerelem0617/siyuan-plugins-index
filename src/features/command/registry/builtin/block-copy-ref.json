@@ -1,5 +1,5 @@
 {
-    "id": "editor.block.copyRef",
+    "id": "index.copyBlockRef",
     "name": "复制块引用",
     "description": "将当前块的引用链接 ((block_id 'content')) 复制到剪贴板。依赖编辑器焦点。",
     "dispatch": {

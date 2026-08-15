@@ -1,5 +1,5 @@
 {
-    "id": "siyuan.ui.toast",
+    "id": "index.showToast",
     "name": "消息提示",
     "description": "呼出思源系统的气泡消息提示 (Toast Notification)。",
     "dispatch": {

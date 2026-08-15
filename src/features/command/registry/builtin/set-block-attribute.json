@@ -1,5 +1,5 @@
 {
-    "id": "plugin-index.command.setBlockAttribute",
+    "id": "index.setBlockAttribute",
     "name": "设置块属性",
     "description": "统一设置/更新块属性 (Upsert 模式：无则自动挂载创建，有则更新覆写)。支持设置 status、priority 等任意 custom 属性。",
     "dispatch": {
@@ -42,19 +42,19 @@
         {
             "rowID": "20260813180000-setattr0001",
             "label": "🏷️ 设置块属性",
-            "commandID": "plugin-index.command.setBlockAttribute",
+            "commandID": "index.setBlockAttribute",
             "paramMapping": "{}"
         },
         {
             "rowID": "20260526204558-cvttsk9",
             "label": "🔘 转换为任务",
-            "commandID": "plugin-index.command.setBlockAttribute-1",
+            "commandID": "index.setBlockAttribute-1",
             "paramMapping": "{\"attrName\":\"custom-index-task\",\"attrValue\":\"{{cycle:pending,}}\"}"
         },
         {
             "rowID": "20260526204558-sw91kl2",
             "label": "☑️ 切换任务状态",
-            "commandID": "plugin-index.command.setBlockAttribute-2",
+            "commandID": "index.setBlockAttribute-2",
             "paramMapping": "{\"attrName\":\"custom-index-task\",\"attrValue\":\"{{cycle:pending,completed}}\"}"
         }
     ]

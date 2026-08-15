@@ -68,37 +68,37 @@ export default class IndexPlugin extends Plugin {
         // 内置命令表先行加载，其他所有模块（Dispatcher、第三方插件）均可安全地调用 getCommand()
         commandRegistry.loadBuiltins();
         
-        const visualEffectCmd = commandRegistry.getCommand("plugin-index.effect.visualEffect");
+        const visualEffectCmd = commandRegistry.getCommand("index.visualEffect");
         if (visualEffectCmd) {
             visualEffectCmd.dispatch.executor = triggerVisualEffect;
         }
 
-        const showMsgCmd = commandRegistry.getCommand("siyuan.ui.toast");
+        const showMsgCmd = commandRegistry.getCommand("index.showToast");
         if (showMsgCmd) {
             showMsgCmd.dispatch.executor = triggerShowMessage;
         }
 
-        const safeUpdateCmd = commandRegistry.getCommand("plugin-index.command.safeUpdateBlock");
+        const safeUpdateCmd = commandRegistry.getCommand("index.safeUpdateBlock");
         if (safeUpdateCmd) {
             safeUpdateCmd.dispatch.executor = triggerSafeUpdateBlock;
         }
 
-        const addSupertagCmd = commandRegistry.getCommand("plugin-index.supertag.addTag") || commandRegistry.getCommand("plugin-index.command.addSupertag");
+        const addSupertagCmd = commandRegistry.getCommand("index.addSupertag");
         if (addSupertagCmd) {
             addSupertagCmd.dispatch.executor = triggerAddSupertag;
         }
 
-        const openCmd = commandRegistry.getCommand("plugin-index.command.open");
+        const openCmd = commandRegistry.getCommand("index.openTarget");
         if (openCmd) {
             openCmd.dispatch.executor = handleOpenTargetCommand;
         }
 
-        const insertBlockBelowCmd = commandRegistry.getCommand("plugin-index.command.insertBlockBelow");
+        const insertBlockBelowCmd = commandRegistry.getCommand("index.insertBlockBelow");
         if (insertBlockBelowCmd) {
             insertBlockBelowCmd.dispatch.executor = triggerInsertBlockBelow;
         }
 
-        const setAttrCmd = commandRegistry.getCommand("plugin-index.command.setBlockAttribute");
+        const setAttrCmd = commandRegistry.getCommand("index.setBlockAttribute");
         if (setAttrCmd) {
             const { setBlockAttribute } = await import("./features/command/effect/set-block-attribute");
             setAttrCmd.dispatch.executor = setBlockAttribute;

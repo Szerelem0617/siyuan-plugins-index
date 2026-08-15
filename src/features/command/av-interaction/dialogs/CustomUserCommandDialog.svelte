@@ -9,7 +9,7 @@
     let rawId = "";
     let name = "";
     let description = "";
-    let codeContent = `// 自定义脚本代码体\nawait dispatch("siyuan.ui.toast");`;
+    let codeContent = `// 自定义脚本代码体\nawait dispatch("index.showToast", { message: "自定义命令已执行" });`;
 
     $: fullId = rawId.trim() ? (rawId.trim().startsWith("user.") ? rawId.trim() : `user.${rawId.trim()}`) : "user.";
 

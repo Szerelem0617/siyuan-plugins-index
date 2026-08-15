@@ -147,7 +147,7 @@
             if (r.geekScript) {
                 lines.push(r.geekScript.trim());
             } else {
-                lines.push(`if (state.tickCount % 60 === 0) {\n    await dispatch("siyuan.ui.toast");\n}`);
+                lines.push(`if (state.tickCount % 60 === 0) {\n    await dispatch("index.showToast");\n}`);
             }
         }
 
@@ -382,7 +382,7 @@
             commandIds: [],
             eventType: "block_content_changed",
             boundCommands: [],
-            geekScript: `if (state.tickCount % 60 === 0) {\n    await dispatch("siyuan.ui.toast");\n}`,
+            geekScript: `if (state.tickCount % 60 === 0) {\n    await dispatch("index.showToast");\n}`,
             tickRateMs: 5000
         };
         rules = [...rules, newRule];

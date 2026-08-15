@@ -1,7 +1,7 @@
 {
-    "id": "plugin-index.effect.visualEffect",
+    "id": "index.visualEffect",
     "name": "视觉特效",
-    "description": "在当前位置触发粒子动画特效（支持烟花、流星、霓虹扫描、琉璃气泡、禅意流风、闪电、下雨、火焰等多种场景反馈）。",
+    "description": "在当前位置触发粒子动画特效（支持烟花、流星、霓虹扫描、琉璃气泡、禅意流风、沉浸细雨、温暖篝火等多种场景反馈）。",
     "dispatch": {
         "method": "custom"
     },
@@ -9,10 +9,10 @@
         {
             "key": "type",
             "type": "enum",
-            "values": ["fireworks", "meteor", "neon_scan", "bubble", "breeze", "lightning", "rain", "flame"],
+            "values": ["fireworks", "meteor", "neon_scan", "bubble", "breeze", "rain", "flame"],
             "paramMode": "template",
             "default": "fireworks",
-            "description": "特效类型: fireworks(庆贺烟花) / meteor(流星跃迁) / neon_scan(霓虹边框扫描) / bubble(琉璃微气泡) / breeze(禅意流风) / lightning(极速闪电) / rain(沉浸细雨) / flame(炽热烈焰)"
+            "description": "特效类型: fireworks(庆贺烟花) / meteor(流星跃迁) / neon_scan(霓虹边框扫描) / bubble(琉璃微气泡) / breeze(禅意流风) / rain(沉浸细雨) / flame(温暖篝火)"
         }
     ],
     "constraints": {
@@ -28,49 +28,43 @@
         {
             "rowID": "20260526204558-firework",
             "label": "🎆 烟花",
-            "commandID": "plugin-index.effect.visualEffect",
+            "commandID": "index.visualEffect",
             "paramMapping": "{\"type\":\"fireworks\"}"
         },
         {
             "rowID": "20260526204558-meteor01",
             "label": "🌌 流星跃迁",
-            "commandID": "plugin-index.effect.visualEffect-1",
+            "commandID": "index.visualEffect-1",
             "paramMapping": "{\"type\":\"meteor\"}"
         },
         {
             "rowID": "20260526204558-neon0001",
             "label": "💫 霓虹扫描",
-            "commandID": "plugin-index.effect.visualEffect-2",
+            "commandID": "index.visualEffect-2",
             "paramMapping": "{\"type\":\"neon_scan\"}"
         },
         {
             "rowID": "20260526204558-bubble01",
             "label": "🫧 琉璃气泡",
-            "commandID": "plugin-index.effect.visualEffect-3",
+            "commandID": "index.visualEffect-3",
             "paramMapping": "{\"type\":\"bubble\"}"
         },
         {
             "rowID": "20260526204558-breeze01",
             "label": "🍃 禅意流风",
-            "commandID": "plugin-index.effect.visualEffect-4",
+            "commandID": "index.visualEffect-4",
             "paramMapping": "{\"type\":\"breeze\"}"
-        },
-        {
-            "rowID": "20260526204558-lightn01",
-            "label": "⚡ 极速闪电",
-            "commandID": "plugin-index.effect.visualEffect-5",
-            "paramMapping": "{\"type\":\"lightning\"}"
         },
         {
             "rowID": "20260526204558-rain0001",
             "label": "🌧️ 沉浸细雨",
-            "commandID": "plugin-index.effect.visualEffect-6",
+            "commandID": "index.visualEffect-5",
             "paramMapping": "{\"type\":\"rain\"}"
         },
         {
             "rowID": "20260526204558-flame001",
-            "label": "🔥 炽热烈焰",
-            "commandID": "plugin-index.effect.visualEffect-7",
+            "label": "🔥 温暖篝火",
+            "commandID": "index.visualEffect-6",
             "paramMapping": "{\"type\":\"flame\"}"
         }
     ]

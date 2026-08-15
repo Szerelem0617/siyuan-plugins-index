@@ -7,6 +7,8 @@
  * 3. neon_scan: 💫 霓虹扫描（极细青紫激光沿块矩形边框瞬间疾驰环绕 + 尾迹辉光，用于 Pipeline 自动化成功）
  * 4. bubble:    🫧 琉璃气泡（带彩虹折射与双光斑的通透浮空气泡 + 微物理晃动，用于随笔日记 / 碎片想法）
  * 5. breeze:    🍃 禅意流风（翡翠绿叶优雅抛物线波浪摇曳与 3D 翻转，用于笔记归档 / 番茄钟收工）
+ * 6. rain:      🌧️ 沉浸细雨（倾斜透亮湖蓝雨丝 + 涟漪扩散与水珠飞溅，用于深度思考 / 静心阅读）
+ * 7. flame:     🔥 温暖篝火（底沿汇聚篝火 + 随风摇曳升腾与盘旋飞舞火星，用于冲刺攻坚 / 番茄钟结算）
  */
 
 import type { CommandContext } from "../dispatcher";
@@ -508,143 +510,7 @@ export async function triggerVisualEffect(
     }
 
     // =========================================================================
-    // 模式 6: ⚡ 极速闪电 (Lightning / Thunder Bolt) - Local 纯粹局部电弧
-    // =========================================================================
-    if (effectType === "lightning" || effectType === "thunder") {
-        interface Point { x: number; y: number; }
-        interface BoltSegment { p1: Point; p2: Point; width: number; }
-
-        const createFractalBolt = (start: Point, end: Point, maxDisplace: number, width: number, depth = 0): BoltSegment[] => {
-            if (depth > 5 || Math.hypot(end.x - start.x, end.y - start.y) < 10) {
-                return [{ p1: start, p2: end, width }];
-            }
-            const midX = (start.x + end.x) / 2;
-            const midY = (start.y + end.y) / 2;
-            const nx = -(end.y - start.y);
-            const ny = end.x - start.x;
-            const len = Math.hypot(nx, ny) || 1;
-            const displace = (Math.random() - 0.5) * maxDisplace;
-            const mid: Point = {
-                x: midX + (nx / len) * displace,
-                y: midY + (ny / len) * displace
-            };
-            const left = createFractalBolt(start, mid, maxDisplace * 0.55, width * 0.88, depth + 1);
-            const right = createFractalBolt(mid, end, maxDisplace * 0.55, width * 0.88, depth + 1);
-            return left.concat(right);
-        };
-
-        const bolts: { segments: BoltSegment[]; colorCore: string; colorGlow: string; alpha: number }[] = [];
-
-        // 主闪电：从目标上方 260px 处直击目标中心
-        const startPoint: Point = {
-            x: startX + (Math.random() - 0.5) * 80,
-            y: Math.max(0, startY - 260)
-        };
-        const endPoint: Point = { x: startX, y: startY };
-
-        // 主电弧链 (晶亮浅冰蓝电晕 + 纯白核心)
-        const mainSegments = createFractalBolt(startPoint, endPoint, 55, 3.5);
-        bolts.push({
-            segments: mainSegments,
-            colorCore: "#FFFFFF",
-            colorGlow: "hsl(202, 100%, 66%)",
-            alpha: 1.0
-        });
-
-        // 2 道局部蔓延分叉分支电弧
-        for (let b = 0; b < 2; b++) {
-            const segIndex = Math.floor(mainSegments.length * (0.35 + b * 0.3));
-            const branchStart = mainSegments[segIndex]?.p1 || startPoint;
-            const branchAngle = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x) + (b === 0 ? 0.65 : -0.65);
-            const branchLen = 50 + Math.random() * 60;
-            const branchEnd: Point = {
-                x: branchStart.x + Math.cos(branchAngle) * branchLen,
-                y: branchStart.y + Math.sin(branchAngle) * branchLen
-            };
-            bolts.push({
-                segments: createFractalBolt(branchStart, branchEnd, 28, 2.0),
-                colorCore: "#F5FAFF",
-                colorGlow: "hsl(255, 95%, 74%)",
-                alpha: 0.95
-            });
-        }
-
-        let flashAlpha = 0.18; // 瞬间全屏环境闪光
-        let frame = 0;
-
-        const animateLightning = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            let alive = false;
-            frame++;
-
-            // 1. 全屏瞬间环境闪光
-            if (flashAlpha > 0.004) {
-                alive = true;
-                ctx.save();
-                ctx.fillStyle = `rgba(210, 235, 255, ${flashAlpha})`;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.restore();
-                flashAlpha *= 0.68;
-            }
-
-            // 2. 绘制电弧主体
-            for (const bolt of bolts) {
-                if (bolt.alpha > 0.02) {
-                    alive = true;
-                    // 闪电脉冲闪烁
-                    const flicker = (frame % 2 === 0 ? 1.0 : 0.6) * bolt.alpha;
-
-                    ctx.save();
-                    ctx.lineCap = "round";
-                    ctx.lineJoin = "round";
-
-                    // 1. 外层晶亮浅蓝发光电晕
-                    ctx.shadowBlur = 16;
-                    ctx.shadowColor = bolt.colorGlow;
-                    ctx.strokeStyle = bolt.colorGlow;
-                    ctx.globalAlpha = flicker * 0.85;
-
-                    ctx.beginPath();
-                    for (const seg of bolt.segments) {
-                        ctx.lineWidth = seg.width * 2.6;
-                        ctx.moveTo(seg.p1.x, seg.p1.y);
-                        ctx.lineTo(seg.p2.x, seg.p2.y);
-                    }
-                    ctx.stroke();
-
-                    // 2. 内层纯白高能核心
-                    ctx.shadowBlur = 4;
-                    ctx.shadowColor = "#FFFFFF";
-                    ctx.strokeStyle = bolt.colorCore;
-                    ctx.globalAlpha = flicker;
-
-                    ctx.beginPath();
-                    for (const seg of bolt.segments) {
-                        ctx.lineWidth = seg.width;
-                        ctx.moveTo(seg.p1.x, seg.p1.y);
-                        ctx.lineTo(seg.p2.x, seg.p2.y);
-                    }
-                    ctx.stroke();
-                    ctx.restore();
-
-                    bolt.alpha -= 0.08;
-                }
-            }
-
-            if (alive) {
-                requestAnimationFrame(animateLightning);
-            } else {
-                clearTimeout(safetyTimer);
-                cleanup();
-            }
-        };
-
-        animateLightning();
-        return { success: true, method: "custom", detail: "Visual effect [lightning] played." };
-    }
-
-    // =========================================================================
-    // 模式 7: 🌧️ 沉浸细雨 (Rain / Raindrop & Ripple Splash) - 日夜双清晰水润质感
+    // 模式 6: 🌧️ 沉浸细雨 (Rain / Raindrop & Ripple Splash) - 日夜双清晰水润质感
     // =========================================================================
     if (effectType === "rain" || effectType === "raindrop") {
         interface Raindrop {
@@ -815,7 +681,7 @@ export async function triggerVisualEffect(
     }
 
     // =========================================================================
-    // 模式 8: 🔥 温暖篝火 (Bonfire / Wind Sway & Flying Embers)
+    // 模式 7: 🔥 温暖篝火 (Bonfire / Wind Sway & Flying Embers)
     // =========================================================================
     if (effectType === "flame" || effectType === "fire") {
         interface BonfireFlame {

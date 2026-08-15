@@ -1,5 +1,5 @@
 {
-    "id": "plugin-index.command.insertBlockBelow",
+    "id": "index.insertBlockBelow",
     "name": "在下方插入块",
     "description": "在指定的目标块/页面下方插入新块或子页面，支持短码 (p/h/c/b/l/t/tb) 与模板占位符。",
     "dispatch": {

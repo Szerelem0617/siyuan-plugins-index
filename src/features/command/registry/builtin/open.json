@@ -1,6 +1,6 @@
 {
-    "id": "plugin-index.command.open",
-    "name": "打开",
+    "id": "index.openTarget",
+    "name": "打开目标",
     "description": "多态打开命令：在页签中打开指定的目标页面或块。如为普通内容块，自动平滑滚动并高亮该块。",
     "dispatch": {
         "method": "custom"

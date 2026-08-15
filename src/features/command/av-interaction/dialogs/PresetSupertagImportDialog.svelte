@@ -20,7 +20,7 @@
             icon: "📖",
             tag: "read_note",
             desc: "用于书籍、论文与知识卡片管理，预置关系图与摘要指示。",
-            defaultCommands: "editor.block.duplicate",
+            defaultCommands: "index.duplicateBlock",
             defaultConditional: "// [打上标签时] -> 复制当前块"
         },
         {
@@ -28,7 +28,7 @@
             icon: "🗓️",
             tag: "daily_review",
             desc: "用于每日日记、时间追踪与心流总结。",
-            defaultCommands: "siyuan.view.inbox",
+            defaultCommands: "index.openInbox",
             defaultConditional: "// [打上标签时] -> 打开收集箱"
         },
         {
@@ -36,7 +36,7 @@
             icon: "💡",
             tag: "idea_spark",
             desc: "闪念胶囊与灵感卡片记录。",
-            defaultCommands: "editor.block.insertBelow",
+            defaultCommands: "index.insertBlockBelow",
             defaultConditional: "// [打上标签时] -> 在下方插入同级块"
         },
         {
@@ -44,7 +44,7 @@
             icon: "📌",
             tag: "task_card",
             desc: "GTD 任务与项目看板卡片。",
-            defaultCommands: "plugin-index.command.turnIntoTask",
+            defaultCommands: "index.setBlockAttribute-1",
             defaultConditional: "// [打上标签时] -> 转换为任务"
         }
     ];

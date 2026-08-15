@@ -38,20 +38,20 @@ export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
         "侧栏左": [],
         "侧栏右": [],
         "命令按钮": [
-            "plugin-index.command.safeUpdateBlock",
-            "plugin-index.effect.visualEffect",
-            "siyuan.ui.toast",
-            "plugin-index.command.setBlockAttribute",
-            "siyuan.view.graph"
+            "index.safeUpdateBlock",
+            "index.visualEffect",
+            "index.showToast",
+            "index.setBlockAttribute",
+            "index.openGraph"
         ],
         ";;菜单": [
-            "siyuan.view.graph",
-            "editor.block.duplicate",
-            "api.block.insert",
-            "plugin-index.command.safeUpdateBlock",
-            "plugin-index.effect.visualEffect",
-            "siyuan.ui.toast",
-            "plugin-index.command.setBlockAttribute"
+            "index.openGraph",
+            "index.duplicateBlock",
+            "index.insertBlock",
+            "index.safeUpdateBlock",
+            "index.visualEffect",
+            "index.showToast",
+            "index.setBlockAttribute"
         ],
         "快捷键": [],
         "/菜单": [],

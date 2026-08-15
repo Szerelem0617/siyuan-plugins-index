@@ -1,6 +1,6 @@
 /**
  * insert-block-below.ts
- * 在下方插入块命令 (plugin-index.command.insertBlockBelow) - Universal 真实写逻辑与防 Panic 版
+ * 在下方插入块命令 (index.insertBlockBelow) - Universal 真实写逻辑与防 Panic 版
  *
  * 核心机制：
  * 1. 🛡️ 严格 Block ID 正则校验 (SIYUAN_ID_REGEX) + 活动 Protyle 环境探针自动修复 ID；

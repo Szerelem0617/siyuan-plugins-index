@@ -1,5 +1,5 @@
 {
-    "id": "siyuan.view.graph",
+    "id": "index.openGraph",
     "name": "全局关系图",
     "description": "呼出全局块关系图面板。",
     "dispatch": {

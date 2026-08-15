@@ -50,7 +50,7 @@ export async function resolveCommandParams(
     // Layer 3 客制化入参 (最高优先级)
     const layer3Params = parseParam(sources.sources || sources.manual);
 
-    // Layer 2 默认入参（优先精准匹配当前分身 commandRef，如 plugin-index.command.setBlockAttribute-1）
+    // Layer 2 默认入参（优先精准匹配当前分身 commandRef，如 index.setBlockAttribute-1）
     let liveDbParam: any = null;
     try {
         const liveDbBinding = Object.values(COMMAND_BINDINGS).find(b => 

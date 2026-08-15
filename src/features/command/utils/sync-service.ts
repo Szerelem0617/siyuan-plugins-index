@@ -457,7 +457,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                     }
                 }
 
-                // 3. 回退策略：解析 Conditional 自动化条件脚本中的命令引用 (如 dispatch("plugin-index.command.safeUpdateBlock"))
+                // 3. 回退策略：解析 Conditional 自动化条件脚本中的命令引用 (如 dispatch("index.safeUpdateBlock"))
                 const conditionalText = row[3] || row[2] || "";
                 if (conditionalText) {
                     const matches = String(conditionalText).matchAll(/dispatch\(\s*["']([^"']+)["']/g);

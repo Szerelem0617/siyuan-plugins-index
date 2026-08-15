@@ -1,5 +1,5 @@
 {
-    "id": "plugin-index.command.safeUpdateBlock",
+    "id": "index.safeUpdateBlock",
     "name": "更新块/页面内容",
     "description": "更新目标块或页面的内容。若目标为页面(Doc)则自动重命名页面标题；若目标为普通块则更新块 Markdown 内容并保留自定义属性。",
     "dispatch": {

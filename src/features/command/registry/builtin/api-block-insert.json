@@ -1,6 +1,6 @@
 {
-    "id": "api.block.insert",
-    "name": "API：插入块",
+    "id": "index.insertBlock",
+    "name": "插入原生块",
     "description": "向思源后端发送原生 POST /api/block/insertBlock，在指定 Block 之后追加 Markdown 块。",
     "dispatch": {
         "method": "api",

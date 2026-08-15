@@ -1,5 +1,5 @@
 {
-    "id": "plugin-index.supertag.addTag",
+    "id": "index.addSupertag",
     "name": "添加超级标签",
     "description": "为指定的块添加一个超级标签（更新 custom-supertags 属性并向 DOM 挂载内联 Tag 标头）。支持界面交互，也可供后台纯 API 调用。",
     "dispatch": {

@@ -144,7 +144,7 @@ export interface CommandMeta {
 
 /** 完整的命令定义（Registry 中的存储单元） */
 export interface CommandDef {
-    /** 唯一 ID，点分路径，如 "editor.general.duplicate" 或 "api.block.insertBlock" */
+    /** 唯一 ID，两层扁平动宾路径，如 "index.duplicateBlock" 或 "index.insertBlock" 或 "user.myWorkflow" */
     id: string;
     /** 展示名称 */
     name: string;

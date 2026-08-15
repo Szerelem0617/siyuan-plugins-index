@@ -1,5 +1,5 @@
 {
-    "id": "siyuan.view.inbox",
+    "id": "index.openInbox",
     "name": "打开收集箱",
     "description": "打开每日收集箱。",
     "dispatch": {

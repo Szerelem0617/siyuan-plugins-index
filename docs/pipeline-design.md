@@ -51,11 +51,11 @@
 ```ts
 // 名称: 创建任务并更新
 async ({ dispatch, state, eventName }) => {
-    await dispatch("api.block.insertBlock", {
+    await dispatch("index.insertBlock", {
         "data": "[新任务] {{time}}",
         "previousID": "{{block_id}}"
     });
-    await dispatch("plugin-index.command.safeUpdateBlock", {
+    await dispatch("index.safeUpdateBlock", {
         "id": "{{createdblock}}"
     });
 }
