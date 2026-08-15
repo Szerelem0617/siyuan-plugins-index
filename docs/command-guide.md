@@ -88,7 +88,7 @@ IndexOS 采用极简的两层扁平动宾体系 `[namespace].[verbNoun]`：
 | `index.openTarget` | 🚀 打开目标 | navigation | any | 在页签中打开页面或定位高亮内容块 |
 | `index.addSupertag` | 🏷️ 添加超级标签 | edit | any | 为块添加 Supertag 并挂载 DOM 标头 |
 | `index.visualEffect` | 🎆 视觉特效 | view | none | 触发粒子动画特效（烟花/流星/扫描/气泡/微风/细雨/篝火） |
-| `index.showToast` | 💬 弹出提示消息 | view | none | 呼出系统气泡消息提示 |
+| `index.showToast` | 💬 消息通知 | view | none | 多态消息通知（前台气泡 / 后台系统横幅 / 内核广播 / 审计日志） |
 | `index.openGraph` | 🕸️ 全局关系图 | navigation | none | 呼出全局块关系图面板 |
 | `index.openInbox` | 📥 打开收集箱 | navigation | none | 打开每日收集箱 |
 | `index.splitRight` | 📑 在右侧分屏打开 | view | doc | 将当前文档在右侧新面板打开 |

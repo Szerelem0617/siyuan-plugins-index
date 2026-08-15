@@ -1,7 +1,7 @@
 {
     "id": "index.showToast",
-    "name": "消息提示",
-    "description": "呼出思源系统的气泡消息提示 (Toast Notification)。",
+    "name": "消息通知",
+    "description": "多态消息通知系统：支持前台气泡提示 (Toast)、后台系统级原生弹窗 (OS Native Push)、内核广播与结构化审计日志。",
     "dispatch": {
         "method": "custom"
     },
@@ -14,16 +14,35 @@
             "description": "要显示的消息文本，支持 {{time}} 等占位符"
         },
         {
-            "key": "type",
-            "type": "string",
+            "key": "preventDuplicate",
+            "type": "boolean",
             "paramMode": "template",
-            "default": "info",
-            "description": "消息类型: info / error"
+            "default": false,
+            "hidden": true,
+            "description": "防重复提示: 相同内容在显示期间不重复弹出"
+        },
+        {
+            "key": "channel",
+            "type": "enum",
+            "values": ["auto", "toast", "system"],
+            "paramMode": "template",
+            "default": "auto",
+            "hidden": true,
+            "description": "通知渠道: auto(智能多态: 前台气泡/后台系统通知) / toast(仅思源气泡) / system(仅操作系统通知中心)"
+        },
+        {
+            "key": "enableLog",
+            "type": "boolean",
+            "paramMode": "template",
+            "default": true,
+            "hidden": true,
+            "description": "是否在控制台输出结构化审计日志"
         }
     ],
     "constraints": {
-        "environment": "ui",
-        "targetScope": "none"
+        "environment": "universal",
+        "targetScope": "none",
+        "comment": "支持前后台、自动化定时任务与无界面环境中安全调度"
     },
     "meta": {
         "contextNeed": "none",
@@ -32,7 +51,7 @@
     },
     "seed": {
         "rowID": "20260526204558-toast001",
-        "label": "💬 消息提示",
+        "label": "💬 消息通知",
         "paramMapping": "{\"message\":\"IndexOS 消息通知\"}"
     }
 }
