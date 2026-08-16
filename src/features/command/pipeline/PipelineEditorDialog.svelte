@@ -174,7 +174,7 @@
     <div style="display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
         <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); display: flex; align-items: center; gap: 6px;">
             <span>🧩</span>
-            <span>复合命令 (Pipeline) 编排中心</span>
+            <span>复合命令 (Composite Command) 编排中心</span>
         </div>
         {#if editRowId}
             <span style="font-family: monospace; font-size: 11px; opacity: 0.6;">{pipelineCommandId(editRowId)}</span>

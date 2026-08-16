@@ -434,101 +434,22 @@ export function handleBtnPaste(event: CustomEvent) {
 // Configuration dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
-function openButtonConfigurationDialog(targetRange: Range) {
-    const dropdownOptions = availableInlineCommands.map(cmd => ({
-        value: cmd.id,
-        label: `${cmd.label} (${cmd.commandId})`
-    }));
-
-    if (dropdownOptions.length === 0) {
-        dropdownOptions.push({
-            value: "",
-            label: "没有关联行内按钮的命令，请在『入口配置』中为『行内按钮』位置勾选命令"
-        });
-    }
-
-    let selectedValue = dropdownOptions[0].value;
-
+async function openButtonConfigurationDialog(targetRange: Range) {
     const dialog = new Dialog({
         title: "配置命令按钮",
-        content: `
-            <div class="b3-dialog__content">
-                <div class="fn__flex b3-label">
-                    <div class="fn__flex-1">
-                        选择要绑定的功能：
-                        <div class="b3-label__text">列表来源于 Command-DB 勾选的 Inline Button</div>
-                    </div>
-                    <button class="b3-select fn__flex" id="btn-action-select" style="width: 200px; align-items: center; justify-content: space-between; height: 28px; padding: 4px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.15s ease;">
-                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            ${dropdownOptions[0].label}
-                        </span>
-                        <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.5; flex-shrink: 0; margin-left: 4px;"><use xlink:href="#iconDown"></use></svg>
-                    </button>
-                </div>
-                <div class="fn__flex b3-label">
-                    <div class="fn__flex-1">定制按钮显示名称（选填）:</div>
-                    <input class="b3-text-field" id="btn-custom-label" style="width: 200px;" placeholder="默认使用命令名">
-                </div>
-            </div>
-            <div class="b3-dialog__action">
-                <button class="b3-button b3-button--cancel">取消</button>
-                <button class="b3-button b3-button--text" id="btn-config-confirm">确认绑定</button>
-            </div>
-        `,
-        width: "520px"
+        content: `<div id="inline-btn-config-container" style="height: 100%;"></div>`,
+        width: "740px",
+        height: "640px"
     });
     dialog.element.classList.add("indexos-dialog");
 
-    const selectBtn = dialog.element.querySelector("#btn-action-select") as HTMLElement;
-    if (selectBtn) {
-        selectBtn.addEventListener("click", (e) => {
-            openIndexDropdown({
-                event: e,
-                options: dropdownOptions,
-                selectedValue: selectedValue,
-                onSelect: (val) => {
-                    selectedValue = val;
-                    const textSpan = selectBtn.querySelector("span");
-                    if (textSpan) {
-                        const matched = dropdownOptions.find(o => o.value === val);
-                        textSpan.textContent = matched ? matched.label : val;
-                    }
-                }
-            });
-        });
-    }
-
-    dialog.element.querySelector("#btn-config-confirm")?.addEventListener("click", () => {
-        const customLabelEl = dialog.element.querySelector("#btn-custom-label") as HTMLInputElement;
-
-        const selectedId = selectedValue;
-        const targetCmd = availableInlineCommands.find(c => c.id === selectedId);
-
-        if (!targetCmd) {
-            showMessage("请先选择一个功能关联", -1, "error");
-            return;
+    const InlineButtonConfigDialog = (await import("./InlineButtonConfigDialog.svelte")).default;
+    new InlineButtonConfigDialog({
+        target: dialog.element.querySelector("#inline-btn-config-container")!,
+        props: {
+            dialog,
+            targetRange
         }
-
-        const finalLabel = customLabelEl.value.trim() || targetCmd.label;
-        const finalParam = targetCmd.commandParam || undefined;
-
-        // 使用命令 name（中文名）作为 URL 中的标识符，同时 ID 也可以
-        // 为了最大稳定性，这里存的是命令 ID（可读性由显示文本保证）
-        const href = encodeBtnHref({ command: targetCmd.commandId, param: finalParam });
-        const inlineDOM = `<span data-type="a" data-href="${href}">${finalLabel}</span>&#8203;`;
-
-        const selection = window.getSelection();
-        if (selection) {
-            selection.removeAllRanges();
-            selection.addRange(targetRange);
-            document.execCommand("insertHTML", false, inlineDOM);
-        }
-
-        dialog.destroy();
-    });
-
-    dialog.element.querySelector(".b3-button--cancel")?.addEventListener("click", () => {
-        dialog.destroy();
     });
 }
 

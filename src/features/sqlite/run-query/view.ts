@@ -401,8 +401,8 @@ export async function createCommandDbViews(avID: string, avBlockID: string, db: 
         const defaultView = viewsList.length > 0 ? viewsList[0] : null;
         const defaultViewID = defaultView ? defaultView.id : generateNodeId();
 
-        // 2. 查找 Pipeline_定义 列的 keyID
-        const pipelineColRes = db.exec(`SELECT key_id, key_type FROM _av_schema WHERE av_id = ? AND (col_name LIKE '%Pipeline%' OR key_name LIKE '%Pipeline%')`, [avID]);
+        // 2. 查找 复合命令定义 / Pipeline_定义 列的 keyID
+        const pipelineColRes = db.exec(`SELECT key_id, key_type FROM _av_schema WHERE av_id = ? AND (col_name LIKE '%Pipeline%' OR key_name LIKE '%Pipeline%' OR col_name LIKE '%复合%' OR key_name LIKE '%复合%')`, [avID]);
         let pipelineColKeyId = "";
         if (pipelineColRes.length > 0 && pipelineColRes[0].values.length > 0) {
             pipelineColKeyId = String(pipelineColRes[0].values[0][0]);

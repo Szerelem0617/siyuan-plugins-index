@@ -30,10 +30,11 @@ function shortHash(input: string): string {
     return ((h2 >>> 0).toString(36) + (h1 >>> 0).toString(36)).slice(0, 10);
 }
 
-/** 复合命令 ID：pipeline. + 短哈希（不含时间戳-连字符模式，避免与 block id 误判） */
-export function pipelineCommandId(rowId: string): string {
-    return `pipeline.${shortHash(rowId)}`;
+/** 复合命令 ID：composite. + 短哈希（不含时间戳-连字符模式，避免与 block id 误判） */
+export function compositeCommandId(rowId: string): string {
+    return `composite.${shortHash(rowId)}`;
 }
+export const pipelineCommandId = compositeCommandId;
 
 export function unregisterAllPipelines(): void {
     for (const id of registeredPipelines) {
@@ -50,7 +51,7 @@ export function registerPipelineCommand(id: string, name: string, script: string
     commandRegistry.registerCommand({
         id,
         name,
-        description: `复合命令（Pipeline）：${name}`,
+        description: `复合命令：${name}`,
         dispatch: {
             method: "custom",
             executor: async (params, ctx) => {
@@ -61,13 +62,13 @@ export function registerPipelineCommand(id: string, name: string, script: string
                 };
                 const result = await runRuleScript(script, runCtx);
                 return result.success
-                    ? { success: true, method: "custom", detail: "pipeline ok", value: result.vars }
-                    : { success: false, method: "custom", detail: result.detail || "pipeline failed" };
+                    ? { success: true, method: "custom", detail: "composite ok", value: result.vars }
+                    : { success: false, method: "custom", detail: result.detail || "composite failed" };
             }
         },
         params: [],
         constraints: { environment: "universal", targetScope: "any" },
-        meta: { contextNeed: "none", category: "custom", source: "user", plugin: "pipeline" }
+        meta: { contextNeed: "none", category: "custom", source: "user", plugin: "composite" }
     });
     registeredPipelines.add(id);
     return id;
@@ -292,12 +293,14 @@ export async function syncPipelinesFromCommandDb(): Promise<void> {
                 console.warn(`[Pipeline] 跳过无法解析的脚本行 "${label}"`);
                 continue;
             }
-            const commandId = storedCmdId.startsWith("pipeline.") ? storedCmdId : pipelineCommandId(rowId);
+            const commandId = (storedCmdId.startsWith("composite.") || storedCmdId.startsWith("pipeline."))
+                ? storedCmdId
+                : compositeCommandId(rowId);
             registerPipelineCommand(commandId, rule.name || label || rowId, script, globalParams);
-            console.log(`[Pipeline] 已注册复合命令 ${commandId} (${rule.name || label})`);
+            console.log(`[Composite] 已注册复合命令 ${commandId} (${rule.name || label})`);
         }
     } catch (e) {
-        console.error("[Pipeline] syncPipelinesFromCommandDb failed:", e);
+        console.error("[Composite] syncPipelinesFromCommandDb failed:", e);
     }
 }
 
@@ -317,7 +320,7 @@ export function openPipelineEditor(
     onCreated?: (rowId: string, name: string) => void
 ): void {
     const dialog = new Dialog({
-        title: "创建复合命令 (Pipeline)",
+        title: "创建复合命令 (Composite Command)",
         content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
         width: "680px",
         height: "720px"

@@ -38,7 +38,7 @@
 
     function openCreatePipelineDialog() {
         const dialog = new Dialog({
-            title: "创建复合命令 (Pipeline)",
+            title: "创建复合命令 (Composite Command)",
             content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
             width: "680px",
             height: "720px"

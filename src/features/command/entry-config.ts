@@ -26,7 +26,7 @@ export interface EntryConfig {
 
 export const ENTRY_POSITIONS = [
     "顶栏右", "顶栏左", "底栏右", "底栏左", "侧栏左", "侧栏右",
-    "命令按钮", ";;菜单", "快捷键", "/菜单", "块菜单", "页面菜单", "编辑器菜单"
+    ";;菜单", "快捷键", "/菜单", "块菜单", "页面菜单", "编辑器菜单"
 ];
 
 export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
@@ -37,13 +37,6 @@ export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
         "底栏左": [],
         "侧栏左": [],
         "侧栏右": [],
-        "命令按钮": [
-            "index.safeUpdateBlock",
-            "index.visualEffect",
-            "index.showToast",
-            "index.setBlockAttribute",
-            "index.openGraph"
-        ],
         ";;菜单": [
             "index.openGraph",
             "index.duplicateBlock",
@@ -65,8 +58,7 @@ export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
 export const POSITION_HINTS: Record<string, string> = {
     "快捷键": "加入后可在 设置 → 快捷键 → 插件 → 目录插件 中找到该命令，并为其绑定快捷键",
     "/菜单": "加入后可在编辑器内输入 / 呼出的菜单中找到该命令",
-    ";;菜单": "在编辑器内输入 ;;（或；；）呼出的快捷命令面板",
-    "命令按钮": "以命令按钮的形式出现在编辑器中（插入命令按钮 / 超级标签按钮段落）"
+    ";;菜单": "在编辑器内输入 ;;（或；；）呼出的快捷命令面板"
 };
 
 function cloneDefault(): EntryConfig {

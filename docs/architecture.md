@@ -24,7 +24,7 @@ flowchart TD
         ExecProtocol["协议分发中枢\n(API, Custom Executor, Keyboard, Global)"]
     end
 
-    subgraph Pipeline_Layer ["🧩 复合命令编排引擎 (Workflow Pipeline)"]
+    subgraph Pipeline_Layer ["🧩 复合命令编排引擎 (Composite Command Engine)"]
         RuleEngine["沙箱规则执行器\n(runRuleScript)"]
         StepSchema["步骤 Schema 与 IO 映射探测\n(StepSchemaItem)"]
         DataPool["平坦变量池 state.vars\n(规范 key + 别名映射)"]

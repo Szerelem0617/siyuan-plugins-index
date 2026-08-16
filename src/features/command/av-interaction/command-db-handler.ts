@@ -377,11 +377,11 @@ export async function handleCommandDbAltClick(
             console.error("[AltClick] Failed to resolve column schema details:", e);
         }
 
-        // 优先检查当前行是否为复合命令 (Pipeline) 行
+        // 优先检查当前行是否为复合命令 (Composite Command) 行
         const pipelineRow = await readPipelineRow(rowId);
-        const isPipeline = Boolean(pipelineRow && pipelineRow.script) || (resolvedCommand && resolvedCommand.startsWith("pipeline."));
+        const isPipeline = Boolean(pipelineRow && pipelineRow.script) || (resolvedCommand && (resolvedCommand.startsWith("composite.") || resolvedCommand.startsWith("pipeline.")));
 
-        if (isPipeline || clickedKeyName === "Pipeline 定义" || clickedKeyName === "Pipeline Config") {
+        if (isPipeline || clickedKeyName === "复合命令定义" || clickedKeyName === "Pipeline 定义" || clickedKeyName === "Pipeline Config") {
             // --- 行为 0: Pipeline 行根据 Alt+Click 的列智能打开对应 Tab ---
             event.preventDefault();
             event.stopPropagation();

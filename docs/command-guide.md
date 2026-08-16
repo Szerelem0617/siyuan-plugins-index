@@ -75,7 +75,7 @@ IndexOS 采用极简的两层扁平动宾体系 `[namespace].[verbNoun]`：
 ### 命名空间划分：
 1. **`index.*`**：IndexOS 内置增强原子命令（源自 `builtin/*.json`，如 `index.insertBlockBelow`）；
 2. **`user.*`**：用户在界面自建的客制化原子命令（如 `user.dailyArchive`）；
-3. **`pipeline.*`**：复合命令编排流水线（具有沙箱规则脚本与多步骤调度特性）；
+3. **`composite.*`**：复合命令编排流水线（具有沙箱规则脚本与多步骤调度特性）；
 4. **`[plugin-id].*`**：第三方插件扩展接入命令。
 
 ### 内置原子命令全量矩阵表：

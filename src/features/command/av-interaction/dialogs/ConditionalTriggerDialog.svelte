@@ -7,7 +7,6 @@
 
     export let dialog: Dialog;
     export let supertag: string;
-    export let boundCommands: { label: string; rowId: string; commandRef?: string }[];
     export let currentValue: string;
     export let onSave: (updatedValue: string) => Promise<void>;
 
@@ -18,17 +17,6 @@
         { id: "block_attribute_changed", label: "属性变动时", icon: "🏷️" },
         { id: "task_completed", label: "任务完成时", icon: "☑" }
     ];
-
-    import { commandRegistry } from "../../registry/command-registry";
-
-    /** Conditional 只允许勾选“绑定命令”中存在的命令 */
-    const allowed = Array.from(new Set(
-        boundCommands
-            .flatMap(b => {
-                const def = commandRegistry.getCommand(b.commandRef || b.label) || commandRegistry.findByNameOrId(b.commandRef || b.label);
-                return [def?.id, b.commandRef, b.label].filter(Boolean) as string[];
-            })
-    ));
 
     let selectedEvents: string[] = ["tag_created"];
     let activeEventTab: string = "tag_created";
@@ -42,15 +30,13 @@
     let savingAsCommand = false;
     let showAddEventPicker = false;
 
-    /** 核心提取函数：从单序列脚本文本中提取 commands 数组 (绝无遗漏) */
+    /** 核心提取函数：从单序列脚本文本中提取 commands 数组 */
     function extractCommandsFromScript(text: string): RuleCommand[] {
         return parseDispatchCallsFromText(text);
     }
 
     // 初次挂载时：从既有脚本中拆解多事件与命令映射
-    console.log("[ConditionalDialog-Debug] 初始化挂载，currentValue:", JSON.stringify(currentValue), "boundCommands:", boundCommands);
     const parsed = parseMultiEventRuleScript(currentValue || "");
-    console.log("[ConditionalDialog-Debug] parseMultiEventRuleScript 结果:", parsed);
     if (parsed && parsed.events && parsed.events.length > 0) {
         selectedEvents = parsed.events;
         activeEventTab = selectedEvents[0] || "tag_created";
@@ -63,12 +49,10 @@
     // 防错兜底：如果解析后默认选中的 Tab 在 eventCommandsMap 中依然为空，尝试整体解包文本
     if (currentValue && (!eventCommandsMap[activeEventTab] || eventCommandsMap[activeEventTab].length === 0)) {
         const fallbackCmds = extractCommandsFromScript(currentValue);
-        console.log("[ConditionalDialog-Debug] 兜底解包命令列表:", fallbackCmds);
         if (fallbackCmds.length > 0) {
             eventCommandsMap[activeEventTab] = fallbackCmds;
         }
     }
-    console.log("[ConditionalDialog-Debug] 最终初始化 eventCommandsMap:", JSON.parse(JSON.stringify(eventCommandsMap)));
 
     $: unselectedEvents = ALL_EVENT_TYPES.filter(ev => !selectedEvents.includes(ev.id));
 
@@ -247,7 +231,7 @@
             <CommandSequenceEditor
                 initialScript={buildScriptForActiveTab(activeEventTab)}
                 showName={false}
-                allowedCommands={allowed}
+                allowedCommands={null}
                 onScriptChange={handleActiveScriptChange}
             />
         </div>
