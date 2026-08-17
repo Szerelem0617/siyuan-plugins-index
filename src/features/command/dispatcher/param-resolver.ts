@@ -167,14 +167,32 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
         const isBackground = context.executionMode === "background";
         const promptRegex = /\{\{(prompt|interactive|input)(?::([^}]+))?\}\}/g;
         let match: RegExpExecArray | null;
+
+        if (!context.promptCache) {
+            context.promptCache = new Map<string, string>();
+        }
+
         while ((match = promptRegex.exec(normalizedText)) !== null) {
             const fullPlaceholder = match[0];
             if (isBackground) {
                 normalizedText = normalizedText.replace(fullPlaceholder, "");
             } else {
                 const titlePrompt = match[2]?.trim() || "请输入参数内容";
-                const userInput = await promptUserModal(titlePrompt);
-                normalizedText = normalizedText.replace(fullPlaceholder, userInput ?? "");
+                let userInput: string;
+
+                if (context.promptCache.has(titlePrompt)) {
+                    userInput = context.promptCache.get(titlePrompt)!;
+                } else {
+                    const res = await promptUserModal(titlePrompt);
+                    userInput = res ?? "";
+                    context.promptCache.set(titlePrompt, userInput);
+                }
+
+                if (!context.vars) context.vars = {};
+                context.vars[`prompt_${titlePrompt}`] = userInput;
+                context.vars["prompt"] = userInput;
+
+                normalizedText = normalizedText.replace(fullPlaceholder, userInput);
             }
         }
     }

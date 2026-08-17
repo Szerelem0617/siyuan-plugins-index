@@ -119,15 +119,15 @@ export async function getCommandDbKeyIds(): Promise<{
     const pk = keys.find((k: any) => k.type === "block" || k.name === "主键" || k.name === "Primary Key");
     const result = {
         pkKeyId: pk?.id ? String(pk.id) : (keys[0]?.id ? String(keys[0].id) : ""),
-        cmdIdKeyId: findId("Command ID", "Command_ID"),
-        inputKeyId: findId("Input", "Input Mapping", "Param Mapping", "参数映射", "入参映射"),
-        outputKeyId: findId("Output", "Output Mapping", "出参映射"),
-        pipelineKeyId: findId("Pipeline 定义", "Pipeline Config")
+        cmdIdKeyId: findId("Command ID"),
+        inputKeyId: findId("Input"),
+        outputKeyId: findId("Output"),
+        pipelineKeyId: findId("Composite")
     };
     return result.pipelineKeyId ? result : null;
 }
 
-/** 在 Command-DB 创建一行复合命令记录（自动填充 Input, Output, Pipeline 定义） */
+/** 在 Command-DB 创建一行复合命令记录（自动填充 Input, Output, Composite） */
 export async function createPipelineRow(
     name: string,
     script: string,
@@ -140,7 +140,7 @@ export async function createPipelineRow(
     }
     const keys = await getCommandDbKeyIds();
     if (!keys) {
-        throw new Error("Command-DB 缺少 'Pipeline 定义' 列：请删除 IndexOS 笔记本后重新“将数据存到思源”");
+        throw new Error("Command-DB 缺少 'Composite' 列：请删除 IndexOS 笔记本后重新“将数据存到思源”");
     }
 
     const rule = parseRuleScript(script);
@@ -194,14 +194,14 @@ export async function readPipelineRow(rowId: string): Promise<{
     const pkRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [cmdAvId]);
     const pkCol = pkRes.length > 0 && pkRes[0].values.length > 0 ? String(pkRes[0].values[0][0]) : "label";
     
-    const pipeRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Pipeline 定义' OR key_name = 'Pipeline Config')`, [cmdAvId]);
+    const pipeRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Composite'`, [cmdAvId]);
     if (pipeRes.length === 0 || pipeRes[0].values.length === 0) return null;
     const pipeCol = String(pipeRes[0].values[0][0]);
 
-    const inputRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Input' OR key_name = 'Input Mapping' OR key_name = 'Param Mapping' OR key_name = '参数映射' OR key_name = '入参映射')`, [cmdAvId]);
+    const inputRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Input'`, [cmdAvId]);
     const inputCol = inputRes.length > 0 && inputRes[0].values.length > 0 ? String(inputRes[0].values[0][0]) : "";
 
-    const outputRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Output' OR key_name = 'Output Mapping' OR key_name = '出参映射')`, [cmdAvId]);
+    const outputRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Output'`, [cmdAvId]);
     const outputCol = outputRes.length > 0 && outputRes[0].values.length > 0 ? String(outputRes[0].values[0][0]) : "";
 
     const selectCols = [`"${pkCol}"`, `"${pipeCol}"`];
@@ -231,7 +231,7 @@ export async function updatePipelineRow(
     const cmdAvId = getCommandAvId();
     const keys = await getCommandDbKeyIds();
     if (!cmdAvId || !keys) {
-        throw new Error("Command-DB 不可用或缺少 Pipeline 列");
+        throw new Error("Command-DB 不可用或缺少 Composite 列");
     }
 
     const rule = parseRuleScript(script);
@@ -267,15 +267,15 @@ export async function syncPipelinesFromCommandDb(): Promise<void> {
 
         const { db } = await getSqliteEngine();
         const tableName = `av_${cmdAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-        const colRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Pipeline 定义' OR key_name = 'Pipeline Config')`, [cmdAvId]);
+        const colRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Composite'`, [cmdAvId]);
         if (colRes.length === 0 || colRes[0].values.length === 0) return;
         const pipelineCol = String(colRes[0].values[0][0]);
 
         const pkRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [cmdAvId]);
         const pkCol = pkRes.length > 0 && pkRes[0].values.length > 0 ? String(pkRes[0].values[0][0]) : "label";
-        const paramRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Param Mapping' OR key_name = '参数映射')`, [cmdAvId]);
-        const paramCol = paramRes.length > 0 && paramRes[0].values.length > 0 ? String(paramRes[0].values[0][0]) : "Param_Mapping";
-        const cmdIdRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Command ID' OR key_name = 'Command_ID')`, [cmdAvId]);
+        const paramRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Input'`, [cmdAvId]);
+        const paramCol = paramRes.length > 0 && paramRes[0].values.length > 0 ? String(paramRes[0].values[0][0]) : "Input";
+        const cmdIdRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Command ID'`, [cmdAvId]);
         const cmdIdCol = cmdIdRes.length > 0 && cmdIdRes[0].values.length > 0 ? String(cmdIdRes[0].values[0][0]) : "Command_ID";
 
         const rows = db.exec(`SELECT _itemID, "${pkCol}", "${pipelineCol}", "${paramCol}", "${cmdIdCol}" FROM "${tableName}" WHERE "${pipelineCol}" IS NOT NULL AND "${pipelineCol}" != ''`);

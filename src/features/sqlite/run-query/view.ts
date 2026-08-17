@@ -405,8 +405,8 @@ export async function createCommandDbViews(avID: string, avBlockID: string, _db?
         const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID });
         const keys = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
         
-        const pipelineKey = keys.find((k: any) => k.name === "复合命令定义" || k.name.includes("Pipeline") || k.name.includes("复合"));
-        const cmdIdKey = keys.find((k: any) => k.name === "Command ID" || k.name === "Command_ID");
+        const pipelineKey = keys.find((k: any) => k.name === "Composite");
+        const cmdIdKey = keys.find((k: any) => k.name === "Command ID");
 
         const pipelineColKeyId = pipelineKey ? pipelineKey.id : "";
         const cmdIdColKeyId = cmdIdKey ? cmdIdKey.id : "";

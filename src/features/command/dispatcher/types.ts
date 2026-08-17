@@ -49,6 +49,8 @@ export interface CommandContext {
     executionMode?: ExecutionMode;
     /** Pipeline 与多步执行中的动态变量池 */
     vars?: Record<string, unknown>;
+    /** 执行会话内 Prompt 缓存（避免相同提示词重复弹窗） */
+    promptCache?: Map<string, string>;
 
     // ── 内部派发元数据 ──────────────────────────────────────────
     /** 实际触发的派生命令 ID（如带有 -1, -2 的分身命令） */

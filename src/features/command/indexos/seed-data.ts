@@ -160,7 +160,7 @@ export const COMMAND_DB_CONFIG: DbPageConfig = {
         { name: "Command ID", type: "text", icon: "iconCode" },
         { name: "Input", type: "text", icon: "iconList" },
         { name: "Output", type: "text", icon: "iconCheck" },
-        { name: "复合命令定义", type: "text", icon: "iconCode" }
+        { name: "Composite", type: "text", icon: "iconCode" }
     ]
 };
 

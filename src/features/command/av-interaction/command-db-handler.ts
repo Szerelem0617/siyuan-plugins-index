@@ -381,13 +381,13 @@ export async function handleCommandDbAltClick(
         const pipelineRow = await readPipelineRow(rowId);
         const isPipeline = Boolean(pipelineRow && pipelineRow.script) || (resolvedCommand && (resolvedCommand.startsWith("composite.") || resolvedCommand.startsWith("pipeline.")));
 
-        if (isPipeline || clickedKeyName === "复合命令定义" || clickedKeyName === "Pipeline 定义" || clickedKeyName === "Pipeline Config") {
-            // --- 行为 0: Pipeline 行根据 Alt+Click 的列智能打开对应 Tab ---
+        if (isPipeline || clickedKeyName === "Composite") {
+            // --- 行为 0: Composite 行根据 Alt+Click 的列智能打开对应 Tab ---
             event.preventDefault();
             event.stopPropagation();
 
-            const isOutputClick = clickedKeyName === "Output" || clickedKeyName === "Output Mapping" || clickedKeyName === "出参映射";
-            const isInputClick = clickedKeyName === "Input" || clickedKeyName === "Input Mapping" || clickedKeyName === "入参映射" || clickedKeyName === "Param Mapping" || clickedKeyName === "参数映射";
+            const isOutputClick = clickedKeyName === "Output";
+            const isInputClick = clickedKeyName === "Input";
             const initialTab: "steps" | "input" | "output" = isOutputClick ? "output" : isInputClick ? "input" : "steps";
 
             if (!pipelineRow || !pipelineRow.script) {
