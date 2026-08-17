@@ -10,7 +10,6 @@ import {
     NOTEBOOK_ICON, 
     COMMAND_DB_CONFIG, 
     TYPE_DB_CONFIG, 
-    DEFAULT_RELATION_BINDINGS,
     ColumnMeta,
     DbPageConfig,
     getSeedCommandRows,
@@ -140,11 +139,6 @@ export async function constructCommandStorage() {
             targetNotebookId,
             TYPE_DB_CONFIG,
             async (avId) => {
-                // 建立双向关联列 '绑定命令' <-> '绑定类'
-                if (commandDb?.avId) {
-                    await establishDbRelation(commandDb.avId, avId);
-                }
-
                 const keyMap = await createAvColumns(avId, TYPE_DB_CONFIG.columns);
 
                 // 从种子常量读取 Layer 3 默认行（不再依赖 SQLite 种子表）
@@ -203,8 +197,6 @@ export async function constructCommandStorage() {
         await getOrCreateDataDbsParentDoc(targetNotebookId);
 
         if (commandDb?.avId && typeDb?.avId) {
-            await establishDbRelation(commandDb.avId, typeDb.avId);
-
             // Set global registration variables
             setCommandAvId(commandDb.avId);
             setTypeAvId(typeDb.avId);
@@ -215,11 +207,17 @@ export async function constructCommandStorage() {
             await instantiateAV(commandDb.avId, true);
             await instantiateAV(typeDb.avId, true);
 
-            // 自动为 Command-DB 创建 "普通命令" (隐藏 Pipeline 列) 与 "复合命令" (展示 Pipeline 列) 双表格视图
-            const sqlFindBlock = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${commandDb.avId}%' OR ial LIKE '%${commandDb.avId}%')`;
-            const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
-            if (resFind && resFind.length > 0) {
-                const avBlockId = resFind[0].id;
+            let avBlockId = commandDb.blockId;
+            if (!avBlockId && commandDb.docId) {
+                const resFind = await post("/api/query/sql", {
+                    stmt: `SELECT id FROM blocks WHERE root_id = '${commandDb.docId}' AND type = 'av' LIMIT 1`
+                });
+                if (resFind && resFind.length > 0) {
+                    avBlockId = resFind[0].id;
+                }
+            }
+
+            if (avBlockId) {
                 const { db } = await getSqliteEngine();
                 await createCommandDbViews(commandDb.avId, avBlockId, db);
             }
@@ -231,345 +229,6 @@ export async function constructCommandStorage() {
         console.error("[IndexOS] Data construction failed:", e);
         showMessage(`初始化系统存储库失败: ${(e as Error).message}`, 4000, "error");
         throw e;
-    }
-}
-
-async function establishDbRelation(commandAvId: string, typeAvId: string) {
-    console.log(`[IndexOS] Checking database relation between Command-DB (${commandAvId}) and Type-DB (${typeAvId})...`);
-    
-    // 1. Fetch current keys for Command-DB
-    let keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: commandAvId });
-    let currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
-    
-    // Clean up "绑定类" if it exists but has wrong type
-    const existingKeyOfAnyType = currentKeys.find((k: any) => k.name === "绑定类");
-    if (existingKeyOfAnyType && existingKeyOfAnyType.type !== "relation") {
-        console.warn(`[IndexOS] Found key '绑定类' with wrong type '${existingKeyOfAnyType.type}'. Removing it...`);
-        await post("/api/av/removeAttributeViewKey", {
-            avID: commandAvId,
-            keyID: existingKeyOfAnyType.id
-        });
-        await sleep(1000);
-        // Refresh keys
-        keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: commandAvId });
-        currentKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);
-    }
-
-    // Clean up "绑定命令" in Type-DB if it exists but has wrong type
-    const typeKeysResBefore = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
-    const typeKeysBefore = Array.isArray(typeKeysResBefore) ? typeKeysResBefore : (typeKeysResBefore.keys || []);
-    const existingTypeKeyOfAnyType = typeKeysBefore.find((k: any) => k.name === "绑定命令");
-    if (existingTypeKeyOfAnyType && existingTypeKeyOfAnyType.type !== "relation") {
-        console.warn(`[IndexOS] Found key '绑定命令' in Type-DB with wrong type '${existingTypeKeyOfAnyType.type}'. Removing it...`);
-        await post("/api/av/removeAttributeViewKey", {
-            avID: typeAvId,
-            keyID: existingTypeKeyOfAnyType.id
-        });
-        await sleep(1000);
-    }
-
-    const relationKey = currentKeys.find((k: any) => k.name === "绑定类" && k.type === "relation");
-    let commandRelKeyId = relationKey?.id;
-    const isLinked = relationKey?.relation?.avID === typeAvId && relationKey?.relation?.isTwoWay;
-
-    if (!commandRelKeyId) {
-        console.log("[IndexOS] Relation column '绑定类' not found. Creating key first...");
-        const lastKeyID = currentKeys.length > 0 ? currentKeys[currentKeys.length - 1].id : "";
-        
-        // @ts-ignore
-        commandRelKeyId = window.Lute.NewNodeID();
-        await post("/api/av/addAttributeViewKey", {
-            avID: commandAvId,
-            keyID: commandRelKeyId,
-            keyName: "绑定类",
-            keyType: "relation",
-            keyIcon: "iconLink",
-            previousKeyID: lastKeyID
-        });
-        await sleep(1500);
-    }
-
-    if (!isLinked) {
-        console.log("[IndexOS] Relation link is missing or incomplete. Establishing bidirectional relation...");
-        
-        let isLinkedAfterTx = false;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-            console.log(`[IndexOS] Sending relation transaction (attempt ${attempt})...`);
-            
-            // Re-fetch type keys to check if "绑定命令" already exists
-            const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
-            const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
-            const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
-            
-            // @ts-ignore
-            const typeRelKeyId = typeRelKey?.id || relationKey?.relation?.backKeyID || window.Lute.NewNodeID();
-            
-            const txPayload = {
-                reqId: Date.now(),
-                app: "plugin-index",
-                transactions: [
-                    {
-                        doOperations: [
-                            {
-                                action: "updateAttrViewColRelation",
-                                avID: commandAvId,
-                                id: typeAvId,
-                                keyID: commandRelKeyId,
-                                isTwoWay: true,
-                                backRelationKeyID: typeRelKeyId,
-                                name: "绑定命令",
-                                format: "绑定类"
-                            }
-                        ]
-                    }
-                ]
-            };
-            
-            await post("/api/transactions", txPayload);
-            
-            // Poll to verify relation in Command-DB
-            for (let i = 0; i < 20; i++) {
-                await sleep(200);
-                const checkKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: commandAvId });
-                const checkKeys = Array.isArray(checkKeysRes) ? checkKeysRes : (checkKeysRes.keys || []);
-                const checkRelKey = checkKeys.find((k: any) => k.name === "绑定类" && k.type === "relation");
-                
-                if (checkRelKey?.relation?.avID === typeAvId && checkRelKey?.relation?.isTwoWay) {
-                    console.log(`[IndexOS] Bidirectional relation successfully established and verified on attempt ${attempt}!`);
-                    isLinkedAfterTx = true;
-                    break;
-                }
-            }
-            
-            if (isLinkedAfterTx) {
-                break;
-            } else {
-                console.warn(`[IndexOS] Attempt ${attempt} failed. Retrying...`);
-                await sleep(1500);
-            }
-        }
-        
-        if (!isLinkedAfterTx) {
-            throw new Error("Failed to establish bidirectional relation between Command-DB and Type-DB after 3 attempts.");
-        }
-    }
-
-    // 1. 默认隐藏 Command-DB 中的 Command ID 列，防止用户误改
-    try {
-        const cmdKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: commandAvId });
-        const cmdKeys = Array.isArray(cmdKeysRes) ? cmdKeysRes : (cmdKeysRes.keys || []);
-        const cmdIdKey = cmdKeys.find((k: any) => k.name === "Command ID" || k.name === "Command_ID");
-        if (cmdIdKey) {
-            await post("/api/transactions", {
-                app: "plugin-index",
-                reqId: Date.now(),
-                transactions: [{
-                    doOperations: [{
-                        action: "setAttrViewColHidden",
-                        avID: commandAvId,
-                        blockID: commandAvId,
-                        id: cmdIdKey.id,
-                        data: true
-                    }]
-                }]
-            });
-        }
-    } catch (cmdHideErr) {
-        console.warn("[IndexOS] Error hiding Command ID column:", cmdHideErr);
-    }
-
-    // 2. 将 Supertag-DB 中的 '绑定命令' 列排在主键（第一列）右侧，更符合逻辑流向
-    try {
-        const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
-        const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
-        const primaryKeyCol = typeKeys.find((k: any) => k.type === "block" || k.name === "主键" || k.name === "Primary Key") || typeKeys[0];
-        const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
-
-        if (primaryKeyCol && typeRelKey) {
-            await post("/api/transactions", {
-                app: "plugin-index",
-                reqId: Date.now(),
-                transactions: [{
-                    doOperations: [{
-                        action: "updateAttrViewCol",
-                        avID: typeAvId,
-                        keyID: typeRelKey.id,
-                        id: typeRelKey.id,
-                        name: "绑定命令",
-                        type: "relation",
-                        previousKeyID: primaryKeyCol.id
-                    }]
-                }]
-            });
-        }
-    } catch (orderErr) {
-        console.warn("[IndexOS] Error reordering 绑定命令 column:", orderErr);
-    }
-
-    await bindDefaultRelation(commandAvId, typeAvId);
-}
-
-async function bindDefaultRelation(commandAvId: string, typeAvId: string) {
-    
-    const commandRender = await post("/api/av/renderAttributeView", { id: commandAvId });
-    const commandRows = commandRender?.view?.rows || commandRender?.rows || [];
-
-    const typeRender = await post("/api/av/renderAttributeView", { id: typeAvId });
-    const typeRows = typeRender?.view?.rows || typeRender?.rows || [];
-
-    // Map labels to row IDs
-    // Map Command IDs to Command Row IDs or Command IDs directly
-    const commandMap: Record<string, string> = {};
-    const commandIdIdx = (commandRender?.view?.columns || commandRender?.columns || []).findIndex((c: any) => c.name === "Command ID" || c.name === "Command_ID");
-    
-    for (const row of commandRows) {
-        let cmdId = "";
-        if (commandIdIdx !== -1 && row.cells[commandIdIdx]) {
-            cmdId = row.cells[commandIdIdx]?.value?.text?.content || row.cells[commandIdIdx]?.value?.mText?.content || "";
-        }
-        if (!cmdId) {
-            const firstCell = row.cells[0];
-            cmdId = firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "";
-        }
-        if (cmdId) {
-            commandMap[cmdId.trim()] = row.id;
-        }
-    }
-
-    const primaryKeyId = await getAvPrimaryKeyColId(typeAvId);
-    
-    const SEED_ROW_ID_MAP: Record<string, string> = {
-        "20260526204605-7hun58a": "project",
-        "20260526204605-v11e2ta": "task",
-        "20260721140000-pipeline": "pipeline",
-        "20260721140000-permanent": "permanent"
-    };
-
-    // 1. 按照 supertag 名称将行进行分组
-    const supertagRowGroups: Record<string, any[]> = {};
-    for (const row of typeRows) {
-        const firstCell = row.cells[0];
-        const label = (firstCell?.value?.block?.content || firstCell?.value?.mText?.content || firstCell?.value?.text?.content || "").trim();
-        let cleanLabel = label.replace(/^#/, "").toLowerCase();
-        if (!cleanLabel && SEED_ROW_ID_MAP[row.id]) {
-            cleanLabel = SEED_ROW_ID_MAP[row.id];
-        }
-        if (cleanLabel === "person") cleanLabel = "task";
-
-        if (cleanLabel) {
-            if (!supertagRowGroups[cleanLabel]) supertagRowGroups[cleanLabel] = [];
-            supertagRowGroups[cleanLabel].push(row);
-        }
-    }
-
-    const typeMap: Record<string, string> = {};
-    const duplicateRowIdsToRemove: string[] = [];
-
-    // 2. 为每个 supertag 选择唯一的为主种子行，并标记多余重复行进行清理
-    for (const [tag, rows] of Object.entries(supertagRowGroups)) {
-        let primaryRow = rows.find(r => SEED_ROW_ID_MAP[r.id] === tag);
-        if (!primaryRow) {
-            primaryRow = rows.find(r => r.cells.some((c: any) => c?.value?.text?.content || c?.value?.mText?.content)) || rows[0];
-        }
-
-        typeMap[tag] = primaryRow.id;
-
-        const primaryLabel = (primaryRow.cells[0]?.value?.block?.content || primaryRow.cells[0]?.value?.mText?.content || primaryRow.cells[0]?.value?.text?.content || "").trim();
-        if (primaryLabel !== tag && primaryKeyId) {
-            await post("/api/av/batchSetAttributeViewBlockAttrs", {
-                avID: typeAvId,
-                values: [{
-                    keyID: primaryKeyId,
-                    itemID: primaryRow.id,
-                    value: { type: "block", block: { content: tag } }
-                }]
-            });
-        }
-
-        for (const row of rows) {
-            if (row.id !== primaryRow.id) {
-                duplicateRowIdsToRemove.push(row.id);
-            }
-        }
-    }
-
-    if (duplicateRowIdsToRemove.length > 0) {
-        await post("/api/av/removeAttributeViewBlocks", {
-            avID: typeAvId,
-            srcs: duplicateRowIdsToRemove.map(id => ({ itemID: id }))
-        });
-        await sleep(500);
-    }
-
-    const typeKeysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
-    const typeKeys = Array.isArray(typeKeysRes) ? typeKeysRes : (typeKeysRes.keys || []);
-    const iconMenuKey = typeKeys.find((k: any) => k.name === "Icon Menu" || k.name === "Icon menu & button" || k.name === "图标菜单");
-    const typeRelKey = typeKeys.find((k: any) => k.name === "绑定命令" && k.type === "relation");
-
-    const batchValues: any[] = [];
-
-    for (const binding of DEFAULT_RELATION_BINDINGS) {
-        const cleanBindingType = binding.typeLabel.replace(/^#/, "").toLowerCase();
-        const typeRowId = typeMap[cleanBindingType];
-        if (!typeRowId) {
-            continue;
-        }
-
-        // 1. Populate Icon Menu text column ONLY if missing or empty
-        if (iconMenuKey) {
-            try {
-                const checkRes = await runQuery(`SELECT "${iconMenuKey.id}" FROM av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")} WHERE _itemID = ?`, [typeRowId]);
-                const existingVal = checkRes?.values?.[0]?.[0] || "";
-                if (!existingVal || !String(existingVal).trim()) {
-                    const validCommandIds: string[] = [];
-                    for (const cmdId of binding.iconMenuCmdIds) {
-                        if (cmdId) validCommandIds.push(cmdId);
-                    }
-                    if (validCommandIds.length > 0) {
-                        batchValues.push({
-                            keyID: iconMenuKey.id,
-                            itemID: typeRowId,
-                            value: {
-                                type: "text",
-                                text: {
-                                    content: JSON.stringify({ menu: validCommandIds.map(id => ({ id })), button: [] })
-                                }
-                            }
-                        });
-                    }
-                }
-            } catch { /* ignore */ }
-        }
-
-        // 2. Populate 绑定命令 AV Relation column with relationCmdIds
-        if (typeRelKey) {
-            const commandRowIds: string[] = [];
-            for (const cmdId of binding.relationCmdIds) {
-                if (commandMap[cmdId]) {
-                    commandRowIds.push(commandMap[cmdId]);
-                }
-            }
-            if (commandRowIds.length > 0) {
-                batchValues.push({
-                    keyID: typeRelKey.id,
-                    itemID: typeRowId,
-                    value: {
-                        type: "relation",
-                        relation: {
-                            blockIDs: commandRowIds
-                        }
-                    }
-                });
-            }
-        }
-    }
-
-    if (batchValues.length > 0) {
-        await post("/api/av/batchSetAttributeViewBlockAttrs", {
-            avID: typeAvId,
-            values: batchValues
-        });
-        console.log("[IndexOS-Debug] Default relation bindings updated successfully!");
     }
 }
 

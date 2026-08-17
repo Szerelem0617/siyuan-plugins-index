@@ -356,42 +356,25 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         }
         setCommandBindings(newCommandBindings);
 
-        // 2. Query relation column name for '绑定命令' in Type-DB
-        let typeRelationCol = "绑定命令";
-        let hasRelationCol = false;
+        // 2. Load Type Bindings (Layer 3 - Manual & Auto)
+        let manualCol = "Manual";
+        let autoCol = "Auto";
         try {
-            const relColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = '绑定命令' OR key_name LIKE '%Command%')`, [tAvId]);
-            if (relColRes.length > 0 && relColRes[0].values.length > 0) {
-                typeRelationCol = String(relColRes[0].values[0][0]);
-                hasRelationCol = true;
-            }
-        } catch (e) {
-            // ignore
-        }
-
-        // 3. Load Type Bindings (Layer 3 - Manual & Auto)
-        let iconMenuCol = "Manual";
-        try {
-            const iconRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name IN ('Manual', 'manual', 'Icon Menu', 'Icon menu & button', '图标菜单', '手动触发') OR key_name LIKE '%Manual%' OR key_name LIKE '%Icon%')`, [tAvId]);
-            if (iconRes.length > 0 && iconRes[0].values.length > 0) {
-                iconMenuCol = String(iconRes[0].values[0][0]);
+            const schemaCols = db.exec(`SELECT key_name, col_name FROM _av_schema WHERE av_id = ?`, [tAvId]);
+            if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
+                for (const row of schemaCols[0].values) {
+                    const kName = String(row[0]);
+                    const cName = String(row[1]);
+                    if (kName === "Manual" || kName === "manual" || kName === "Icon Menu" || kName === "Icon menu & button") {
+                        manualCol = cName;
+                    } else if (kName === "Auto" || kName === "auto" || kName === "Conditional" || kName === "触发器") {
+                        autoCol = cName;
+                    }
+                }
             }
         } catch { /* ignore */ }
 
-        let querySql = "";
-        if (hasRelationCol) {
-            querySql = `SELECT "${typeSupertagCol}", "${iconMenuCol}", "${typeRelationCol}" FROM ${typesTable}`;
-        } else {
-            const checkCols = await runQuery(`PRAGMA table_info(${typesTable})`);
-            const colNames = checkCols?.values?.map((c: any) => c[1]) || [];
-            if (colNames.includes(iconMenuCol)) {
-                querySql = `SELECT "${typeSupertagCol}", "${iconMenuCol}" FROM ${typesTable}`;
-            } else if (colNames.includes("Block_Icon_Menu")) {
-                querySql = `SELECT "${typeSupertagCol}", Block_Icon_Menu, Current_Page_Menu FROM ${typesTable}`;
-            } else {
-                querySql = `SELECT "${typeSupertagCol}" FROM ${typesTable}`;
-            }
-        }
+        const querySql = `SELECT "${typeSupertagCol}", "${manualCol}", "${autoCol}" FROM ${typesTable}`;
         const typeRes = await runQuery(querySql);
         if (!typeRes || !typeRes.values) return false;
 
@@ -399,7 +382,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         for (const row of typeRes.values) {
             const typeTagRaw = row[0];
             const manualText = row[1] || "";
-            const relationRaw = hasRelationCol ? (row[2] || "") : "";
+            const autoText = row[2] || "";
 
             if (typeTagRaw) {
                 const cleanTag = String(typeTagRaw).replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
@@ -458,39 +441,9 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                     if (e.showInVirtualButton) pushEntry(e, "VirtualButton");
                 }
 
-                // 2. 解析 绑定命令 关联列或 Conditional 条件脚本中包含的命令引用
-                if (relationRaw) {
-                    try {
-                        const linkedRowIds: string[] = JSON.parse(relationRaw);
-                        if (Array.isArray(linkedRowIds)) {
-                            for (const cmdRowId of linkedRowIds) {
-                                const cmdInfo = cmdByRowId[cmdRowId];
-                                if (cmdInfo) {
-                                    const inIconMenu = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
-                                    if (!inIconMenu) {
-                                        const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef);
-                                        if (!exists) {
-                                            newRegistry.push({
-                                                typeTag: cleanTag,
-                                                methodName: cmdInfo.methodName,
-                                                commandRef: cmdInfo.commandRef,
-                                                inputMapping: cmdInfo.inputMapping,
-                                                outputMapping: cmdInfo.outputMapping,
-                                                uiLocation: "BoundOnly"
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } catch (e) {
-                    }
-                }
-
-                // 3. 回退策略：解析 Conditional 自动化条件脚本中的命令引用 (如 dispatch("index.safeUpdateBlock"))
-                const conditionalText = row[3] || row[2] || "";
-                if (conditionalText) {
-                    const matches = String(conditionalText).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
+                // 2. 解析 Auto 规则脚本中引用的命令 (如 dispatch("index.safeUpdateBlock"))，标记为 BoundOnly
+                if (autoText) {
+                    const matches = String(autoText).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
                     for (const m of matches) {
                         const cmdRef = m[1];
                         const foundCmd = Object.values(newCommandBindings).find(c => c.commandRef === cmdRef);
@@ -623,18 +576,8 @@ async function refreshRegistryFromApi() {
                 return cell?.value?.text?.content || cell?.value?.mText?.content || cell?.value?.block?.content || "";
             };
 
-            const getRelationIds = (colName: string): string[] => {
-                const idx = columns.findIndex((c: any) => c.name === colName || c.keyName === colName);
-                if (idx < 0) return [];
-                const cell = row.cells[idx];
-                const relContents = cell?.value?.relation?.contents || [];
-                return relContents.map((rc: any) => rc.block?.id || rc.blockID || rc.content).filter(Boolean);
-            };
-
-            const manualRaw = getCellText("Manual") || getCellText("manual") || getCellText("Icon Menu") || getCellText("iconMenu") || getCellText("Block Icon Menu") || getCellText("Current Page Menu");
-            const linkedRowIds = getRelationIds("绑定命令");
-
-            const hasRelationCol = columns.some((c: any) => c.name === "绑定命令" || c.keyName === "绑定命令");
+            const manualRaw = getCellText("Manual") || getCellText("manual") || getCellText("Icon Menu") || getCellText("Icon menu & button");
+            const autoRaw = getCellText("Auto") || getCellText("auto") || getCellText("Conditional");
 
             if (typeTagRaw) {
                 const cleanTag = typeTagRaw.replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
@@ -668,25 +611,21 @@ async function refreshRegistryFromApi() {
                     if (e.showInVirtualButton) pushEntry(e, "VirtualButton");
                 }
 
-                // 2. 解析 绑定命令 关联列：这些命令关联到 Tag，但未写入 Icon Menu 列的标记为 BoundOnly
-                if (hasRelationCol) {
-                    for (const cmdRowId of linkedRowIds) {
-                        const cmdInfo = cmdByRowId[cmdRowId];
-                        if (cmdInfo) {
-                            const inIconMenu = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === "IconMenu");
-                            if (!inIconMenu) {
-                                const exists = newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef);
-                                if (!exists) {
-                                    newRegistry.push({
-                                        typeTag: cleanTag,
-                                        methodName: cmdInfo.methodName,
-                                        commandRef: cmdInfo.commandRef,
-                                        inputMapping: cmdInfo.inputMapping,
-                                        outputMapping: cmdInfo.outputMapping,
-                                        uiLocation: "BoundOnly"
-                                    });
-                                }
-                            }
+                // 2. Auto 列：解析 dispatch("...") 引用的命令
+                if (autoRaw) {
+                    const matches = String(autoRaw).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
+                    for (const m of matches) {
+                        const cmdRef = m[1];
+                        const foundCmd = Object.values(newCommandBindings).find(c => c.commandRef === cmdRef);
+                        if (foundCmd && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef)) {
+                            newRegistry.push({
+                                typeTag: cleanTag,
+                                methodName: foundCmd.methodName,
+                                commandRef: foundCmd.commandRef,
+                                inputMapping: foundCmd.inputMapping,
+                                outputMapping: foundCmd.outputMapping,
+                                uiLocation: "BoundOnly"
+                            });
                         }
                     }
                 }

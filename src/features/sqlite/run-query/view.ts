@@ -391,7 +391,7 @@ export async function executeAlterView(processedSql: string, db: any, options?: 
  * 1. "普通命令" 视图：仅显示非 Pipeline 的常规命令，隐藏 Pipeline_定义 列；
  * 2. "复合命令" 视图：仅显示配置了 Pipeline_定义 的复合命令，展开显示 Pipeline_定义 列。
  */
-export async function createCommandDbViews(avID: string, avBlockID: string, db: any): Promise<void> {
+export async function createCommandDbViews(avID: string, avBlockID: string, _db?: any): Promise<void> {
     try {
         console.log(`[ViewManager] 正在为 Command-DB (avID: ${avID}) 自动构建普通命令与复合命令视图...`);
 
@@ -401,12 +401,15 @@ export async function createCommandDbViews(avID: string, avBlockID: string, db: 
         const defaultView = viewsList.length > 0 ? viewsList[0] : null;
         const defaultViewID = defaultView ? defaultView.id : generateNodeId();
 
-        // 2. 查找 复合命令定义 / Pipeline_定义 列的 keyID
-        const pipelineColRes = db.exec(`SELECT key_id, key_type FROM _av_schema WHERE av_id = ? AND (col_name LIKE '%Pipeline%' OR key_name LIKE '%Pipeline%' OR col_name LIKE '%复合%' OR key_name LIKE '%复合%')`, [avID]);
-        let pipelineColKeyId = "";
-        if (pipelineColRes.length > 0 && pipelineColRes[0].values.length > 0) {
-            pipelineColKeyId = String(pipelineColRes[0].values[0][0]);
-        }
+        // 2. 精确获取列元数据
+        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID });
+        const keys = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
+        
+        const pipelineKey = keys.find((k: any) => k.name === "复合命令定义" || k.name.includes("Pipeline") || k.name.includes("复合"));
+        const cmdIdKey = keys.find((k: any) => k.name === "Command ID" || k.name === "Command_ID");
+
+        const pipelineColKeyId = pipelineKey ? pipelineKey.id : "";
+        const cmdIdColKeyId = cmdIdKey ? cmdIdKey.id : "";
 
         // 过滤器定义（使用思源标准操作符 "Is empty" 和 "Is not empty"）
         const filterNormal = pipelineColKeyId ? [
@@ -436,7 +439,7 @@ export async function createCommandDbViews(avID: string, avBlockID: string, db: 
         ] : [];
 
         // ---------------------------------------------------------------------
-        // 步骤 A: 直接将默认视图重命名为 "普通命令"，并施加 Is empty 过滤与隐藏 Pipeline 列
+        // 步骤 A: 直接将默认视图重命名为 "普通命令"，并施加 Is empty 过滤与隐藏 Pipeline/Command ID 列
         // ---------------------------------------------------------------------
         const opsNormal: any[] = [];
         if (!defaultView) {
@@ -452,6 +455,9 @@ export async function createCommandDbViews(avID: string, avBlockID: string, db: 
         if (pipelineColKeyId) {
             opsNormal.push({ action: "setAttrViewColHidden", id: pipelineColKeyId, avID, data: true, blockID: avBlockID });
         }
+        if (cmdIdColKeyId) {
+            opsNormal.push({ action: "setAttrViewColHidden", id: cmdIdColKeyId, avID, data: true, blockID: avBlockID });
+        }
 
         await post("/api/transactions", {
             reqId: Date.now(),
@@ -462,22 +468,20 @@ export async function createCommandDbViews(avID: string, avBlockID: string, db: 
         // ---------------------------------------------------------------------
         // 步骤 B: 创建第二个视图 "复合命令"，并施加 Is not empty 过滤与展开 Pipeline 列
         // ---------------------------------------------------------------------
-        const viewPipelineID = generateNodeId();
-        const opsPipeline: any[] = [
-            { action: "addAttrViewView", avID, id: viewPipelineID, blockID: avBlockID, layout: "table" },
+        // 检查是否已有 "复合命令" 视图
+        const existingPipelineView = viewsList.find((v: any) => v.name === "复合命令" || v.name === "Pipeline");
+        const viewPipelineID = existingPipelineView ? existingPipelineView.id : generateNodeId();
+        const opsPipeline: any[] = [];
+        
+        if (!existingPipelineView) {
+            opsPipeline.push({ action: "addAttrViewView", avID, id: viewPipelineID, blockID: avBlockID, layout: "table" });
+        }
+        opsPipeline.push(
             { action: "setAttrViewViewName", avID, id: viewPipelineID, blockID: avBlockID, data: "复合命令" }
-        ];
+        );
         if (filterPipeline.length > 0) {
             opsPipeline.push({ action: "setAttrViewFilters", avID, data: filterPipeline, blockID: avBlockID });
         }
-        let cmdIdColKeyId = "";
-        try {
-            const cmdIdColRes = db.exec(`SELECT key_id FROM _av_schema WHERE av_id = ? AND (col_name LIKE '%Command ID%' OR col_name LIKE '%Command_ID%' OR key_name LIKE '%Command ID%' OR key_name LIKE '%Command_ID%')`, [avID]);
-            if (cmdIdColRes.length > 0 && cmdIdColRes[0].values.length > 0) {
-                cmdIdColKeyId = String(cmdIdColRes[0].values[0][0]);
-            }
-        } catch { /* ignore */ }
-
         if (pipelineColKeyId) {
             opsPipeline.push({ action: "setAttrViewColHidden", id: pipelineColKeyId, avID, data: false, blockID: avBlockID });
         }

@@ -130,24 +130,10 @@ export async function handleTypeDbAltClick(
 }
 
 async function openConditionalSelector(avId: string, rowId: string, colId: string) {
-    const commandAvId = getCommandAvId();
-    if (!commandAvId) {
-        showMessage("无法获取命令管理数据库 (Command-DB)", 3000, "error");
-        return;
-    }
-
     try {
         const { db } = await getSqliteEngine();
         
-        // 1. Get the relation column name "绑定命令" in Type-DB
-        const relColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = '绑定命令'`, [avId]);
-        if (relColRes.length === 0 || relColRes[0].values.length === 0) {
-            showMessage("未能在超级标签管理表中找到'绑定命令'关系列", 3000, "error");
-            return;
-        }
-        const typeRelationCol = relColRes[0].values[0][0];
-
-        // 2. Query supertag name for the clicked row
+        // 1. Query supertag name for the clicked row
         const typeTableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
         const supertagColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [avId]);
         let supertagCol = "supertag";
@@ -155,64 +141,26 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
             supertagCol = supertagColRes[0].values[0][0];
         }
 
-        // Get SQLite column name for the clicked colId (which is Siyuan key ID)
+        // Get SQLite column name for the clicked colId
         const colNameRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
-        if (colNameRes.length === 0 || colNameRes[0].values.length === 0) {
-            showMessage("未能在超级标签管理表中找到该列的 Schema 映射", 3000, "error");
-            return;
+        let colName = "Auto";
+        if (colNameRes.length > 0 && colNameRes[0].values.length > 0) {
+            colName = colNameRes[0].values[0][0];
         }
-        const colName = colNameRes[0].values[0][0];
 
-        const supertagQuery = db.exec(`SELECT "${supertagCol}", "${typeRelationCol}", "${colName}" FROM ${typeTableName} WHERE _itemID = ?`, [rowId]);
+        const supertagQuery = db.exec(`SELECT "${supertagCol}", "${colName}" FROM ${typeTableName} WHERE _itemID = ?`, [rowId]);
         if (supertagQuery.length === 0 || supertagQuery[0].values.length === 0) {
             showMessage("未找到该超级标签的行记录", 3000, "error");
             return;
         }
 
         const supertagLabel = String(supertagQuery[0].values[0][0] || "").trim();
-        const relationRaw = String(supertagQuery[0].values[0][1] || "");
-        const currentConditionalVal = String(supertagQuery[0].values[0][2] || "").trim();
-        console.log("[Conditional-Debug] Alt+Click 读取数据库单元格原文 currentConditionalVal:", JSON.stringify(currentConditionalVal));
+        const currentConditionalVal = String(supertagQuery[0].values[0][1] || "").trim();
 
-        // 3. Resolve linked rowIDs
-        let linkedRowIds: string[] = [];
-        if (relationRaw) {
-            try {
-                linkedRowIds = JSON.parse(relationRaw);
-            } catch (_) {}
-        }
-
-        // 4. Query labels of bound commands from Command-DB
-        const cmdTableName = `av_${commandAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-        const cmdLabelColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [commandAvId]);
-        let cmdLabelCol = "label";
-        if (cmdLabelColRes.length > 0 && cmdLabelColRes[0].values.length > 0) {
-            cmdLabelCol = cmdLabelColRes[0].values[0][0];
-        }
-
-        const boundCommands: { label: string; rowId: string; commandRef: string }[] = [];
-        if (linkedRowIds.length > 0) {
-            const placeholders = linkedRowIds.map(() => "?").join(",");
-            const cmdsQuery = db.exec(`SELECT _itemID, "${cmdLabelCol}" FROM ${cmdTableName} WHERE _itemID IN (${placeholders})`, linkedRowIds);
-            if (cmdsQuery.length > 0 && cmdsQuery[0].values.length > 0) {
-                cmdsQuery[0].values.forEach((row: any) => {
-                    const label = String(row[1] || "").trim();
-                    const cmdInfo = COMMAND_BINDINGS[label];
-                    const cmdDef = commandRegistry.getCommand(label) || commandRegistry.findByNameOrId(label);
-                    const realCmdId = cmdDef?.id || cmdInfo?.commandRef || label;
-                    boundCommands.push({
-                        rowId: String(row[0]),
-                        label: label,
-                        commandRef: realCmdId
-                    });
-                });
-            }
-        }
-
-        // 5. Open dialog and mount Svelte component
+        // 2. Open dialog and mount Svelte component
         const dialog = new Dialog({
-            title: `配置 Supertag #${supertagLabel} 条件触发器`,
-            content: `<div class="b3-dialog__content" id="conditional-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
+            title: `配置 Supertag #${supertagLabel} 自动触发 (Auto)`,
+            content: `<div id="conditional-config-container" style="height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;"></div>`,
             width: "740px",
             height: "640px"
         });
@@ -226,6 +174,13 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
                 currentValue: currentConditionalVal,
                 onSave: async (updatedVal: string) => {
                     await updateCellValue(null, avId, rowId, colId, updatedVal);
+                    try {
+                        const { refreshSupertagRegistry } = await import("../utils/sync-service");
+                        await refreshSupertagRegistry();
+                    } catch (e) {
+                        console.error("[AltClick-Auto] 刷新 Supertag 注册表失败:", e);
+                    }
+                    showMessage(`✓ 已更新 Supertag #${supertagLabel} 的自动触发 (Auto) 配置 ⚡`);
                 }
             }
         });

@@ -180,28 +180,4 @@ export const DATA_DBS_CONFIG = {
     attrName: "custom-index-data-dbs"
 };
 
-export interface DefaultRelationRule {
-    typeLabel: string;
-    iconMenuCmdIds: string[];
-    relationCmdIds: string[];
-}
-
-export const DEFAULT_RELATION_BINDINGS: DefaultRelationRule[] = [
-    {
-        typeLabel: "task",
-        iconMenuCmdIds: ["index.setBlockAttribute"],
-        relationCmdIds: ["index.visualEffect", "index.setBlockAttribute"]
-    },
-    {
-        typeLabel: "pipeline",
-        iconMenuCmdIds: [],
-        relationCmdIds: ["index.insertBlockBelow", "index.safeUpdateBlock", "index.setBlockAttribute"]
-    },
-    {
-        typeLabel: "permanent",
-        iconMenuCmdIds: ["index.safeUpdateBlock"],
-        relationCmdIds: ["index.insertBlockBelow", "index.safeUpdateBlock", "index.setBlockAttribute"]
-    }
-];
-
 export const BUILTIN_SUPERTAGS = new Set(["task", "pipeline", "permanent"]);
