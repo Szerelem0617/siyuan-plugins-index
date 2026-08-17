@@ -383,10 +383,9 @@
     background: var(--indexos-bg-container) !important;
     color: var(--indexos-text-main) !important;
     border: 1px solid var(--indexos-border-light) !important;
-    border-radius: 3px !important;
-    padding: 6px 12px !important;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    border-radius: 4px !important;
     outline: none !important;
+    box-sizing: border-box !important;
 }
 
 .indexos-dialog select.b3-select:focus {

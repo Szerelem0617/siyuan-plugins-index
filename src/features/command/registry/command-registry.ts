@@ -117,14 +117,22 @@ export interface CommandConstraints {
     comment?: string;
 }
 
-/** 命令的元信息，供 command-db 展示和筛选使用 */
+export type CommandSourceType = "builtin" | "composite" | "user" | "plugin";
+export type CommandDomainType = "block" | "attribute" | "interaction" | "document" | "data_flow" | "composite" | "other";
+export type CommandScopeType = "focused_block" | "document" | "global";
+
+/** 命令的元信息，供 command-db 展示和多维筛选使用 */
 export interface CommandMeta {
     /** 裸绑定时的最小上下文需求（none/block/doc），决定可绑定的入口位置 */
     contextNeed: ContextNeed;
     /** 功能分类 */
-    category: CommandCategory;
-    /** 命令来源 */
-    source: "builtin" | "plugin" | "user";
+    category?: CommandCategory | string;
+    /** 1. 命令来源维度 */
+    source: CommandSourceType | "builtin" | "plugin" | "user";
+    /** 2. 功能领域维度 */
+    domain?: CommandDomainType;
+    /** 3. 目标作用域维度 */
+    scope?: CommandScopeType;
     /** source=plugin 时，记录插件名 */
     plugin?: string;
     /** 用户命令的图标 */
@@ -140,6 +148,33 @@ export interface CommandMeta {
      * Dispatcher 不匹配时仅 warn，不阻断执行。
      */
     appliesTo?: BlockTarget[];
+}
+
+export function inferCommandSource(cmd: CommandDef): CommandSourceType {
+    if (cmd.meta?.source) return cmd.meta.source as CommandSourceType;
+    if (cmd.id.startsWith("composite.") || cmd.id.startsWith("pipeline.")) return "composite";
+    if (cmd.id.startsWith("user.")) return "user";
+    return "builtin";
+}
+
+export function inferCommandDomain(cmd: CommandDef): CommandDomainType {
+    if (cmd.meta?.domain) return cmd.meta.domain;
+    if (cmd.id.startsWith("composite.") || cmd.id.startsWith("pipeline.")) return "composite";
+    const lowerId = cmd.id.toLowerCase();
+    const lowerName = (cmd.name || "").toLowerCase();
+    if (lowerId.includes("tag") || lowerId.includes("attr") || lowerName.includes("标签") || lowerName.includes("属性")) return "attribute";
+    if (lowerId.includes("visual") || lowerId.includes("toast") || lowerId.includes("prompt") || lowerName.includes("特效") || lowerName.includes("通知") || lowerName.includes("烟花")) return "interaction";
+    if (lowerId.includes("doc") || lowerId.includes("target") || lowerName.includes("文档") || lowerName.includes("打开")) return "document";
+    if (lowerId.includes("sql") || lowerId.includes("fetch") || lowerName.includes("数据") || lowerName.includes("请求")) return "data_flow";
+    if (lowerId.includes("block") || lowerName.includes("块")) return "block";
+    return "other";
+}
+
+export function inferCommandScope(cmd: CommandDef): CommandScopeType {
+    if (cmd.meta?.scope) return cmd.meta.scope;
+    if (cmd.meta?.contextNeed === "none" || cmd.constraints?.targetScope === "none") return "global";
+    if (cmd.meta?.contextNeed === "doc" || cmd.constraints?.targetScope === "doc") return "document";
+    return "focused_block";
 }
 
 /** 完整的命令定义（Registry 中的存储单元） */
