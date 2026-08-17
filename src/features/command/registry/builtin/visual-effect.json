@@ -30,42 +30,6 @@
             "label": "🎆 烟花",
             "commandID": "index.visualEffect",
             "paramMapping": "{\"type\":\"fireworks\"}"
-        },
-        {
-            "rowID": "20260526204558-meteor01",
-            "label": "🌌 流星跃迁",
-            "commandID": "index.visualEffect-1",
-            "paramMapping": "{\"type\":\"meteor\"}"
-        },
-        {
-            "rowID": "20260526204558-neon0001",
-            "label": "💫 霓虹扫描",
-            "commandID": "index.visualEffect-2",
-            "paramMapping": "{\"type\":\"neon_scan\"}"
-        },
-        {
-            "rowID": "20260526204558-bubble01",
-            "label": "🫧 琉璃气泡",
-            "commandID": "index.visualEffect-3",
-            "paramMapping": "{\"type\":\"bubble\"}"
-        },
-        {
-            "rowID": "20260526204558-breeze01",
-            "label": "🍃 禅意流风",
-            "commandID": "index.visualEffect-4",
-            "paramMapping": "{\"type\":\"breeze\"}"
-        },
-        {
-            "rowID": "20260526204558-rain0001",
-            "label": "🌧️ 沉浸细雨",
-            "commandID": "index.visualEffect-5",
-            "paramMapping": "{\"type\":\"rain\"}"
-        },
-        {
-            "rowID": "20260526204558-flame001",
-            "label": "🔥 温暖篝火",
-            "commandID": "index.visualEffect-6",
-            "paramMapping": "{\"type\":\"flame\"}"
         }
     ]
 }
