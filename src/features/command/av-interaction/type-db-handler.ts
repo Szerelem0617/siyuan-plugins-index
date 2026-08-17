@@ -5,6 +5,7 @@ import { updateCellValue } from "../../av/attribute-view/special/special-handler
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { openConfigForCommand } from "./command-db-handler";
 import ConditionalTriggerDialog from "./dialogs/ConditionalTriggerDialog.svelte";
+import ManualConfigDialog from "./dialogs/ManualConfigDialog.svelte";
 import PresetSupertagImportDialog from "./dialogs/PresetSupertagImportDialog.svelte";
 
 export function openPresetSupertagImportDialog() {
@@ -54,9 +55,9 @@ export async function handleTypeDbAltClick(
         if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
             const keyName = checkColRes[0].values[0][0];
             clickedColName = checkColRes[0].values[0][1];
-            if (keyName === "Conditional" || keyName === "触发器" || keyName === "On Create" || keyName === "创建时") {
+            if (keyName === "Auto" || keyName === "auto" || keyName === "Conditional" || keyName === "触发器" || keyName === "On Create" || keyName === "创建时" || keyName === "自动触发" || keyName === "自动") {
                 isConditionalCol = true;
-            } else if (keyName === "Icon Menu" || keyName === "Icon menu & button" || keyName === "图标菜单" || keyName === "绑定命令") {
+            } else if (keyName === "Manual" || keyName === "manual" || keyName === "Icon Menu" || keyName === "Icon menu & button" || keyName === "图标菜单" || keyName === "绑定命令" || keyName === "手动触发" || keyName === "手动") {
                 isIconMenuCol = true;
             }
         }
@@ -281,32 +282,29 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
     }));
 
     const dialog = new Dialog({
-        title: `配置 Supertag #${supertagLabel} 菜单与按钮`,
-        content: `<div id="icon-menu-config-dialog" style="height: 100%;"></div>`,
-        width: "740px",
-        height: "640px"
+        title: `配置 Supertag #${supertagLabel} 手动命令 (Manual)`,
+        content: `<div id="manual-config-dialog" style="height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;"></div>`,
+        width: "780px",
+        height: "660px"
     });
     dialog.element.classList.add("indexos-dialog");
 
-    const IconMenuConfigDialog = (await import("./dialogs/IconMenuConfigDialog.svelte")).default;
-
-    new IconMenuConfigDialog({
-        target: dialog.element.querySelector("#icon-menu-config-dialog")!,
+    new ManualConfigDialog({
+        target: dialog.element.querySelector("#manual-config-dialog")!,
         props: {
             dialog,
             supertag: supertagLabel,
             availableCommands: selectableCommands,
-            currentIconMenuVal,
-            conditionalVal,
+            currentVal: currentIconMenuVal,
             onSave: async (updatedVal: string) => {
                 await updateCellValue(null, avId, rowId, colId, updatedVal);
                 try {
                     const { refreshSupertagRegistry } = await import("../utils/sync-service");
                     await refreshSupertagRegistry();
                 } catch (e) {
-                    console.error("[AltClick-IconMenu] 刷新 Supertag 注册表失败:", e);
+                    console.error("[AltClick-Manual] 刷新 Supertag 注册表失败:", e);
                 }
-                showMessage(`✓ 已更新 Supertag #${supertagLabel} 的 Icon Menu & Button 配置并全盘生效 ⚡`);
+                showMessage(`✓ 已更新 Supertag #${supertagLabel} 的手动命令 (Manual) 配置 ⚡`);
             }
         }
     });

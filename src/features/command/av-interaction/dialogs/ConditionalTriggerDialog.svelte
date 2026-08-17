@@ -163,7 +163,7 @@
 <div class="fn__flex-column" style="height: 100%; padding: 16px; box-sizing: border-box; gap: 12px;">
     <!-- 标题 -->
     <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;">
-        <span>🏷️ 配置 Supertag <span style="color: var(--indexos-accent-primary);">#{supertag}</span> 的条件触发</span>
+        <span>⚡ 配置 Supertag <span style="color: var(--indexos-accent-primary);">#{supertag}</span> 自动触发 (Auto)</span>
     </div>
 
     <!-- 触发事件 Tab 选项卡 (规范级 Segmented TabBar) -->

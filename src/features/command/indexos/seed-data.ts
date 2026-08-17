@@ -101,16 +101,40 @@ async ({ dispatch, state, eventName }) => {
 /** Layer 3 种子行：内置 Supertag 及其绑定 */
 export function getSeedSupertagRows(): SeedSupertagRow[] {
     return [
-        { rowID: "20260526204605-v11e2ta", supertag: "task", iconMenu: "", conditional: defaultTaskConditional },
-        { rowID: "20260721140000-pipeline", supertag: "pipeline", iconMenu: "", conditional: defaultPipelineConditional },
-        { rowID: "20260721140000-permanent", supertag: "permanent", iconMenu: JSON.stringify({ menu: [{ id: "index.safeUpdateBlock" }], button: [] }), conditional: defaultPermanentConditional }
+        {
+            rowID: "20260526204605-v11e2ta",
+            supertag: "task",
+            manual: JSON.stringify([
+                { id: "index.setBlockAttribute", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false },
+                { id: "index.visualEffect", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
+            ]),
+            auto: defaultTaskConditional
+        },
+        {
+            rowID: "20260721140000-pipeline",
+            supertag: "composite",
+            manual: JSON.stringify([
+                { id: "index.insertBlockBelow", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false },
+                { id: "index.safeUpdateBlock", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
+            ]),
+            auto: defaultPipelineConditional
+        },
+        {
+            rowID: "20260721140000-permanent",
+            supertag: "permanent",
+            manual: JSON.stringify([
+                { id: "index.safeUpdateBlock", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
+            ]),
+            auto: defaultPermanentConditional
+        }
     ];
 }
 
-/** 未实例化时按 cleanTag 查找内置 Conditional 脚本 */
+/** 未实例化时按 cleanTag 查找内置 Auto / Conditional 脚本 */
 export function getSeedConditionalScript(cleanTag: string): string {
     const tag = cleanTag.replace(/^#/, "").trim().toLowerCase();
-    return getSeedSupertagRows().find(r => r.supertag.toLowerCase() === tag)?.conditional || "";
+    const row = getSeedSupertagRows().find(r => r.supertag.toLowerCase() === tag);
+    return row?.auto || row?.conditional || "";
 }
 
 export interface ColumnMeta {
@@ -136,7 +160,7 @@ export const COMMAND_DB_CONFIG: DbPageConfig = {
         { name: "Command ID", type: "text", icon: "iconCode" },
         { name: "Input", type: "text", icon: "iconList" },
         { name: "Output", type: "text", icon: "iconCheck" },
-        { name: "Pipeline 定义", type: "text", icon: "iconCode" }
+        { name: "复合命令定义", type: "text", icon: "iconCode" }
     ]
 };
 
@@ -144,10 +168,10 @@ export const TYPE_DB_CONFIG: DbPageConfig = {
     title: "supertag-db",
     attrName: "custom-index-supertag-db",
     markdown: `该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
-    expectedColName: "Icon menu & button",
+    expectedColName: "Manual",
     columns: [
-        { name: "Icon menu & button", type: "text", icon: "iconMenu" },
-        { name: "Conditional", type: "text", icon: "iconPlay" }
+        { name: "Manual", type: "text", icon: "iconMenu" },
+        { name: "Auto", type: "text", icon: "iconPlay" }
     ]
 };
 

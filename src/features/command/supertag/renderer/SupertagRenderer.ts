@@ -1,8 +1,11 @@
 import { post } from "../../../../shared/api-client/request";
 import { showMessage } from "siyuan";
 import { supertagMonitor } from "../core/supertag-listener";
-import { globalSupertagsCache } from "../../registration";
+import { globalSupertagsCache, SUPERTAG_REGISTRY } from "../../registration";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
+import { evaluateBlockFilter } from "../core/block-filter";
+import { dispatchCommand } from "../../command-dispatcher";
+import { commandRegistry } from "../../registry/command-registry";
 
 export class SupertagRenderer {
     private static isObserverInit = false;
@@ -176,7 +179,105 @@ export class SupertagRenderer {
                 await this.removeTagFromBlock(blockId, tag, "block", editorEl);
             }, true);
             container.appendChild(pill);
+
+            // 渲染该 Supertag 绑定的 Virtual Button (虚拟悬浮按钮)
+            this.renderVirtualButtonsForTag(blockId, tag, blockEl, editorEl, container);
         });
+    }
+
+    /**
+     * 根据 Block Filter 条件动态挂载 Virtual Button (虚拟悬浮按钮)
+     */
+    private static renderVirtualButtonsForTag(
+        blockId: string,
+        tag: string,
+        blockEl: HTMLElement,
+        editorEl: HTMLElement,
+        container: HTMLElement
+    ) {
+        const cleanTag = tag.replace(/^#/, "").trim().toLowerCase();
+        const vEntries = SUPERTAG_REGISTRY.filter(l =>
+            l.typeTag.toLowerCase() === cleanTag && l.uiLocation === "VirtualButton" && l.commandRef
+        );
+        if (vEntries.length === 0) return;
+
+        // 收集块属性
+        const attrs: Record<string, string> = {};
+        for (let i = 0; i < blockEl.attributes.length; i++) {
+            const attr = blockEl.attributes[i];
+            if (attr.name.startsWith("custom-") || attr.name.startsWith("data-") || attr.name === "updated") {
+                attrs[attr.name] = attr.value;
+            }
+        }
+        const blockContent = blockEl.textContent || "";
+
+        for (const entry of vEntries) {
+            const cond = entry.condition || entry.blockFilter;
+            const isMatch = evaluateBlockFilter(cond, {
+                id: blockId,
+                attrs,
+                content: blockContent
+            });
+
+            if (isMatch) {
+                const vBtn = this.createVirtualButtonPill(blockId, entry, blockEl, editorEl);
+                container.appendChild(vBtn);
+            }
+        }
+    }
+
+    private static createVirtualButtonPill(
+        blockId: string,
+        entry: any,
+        blockEl: HTMLElement,
+        editorEl: HTMLElement
+    ): HTMLElement {
+        const cmdDef = commandRegistry.getCommand(entry.commandRef);
+        const displayName = entry.buttonLabel || cmdDef?.name || entry.methodName || entry.commandRef;
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "indexos-virtual-button indexos-supertag-chip";
+        btn.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 1px 7px;
+            border-radius: 4px;
+            background: rgba(124, 58, 237, 0.08);
+            border: 1px solid rgba(124, 58, 237, 0.25);
+            color: #7c3aed;
+            font-size: 10px;
+            font-weight: 600;
+            height: 18px;
+            line-height: 16px;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            user-select: none;
+            vertical-align: middle;
+        `;
+        btn.innerHTML = `<span>⚡</span><span>${displayName}</span>`;
+        btn.title = `虚拟按钮 [${displayName}] (满足条件动态悬浮)`;
+
+        btn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+                btn.style.opacity = "0.5";
+                const ctx = { blockEl, protyleEl: editorEl, vars: { block_id: blockId } };
+                await dispatchCommand(entry.commandRef, entry.inputMapping || "", ctx as any);
+                // 触发重新渲染
+                setTimeout(() => {
+                    SupertagRenderer.renderBlockTags(editorEl);
+                }, 100);
+            } catch (err: any) {
+                showMessage(`执行虚拟按钮失败: ${err?.message || err}`, 3000, "error");
+            } finally {
+                btn.style.opacity = "1";
+            }
+        });
+
+        return btn;
     }
 
     /**

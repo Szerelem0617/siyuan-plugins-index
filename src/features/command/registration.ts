@@ -26,7 +26,10 @@ export interface SupertagCommand {
     commandRef: string;   // 执行 of the command ID
     inputMapping: string;
     outputMapping: string;
-    uiLocation: string;   // 绑定的界面位置
+    uiLocation: string;   // 绑定的界面位置: "IconMenu" | "Slash" | "Button" | "VirtualButton" | "BoundOnly"
+    condition?: string;   // 显示条件 (Condition)
+    blockFilter?: string; // 兼容
+    buttonLabel?: string; // 定制按钮名
     autoSync?: boolean;
     targetDbId?: string;
     typeFieldId?: string;

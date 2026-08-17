@@ -178,11 +178,19 @@ export async function constructCommandStorage() {
                         });
                     }
 
-                    // 保留初始 Icon Menu 配置文本
-                    let cleanIconMenuVal = String(row.iconMenu || "").trim();
+                    // 写入 Manual 与 Auto 列
+                    const cleanManualVal = String(row.manual || row.iconMenu || "").trim();
+                    const cleanAutoVal = String(row.auto || row.conditional || "").trim();
 
-                    populateOps.push({ keyID: keyMap["Icon menu & button"], itemID: row.rowID, value: { type: "text", text: { content: cleanIconMenuVal } } });
-                    populateOps.push({ keyID: keyMap["Conditional"], itemID: row.rowID, value: { type: "text", text: { content: String(row.conditional || "") } } });
+                    const manualKey = keyMap["Manual"] || keyMap["Icon menu & button"];
+                    const autoKey = keyMap["Auto"] || keyMap["Conditional"];
+
+                    if (manualKey) {
+                        populateOps.push({ keyID: manualKey, itemID: row.rowID, value: { type: "text", text: { content: cleanManualVal } } });
+                    }
+                    if (autoKey) {
+                        populateOps.push({ keyID: autoKey, itemID: row.rowID, value: { type: "text", text: { content: cleanAutoVal } } });
+                    }
                 }
 
                 if (populateOps.length > 0) {

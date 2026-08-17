@@ -4,7 +4,7 @@ import { getSqliteEngine, runQuery, checkTableExists, instantiateAV, tableNameTo
 import { initSystemTables } from "../indexos/command-sqlite";
 import { getSeedCommandRows, getSeedSupertagRows } from "../indexos/seed-data";
 import { syncPipelinesFromCommandDb } from "../pipeline/manager";
-import { parseIconMenuConfig } from "./icon-menu-config";
+import { parseManualConfig, type ManualCommandEntry } from "./manual-config";
 import { parseSupertags } from "../supertag/core/supertag-diff";
 import { 
     isDevInitSysEnabled,
@@ -240,19 +240,33 @@ function refreshRegistryFromSeed() {
             return undefined;
         };
 
-        // 1. Icon menu & button 列：menu → UI 菜单，button → 块下方按钮
-        const iconCfg = parseIconMenuConfig(row.iconMenu || "");
-        const pushEntry = (entry: { id: string; params?: Record<string, string> }, uiLocation: "IconMenu" | "Button") => {
+        // 1. Manual 列：4 态分流分发
+        const manualEntries = parseManualConfig(row.manual || row.iconMenu || "");
+        const pushEntry = (entry: ManualCommandEntry, uiLocation: "IconMenu" | "Slash" | "Button" | "VirtualButton") => {
             const cmdInfo = findBinding(entry.id);
             if (!cmdInfo) return;
             const hasParams = entry.params && Object.keys(entry.params).length > 0;
             const inputMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.inputMapping;
             if (!newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === uiLocation)) {
-                newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, inputMapping, outputMapping: cmdInfo.outputMapping, uiLocation });
+                newRegistry.push({
+                    typeTag: cleanTag,
+                    methodName: cmdInfo.methodName,
+                    commandRef: cmdInfo.commandRef,
+                    inputMapping,
+                    outputMapping: cmdInfo.outputMapping,
+                    uiLocation,
+                    condition: entry.condition || entry.blockFilter,
+                    blockFilter: entry.condition || entry.blockFilter,
+                    buttonLabel: entry.buttonLabel
+                });
             }
         };
-        for (const e of iconCfg.menu) pushEntry(e, "IconMenu");
-        for (const e of iconCfg.button) pushEntry(e, "Button");
+        for (const e of manualEntries) {
+            if (e.showInMenu) pushEntry(e, "IconMenu");
+            if (e.showInSlash) pushEntry(e, "Slash");
+            if (e.showInButton) pushEntry(e, "Button");
+            if (e.showInVirtualButton) pushEntry(e, "VirtualButton");
+        }
 
         // 2. Conditional 脚本中的 dispatch 引用：标记为 BoundOnly
         if (row.conditional) {
@@ -355,10 +369,10 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             // ignore
         }
 
-        // 3. Load Type Bindings (Layer 3)
-        let iconMenuCol = "Icon_Menu";
+        // 3. Load Type Bindings (Layer 3 - Manual & Auto)
+        let iconMenuCol = "Manual";
         try {
-            const iconRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name IN ('Icon Menu', 'Icon menu & button', '图标菜单') OR key_name LIKE '%Icon%')`, [tAvId]);
+            const iconRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name IN ('Manual', 'manual', 'Icon Menu', 'Icon menu & button', '图标菜单', '手动触发') OR key_name LIKE '%Manual%' OR key_name LIKE '%Icon%')`, [tAvId]);
             if (iconRes.length > 0 && iconRes[0].values.length > 0) {
                 iconMenuCol = String(iconRes[0].values[0][0]);
             }
@@ -384,14 +398,14 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         const newRegistry: SupertagCommand[] = [];
         for (const row of typeRes.values) {
             const typeTagRaw = row[0];
-            const iconMenuText = row[1] || "";
+            const manualText = row[1] || "";
             const relationRaw = hasRelationCol ? (row[2] || "") : "";
 
             if (typeTagRaw) {
                 const cleanTag = String(typeTagRaw).replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
 
-                // 1. Icon menu & button 列：menu → UI 菜单，button → 块下方按钮（含每命令参数）
-                const iconCfg = parseIconMenuConfig(iconMenuText);
+                // 1. Manual 列：4 态分流分发 (;; 面板 / Icon Menu / 块下方实体按钮 / 虚拟悬浮按钮)
+                const manualEntries = parseManualConfig(manualText);
                 const resolveCmd = (token: string) => {
                     const lower = token.toLowerCase();
                     const exact = Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower);
@@ -416,17 +430,33 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                     }
                     return undefined;
                 };
-                const pushEntry = (entry: { id: string; params?: Record<string, string> }, uiLocation: "IconMenu" | "Button") => {
+
+                const pushEntry = (entry: ManualCommandEntry, uiLocation: "IconMenu" | "Slash" | "Button" | "VirtualButton") => {
                     const cmdInfo = resolveCmd(entry.id);
                     if (!cmdInfo) return;
                     const hasParams = entry.params && Object.keys(entry.params).length > 0;
                     const inputMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.inputMapping;
                     if (!newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === uiLocation)) {
-                        newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, inputMapping, outputMapping: cmdInfo.outputMapping, uiLocation });
+                        newRegistry.push({
+                            typeTag: cleanTag,
+                            methodName: cmdInfo.methodName,
+                            commandRef: cmdInfo.commandRef,
+                            inputMapping,
+                            outputMapping: cmdInfo.outputMapping,
+                            uiLocation,
+                            condition: entry.condition || entry.blockFilter,
+                            blockFilter: entry.condition || entry.blockFilter,
+                            buttonLabel: entry.buttonLabel
+                        });
                     }
                 };
-                for (const e of iconCfg.menu) pushEntry(e, "IconMenu");
-                for (const e of iconCfg.button) pushEntry(e, "Button");
+
+                for (const e of manualEntries) {
+                    if (e.showInMenu) pushEntry(e, "IconMenu");
+                    if (e.showInSlash) pushEntry(e, "Slash");
+                    if (e.showInButton) pushEntry(e, "Button");
+                    if (e.showInVirtualButton) pushEntry(e, "VirtualButton");
+                }
 
                 // 2. 解析 绑定命令 关联列或 Conditional 条件脚本中包含的命令引用
                 if (relationRaw) {
@@ -601,8 +631,7 @@ async function refreshRegistryFromApi() {
                 return relContents.map((rc: any) => rc.block?.id || rc.blockID || rc.content).filter(Boolean);
             };
 
-            const typeTagRaw = getCellText("Primary Key") || (row.cells[0]?.value?.block?.content) || "";
-            const iconMenuRaw = getCellText("Icon Menu") || getCellText("iconMenu") || getCellText("Block Icon Menu") || getCellText("Current Page Menu");
+            const manualRaw = getCellText("Manual") || getCellText("manual") || getCellText("Icon Menu") || getCellText("iconMenu") || getCellText("Block Icon Menu") || getCellText("Current Page Menu");
             const linkedRowIds = getRelationIds("绑定命令");
 
             const hasRelationCol = columns.some((c: any) => c.name === "绑定命令" || c.keyName === "绑定命令");
@@ -610,20 +639,34 @@ async function refreshRegistryFromApi() {
             if (typeTagRaw) {
                 const cleanTag = typeTagRaw.replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
 
-                // 1. Icon menu & button 列：menu → UI 菜单，button → 块下方按钮（含每命令参数）
-                const iconCfg = parseIconMenuConfig(iconMenuRaw);
-                const pushEntry = (entry: { id: string; params?: Record<string, string> }, uiLocation: "IconMenu" | "Button") => {
+                // 1. Manual 列：4 态分流分发
+                const manualEntries = parseManualConfig(manualRaw);
+                const pushEntry = (entry: ManualCommandEntry, uiLocation: "IconMenu" | "Slash" | "Button" | "VirtualButton") => {
                     const foundKey = Object.keys(newCommandBindings).find(k => k.toLowerCase().includes(entry.id.toLowerCase()));
                     const cmdInfo = foundKey ? newCommandBindings[foundKey] : undefined;
                     if (!cmdInfo) return;
                     const hasParams = entry.params && Object.keys(entry.params).length > 0;
                     const inputMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.inputMapping;
                     if (!newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === cmdInfo.commandRef && r.uiLocation === uiLocation)) {
-                        newRegistry.push({ typeTag: cleanTag, methodName: cmdInfo.methodName, commandRef: cmdInfo.commandRef, inputMapping, outputMapping: cmdInfo.outputMapping, uiLocation });
+                        newRegistry.push({
+                            typeTag: cleanTag,
+                            methodName: cmdInfo.methodName,
+                            commandRef: cmdInfo.commandRef,
+                            inputMapping,
+                            outputMapping: cmdInfo.outputMapping,
+                            uiLocation,
+                            condition: entry.condition || entry.blockFilter,
+                            blockFilter: entry.condition || entry.blockFilter,
+                            buttonLabel: entry.buttonLabel
+                        });
                     }
                 };
-                for (const e of iconCfg.menu) pushEntry(e, "IconMenu");
-                for (const e of iconCfg.button) pushEntry(e, "Button");
+                for (const e of manualEntries) {
+                    if (e.showInMenu) pushEntry(e, "IconMenu");
+                    if (e.showInSlash) pushEntry(e, "Slash");
+                    if (e.showInButton) pushEntry(e, "Button");
+                    if (e.showInVirtualButton) pushEntry(e, "VirtualButton");
+                }
 
                 // 2. 解析 绑定命令 关联列：这些命令关联到 Tag，但未写入 Icon Menu 列的标记为 BoundOnly
                 if (hasRelationCol) {

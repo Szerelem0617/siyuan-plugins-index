@@ -160,9 +160,28 @@ export async function refreshEntryRegistrations() {
         const meta = commandMeta(id);
         newInlineBtns.push({ id, label: meta.label, commandId: id, commandParam: meta.commandParam, requiresParams: meta.requiresParams });
     }
+    const seenPaletteCmdIds = new Set<string>();
     for (const id of positionCommands(cfg, ";;菜单")) {
         const meta = commandMeta(id);
         newPaletteCmds.push({ id, label: meta.label, commandId: id, commandParam: meta.commandParam, requiresParams: meta.requiresParams });
+        seenPaletteCmdIds.add(id);
+    }
+    // 注入从 Supertag Manual 配置中启用 ;; 面板的命令
+    const { SUPERTAG_REGISTRY } = await import("../registration");
+    for (const stCmd of SUPERTAG_REGISTRY) {
+        if (stCmd.uiLocation === "Slash" && stCmd.commandRef && !seenPaletteCmdIds.has(stCmd.commandRef)) {
+            const def = commandRegistry.getCommand(stCmd.commandRef);
+            const label = stCmd.methodName || def?.name || stCmd.commandRef;
+            newPaletteCmds.push({
+                id: stCmd.commandRef,
+                label: `🏷️ #${stCmd.typeTag} » ${label}`,
+                description: `Supertag #${stCmd.typeTag} 快捷命令`,
+                commandId: stCmd.commandRef,
+                commandParam: stCmd.inputMapping || "",
+                requiresParams: def && def.params && def.params.length > 0 ? "true" : "false"
+            });
+            seenPaletteCmdIds.add(stCmd.commandRef);
+        }
     }
 
     applyEntryUpdates(newTopBars, newStatusBars, newDocks, newInlineBtns, newPaletteCmds);

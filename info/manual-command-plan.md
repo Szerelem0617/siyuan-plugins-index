@@ -24,22 +24,20 @@
 
 ---
 
-## 3. Node Filter 动态提拔机制 (Dynamic Elevation)
+## 3. Block Filter (块过滤条件) 动态呈现机制
 
 ### 3.1 核心思想与应用边界
-- **应用边界**：只有当命令作为常驻按钮暴露在块上时，Node Filter 才有真正震撼的意义（未完成显示【完成】按钮，完成后按钮自动隐去或切换为【重置】）。
-- **避坑绝招 (虚拟挂载)**：彻底摒弃在文档里用 API 频繁创建/删除物理 Block 按钮的旧路，采用 **Virtual Button 动态挂载**。Filter 计算为 `true` 时动态呈现，`false` 时无痕消隐，**绝对不向 `.sy` 文档写入垃圾 Block，不污染 Undo/Redo 历史记录**。
+- **应用边界**：只有当命令作为常驻/悬浮按钮暴露在块上时，Block Filter 才有真正震撼的意义（未完成显示【完成】按钮，完成后按钮自动隐去或切换为【重置】）。
+- **避坑绝招 (虚拟挂载)**：彻底摒弃在文档里用 API 频繁创建/删除物理 Block 按钮的旧路，采用 **Virtual Button 动态挂载**。Block Filter 计算为 `true` 时动态呈现，`false` 时无痕消隐，**绝对不向 `.sy` 文档写入垃圾 Block，不污染 Undo/Redo 历史记录**。
 
-### 3.2 Filter 条件语法 Schema (白盒低心智)
+### 3.2 Block Filter 条件语法 Schema (白盒低心智)
 - **属性检测**：`custom-status == pending` / `custom-priority == high`
 - **内容检测**：`content includes [ ]` (未完成待办)
-- **空值检测**：`isEmpty(custom-status)`
+- **空值检测**：`isEmpty(custom-status)` / `isNotEmpty(custom-status)`
 
 ---
 
-## 4. 数据结构 Schema 演进与 UI 改动规划
-
-### 4.1 数据结构 Schema (`Icon menu & button` 列 JSON)
+## 4. 数据结构 Schema 落地 (`Manual` 列 JSON)
 扩展 JSON 结构，支持 `elevation` (展现形态) 与 `filter` (提拔条件)：
 
 ```json
