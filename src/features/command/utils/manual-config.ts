@@ -124,6 +124,5 @@ export function serializeManualConfig(entries: ManualConfig): string {
     return JSON.stringify(valid);
 }
 
-/** 兼容旧列名 */
-export const MANUAL_COL_NAMES = ["Manual", "manual", "Icon Menu", "Icon menu & button", "图标菜单", "手动触发", "手动"];
-export const AUTO_COL_NAMES = ["Auto", "auto", "Conditional", "conditional", "条件", "触发器", "自动触发", "自动"];
+export const MANUAL_COL_NAMES = ["Manual"];
+export const AUTO_COL_NAMES = ["Auto"];

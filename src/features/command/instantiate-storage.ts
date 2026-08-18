@@ -173,11 +173,11 @@ export async function constructCommandStorage() {
                     }
 
                     // 写入 Manual 与 Auto 列
-                    const cleanManualVal = String(row.manual || row.iconMenu || "").trim();
-                    const cleanAutoVal = String(row.auto || row.conditional || "").trim();
+                    const cleanManualVal = String(row.manual || "").trim();
+                    const cleanAutoVal = String(row.auto || "").trim();
 
-                    const manualKey = keyMap["Manual"] || keyMap["Icon menu & button"];
-                    const autoKey = keyMap["Auto"] || keyMap["Conditional"];
+                    const manualKey = keyMap["Manual"];
+                    const autoKey = keyMap["Auto"];
 
                     if (manualKey) {
                         populateOps.push({ keyID: manualKey, itemID: row.rowID, value: { type: "text", text: { content: cleanManualVal } } });

@@ -44,22 +44,26 @@ export function scanAvIndicators() {
             let isConfigurableCol = isUniversalSpecialCol;
 
             if (isCommandDb) {
-                // Command-DB: 主键, Input, Output, Pipeline 定义（入口绑定已迁移至全局『入口配置』）
+                // Command-DB: 仅高亮支持 Alt+Click 快捷交互的列
+                // - 主键: Alt+Click 打开命令详情/自定义命令编辑/复合命令编排
+                // - Input: Alt+Click 打开入参配置抽屉 (InputConfigDialog)
+                // - Output: Alt+Click 打开出参配置抽屉 (OutputConfigDialog)
+                // - Composite: Alt+Click 打开复合命令流水线编排器 (PipelineEditor)
+                // (注：Command ID 列仅用于机器标识展示，无 Alt+Click 操作，故不高亮)
                 isConfigurableCol = isConfigurableCol || (
                     txt.includes("主键") ||
                     txt.includes("input") ||
                     txt.includes("output") ||
-                    txt.includes("param mapping") ||
-                    txt.includes("pipeline 定义") ||
-                    cell.getAttribute("data-dtype") === "block"
+                    txt.includes("composite")
                 );
             } else if (isSupertagDb) {
-                // Supertag-DB: icon menu, conditional
+                // Supertag-DB: 仅高亮支持 Alt+Click 快捷交互的列
+                // - Manual: Alt+Click 打开手动触发配置 (;;菜单/IconMenu/实体按钮/虚拟按钮)
+                // - Auto: Alt+Click 打开多事件自动触发器编排器
+                // (注：Supertag 主键列无 Alt+Click 拦截行为，故不高亮)
                 isConfigurableCol = isConfigurableCol || (
-                    txt.includes("icon menu") ||
-                    txt.includes("conditional") ||
-                    txt.includes("条件") ||
-                    txt.includes("图标菜单") || txt.includes("Icon Menu") || txt.includes("Icon menu & button")
+                    txt.includes("manual") ||
+                    txt.includes("auto")
                 );
             }
 

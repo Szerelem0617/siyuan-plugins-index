@@ -365,9 +365,9 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                 for (const row of schemaCols[0].values) {
                     const kName = String(row[0]);
                     const cName = String(row[1]);
-                    if (kName === "Manual" || kName === "manual" || kName === "Icon Menu" || kName === "Icon menu & button") {
+                    if (kName === "Manual") {
                         manualCol = cName;
-                    } else if (kName === "Auto" || kName === "auto" || kName === "Conditional" || kName === "触发器") {
+                    } else if (kName === "Auto") {
                         autoCol = cName;
                     }
                 }
@@ -576,8 +576,8 @@ async function refreshRegistryFromApi() {
                 return cell?.value?.text?.content || cell?.value?.mText?.content || cell?.value?.block?.content || "";
             };
 
-            const manualRaw = getCellText("Manual") || getCellText("manual") || getCellText("Icon Menu") || getCellText("Icon menu & button");
-            const autoRaw = getCellText("Auto") || getCellText("auto") || getCellText("Conditional");
+            const manualRaw = getCellText("Manual");
+            const autoRaw = getCellText("Auto");
 
             if (typeTagRaw) {
                 const cleanTag = typeTagRaw.replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();

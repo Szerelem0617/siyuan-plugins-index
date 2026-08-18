@@ -55,9 +55,9 @@ export async function handleTypeDbAltClick(
         if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
             const keyName = checkColRes[0].values[0][0];
             clickedColName = checkColRes[0].values[0][1];
-            if (keyName === "Auto" || keyName === "auto" || keyName === "Conditional" || keyName === "触发器" || keyName === "On Create" || keyName === "创建时" || keyName === "自动触发" || keyName === "自动") {
+            if (keyName === "Auto") {
                 isConditionalCol = true;
-            } else if (keyName === "Manual" || keyName === "manual" || keyName === "Icon Menu" || keyName === "Icon menu & button" || keyName === "图标菜单" || keyName === "绑定命令" || keyName === "手动触发" || keyName === "手动") {
+            } else if (keyName === "Manual") {
                 isIconMenuCol = true;
             }
         }
