@@ -47,18 +47,54 @@
     let filterDomain: "all" | CommandDomainType = "all";
     let filterScope: "all" | CommandScopeType = "all";
 
-    $: allRawCommands = commandRegistry.getAllCommands();
+    import { COMMAND_BINDINGS } from "../registration";
+    import { getSeedCommandRows } from "../indexos/seed-data";
 
-    $: commands = allRawCommands
-        .map(c => ({
-            id: c.id,
-            name: c.name,
-            def: c,
-            source: inferCommandSource(c),
-            domain: inferCommandDomain(c),
-            scope: inferCommandScope(c)
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name, "zh"));
+    $: layer2List = (() => {
+        const bindings = Object.values(COMMAND_BINDINGS);
+        if (bindings.length > 0) {
+            return bindings.map(b => {
+                const def = commandRegistry.getCommand(b.commandRef) || commandRegistry.findByNameOrId(b.methodName);
+                return {
+                    id: b.commandRef,
+                    name: b.methodName || def?.name || b.commandRef,
+                    def: def || ({
+                        id: b.commandRef,
+                        name: b.methodName,
+                        description: "",
+                        params: [],
+                        outputs: [],
+                        handler: async () => {}
+                    } as CommandDef),
+                    source: def ? inferCommandSource(def) : ("composite" as CommandSourceType),
+                    domain: def ? inferCommandDomain(def) : ("other" as CommandDomainType),
+                    scope: def ? inferCommandScope(def) : ("focused_block" as CommandScopeType)
+                };
+            });
+        }
+
+        // 兜底（未实例化或 bindings 尚未就绪）：从 seed-data.ts 常量读取 Layer 2 种子命令
+        return getSeedCommandRows().map(row => {
+            const def = commandRegistry.getCommand(row.commandID) || commandRegistry.findByNameOrId(row.label);
+            return {
+                id: row.commandID,
+                name: row.label || def?.name || row.commandID,
+                def: def || ({
+                    id: row.commandID,
+                    name: row.label,
+                    description: "",
+                    params: [],
+                    outputs: [],
+                    handler: async () => {}
+                } as CommandDef),
+                source: def ? inferCommandSource(def) : ("builtin" as CommandSourceType),
+                domain: def ? inferCommandDomain(def) : ("other" as CommandDomainType),
+                scope: def ? inferCommandScope(def) : ("focused_block" as CommandScopeType)
+            };
+        });
+    })();
+
+    $: commands = layer2List.sort((a, b) => a.name.localeCompare(b.name, "zh"));
 
     $: availableCommands = allowedCommands
         ? commands.filter(cmd => allowedCommands.includes(cmd.id) || allowedCommands.includes(cmd.name))

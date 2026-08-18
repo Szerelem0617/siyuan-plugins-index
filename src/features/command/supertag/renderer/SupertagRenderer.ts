@@ -107,6 +107,9 @@ export class SupertagRenderer {
                     await this.removeTagFromBlock(docId, tag, "doc", editorEl);
                 }, false);
                 container.appendChild(pill);
+
+                // 挂载文档级 Supertag 的虚拟按钮
+                this.renderVirtualButtonsForTag(docId, tag, titleEl, editorEl, container);
             });
         } catch (e) {
             console.error("[SupertagRenderer] Failed to render document tags:", e);
@@ -148,7 +151,11 @@ export class SupertagRenderer {
             return;
         }
 
-        const renderedKey = `${tags.join(",")}|${taskStatus || ""}`;
+        const cleanTagList = tags.map(t => t.replace(/^#/, "").trim().toLowerCase());
+        const vBtnConfigs = SUPERTAG_REGISTRY.filter(r => r.uiLocation === "VirtualButton" && cleanTagList.includes(r.typeTag.toLowerCase()));
+        const vBtnSig = vBtnConfigs.map(v => `${v.commandRef}:${v.condition || ''}:${v.buttonLabel || ''}`).join(";");
+        const renderedKey = `${tags.join(",")}|${taskStatus || ""}|${vBtnSig}`;
+
         if (container && container.getAttribute("data-rendered-key") === renderedKey) {
             return;
         }
@@ -237,23 +244,17 @@ export class SupertagRenderer {
 
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "indexos-virtual-button indexos-supertag-chip";
+        btn.className = "indexos-virtual-button indexos-btn-inline";
         btn.style.cssText = `
             display: inline-flex;
             align-items: center;
             gap: 3px;
             padding: 1px 7px;
-            border-radius: 4px;
-            background: rgba(124, 58, 237, 0.08);
-            border: 1px solid rgba(124, 58, 237, 0.25);
-            color: #7c3aed;
+            height: 18px;
             font-size: 10px;
             font-weight: 600;
-            height: 18px;
             line-height: 16px;
-            cursor: pointer;
-            transition: all 0.15s ease-in-out;
-            user-select: none;
+            box-sizing: border-box;
             vertical-align: middle;
         `;
         btn.innerHTML = `<span>⚡</span><span>${displayName}</span>`;

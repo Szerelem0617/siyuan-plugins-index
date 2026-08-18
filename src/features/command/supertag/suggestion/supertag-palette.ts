@@ -1,7 +1,7 @@
 import { Plugin } from "siyuan";
 import { post } from "../../../../shared/api-client/request";
 import { supertagMonitor } from "../core/supertag-listener";
-import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../../registration";
+import { getSupertagRegistry, SUPERTAG_REGISTRY, globalSupertagsCache } from "../../registration";
 import { SupertagRenderer } from "../renderer/SupertagRenderer";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
 import { findActiveBlock } from "../../utils/context-extractor";
@@ -130,6 +130,11 @@ function onEditorKeydown(e: KeyboardEvent) {
         return;
     }
 
+    if (e.key === " " || e.key === "Spacebar" || e.code === "Space") {
+        closePalette();
+        return;
+    }
+
     if (e.key === "ArrowDown") {
         e.preventDefault();
         e.stopPropagation();
@@ -193,10 +198,19 @@ async function renderList(query: string) {
     currentTagList = [];
 
     const dbConfigs = await getGlobalTypeConfigs();
-    const logicConfigs = SUPERTAG_REGISTRY || [];
+    let logicConfigs = getSupertagRegistry();
+    if (!logicConfigs || logicConfigs.length === 0) {
+        try {
+            const { refreshSupertagRegistry } = await import("../../utils/sync-service");
+            await refreshSupertagRegistry();
+            logicConfigs = getSupertagRegistry();
+        } catch (err) {
+            console.error("[SupertagPalette] Refresh registry error:", err);
+        }
+    }
 
-    const dataNames = new Set(dbConfigs.map((c: any) => c.typeName.trim().toLowerCase()));
-    const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()));
+    const dataNames = new Set(dbConfigs.map((c: any) => c.typeName.trim().toLowerCase()).filter(Boolean));
+    const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()).filter(Boolean));
 
     const queryLower = query.toLowerCase();
     const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
@@ -204,6 +218,15 @@ async function renderList(query: string) {
         if (!t.includes(queryLower)) return false;
         const pref = supertagBinder.getPref(t);
         return pref !== "disabled";
+    });
+
+    console.log("[SupertagPalette Debug]", {
+        query,
+        logicConfigsCount: logicConfigs.length,
+        logicNames: Array.from(logicNames),
+        dataNames: Array.from(dataNames),
+        allSupertags,
+        matched
     });
 
     const activeBlock = activeProtyle ? findActiveBlock(activeProtyle) : null;
@@ -230,18 +253,22 @@ async function renderList(query: string) {
     const dataComps: string[] = [];
 
     matched.forEach(tag => {
-        const isData = dataNames.has(tag);
         const isLogic = logicNames.has(tag);
+        const isData = dataNames.has(tag);
         if (isLogic) {
             cmdComps.push(tag);
         } else if (isData) {
             dataComps.push(tag);
+        } else {
+            cmdComps.push(tag);
         }
     });
 
-    const sortedCmds = cmdComps.sort();
-    const sortedDatas = dataComps.sort();
+    const sortedCmds = Array.from(new Set(cmdComps)).sort();
+    const sortedDatas = Array.from(new Set(dataComps)).sort();
     currentTagList = [...sortedCmds, ...sortedDatas];
+
+    console.log("[SupertagPalette Debug Categorized]", { sortedCmds, sortedDatas, currentTagList });
 
     if (currentTagList.length === 0) {
         paletteEl.innerHTML = `<div style="font-size: 11px; text-align: center; padding: 16px 0; color: var(--indexos-text-muted); font-family: ui-monospace, monospace;">无匹配的超级标签 (@)</div>`;

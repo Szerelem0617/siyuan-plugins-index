@@ -169,30 +169,27 @@ export async function getTargetTablesInfo() {
  * 优先尝试从 SQLite 加载以获得更好的性能 and 统一性
  */
 export async function refreshSupertagRegistry() {
-    if (isDevInitSysEnabled()) {
-        try {
-            const { db } = await getSqliteEngine();
-            if (db) {
-                await getTargetTablesInfo();
-                const cmdAvId = getCommandAvId();
-                const tAvId = getTypeAvId();
-                if (cmdAvId && tAvId) {
-                    // 已实例化：从思源 AV 刷新（经 av_ SQLite 镜像）
-                    await instantiateAV(cmdAvId, true);
-                    await instantiateAV(tAvId, true);
-                    const success = await refreshRegistryFromSqlite();
-                    if (success) return;
-                } else {
-                    // 未实例化：直接读种子常量（seed-data.ts），无 SQLite 种子表
-                    refreshRegistryFromSeed();
-                    return;
-                }
-            }
-        } catch (e) {
-            console.warn("[Supertag] SQLite sync/refresh failed, falling back to API refresh", e);
+    try {
+        const { db } = await getSqliteEngine();
+        await getTargetTablesInfo();
+        const cmdAvId = getCommandAvId();
+        const tAvId = getTypeAvId();
+
+        if (cmdAvId && tAvId) {
+            // 已实例化：从思源 AV 刷新（经 av_ SQLite 镜像）
+            await instantiateAV(cmdAvId, true);
+            await instantiateAV(tAvId, true);
+            const success = await refreshRegistryFromSqlite();
+            if (success) return;
+            await refreshRegistryFromApi();
+            if (SUPERTAG_REGISTRY.length > 0) return;
         }
+    } catch (e) {
+        console.warn("[Supertag Sync] SQLite/AV check failed, using seed data fallback:", e);
     }
-    await refreshRegistryFromApi();
+
+    // 未实例化状态（或数据库未创建）：直接从 seed-data.ts 常量构建 Layer 2/3 注册表
+    refreshRegistryFromSeed();
 }
 
 /**
@@ -268,9 +265,9 @@ function refreshRegistryFromSeed() {
             if (e.showInVirtualButton) pushEntry(e, "VirtualButton");
         }
 
-        // 2. Conditional 脚本中的 dispatch 引用：标记为 BoundOnly
-        if (row.conditional) {
-            const matches = String(row.conditional).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
+        // 2. Auto 规则脚本中的 dispatch 引用：标记为 BoundOnly
+        if (row.auto) {
+            const matches = String(row.auto).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
             for (const m of matches) {
                 const cmdRef = m[1];
                 const foundCmd = Object.values(newCommandBindings).find(c => c.commandRef === cmdRef);
@@ -321,17 +318,20 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
 
         // 1. Resolve actual SQLite column names for Layer 2 (Command-DB)
         const { db } = await getSqliteEngine();
+        let cmdIdCol = "Command_ID";
         let inputCol = "Input";
         let outputCol = "Output";
         try {
-            const inRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Input' OR key_name = 'Input Mapping' OR key_name = 'Param Mapping')`, [cmdAvId]);
+            const cmdIdRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Command ID' OR key_name = 'command id' OR key_name = 'Command_ID')`, [cmdAvId]);
+            if (cmdIdRes.length > 0 && cmdIdRes[0].values.length > 0) cmdIdCol = String(cmdIdRes[0].values[0][0]);
+            const inRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Input' OR key_name = 'input')`, [cmdAvId]);
             if (inRes.length > 0 && inRes[0].values.length > 0) inputCol = String(inRes[0].values[0][0]);
-            const outRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Output' OR key_name = 'Output Mapping')`, [cmdAvId]);
+            const outRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Output' OR key_name = 'output')`, [cmdAvId]);
             if (outRes.length > 0 && outRes[0].values.length > 0) outputCol = String(outRes[0].values[0][0]);
         } catch { /* ignore */ }
 
         // 1. Load Commands (Layer 2)
-        const cmdRes = await runQuery(`SELECT rowID, "${commandLabelCol}", Command_ID, "${inputCol}", "${outputCol}" FROM ${commandsTable}`);
+        const cmdRes = await runQuery(`SELECT rowID, "${commandLabelCol}", "${cmdIdCol}", "${inputCol}", "${outputCol}" FROM ${commandsTable}`);
         if (!cmdRes || !cmdRes.values) return false;
 
         const newCommandBindings: Record<string, CommandBinding> = {};
@@ -480,6 +480,18 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             }
         }
         setSupertagRegistry(newRegistry);
+        console.log("[Supertag Sync] Registry loaded from SQLite:", { count: newRegistry.length, tags: newRegistry.map(r => r.typeTag) });
+
+        // 触发前端编辑器重新渲染 Supertag 与 Virtual Buttons
+        try {
+            const { SupertagRenderer } = await import("../supertag/renderer/SupertagRenderer");
+            const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
+            const editorEl = activeProtyle?.element || document.querySelector(".protyle-content") || document.body;
+            if (editorEl) {
+                SupertagRenderer.renderBlockTags(editorEl as HTMLElement);
+            }
+        } catch (_) {}
+
         // 加载并注册复合命令（Pipeline）
         await syncPipelinesFromCommandDb();
         return true;
@@ -576,6 +588,7 @@ async function refreshRegistryFromApi() {
                 return cell?.value?.text?.content || cell?.value?.mText?.content || cell?.value?.block?.content || "";
             };
 
+            const typeTagRaw = getCellText("Supertag") || getCellText("主键") || (row.cells[0]?.value?.block?.content) || "";
             const manualRaw = getCellText("Manual");
             const autoRaw = getCellText("Auto");
 
@@ -584,9 +597,26 @@ async function refreshRegistryFromApi() {
 
                 // 1. Manual 列：4 态分流分发
                 const manualEntries = parseManualConfig(manualRaw);
+                const resolveCmd = (token: string) => {
+                    const lower = token.toLowerCase();
+                    const exact = Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower);
+                    if (exact) return exact;
+                    const byName = Object.values(newCommandBindings).find(b => b.methodName.toLowerCase() === lower);
+                    if (byName) return byName;
+                    const sysCmd = commandRegistry.getCommand(token);
+                    if (sysCmd) {
+                        return {
+                            methodName: sysCmd.name,
+                            commandRef: sysCmd.id,
+                            inputMapping: "",
+                            outputMapping: ""
+                        };
+                    }
+                    return undefined;
+                };
+
                 const pushEntry = (entry: ManualCommandEntry, uiLocation: "IconMenu" | "Slash" | "Button" | "VirtualButton") => {
-                    const foundKey = Object.keys(newCommandBindings).find(k => k.toLowerCase().includes(entry.id.toLowerCase()));
-                    const cmdInfo = foundKey ? newCommandBindings[foundKey] : undefined;
+                    const cmdInfo = resolveCmd(entry.id);
                     if (!cmdInfo) return;
                     const hasParams = entry.params && Object.keys(entry.params).length > 0;
                     const inputMapping = hasParams ? JSON.stringify(entry.params) : cmdInfo.inputMapping;
@@ -629,9 +659,23 @@ async function refreshRegistryFromApi() {
                         }
                     }
                 }
+
+                // 确保每一个定义在 supertag-db 中的标签都能作为合法 Supertag 注册
+                if (cleanTag && !newRegistry.some(r => r.typeTag === cleanTag)) {
+                    newRegistry.push({
+                        typeTag: cleanTag,
+                        methodName: "",
+                        commandRef: "",
+                        inputMapping: "",
+                        outputMapping: "",
+                        uiLocation: "IconMenu"
+                    });
+                }
             }
         }
         setSupertagRegistry(newRegistry);
+        console.log("[Supertag Sync] Registry loaded from API fallback:", { count: newRegistry.length, tags: newRegistry.map(r => r.typeTag) });
     } catch (e) {
+        console.error("[Supertag Sync] API sync failed:", e);
     }
 }

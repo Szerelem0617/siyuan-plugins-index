@@ -150,6 +150,11 @@ function onEditorKeydown(e: KeyboardEvent) {
         return;
     }
 
+    if (e.key === " " || e.key === "Spacebar" || e.code === "Space") {
+        closePalette();
+        return;
+    }
+
     // 2D Matrix Grid Directional Navigation
     if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();

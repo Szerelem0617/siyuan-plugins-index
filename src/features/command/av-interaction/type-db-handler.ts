@@ -1,5 +1,5 @@
 import { Dialog, showMessage } from "siyuan";
-import { getCommandAvId, COMMAND_BINDINGS } from "../registration";
+import { getCommandAvId, COMMAND_BINDINGS, getLayer2Commands } from "../registration";
 import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
@@ -229,12 +229,7 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
         currentIconMenuVal = cellEl?.textContent?.trim() || "";
     }
 
-    const selectableCommands = commandRegistry.getAllCommands().map(c => ({
-        id: c.id,
-        name: c.name,
-        description: c.description || "",
-        params: c.params || []
-    }));
+    const selectableCommands = getLayer2Commands();
 
     const dialog = new Dialog({
         title: `配置 Supertag #${supertagLabel} 手动命令 (Manual)`,

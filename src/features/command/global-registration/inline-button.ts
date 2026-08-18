@@ -95,13 +95,17 @@ function injectButtonCSS() {
 
         /* ─── 0. 通用单色号变量基准 (茵蒂克丝蓝 Token 驱动) ─── */
         span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
-        span[data-type~="a"][data-href^="siyuan-btn://"] {
+        span[data-type~="a"][data-href^="siyuan-btn://"],
+        .indexos-btn-inline,
+        .indexos-virtual-button {
             --btn-color: var(--indexos-index-blue, #A1C4E6);
         }
 
         /* ─── 1. ☀️ 浅色模式：水润冰蓝 (标准 Token 驱动极光 Glassmorphism) ─── */
         span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
-        span[data-type~="a"][data-href^="siyuan-btn://"] {
+        span[data-type~="a"][data-href^="siyuan-btn://"],
+        .indexos-btn-inline,
+        .indexos-virtual-button {
             position: relative !important;
             display: inline-flex !important;
             align-items: center !important;
@@ -138,7 +142,9 @@ function injectButtonCSS() {
 
         /* 45度斜角纯净晶透扫光切线 (::before) */
         span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]::before,
-        span[data-type~="a"][data-href^="siyuan-btn://"]::before {
+        span[data-type~="a"][data-href^="siyuan-btn://"]::before,
+        .indexos-btn-inline::before,
+        .indexos-virtual-button::before {
             content: "" !important;
             position: absolute !important;
             top: -50% !important;
@@ -163,7 +169,9 @@ function injectButtonCSS() {
 
         /* 悬停 (Hover) 触发单次快速划过 + 全息发光 */
         span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover,
-        span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
+        span[data-type~="a"][data-href^="siyuan-btn://"]:hover,
+        .indexos-btn-inline:hover,
+        .indexos-virtual-button:hover {
             border-color: color-mix(in srgb, var(--btn-color) 80%, #0284C7 20%) !important;
             color: color-mix(in srgb, var(--btn-color) 30%, #0284C7 70%) !important;
             background: var(--btn-color) !important;
@@ -174,17 +182,25 @@ function injectButtonCSS() {
         }
 
         span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover::before,
-        span[data-type~="a"][data-href^="siyuan-btn://"]:hover::before {
+        span[data-type~="a"][data-href^="siyuan-btn://"]:hover::before,
+        .indexos-btn-inline:hover::before,
+        .indexos-virtual-button:hover::before {
             animation: indexos-hover-sweep 0.75s ease-out 1 !important;
         }
 
         /* ─── 2. 🌙 深色模式：单色号混黑压暗 (color-mix 32% Base + 68% Black/Dark) ─── */
         html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
         html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"],
+        html[data-theme-mode="dark"] .indexos-btn-inline,
+        html[data-theme-mode="dark"] .indexos-virtual-button,
         body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
         body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"],
+        body[data-theme-mode="dark"] .indexos-btn-inline,
+        body[data-theme-mode="dark"] .indexos-virtual-button,
         .theme-dark span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"],
-        .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"] {
+        .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"],
+        .theme-dark .indexos-btn-inline,
+        .theme-dark .indexos-virtual-button {
             background: color-mix(in srgb, var(--btn-color) 32%, #0F172A 68%) !important;
             border-color: color-mix(in srgb, var(--btn-color) 45%, #0F172A 55%) !important;
             color: color-mix(in srgb, var(--btn-color) 85%, #FFFFFF 15%) !important;
@@ -194,10 +210,16 @@ function injectButtonCSS() {
 
         html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover,
         html[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]:hover,
+        html[data-theme-mode="dark"] .indexos-btn-inline:hover,
+        html[data-theme-mode="dark"] .indexos-virtual-button:hover,
         body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover,
         body[data-theme-mode="dark"] span[data-type~="a"][data-href^="siyuan-btn://"]:hover,
+        body[data-theme-mode="dark"] .indexos-btn-inline:hover,
+        body[data-theme-mode="dark"] .indexos-virtual-button:hover,
         .theme-dark span[data-type~="a"][data-href^="siyuan://plugins/siyuan-plugins-index/"]:hover,
-        .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"]:hover {
+        .theme-dark span[data-type~="a"][data-href^="siyuan-btn://"]:hover,
+        .theme-dark .indexos-btn-inline:hover,
+        .theme-dark .indexos-virtual-button:hover {
             background: color-mix(in srgb, var(--btn-color) 45%, #0F172A 55%) !important;
             color: #FFFFFF !important;
             border-color: color-mix(in srgb, var(--btn-color) 70%, #FFFFFF 30%) !important;

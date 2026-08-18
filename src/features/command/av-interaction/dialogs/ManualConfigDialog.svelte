@@ -4,6 +4,8 @@
     import { parseManualConfig, serializeManualConfig, type ManualConfig, type ManualCommandEntry, createDefaultManualEntry } from "../../utils/manual-config";
     import { PRESET_CONDITIONS } from "../../supertag/core/block-filter";
 
+    import { getLayer2Commands } from "../../registration";
+
     export let dialog: Dialog;
     export let supertag: string = "";
     export let availableCommands: { id: string; name: string; description?: string; params?: any[] }[] = [];
@@ -15,15 +17,10 @@
     let expandedCmdId: string | null = null;
     let saving = false;
 
-    // 获取全量命令注册表
+    // 仅读取 Layer 2 (Command-DB / 种子数据) 注册命令
     $: allCommands = (availableCommands && availableCommands.length > 0)
         ? availableCommands
-        : commandRegistry.getAllCommands().map(c => ({
-            id: c.id,
-            name: c.name,
-            description: c.description || "",
-            params: c.params || []
-        })).sort((a, b) => a.name.localeCompare(b.name, "zh"));
+        : getLayer2Commands();
 
     // 过滤命令列表
     $: visibleCommands = allCommands.filter(cmd => {
@@ -98,9 +95,13 @@
     function appendCondition(cmdId: string, expr: string) {
         const entry = getEntry(cmdId);
         if (!entry) return;
-        const cur = entry.condition || entry.blockFilter || "";
+        const cur = (entry.condition || "").trim();
         const next = cur ? `${cur} && ${expr}` : expr;
         updateEntry(cmdId, () => ({ condition: next, blockFilter: next }));
+    }
+
+    function clearCondition(cmdId: string) {
+        updateEntry(cmdId, () => ({ condition: "", blockFilter: "" }));
     }
 
     async function handleSave() {
@@ -278,37 +279,77 @@
                                     </div>
                                 {/if}
 
-                                <!-- 虚拟按钮 Condition 设置 (仅勾选虚拟按钮时才显示！) -->
+                                <!-- 虚拟按钮专属配置卡片 (仅勾选虚拟按钮时呈现！) -->
                                 {#if entry.showInVirtualButton}
-                                    <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding: 8px 10px; background: rgba(124, 58, 237, 0.04); border-radius: 5px; border: 1px solid rgba(124, 58, 237, 0.2);">
+                                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 10px 12px; background: rgba(124, 58, 237, 0.05); border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.25);">
                                         <div style="display: flex; align-items: center; justify-content: space-between;">
-                                            <span style="font-size: 11px; font-weight: 600; color: #7c3aed;">
-                                                🔍 虚拟按钮 Condition (显示条件):
+                                            <span style="font-size: 11px; font-weight: 600; color: #7c3aed; display: flex; align-items: center; gap: 4px;">
+                                                <span>👻 虚拟悬浮按钮专属配置</span>
                                             </span>
                                             <span style="font-size: 10px; color: var(--indexos-text-muted);">
-                                                满足条件才悬浮展示
+                                                悬浮于 #{supertag} 胶囊右侧
                                             </span>
                                         </div>
-                                        <input
-                                            type="text"
-                                            class="b3-text-field fn__block"
-                                            style="font-size: 11px; padding: 4px 8px;"
-                                            placeholder="如: custom-status == 'pending' 或 content includes '[ ]'"
-                                            value={entry.condition || entry.blockFilter || ""}
-                                            on:input={e => updateEntry(cmd.id, () => ({ condition: e.currentTarget.value, blockFilter: e.currentTarget.value }))}
-                                        />
-                                        <!-- 快捷条件胶囊 -->
+
+                                        <!-- 按钮自定义文字 -->
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span style="font-size: 11px; color: var(--indexos-text-muted); flex-shrink: 0; width: 72px;">按钮文案:</span>
+                                            <input
+                                                type="text"
+                                                class="b3-text-field fn__flex-1"
+                                                style="font-size: 11px; padding: 3px 8px;"
+                                                placeholder="默认: {cmd.name}"
+                                                value={entry.buttonLabel || ""}
+                                                on:input={e => updateEntry(cmd.id, () => ({ buttonLabel: e.currentTarget.value }))}
+                                            />
+                                        </div>
+
+                                        <!-- 按钮显示条件 -->
+                                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                                <span style="font-size: 11px; color: var(--indexos-text-muted); width: 72px;">显示条件:</span>
+                                                <span style="font-size: 10px; color: var(--indexos-text-muted); opacity: 0.8;">留空 = 始终显示；满足条件才悬浮展示</span>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                class="b3-text-field fn__block"
+                                                style="font-size: 11px; padding: 3px 8px; font-family: monospace;"
+                                                placeholder="例如: custom-status == 'pending' 或 content includes '[ ]'"
+                                                value={entry.condition || entry.blockFilter || ""}
+                                                on:input={e => updateEntry(cmd.id, () => ({ condition: e.currentTarget.value, blockFilter: e.currentTarget.value }))}
+                                            />
+                                        </div>
+
+                                        <!-- 快捷预设条件胶囊 -->
                                         <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
-                                            <span style="font-size: 10px; opacity: 0.6;">快捷条件:</span>
+                                            <span style="font-size: 10px; color: var(--indexos-text-muted);">快捷预设:</span>
+                                            <button
+                                                type="button"
+                                                class="indexos-btn-bordered"
+                                                style="font-size: 9px; padding: 1px 6px;"
+                                                on:click={() => clearCondition(cmd.id)}
+                                            >
+                                                始终显示 (无条件)
+                                            </button>
                                             {#each PRESET_CONDITIONS as p}
                                                 <button
                                                     type="button"
-                                                    style="font-size: 9px; padding: 1px 6px; border-radius: 8px; border: 1px solid rgba(124,58,237,0.3); background: var(--indexos-bg-card); cursor: pointer; color: var(--indexos-text-main);"
+                                                    class="indexos-btn-bordered"
+                                                    style="font-size: 9px; padding: 1px 6px; color: #7c3aed;"
                                                     on:click={() => appendCondition(cmd.id, p.filter)}
                                                 >
                                                     + {p.label}
                                                 </button>
                                             {/each}
+                                        </div>
+
+                                        <!-- 实时效果预览 -->
+                                        <div style="display: flex; align-items: center; gap: 6px; padding-top: 4px; border-top: 1px dashed rgba(124,58,237,0.15); font-size: 10px; color: var(--indexos-text-muted);">
+                                            <span>块内渲染预览:</span>
+                                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                                <span class="indexos-supertag-chip" style="font-size: 10px; padding: 1px 6px; border-radius: 3px; background: rgba(40,81,127,0.1); color: var(--indexos-text-main); font-weight: 600;">#{supertag}</span>
+                                                <span class="indexos-virtual-button indexos-btn-inline" style="font-size: 10px; padding: 1px 7px; height: 18px; line-height: 16px; margin: 0;">⚡ {entry.buttonLabel || cmd.name}</span>
+                                            </span>
                                         </div>
                                     </div>
                                 {/if}
