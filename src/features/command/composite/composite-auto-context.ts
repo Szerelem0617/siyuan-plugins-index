@@ -1,11 +1,10 @@
 /**
- * pipeline/composite-auto-context.ts
+ * composite/composite-auto-context.ts
  *
  * 复合命令 (Composite) 专属 Auto-Context 智能推荐引擎（无硬编码，完全从 Command-DB / 注册表动态抓取）
  */
 
 import type { CommandDef } from "../registry/command-registry";
-import { commandRegistry } from "../registry/command-registry";
 import { COMMAND_BINDINGS } from "../registration";
 
 export interface OutputEndpoint {
@@ -48,7 +47,6 @@ export function getCompositeOutputToken(commandRefOrId: string, outputKey: strin
     return formatVarToken(defStr);
 }
 
-// 保持历史命名兼容
 export const getPipelineOutputToken = getCompositeOutputToken;
 
 /** 获取命令定义的真实出参端点列表 */
@@ -120,6 +118,5 @@ export function buildCompositeAutoContextBindings(
     return result;
 }
 
-// 导出别名保持兼容
 export const buildPipelineAutoContextBindings = buildCompositeAutoContextBindings;
 export const buildSmartBindings = buildCompositeAutoContextBindings;

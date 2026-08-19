@@ -1,8 +1,8 @@
 <script lang="ts">
     import { Dialog, showMessage } from "siyuan";
-    import CommandSequenceEditor from "../../pipeline/CommandSequenceEditor.svelte";
-    import { generateMultiEventRuleScript, parseMultiEventRuleScript, generateRuleScript, parseDispatchCallsFromText, type RuleCommand } from "../../pipeline/script-dsl";
-    import { createPipelineRow, registerPipelineCommand, pipelineCommandId } from "../../pipeline/manager";
+    import CommandSequenceEditor from "../../composite/CommandSequenceEditor.svelte";
+    import { generateMultiEventRuleScript, parseMultiEventRuleScript, generateRuleScript, parseDispatchCallsFromText, type RuleCommand } from "../../composite/script-dsl";
+    import { createCompositeRow, registerCompositeCommand, compositeCommandId } from "../../composite/manager";
     import { refreshSupertagRegistry } from "../../utils/sync-service";
 
     export let dialog: Dialog;
@@ -147,9 +147,9 @@
         savingAsCommand = true;
         try {
             const name = `#${supertag} 条件触发`;
-            const rowId = await createPipelineRow(name, finalScript);
-            const commandId = pipelineCommandId(rowId);
-            registerPipelineCommand(commandId, name, finalScript, "{}");
+            const rowId = await createCompositeRow(name, finalScript);
+            const commandId = compositeCommandId(rowId);
+            registerCompositeCommand(commandId, name, finalScript, "{}");
             await refreshSupertagRegistry();
             showMessage(`✓ 已另存为复合命令：${commandId}`);
         } catch (e: any) {
@@ -184,9 +184,12 @@
                     <span class="indexos-tab-badge">{cmdCount}</span>
                     {#if selectedEvents.length > 1}
                         <span
-                            style="opacity: 0.5; font-weight: bold; margin-left: 2px; line-height: 1;"
+                            role="button"
+                            tabindex="0"
+                            style="opacity: 0.5; font-weight: bold; margin-left: 2px; line-height: 1; cursor: pointer;"
                             title="关闭并删除该事件配置"
                             on:click={(e) => removeEventTab(evId, e)}
+                            on:keydown={e => (e.key === 'Enter' || e.key === ' ') && removeEventTab(evId, e)}
                         >&times;</span>
                     {/if}
                 </button>

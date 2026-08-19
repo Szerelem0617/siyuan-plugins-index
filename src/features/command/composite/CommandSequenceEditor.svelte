@@ -118,7 +118,7 @@
             return false;
         }
 
-        // 4. 作用域维度
+        // 4. 作用范围维度
         if (filterScope !== "all" && cmd.scope !== filterScope) {
             return false;
         }
@@ -179,7 +179,6 @@
     function addStep(cmdId: string) {
         const newUid = generateUid();
         steps = [...steps, { uid: newUid, commandRef: cmdId, params: {} }];
-        // 不自动展开右侧入参抽屉，保持纯净连续添加体验
     }
 
     function removeStep(stepIndex: number) {
@@ -353,7 +352,7 @@
             {/if}
         </div>
 
-        <!-- 搜索与多维分类下拉过滤栏 (精简文案与合理内边距，100% 完整显示) -->
+        <!-- 搜索与多维分类下拉过滤栏 -->
         <div style="display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; background: var(--indexos-bg-card, rgba(0,0,0,0.02)); padding: 8px; border-radius: 6px; border: 1px solid var(--indexos-border-light);">
             <!-- 搜索框 -->
             <div style="position: relative;">
@@ -367,7 +366,7 @@
                 <svg style="position: absolute; left: 8px; top: 7px; width: 13px; height: 13px; opacity: 0.5; pointer-events: none;"><use xlink:href="#iconSearch"></use></svg>
             </div>
 
-            <!-- 3 大正交维度平铺下拉框 (宽敞舒适，文字完全不截断) -->
+            <!-- 3 大正交维度平铺下拉框 -->
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
                 <!-- 维度 1: 来源 -->
                 <select 
@@ -407,10 +406,11 @@
                     <option value="focused_block">🎯 聚焦块</option>
                     <option value="document">📄 文档级</option>
                     <option value="global">🌐 全局</option>
+                </select>
             </div>
         </div>
 
-        <!-- 命令列表主体 (支持 [+] 多次追加与角标序号流展示) -->
+        <!-- 命令列表主体 -->
         <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding-right: 4px;">
             {#each visibleCommands as cmd}
                 {@const matchedIndices = steps.map((s, idx) => ({ idx, num: idx + 1, step: s })).filter(item => item.step.commandRef === cmd.id)}
@@ -542,10 +542,10 @@
                         {@const sug = getAutoSuggestion(currentEditingStep.uid, schema)}
                         <div style="display: flex; flex-direction: column; gap: 3px;">
                             <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <label style="font-size: 10px; color: var(--indexos-text-muted);">
+                                <span style="font-size: 10px; color: var(--indexos-text-muted);">
                                     {schema.label || schema.key}
                                     <code style="font-size: 9px; opacity: 0.7;">{schema.key}</code>
-                                </label>
+                                </span>
                                 {#if sug}
                                     <div style="font-size: 10px; color: var(--indexos-text-muted); display: flex; align-items: center; gap: 3px;">
                                         <span style="color: var(--indexos-detached-gold, #D9A74A); font-weight: 600;">推荐:</span>

@@ -23,7 +23,7 @@
 - 完整架构说明见 [docs/architecture.md](docs/architecture.md)（状态机、分层、命名约定）。
 - 核心状态机：未实例化时读 `seed-data.ts` TS 常量；用户点击“将数据存到思源”（代码内称“实例化”）后，
   思源 AV 为唯一数据源；删除系统库文档即回到未实例化。
-- 命令 Pipeline（复合命令）设计见 `docs/pipeline-design.md`；实现位于 `src/features/command/pipeline/`（types / engine / manager）。
+- 复合命令（Composite Command）设计见 `docs/composite-design.md`；实现位于 `src/features/command/composite/`（engine / manager / script-dsl / auto-context）。
 
 ## 本地环境
 

@@ -1,5 +1,5 @@
 /**
- * script-dsl.ts
+ * composite/script-dsl.ts
  * 统一规则脚本 DSL：编辑器生成 / 强大鲁棒反向解析与多事件 Tab 支持
  */
 
@@ -231,7 +231,6 @@ export function parseRuleScript(text: string): RuleScript | null {
         };
     }
 
-    // 兜底直接解析全部 dispatch 调用，保留提取到的名称
     const directCmds = parseDispatchCallsFromText(text);
     return {
         name: extractedName || (multi ? multi.name : ""),

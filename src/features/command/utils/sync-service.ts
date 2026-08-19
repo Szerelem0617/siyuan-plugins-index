@@ -3,7 +3,7 @@ import { client } from "../../../shared/api-client";
 import { getSqliteEngine, runQuery, checkTableExists, instantiateAV, tableNameToAvId, registerFriendlyTableName } from "../../sqlite/sqlite-manager";
 import { initSystemTables } from "../indexos/command-sqlite";
 import { getSeedCommandRows, getSeedSupertagRows } from "../indexos/seed-data";
-import { syncPipelinesFromCommandDb } from "../pipeline/manager";
+import { syncCompositesFromCommandDb } from "../composite/manager";
 import { parseManualConfig, type ManualCommandEntry } from "./manual-config";
 import { parseSupertags } from "../supertag/core/supertag-diff";
 import { 
@@ -493,7 +493,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         } catch (_) {}
 
         // 加载并注册复合命令（Pipeline）
-        await syncPipelinesFromCommandDb();
+        await syncCompositesFromCommandDb();
         return true;
     } catch (e) {
         return false;

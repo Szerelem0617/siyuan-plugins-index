@@ -1,9 +1,9 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { Dialog, showMessage } from "siyuan";
-    import { createPipelineRow, registerPipelineCommand, pipelineCommandId, updatePipelineRow, readPipelineRow, generateUniquePipelineName } from "./manager";
+    import { createCompositeRow, registerCompositeCommand, compositeCommandId, updateCompositeRow, readCompositeRow, generateUniqueCompositeName } from "./manager";
     import { parseRuleScript } from "./script-dsl";
-    import { inspectPipelineSteps, type StepSchemaItem } from "./pipeline-step-schema";
+    import { inspectCompositeSteps, type StepSchemaItem } from "./composite-step-schema";
     import CommandSequenceEditor from "./CommandSequenceEditor.svelte";
     import { refreshSupertagRegistry } from "../utils/sync-service";
 
@@ -23,7 +23,7 @@
     let exposedInputs: Record<string, boolean> = {};
     let exposedInputDefaults: Record<string, string> = {};
 
-    // 导 dangerous 变量状态表：是否导出勾选（默认 true）+ 出参别名
+    // 导出变量状态表：是否导出勾选（默认 true）+ 出参别名
     let exportedOutputs: Record<string, boolean> = {};
     let outputAliases: Record<string, string> = {};
 
@@ -32,7 +32,7 @@
 
     // 步骤结构分析
     $: currentRule = parseRuleScript(script);
-    $: stepSchemas = inspectPipelineSteps(currentRule);
+    $: stepSchemas = inspectCompositeSteps(currentRule);
 
     // 动态计算激活的 Input / Output 数量 Badge
     $: activeExposedInputCount = stepSchemas.flatMap(s => s.params).filter(p => exposedInputs[p.key] === true).length;
@@ -41,13 +41,13 @@
     onMount(async () => {
         if (editRowId && !initialScript) {
             try {
-                const row = await readPipelineRow(editRowId);
+                const row = await readCompositeRow(editRowId);
                 if (row) {
                     initialScript = row.script;
                     loadExistingIO(row.inputStr, row.outputStr);
                 }
             } catch (e) {
-                console.error("[PipelineEditor] Error reading row:", e);
+                console.error("[CompositeEditor] Error reading row:", e);
             }
         }
     });
@@ -86,7 +86,7 @@
             targetScript = sequenceEditorRef.getScript();
         }
 
-        console.log("[PipelineSave-Debug] 💾 handleSave 触发！targetScript:", JSON.stringify(targetScript));
+        console.log("[CompositeSave-Debug] 💾 handleSave 触发！targetScript:", JSON.stringify(targetScript));
         const rule = parseRuleScript(targetScript);
 
         if (!rule || !rule.commands || rule.commands.length === 0) {
@@ -97,7 +97,7 @@
         // 自动命名：若未填写名称，则自动生成唯一命名（复合命令 1, 复合命令 2...）
         let finalName = (rule.name || "").trim();
         if (!finalName) {
-            finalName = generateUniquePipelineName();
+            finalName = generateUniqueCompositeName();
             if (targetScript.includes("// 名称:")) {
                 targetScript = targetScript.replace(/\/\/\s*名称\s*:[^\n]*/, `// 名称: ${finalName}`);
             } else {
@@ -133,14 +133,14 @@
             let rowId: string;
             if (editRowId) {
                 rowId = editRowId;
-                await updatePipelineRow(rowId, finalName, targetScript, finalInputJson, finalOutputJson);
+                await updateCompositeRow(rowId, finalName, targetScript, finalInputJson, finalOutputJson);
             } else {
-                rowId = await createPipelineRow(finalName, targetScript, finalInputJson, finalOutputJson);
+                rowId = await createCompositeRow(finalName, targetScript, finalInputJson, finalOutputJson);
             }
-            const commandId = pipelineCommandId(rowId);
-            registerPipelineCommand(commandId, finalName, targetScript, finalInputJson);
+            const commandId = compositeCommandId(rowId);
+            registerCompositeCommand(commandId, finalName, targetScript, finalInputJson);
             await refreshSupertagRegistry();
-            console.log(`[PipelineEditor] saved ${commandId} (${finalName})`);
+            console.log(`[CompositeEditor] saved ${commandId} (${finalName})`);
             showMessage(`✓ 复合命令已${editRowId ? "更新" : "创建"}：${finalName}`);
             onCreated?.(rowId, finalName);
             dialog.destroy();
@@ -177,7 +177,7 @@
             <span>复合命令 (Composite Command) 编排中心</span>
         </div>
         {#if editRowId}
-            <span style="font-family: monospace; font-size: 11px; opacity: 0.6;">{pipelineCommandId(editRowId)}</span>
+            <span style="font-family: monospace; font-size: 11px; opacity: 0.6;">{compositeCommandId(editRowId)}</span>
         {/if}
     </div>
 

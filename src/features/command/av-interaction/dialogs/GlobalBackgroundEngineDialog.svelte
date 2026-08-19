@@ -6,8 +6,8 @@
     import { getCommandAvId } from "../../registration";
     import { commandRegistry } from "../../registry/command-registry";
     import { backgroundScheduler } from "../../background/background-scheduler";
-    import CommandSequenceEditor from "../../pipeline/CommandSequenceEditor.svelte";
-    import { generateRuleScript, parseRuleScript } from "../../pipeline/script-dsl";
+    import CommandSequenceEditor from "../../composite/CommandSequenceEditor.svelte";
+    import { generateRuleScript, parseRuleScript } from "../../composite/script-dsl";
 
     export let dialog: any;
 

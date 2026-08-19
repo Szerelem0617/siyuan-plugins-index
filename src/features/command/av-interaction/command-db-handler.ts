@@ -7,7 +7,7 @@ import { getSqliteEngine, executeWritableSql } from "../../sqlite/sqlite-manager
 import { post } from "../../../shared/api-client/request";
 import { getInputColKeyId, getOutputColKeyId } from "./query-helper";
 import RegistryCommandSelectorDialog from "./dialogs/RegistryCommandSelectorDialog.svelte";
-import { readPipelineRow, openPipelineEditorForRow, openPipelineEditor } from "../pipeline/manager";
+import { readCompositeRow, openCompositeEditorForRow, openCompositeEditor } from "../composite/manager";
 import GlobalBackgroundEngineDialog from "./dialogs/GlobalBackgroundEngineDialog.svelte";
 
 /** 检测当前 command-db 视图是否处于“复合命令”View 切页 */
@@ -115,7 +115,7 @@ export async function handleAvFooterClick(event: MouseEvent) {
 
         // 若在“复合命令”View 切页下点击“+ 添加条目”，直接调起复合命令配置 Dialog
         if (isPipelineViewActive(avContainer as HTMLElement)) {
-            openPipelineEditor();
+            openCompositeEditor();
             return;
         }
 
@@ -368,10 +368,10 @@ export async function handleCommandDbAltClick(
         }
 
         // 优先检查当前行是否为复合命令 (Composite Command) 行
-        const pipelineRow = await readPipelineRow(rowId);
-        const isPipeline = Boolean(pipelineRow && pipelineRow.script) || (resolvedCommand && (resolvedCommand.startsWith("composite.") || resolvedCommand.startsWith("pipeline.")));
+        const compositeRow = await readCompositeRow(rowId);
+        const isComposite = Boolean(compositeRow && compositeRow.script) || (resolvedCommand && (resolvedCommand.startsWith("composite.") || resolvedCommand.startsWith("pipeline.")));
 
-        if (isPipeline || clickedKeyName === "Composite") {
+        if (isComposite || clickedKeyName === "Composite") {
             // --- 行为 0: Composite 行根据 Alt+Click 的列智能打开对应 Tab ---
             event.preventDefault();
             event.stopPropagation();
@@ -380,12 +380,12 @@ export async function handleCommandDbAltClick(
             const isInputClick = clickedKeyName === "Input";
             const initialTab: "steps" | "input" | "output" = isOutputClick ? "output" : isInputClick ? "input" : "steps";
 
-            if (!pipelineRow || !pipelineRow.script) {
-                // 如果是新行但点击了 Pipeline 定义列，打开新建编辑器
-                openPipelineEditor(initialTab);
+            if (!compositeRow || !compositeRow.script) {
+                // 如果是新行但点击了 Composite 定义列，打开新建编辑器
+                openCompositeEditor(initialTab);
                 return;
             }
-            openPipelineEditorForRow(rowId, pipelineRow.script, initialTab);
+            openCompositeEditorForRow(rowId, compositeRow.script, initialTab);
             return;
         }
 

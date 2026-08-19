@@ -1,10 +1,10 @@
 <script lang="ts">
     import { Dialog, showMessage } from "siyuan";
     import { commandRegistry } from "../registry/command-registry";
-    import CommandSequenceEditor from "../pipeline/CommandSequenceEditor.svelte";
+    import CommandSequenceEditor from "../composite/CommandSequenceEditor.svelte";
     import { encodeBtnHref } from "./inline-button";
-    import { parseDispatchCallsFromText, generateRuleScript } from "../pipeline/script-dsl";
-    import { createPipelineRow, registerPipelineCommand, compositeCommandId, generateUniquePipelineName } from "../pipeline/manager";
+    import { parseDispatchCallsFromText, generateRuleScript } from "../composite/script-dsl";
+    import { createCompositeRow, registerCompositeCommand, compositeCommandId, generateUniqueCompositeName } from "../composite/manager";
     import { refreshSupertagRegistry } from "../utils/sync-service";
 
     export let dialog: Dialog;
@@ -42,10 +42,10 @@
                 dialog.destroy();
             } else {
                 // 多命令复合执行模式：自动注册为复合命令并写入按钮链接
-                const autoName = customLabel.trim() || generateUniquePipelineName();
-                const rowId = await createPipelineRow(autoName, buttonScript, "", "");
+                const autoName = customLabel.trim() || generateUniqueCompositeName();
+                const rowId = await createCompositeRow(autoName, buttonScript, "", "");
                 const commandId = compositeCommandId(rowId);
-                registerPipelineCommand(commandId, autoName, buttonScript, "{}");
+                registerCompositeCommand(commandId, autoName, buttonScript, "{}");
                 await refreshSupertagRegistry();
 
                 const finalLabel = customLabel.trim() || autoName;

@@ -1,7 +1,7 @@
 /**
- * pipeline/manager.ts
- * 复合命令注册管理：Command-DB 的 "Pipeline 定义" 列存统一规则脚本（script-dsl），
- * 读取后注册为 pipeline.* 命令，执行走统一引擎 runRuleScript。
+ * composite/manager.ts
+ * 复合命令注册管理：Command-DB 的 "Composite" 列存统一规则脚本（script-dsl），
+ * 读取后注册为 composite.* 命令，执行走统一引擎 runRuleScript。
  */
 
 import { Dialog, showMessage } from "siyuan";
@@ -13,8 +13,9 @@ import { commandRegistry } from "../registry/command-registry";
 import type { CommandContext } from "../command-dispatcher";
 import { runRuleScript } from "./engine";
 import { parseRuleScript, type RuleScript } from "./script-dsl";
+import { inspectCompositeSteps } from "./composite-step-schema";
 
-const registeredPipelines = new Set<string>();
+const registeredComposites = new Set<string>();
 
 /** 由 AV 行 ID 派生稳定的短哈希后缀（避免与思源 block id 格式混淆） */
 function shortHash(input: string): string {
@@ -36,15 +37,16 @@ export function compositeCommandId(rowId: string): string {
 }
 export const pipelineCommandId = compositeCommandId;
 
-export function unregisterAllPipelines(): void {
-    for (const id of registeredPipelines) {
+export function unregisterAllComposites(): void {
+    for (const id of registeredComposites) {
         commandRegistry.unregisterCommand(id);
     }
-    registeredPipelines.clear();
+    registeredComposites.clear();
 }
+export const unregisterAllPipelines = unregisterAllComposites;
 
 /** 注册（或更新）一个复合命令。executor 闭包携带脚本。 */
-export function registerPipelineCommand(id: string, name: string, script: string, globalParams: string): string {
+export function registerCompositeCommand(id: string, name: string, script: string, globalParams: string): string {
     if (commandRegistry.getCommand(id)) {
         commandRegistry.unregisterCommand(id);
     }
@@ -70,9 +72,10 @@ export function registerPipelineCommand(id: string, name: string, script: string
         constraints: { environment: "universal", targetScope: "any" },
         meta: { contextNeed: "none", category: "custom", source: "user", plugin: "composite" }
     });
-    registeredPipelines.add(id);
+    registeredComposites.add(id);
     return id;
 }
+export const registerPipelineCommand = registerCompositeCommand;
 
 function parseGlobalParams(raw: string): Record<string, unknown> {
     if (!raw) return {};
@@ -95,14 +98,13 @@ function cleanJsonOrEmpty(jsonStr?: string): string {
     return trimmed;
 }
 
-import { inspectPipelineSteps } from "./pipeline-step-schema";
-
 /** 获取 Command-DB 的关键列 keyID */
 export async function getCommandDbKeyIds(): Promise<{
     pkKeyId: string;
     cmdIdKeyId: string;
     inputKeyId: string;
     outputKeyId: string;
+    compositeKeyId: string;
     pipelineKeyId: string;
 } | null> {
     const cmdAvId = getCommandAvId();
@@ -117,18 +119,20 @@ export async function getCommandDbKeyIds(): Promise<{
         return "";
     };
     const pk = keys.find((k: any) => k.type === "block" || k.name === "主键" || k.name === "Primary Key");
+    const compositeColId = findId("Composite", "复合命令", "Pipeline");
     const result = {
         pkKeyId: pk?.id ? String(pk.id) : (keys[0]?.id ? String(keys[0].id) : ""),
         cmdIdKeyId: findId("Command ID"),
         inputKeyId: findId("Input"),
         outputKeyId: findId("Output"),
-        pipelineKeyId: findId("Composite")
+        compositeKeyId: compositeColId,
+        pipelineKeyId: compositeColId
     };
-    return result.pipelineKeyId ? result : null;
+    return result.compositeKeyId ? result : null;
 }
 
 /** 在 Command-DB 创建一行复合命令记录（自动填充 Input, Output, Composite） */
-export async function createPipelineRow(
+export async function createCompositeRow(
     name: string,
     script: string,
     inputParams?: string,
@@ -148,7 +152,7 @@ export async function createPipelineRow(
     let finalOutputJson = outputParams;
 
     if (finalOutputJson === undefined && rule) {
-        const stepSchemas = inspectPipelineSteps(rule);
+        const stepSchemas = inspectCompositeSteps(rule);
         const defaultOutputs: Record<string, string> = {};
         for (const s of stepSchemas) {
             for (const o of s.outputs) {
@@ -166,20 +170,21 @@ export async function createPipelineRow(
     });
     await sleep(300);
 
-    const commandId = pipelineCommandId(rowId);
+    const commandId = compositeCommandId(rowId);
     const ops: any[] = [];
     if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
     if (keys.cmdIdKeyId) ops.push({ keyID: keys.cmdIdKeyId, itemID: rowId, value: { type: "text", text: { content: commandId } } });
     if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalInputJson) } } });
     if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalOutputJson) } } });
-    if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
+    if (keys.compositeKeyId) ops.push({ keyID: keys.compositeKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
     
     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
     return rowId;
 }
+export const createPipelineRow = createCompositeRow;
 
 /** 读取一行复合命令的脚本与 Input/Output */
-export async function readPipelineRow(rowId: string): Promise<{
+export async function readCompositeRow(rowId: string): Promise<{
     name: string;
     script: string;
     inputStr: string;
@@ -194,7 +199,7 @@ export async function readPipelineRow(rowId: string): Promise<{
     const pkRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [cmdAvId]);
     const pkCol = pkRes.length > 0 && pkRes[0].values.length > 0 ? String(pkRes[0].values[0][0]) : "label";
     
-    const pipeRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Composite'`, [cmdAvId]);
+    const pipeRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Composite' OR key_name = '复合命令' OR key_name = 'Pipeline')`, [cmdAvId]);
     if (pipeRes.length === 0 || pipeRes[0].values.length === 0) return null;
     const pipeCol = String(pipeRes[0].values[0][0]);
 
@@ -219,9 +224,10 @@ export async function readPipelineRow(rowId: string): Promise<{
     if (!script) return null;
     return { name, script, inputStr, outputStr, rule: parseRuleScript(script) };
 }
+export const readPipelineRow = readCompositeRow;
 
 /** 更新一行复合命令的名称、脚本与 Input/Output */
-export async function updatePipelineRow(
+export async function updateCompositeRow(
     rowId: string,
     name: string,
     script: string,
@@ -239,7 +245,7 @@ export async function updatePipelineRow(
     let finalOutputJson = outputParams;
 
     if (finalOutputJson === undefined && rule) {
-        const stepSchemas = inspectPipelineSteps(rule);
+        const stepSchemas = inspectCompositeSteps(rule);
         const defaultOutputs: Record<string, string> = {};
         for (const s of stepSchemas) {
             for (const o of s.outputs) {
@@ -253,21 +259,22 @@ export async function updatePipelineRow(
     if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
     if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalInputJson) } } });
     if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalOutputJson) } } });
-    if (keys.pipelineKeyId) ops.push({ keyID: keys.pipelineKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
+    if (keys.compositeKeyId) ops.push({ keyID: keys.compositeKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
     
     await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
 }
+export const updatePipelineRow = updateCompositeRow;
 
 /** 从 Command-DB 同步所有复合命令脚本并注册 */
-export async function syncPipelinesFromCommandDb(): Promise<void> {
+export async function syncCompositesFromCommandDb(): Promise<void> {
     try {
-        unregisterAllPipelines();
+        unregisterAllComposites();
         const cmdAvId = getCommandAvId();
         if (!cmdAvId) return;
 
         const { db } = await getSqliteEngine();
         const tableName = `av_${cmdAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-        const colRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Composite'`, [cmdAvId]);
+        const colRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Composite' OR key_name = '复合命令' OR key_name = 'Pipeline')`, [cmdAvId]);
         if (colRes.length === 0 || colRes[0].values.length === 0) return;
         const pipelineCol = String(colRes[0].values[0][0]);
 
@@ -290,22 +297,23 @@ export async function syncPipelinesFromCommandDb(): Promise<void> {
             if (!rowId || !script) continue;
             const rule = parseRuleScript(script);
             if (!rule) {
-                console.warn(`[Pipeline] 跳过无法解析的脚本行 "${label}"`);
+                console.warn(`[Composite] 跳过无法解析的脚本行 "${label}"`);
                 continue;
             }
             const commandId = (storedCmdId.startsWith("composite.") || storedCmdId.startsWith("pipeline."))
                 ? storedCmdId
                 : compositeCommandId(rowId);
-            registerPipelineCommand(commandId, rule.name || label || rowId, script, globalParams);
+            registerCompositeCommand(commandId, rule.name || label || rowId, script, globalParams);
             console.log(`[Composite] 已注册复合命令 ${commandId} (${rule.name || label})`);
         }
     } catch (e) {
-        console.error("[Composite] syncPipelinesFromCommandDb failed:", e);
+        console.error("[Composite] syncCompositesFromCommandDb failed:", e);
     }
 }
+export const syncPipelinesFromCommandDb = syncCompositesFromCommandDb;
 
 /** 自动生成不重复的复合命令默认名称（复合命令 1, 复合命令 2, ...） */
-export function generateUniquePipelineName(): string {
+export function generateUniqueCompositeName(): string {
     const existingNames = new Set(commandRegistry.getAllCommands().map(c => c.name.trim()));
     let index = 1;
     while (existingNames.has(`复合命令 ${index}`) || existingNames.has(`复合命令${index}`)) {
@@ -313,55 +321,58 @@ export function generateUniquePipelineName(): string {
     }
     return `复合命令 ${index}`;
 }
+export const generateUniquePipelineName = generateUniqueCompositeName;
 
 /** 打开复合命令编辑器（新建） */
-export function openPipelineEditor(
+export function openCompositeEditor(
     initialTab: "steps" | "input" | "output" = "steps",
     onCreated?: (rowId: string, name: string) => void
 ): void {
     const dialog = new Dialog({
         title: "创建复合命令 (Composite Command)",
-        content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
+        content: `<div id="composite-editor-container" style="height: 100%;"></div>`,
         width: "680px",
         height: "720px"
     });
     dialog.element.classList.add("indexos-dialog");
 
-    import("./PipelineEditorDialog.svelte").then(m => {
+    import("./CompositeEditorDialog.svelte").then(m => {
         new m.default({
-            target: dialog.element.querySelector("#pipeline-editor-container")!,
+            target: dialog.element.querySelector("#composite-editor-container")!,
             props: { dialog, initialTab, onCreated }
         });
     }).catch(e => {
-        console.error("[Pipeline] Failed to load editor:", e);
+        console.error("[Composite] Failed to load editor:", e);
         showMessage("加载复合命令编辑器失败", 5000, "error");
         dialog.destroy();
     });
 }
+export const openPipelineEditor = openCompositeEditor;
 
-/** 打开复合命令编辑器（编辑已有行，initialScript 为 Pipeline 定义列内容） */
-export function openPipelineEditorForRow(
+/** 打开复合命令编辑器（编辑已有行） */
+export function openCompositeEditorForRow(
     rowId: string, 
     initialScript: string, 
     initialTab: "steps" | "input" | "output" = "steps",
     onSaved?: (rowId: string, name: string) => void
 ): void {
     const dialog = new Dialog({
-        title: "编辑复合命令 (Pipeline)",
-        content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
+        title: "编辑复合命令 (Composite)",
+        content: `<div id="composite-editor-container" style="height: 100%;"></div>`,
         width: "680px",
         height: "720px"
     });
     dialog.element.classList.add("indexos-dialog");
 
-    import("./PipelineEditorDialog.svelte").then(m => {
+    import("./CompositeEditorDialog.svelte").then(m => {
         new m.default({
-            target: dialog.element.querySelector("#pipeline-editor-container")!,
+            target: dialog.element.querySelector("#composite-editor-container")!,
             props: { dialog, initialScript, editRowId: rowId, initialTab, onCreated: onSaved }
         });
     }).catch(e => {
-        console.error("[Pipeline] Failed to load editor:", e);
+        console.error("[Composite] Failed to load editor:", e);
         showMessage("加载复合命令编辑器失败", 5000, "error");
         dialog.destroy();
     });
 }
+export const openPipelineEditorForRow = openCompositeEditorForRow;

@@ -1,8 +1,8 @@
 /**
- * pipeline/engine.ts
+ * composite/engine.ts
  * 统一规则脚本执行器（RuleEngine）
  *
- * Conditional 列 / 全局后台任务 / 复合命令共用同一脚本工件与同一沙箱环境：
+ * Conditional 列 / 全局后台任务 / 复合命令 (Composite) 共用同一脚本工件与同一沙箱环境：
  *   env = { dispatch, state: { vars }, delay, context, eventName }
  *
  * - dispatch()：调用任意已注册命令；成功后把出参（规范 key + 用户别名）写入参数池 state.vars；

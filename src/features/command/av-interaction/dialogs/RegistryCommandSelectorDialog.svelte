@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Dialog } from "siyuan";
     import CustomUserCommandDialog from "./CustomUserCommandDialog.svelte";
-    import PipelineEditorDialog from "../../pipeline/PipelineEditorDialog.svelte";
+    import CompositeEditorDialog from "../../composite/CompositeEditorDialog.svelte";
 
     export let commands: any[] = [];
     export let onSelect: (cmd: any) => void;
@@ -39,14 +39,14 @@
     function openCreatePipelineDialog() {
         const dialog = new Dialog({
             title: "创建复合命令 (Composite Command)",
-            content: `<div id="pipeline-editor-container" style="height: 100%;"></div>`,
+            content: `<div id="composite-editor-container" style="height: 100%;"></div>`,
             width: "680px",
             height: "720px"
         });
         dialog.element.classList.add("indexos-dialog");
 
-        new PipelineEditorDialog({
-            target: dialog.element.querySelector("#pipeline-editor-container")!,
+        new CompositeEditorDialog({
+            target: dialog.element.querySelector("#composite-editor-container")!,
             props: {
                 dialog,
                 onCreated: (rowId: string, name: string) => {
@@ -81,9 +81,12 @@
     <div style="flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
         {#each filteredCommands as cmd}
             <div 
+                role="button"
+                tabindex="0"
                 class="b3-list-item" 
                 style="padding: 8px 10px; border-radius: 4px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; transition: background-color 0.15s ease;"
                 on:click={() => onSelect(cmd)}
+                on:keydown={e => e.key === 'Enter' && onSelect(cmd)}
             >
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span style="font-weight: bold; color: var(--b3-theme-on-background); font-size: 13px;">

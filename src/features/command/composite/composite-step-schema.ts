@@ -1,7 +1,7 @@
 /**
- * pipeline/pipeline-step-schema.ts
+ * composite/composite-step-schema.ts
  *
- * 负责解析 Pipeline 中各步骤的参数规范与出参定义，
+ * 负责解析复合命令 (Composite) 中各步骤的参数规范与出参定义，
  * 为【外部入参按需暴露】与【出参默认导出/自选过滤】提供清晰的步骤级数据模型。
  */
 
@@ -21,7 +21,7 @@ export interface StepOutputInfo {
     key: string;
     label: string;
     description?: string;
-    canonicalToken: string; // 如 {{var.createdblock}}
+    canonicalToken: string; // 如 {{var.id}}
 }
 
 export interface StepSchemaItem {
@@ -32,7 +32,7 @@ export interface StepSchemaItem {
     outputs: StepOutputInfo[];
 }
 
-export function inspectPipelineSteps(rule: RuleScript | null): StepSchemaItem[] {
+export function inspectCompositeSteps(rule: RuleScript | null): StepSchemaItem[] {
     if (!rule || !rule.commands || rule.commands.length === 0) {
         return [];
     }
@@ -75,3 +75,6 @@ export function inspectPipelineSteps(rule: RuleScript | null): StepSchemaItem[] 
         };
     });
 }
+
+// 别名兼容
+export const inspectPipelineSteps = inspectCompositeSteps;
