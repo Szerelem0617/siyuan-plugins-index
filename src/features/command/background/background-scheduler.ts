@@ -1,13 +1,14 @@
 /**
- * background-scheduler.ts
+ * background/background-scheduler.ts
  *
- * 全局后台命令与循环执行调度中心 (Layer 2 守护进程 - TS 源码脚本调度版)
+ * 全局定时与事件调度中心 (Schedule / Cron & Global Condition Scheduler)
  *
  * 架构特性：
- *   1. 集中持久化：规则以带 Comment 的标准 TypeScript 源码脚本形式存入 Command-DB 数据库 Block 的 custom-attributes；
- *   2. 沿用 Supertag 原始 Pipeline 逻辑：顺序勾选搭建 Pipeline，被勾选项显示 1, 2, 3, 4 角标，中途返回 false 则阻断后续；
- *   3. 保持左侧任务列表 Panel 专注高亮与单任务源码专属编辑；
- *   4. 100% 依托思源 3.7+ 内核层次 (Kernel Mode) API 执行，零 DOM / 零 UI 编辑器依赖。
+ *   1. 精准闹钟模型 (Cron)：彻底摒弃 1s 死循环盲轮询，计算下一执行时间戳，精准休眠与唤醒 (Zero CPU Idle Cost)；
+ *   2. 全局事件驱动 (Condition)：监听全局事件 (块变动、属性变动、文档打开、任务完成)，即时响应触发，0 轮询；
+ *   3. 唤醒补偿机制：监听窗口聚焦与可见性切换，自动补偿笔记本休眠期间到期的周期任务；
+ *   4. 集中持久化：规则以带 Comment 的标准规则脚本形式存入 Command-DB 数据库 Block custom-attributes；
+ *   5. 100% 依托思源内核级 (Kernel Mode) API 执行，零 DOM 依赖。
  */
 
 import { Plugin } from "siyuan";
@@ -16,54 +17,140 @@ import { post } from "../../../shared/api-client/request";
 import { dispatchCommand, type CommandContext } from "../command-dispatcher";
 import { getCommandAvId } from "../registration";
 
-export interface AutomationTask {
+export interface ScheduledTask {
     id: string;
     name: string;
-    type: "cron" | "condition" | "system";
+    type: "cron" | "condition";
     enabled: boolean;
     cronExpr?: string;
-    boundCommands?: string[];
-    commandParams?: Record<string, Record<string, string>>;
     eventType?: string;
-    tickRateMs?: number;
+    boundCommands: string[];
+    commandParams: Record<string, Record<string, string>>;
     scriptBlock: string;
-    intervalMs: number;
     lastRunTime?: number;
+    nextRunTime?: number;
     status: "idle" | "running" | "error";
     lastError?: string;
 }
 
-class BackgroundScheduler {
-    private timerId: any = null;
-    private activeTasks: Map<string, AutomationTask> = new Map();
-    private isRunning = false;
+/**
+ * 极轻量标准 5 字段 Cron 时间戳计算器 (分 时 日 月 周)
+ */
+export function calculateNextCronTimestamp(cronExpr: string, fromTime: number = Date.now()): number {
+    const expr = (cronExpr || "0 2 * * *").trim();
+    const parts = expr.split(/\s+/);
+    if (parts.length < 5) {
+        return fromTime + 3600 * 1000;
+    }
 
-    public async init(_plugin?: Plugin) {
-        await this.reloadTasks();
+    const [minPart, hourPart, dayPart, monthPart, weekPart] = parts;
 
-        if (this.timerId) {
-            clearInterval(this.timerId);
+    // 1. 每 N 分钟 (例如 */15 * * * *)
+    const minuteIntervalMatch = /^\*\/(\d+)$/.exec(minPart);
+    if (minuteIntervalMatch && hourPart === "*" && dayPart === "*") {
+        const intervalMins = parseInt(minuteIntervalMatch[1], 10) || 1;
+        const fromDate = new Date(fromTime);
+        const currentMins = fromDate.getMinutes();
+        const nextMin = (Math.floor(currentMins / intervalMins) + 1) * intervalMins;
+        const target = new Date(fromTime);
+        target.setMinutes(nextMin, 0, 0);
+        return target.getTime();
+    }
+
+    // 2. 逐分钟向前探测未来 8 天内的首个匹配点 (最多探测 11520 分钟)
+    const current = new Date(fromTime);
+    current.setSeconds(0, 0);
+    current.setMinutes(current.getMinutes() + 1);
+
+    const matchesField = (val: number, pattern: string): boolean => {
+        if (pattern === "*") return true;
+        if (pattern.startsWith("*/")) {
+            const step = parseInt(pattern.slice(2), 10);
+            return step > 0 && val % step === 0;
+        }
+        const values = pattern.split(",").map(v => parseInt(v.trim(), 10));
+        return values.includes(val);
+    };
+
+    for (let i = 0; i < 11520; i++) {
+        const min = current.getMinutes();
+        const hour = current.getHours();
+        const day = current.getDate();
+        const month = current.getMonth() + 1;
+        const week = current.getDay(); // 0 is Sunday
+
+        const matchMin = matchesField(min, minPart);
+        const matchHour = matchesField(hour, hourPart);
+        const matchDay = matchesField(day, dayPart);
+        const matchMonth = matchesField(month, monthPart);
+        const matchWeek = matchesField(week, weekPart);
+
+        if (matchMin && matchHour && matchDay && matchMonth && matchWeek) {
+            return current.getTime();
         }
 
-        this.timerId = setInterval(() => {
-            this.tick();
-        }, 1000);
+        current.setMinutes(current.getMinutes() + 1);
+    }
+
+    return fromTime + 86400 * 1000;
+}
+
+class BackgroundScheduler {
+    private wakeTimerId: any = null;
+    private activeTasks: Map<string, ScheduledTask> = new Map();
+    private isExecuting = false;
+    private hasBoundLifecycleListeners = false;
+
+    public async init(_plugin?: Plugin) {
+        this.bindLifecycleListeners();
+        await this.reloadTasks();
     }
 
     public stop() {
-        if (this.timerId) {
-            clearInterval(this.timerId);
-            this.timerId = null;
+        if (this.wakeTimerId) {
+            clearTimeout(this.wakeTimerId);
+            this.wakeTimerId = null;
         }
         this.activeTasks.clear();
-        this.isRunning = false;
+        this.isExecuting = false;
+    }
+
+    private bindLifecycleListeners() {
+        if (this.hasBoundLifecycleListeners) return;
+        this.hasBoundLifecycleListeners = true;
+
+        const checkMissedTasks = () => {
+            console.log("[BackgroundScheduler] 🔔 Window visible/focus, checking scheduled tasks...");
+            this.evaluateAndRunDueTasks();
+        };
+
+        window.addEventListener("focus", checkMissedTasks);
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") {
+                checkMissedTasks();
+            }
+        });
+    }
+
+    /**
+     * 响应全局事件并即时触发符合条件的 Condition 任务 (0 轮询开销)
+     */
+    public async triggerEventTasks(eventName: string, contextVars: Record<string, any> = {}) {
+        for (const task of this.activeTasks.values()) {
+            if (!task.enabled || task.type !== "condition") continue;
+            if (task.eventType && task.eventType !== eventName && task.eventType !== "*") continue;
+
+            console.log(`[BackgroundScheduler] ⚡ Event "${eventName}" triggered condition task "${task.name}"`);
+            this.executeTaskScript(task, contextVars).catch(e => {
+                console.error(`[BackgroundScheduler] Condition task error:`, e);
+            });
+        }
     }
 
     public async resolveTargetCommandDbBlockId(): Promise<string> {
         let blockId = "";
         const commandAvId = getCommandAvId();
 
-        // 1. 尝试从 DOM 抓取 NodeAttributeView 的物理 data-node-id
         if (commandAvId) {
             const avEl = document.querySelector(`[data-av-id="${commandAvId}"]`);
             if (avEl) {
@@ -74,7 +161,6 @@ class BackgroundScheduler {
             }
         }
 
-        // 2. SQL 检索 type = 'av' 物理块
         if (!blockId && commandAvId) {
             try {
                 const res = await post("/api/query/sql", {
@@ -90,7 +176,6 @@ class BackgroundScheduler {
             } catch (_) {}
         }
 
-        // 3. 从 attributes 表反查 custom-index-command-db 记录的物理 block_id
         if (!blockId) {
             try {
                 const res = await post("/api/query/sql", {
@@ -110,13 +195,12 @@ class BackgroundScheduler {
     }
 
     public async reloadTasks() {
-        console.log("[BackgroundScheduler-Debug] 🔄 Reloading TS rules from Command-DB Block custom attributes...");
+        console.log("[BackgroundScheduler] 🔄 Reloading background tasks from storage...");
         const blockId = await this.resolveTargetCommandDbBlockId();
 
         let scriptText = "";
         const LOCAL_BG_FILE = "background-engine.json";
 
-        // 1. 尝试从本地 JSON 文件读取规则
         try {
             if (plugin) {
                 const localData = await plugin.loadData(LOCAL_BG_FILE);
@@ -128,7 +212,6 @@ class BackgroundScheduler {
             }
         } catch (_) {}
 
-        // 2. 若已实例化，尝试从数据库块属性中读取最新的双写规则
         if (blockId) {
             try {
                 const res = await post("/api/attr/getBlockAttrs", { id: blockId });
@@ -147,32 +230,36 @@ class BackgroundScheduler {
         try {
             const tasks = this.parseTsScriptToTasks(scriptText);
             const activeTaskIds = new Set<string>();
+            const now = Date.now();
 
             for (const task of tasks) {
                 if (!task.enabled) continue;
                 activeTaskIds.add(task.id);
 
                 const existingState = this.activeTasks.get(task.id);
+                const nextTime = task.type === "cron" ? calculateNextCronTimestamp(task.cronExpr || "0 2 * * *", now) : undefined;
                 this.activeTasks.set(task.id, {
                     ...task,
                     lastRunTime: existingState?.lastRunTime,
+                    nextRunTime: nextTime,
                     status: "idle"
                 });
             }
 
-            // 清理已删除的规则
             for (const existingId of Array.from(this.activeTasks.keys())) {
                 if (!activeTaskIds.has(existingId)) {
                     this.activeTasks.delete(existingId);
                 }
             }
+
+            this.replanNextWakeAlarm();
         } catch (e) {
-            console.error("[BackgroundScheduler] Failed to reload TS tasks from Block Attrs:", e);
+            console.error("[BackgroundScheduler] Failed to reload tasks:", e);
         }
     }
 
-    private parseTsScriptToTasks(script: string): AutomationTask[] {
-        const tasks: AutomationTask[] = [];
+    private parseTsScriptToTasks(script: string): ScheduledTask[] {
+        const tasks: ScheduledTask[] = [];
         if (!script || !script.trim()) return tasks;
 
         const extractDispatchCommands = (fullText: string): { ids: string[]; params: Record<string, Record<string, string>> } => {
@@ -205,11 +292,10 @@ class BackgroundScheduler {
             taskIndex++;
             const lines = trimmed.split("\n");
             const firstLine = lines[0].trim();
-            const ruleName = firstLine || `Rule #${taskIndex}`;
-
+            const ruleName = firstLine || `任务 #${taskIndex}`;
             const fullText = lines.slice(1).join("\n");
 
-            // 1. Cron 匹配
+            // 1. Cron 定时规则
             const cronMatch = /\/\/\s*\[Cron:\s*([^\]]+)\]/i.exec(fullText);
             if (cronMatch) {
                 const cronExpr = cronMatch[1].trim();
@@ -222,96 +308,96 @@ class BackgroundScheduler {
                     cronExpr,
                     boundCommands,
                     commandParams,
-                    intervalMs: this.parseCronIntervalMs(cronExpr),
                     scriptBlock: fullText,
                     status: "idle"
                 });
                 continue;
             }
 
-            // 2. Condition 匹配 (沿用 Supertag 原始 Pipeline 逻辑，提取顺序 boundCommands)
+            // 2. Condition 条件触发规则
             const condMatch = /\/\/\s*\[Condition:\s*([^\]]*)\]/i.exec(fullText);
             if (condMatch) {
                 const evMatch = /event:\s*([^\]\)]+)/i.exec(condMatch[1] || fullText);
                 const { ids: boundCommands, params: commandParams } = extractDispatchCommands(fullText);
-
                 tasks.push({
                     id: `task_cond_${taskIndex}`,
                     name: ruleName,
                     type: "condition",
                     enabled: true,
+                    eventType: evMatch ? evMatch[1].trim() : "block_content_changed",
                     boundCommands,
                     commandParams,
-                    eventType: evMatch ? evMatch[1].trim() : "block_content_changed",
-                    intervalMs: 3000,
                     scriptBlock: fullText,
                     status: "idle"
                 });
-                continue;
-            }
-
-            // 3. System 匹配
-            const sysMatch = /\/\/\s*\[System:\s*([^\]]+)\]/i.exec(fullText);
-            if (sysMatch) {
-                const tickMatch = /\(tick:\s*(\d+)\)/i.exec(fullText);
-                const tickRateMs = tickMatch ? parseInt(tickMatch[1], 10) : 5000;
-                tasks.push({
-                    id: `task_sys_${taskIndex}`,
-                    name: ruleName,
-                    type: "system",
-                    enabled: true,
-                    tickRateMs,
-                    intervalMs: Math.max(1000, tickRateMs),
-                    scriptBlock: fullText,
-                    status: "idle"
-                });
-                continue;
             }
         }
 
         return tasks;
     }
 
-    private parseCronIntervalMs(cronExpr: string): number {
-        const expr = cronExpr.trim();
-        const minuteIntervalMatch = /^\*\/(\d+)/.exec(expr);
-        if (minuteIntervalMatch) {
-            const minutes = parseInt(minuteIntervalMatch[1], 10);
-            return Math.max(1, minutes) * 60 * 1000;
+    private replanNextWakeAlarm() {
+        if (this.wakeTimerId) {
+            clearTimeout(this.wakeTimerId);
+            this.wakeTimerId = null;
         }
-        if (expr.startsWith("0 *") || expr.startsWith("0 */1")) return 3600 * 1000;
-        if (/^\d+\s+\d+\s+\*\s+\*\s+\*/.test(expr)) return 86400 * 1000;
-        return 60 * 1000;
+
+        const cronTasks = Array.from(this.activeTasks.values()).filter(t => t.type === "cron" && t.enabled);
+        if (cronTasks.length === 0) return;
+
+        const now = Date.now();
+        let earliestTimestamp = Infinity;
+
+        for (const task of cronTasks) {
+            if (!task.nextRunTime || task.nextRunTime <= now) {
+                task.nextRunTime = calculateNextCronTimestamp(task.cronExpr || "0 2 * * *", now);
+            }
+            if (task.nextRunTime < earliestTimestamp) {
+                earliestTimestamp = task.nextRunTime;
+            }
+        }
+
+        if (earliestTimestamp === Infinity) return;
+
+        const delayMs = Math.max(1000, Math.min(earliestTimestamp - now, 3600 * 1000));
+        console.log(`[BackgroundScheduler] ⏱️ Next scheduled task in ${Math.round(delayMs / 1000)}s (at ${new Date(now + delayMs).toLocaleTimeString()})`);
+
+        this.wakeTimerId = setTimeout(() => {
+            this.evaluateAndRunDueTasks();
+        }, delayMs);
     }
 
-    private async tick() {
-        if (this.isRunning) return;
-        this.isRunning = true;
+    private async evaluateAndRunDueTasks() {
+        if (this.isExecuting) return;
+        this.isExecuting = true;
 
         const now = Date.now();
         try {
             for (const task of this.activeTasks.values()) {
-                if (task.status === "running") continue;
+                if (!task.enabled || task.type !== "cron" || task.status === "running") continue;
 
-                const elapsed = task.lastRunTime ? (now - task.lastRunTime) : Infinity;
-                if (!task.lastRunTime || elapsed >= task.intervalMs) {
+                if (task.nextRunTime && task.nextRunTime <= now + 2000) {
+                    console.log(`[BackgroundScheduler] 🚀 Executing scheduled task "${task.name}" (${task.cronExpr})`);
                     await this.executeTaskScript(task);
+                    task.lastRunTime = Date.now();
+                    task.nextRunTime = calculateNextCronTimestamp(task.cronExpr || "0 2 * * *", Date.now());
                 }
             }
         } finally {
-            this.isRunning = false;
+            this.isExecuting = false;
+            this.replanNextWakeAlarm();
         }
     }
 
-    private async executeTaskScript(task: AutomationTask) {
+    private async executeTaskScript(task: ScheduledTask, extraVars: Record<string, any> = {}) {
         task.status = "running";
-        task.lastRunTime = Date.now();
 
         try {
             const ctx: CommandContext = {
                 blockEl: document.createElement("div"),
                 protyleEl: null,
-                executionMode: "background"
+                executionMode: "background",
+                vars: { ...extraVars }
             };
 
             if (task.boundCommands && task.boundCommands.length > 0) {
@@ -325,7 +411,7 @@ class BackgroundScheduler {
                 const asyncFn = new Function("dispatch", "state", `return (async () => { ${task.scriptBlock} })();`);
                 await asyncFn(
                     (cmdId: string, params?: any) => dispatchCommand(cmdId, null, ctx, { manual: params || {} }),
-                    { tickCount: Math.floor(Date.now() / 1000) }
+                    { tickCount: Math.floor(Date.now() / 1000), vars: { ...extraVars } }
                 );
             }
 

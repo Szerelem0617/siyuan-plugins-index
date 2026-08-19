@@ -49,7 +49,7 @@ function isPipelineViewActive(avContainer: HTMLElement): boolean {
 
 export function openGlobalAutomationDialog() {
     const dialog = new Dialog({
-        title: "⚡ 后台执行控制中心",
+        title: "⚡ 后台执行控制中心 (Background Engine)",
         content: `<div class="b3-dialog__content" id="global-bg-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
         width: "720px",
         height: "560px"
@@ -96,10 +96,11 @@ export async function handleAvFooterClick(event: MouseEvent) {
                       target.closest('.av__col-add') || 
                       target.closest('.av__header-add');
     if (addColBtn || (target.classList.contains("b3-button") && (txt.includes("添加列") || txt.includes("添加字段")))) {
-        console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Column (av-header-add)' click on command-db -> Opening Global Automation Dialog!", "color: #10b981; font-weight: bold;");
+        console.log("%c[IndexOS-AV-Click-Debug] 🎯 Hijacking 'Add Column (av-header-add)' click on command-db -> Opening UI Entry Config Dialog!", "color: #10b981; font-weight: bold;");
         event.preventDefault();
         event.stopPropagation();
-        openGlobalAutomationDialog();
+        const { openEntryConfigDialog } = await import("../entry-config-ui");
+        openEntryConfigDialog();
         return;
     }
 
