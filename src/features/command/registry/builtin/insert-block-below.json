@@ -1,7 +1,7 @@
 {
-    "id": "index.insertBlockBelow",
-    "name": "在下方插入块",
-    "description": "在指定的目标块/页面下方插入新块或子页面，支持短码 (p/h/c/b/l/t/tb) 与模板占位符。",
+    "id": "index.insertContentBelow",
+    "name": "在下方新建内容",
+    "description": "在指定的目标块/页面下方新建内容 (普通块在正下方插入，页面在末尾追加或新建子页面)，支持段落/标题/代码块/列表/表格等原生短码与模板占位符。",
     "dispatch": {
         "method": "custom"
     },
@@ -39,16 +39,16 @@
     ],
     "outputs": [
         {
-            "key": "createdblock",
-            "type": "string",
-            "default": "var.createdblock",
-            "description": "成功插入的新块或新子页面的物理 Block ID"
+            "key": "id",
+            "type": "blockid",
+            "default": "var.id",
+            "description": "成功插入的新内容或新子页面的物理 Block ID"
         }
     ],
     "constraints": {
         "environment": "universal",
         "targetScope": "any",
-        "comment": "双端多态通用：支持在任意块正下方插入或在页面下建子页面"
+        "comment": "双端多态通用：支持在任意块正下方新建或在页面下建子页面"
     },
     "meta": {
         "contextNeed": "block",
@@ -57,7 +57,7 @@
     },
     "seed": {
         "rowID": "20260526204558-insblk1",
-        "label": "➕ 在下方插入块",
+        "label": "➕ 在下方新建内容",
         "paramMapping": "{}"
     }
 }

@@ -93,9 +93,9 @@ export default class IndexPlugin extends Plugin {
             openCmd.dispatch.executor = handleOpenTargetCommand;
         }
 
-        const insertBlockBelowCmd = commandRegistry.getCommand("index.insertBlockBelow");
-        if (insertBlockBelowCmd) {
-            insertBlockBelowCmd.dispatch.executor = triggerInsertBlockBelow;
+        const insertContentBelowCmd = commandRegistry.getCommand("index.insertContentBelow") || commandRegistry.getCommand("index.insertBlockBelow");
+        if (insertContentBelowCmd) {
+            insertContentBelowCmd.dispatch.executor = triggerInsertBlockBelow;
         }
 
         const setAttrCmd = commandRegistry.getCommand("index.setBlockAttribute");

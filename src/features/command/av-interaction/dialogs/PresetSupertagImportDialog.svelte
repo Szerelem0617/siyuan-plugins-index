@@ -36,8 +36,8 @@
             icon: "💡",
             tag: "idea_spark",
             desc: "闪念胶囊与灵感卡片记录。",
-            defaultCommands: "index.insertBlockBelow",
-            defaultConditional: "// [打上标签时] -> 在下方插入同级块"
+            defaultCommands: "index.insertContentBelow",
+            defaultConditional: "// [打上标签时] -> 在下方新建内容"
         },
         {
             title: "📌 待办卡片 (Task Card)",

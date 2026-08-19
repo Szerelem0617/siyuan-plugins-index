@@ -65,11 +65,11 @@ export function getSeedCommandRows(): SeedCommandRow[] {
     return rows;
 }
 
-const defaultPipelineConditional = `// [打上标签时] -> ➕ 在下方插入块, 📝 更新块内容
+const defaultPipelineConditional = `// [打上标签时] -> ➕ 在下方新建内容, 📝 更新块内容
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        const step1 = await dispatch("index.insertBlockBelow", { insertType: "p", data: "[Pipeline Step 1] Time: {{time}}", id: "{{block_id}}" });
+        const step1 = await dispatch("index.insertContentBelow", { insertType: "p", data: "[Pipeline Step 1] Time: {{time}}", id: "{{block_id}}" });
         const createdId = step1?.id || state.vars?.createdblock;
         if (createdId) {
             await dispatch("index.safeUpdateBlock", { id: createdId, dataType: "markdown", data: "[Pipeline Step 2] Updated newly created block at {{time}}" });
@@ -77,11 +77,11 @@ async ({ dispatch, state, eventName }) => {
     }
 }`;
 
-const defaultPermanentConditional = `// [打上标签时] -> ➕ 在下方插入块
+const defaultPermanentConditional = `// [打上标签时] -> ➕ 在下方新建内容
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        await dispatch("index.insertBlockBelow", { insertType: "p", data: "[Permanent Init] Inserted at {{time}}", id: "{{block_id}}" });
+        await dispatch("index.insertContentBelow", { insertType: "p", data: "[Permanent Init] Inserted at {{time}}", id: "{{block_id}}" });
     }
 }`;
 
@@ -114,7 +114,7 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
             rowID: "20260721140000-pipeline",
             supertag: "composite",
             manual: JSON.stringify([
-                { id: "index.insertBlockBelow", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false },
+                { id: "index.insertContentBelow", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false },
                 { id: "index.safeUpdateBlock", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
             ]),
             auto: defaultPipelineConditional

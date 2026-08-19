@@ -64,7 +64,10 @@ export async function triggerInsertBlockBelow(
     console.log(`📌 确认 TargetID: "${rawTargetId}" | 块类型: "${insertType}" | 页面策略: "${pageInsertMode}"`);
 
     try {
-        // 2. SQL 读预检：查询 targetId 物理类型与元数据
+        // 2. 节点元数据探测：优先查 SQL，若处于新创块未索引态则从 DOM 智能推断
+        let nodeType = "";
+        let notebookBox = "";
+
         const sqlResRaw = await post("/api/query/sql", {
             stmt: `SELECT id, type, box, path FROM blocks WHERE id = '${rawTargetId}' LIMIT 1`
         });
@@ -73,21 +76,22 @@ export async function triggerInsertBlockBelow(
             ? sqlResRaw 
             : (Array.isArray(sqlResRaw?.data) ? sqlResRaw.data : []);
 
-        if (rows.length === 0) {
-            console.error(`🛑 TargetID "${rawTargetId}" 在 SQLite 数据库中未找到记录！安全拦截。`);
-            console.groupEnd();
-            return {
-                success: false,
-                method: "custom",
-                detail: `Target ID ${rawTargetId} does not exist in SQLite database`
-            };
+        if (rows.length > 0) {
+            nodeType = rows[0].type || "";
+            notebookBox = rows[0].box || "";
+            console.log(`✅ SQL 节点确认成功: nodeType="${nodeType}", notebook="${notebookBox}"`);
+        } else {
+            // SQLite 尚未建立索引（新创块/刚输入的块）：从活动 DOM 或上下文探针识别
+            const targetEl = context.blockEl || document.querySelector(`[data-node-id="${rawTargetId}"]`);
+            if (targetEl) {
+                const isDoc = targetEl.classList.contains("protyle-title") || targetEl.getAttribute("data-type") === "NodeDocument";
+                nodeType = isDoc ? "d" : (targetEl.getAttribute("data-type") || "p");
+                console.log(`ℹ️ [InsertBlockBelow] SQLite 暂未完成索引，从 DOM 识别节点类型: "${nodeType}"`);
+            } else {
+                nodeType = "p";
+                console.log(`ℹ️ [InsertBlockBelow] 按标准内容块执行: TargetID="${rawTargetId}"`);
+            }
         }
-
-        const targetRow = rows[0];
-        const nodeType = targetRow.type || "";
-        const notebookBox = targetRow.box || "";
-
-        console.log(`✅ SQL 节点确认成功: nodeType="${nodeType}", notebook="${notebookBox}"`);
 
         // 3. 格式化 Markdown 内容 (防空)
         const safeMarkdown = formatMarkdownContent(dataContent, insertType);

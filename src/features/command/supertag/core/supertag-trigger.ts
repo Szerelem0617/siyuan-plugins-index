@@ -109,7 +109,7 @@ export function parseConditionalString(conditionalStr: string): TriggerRule[] {
 
     for (let line of lines) {
         line = line.trim();
-        if (!line || line.startsWith("//") || line.startsWith("#")) continue;
+        if (!line || line.startsWith("//") || line.startsWith("#") || line === "Conditional" || line === "Auto") continue;
 
         let event = "tag_created";
         let condition = "";
@@ -138,9 +138,13 @@ export function parseConditionalString(conditionalStr: string): TriggerRule[] {
         }
 
         const rawCmds = splitCommands(cmdPart);
-        const commands: TriggerCommandRef[] = rawCmds.map(parseSingleCommandCall);
+        const commands: TriggerCommandRef[] = rawCmds
+            .map(parseSingleCommandCall)
+            .filter(c => c.labelOrId && c.labelOrId !== "Conditional" && c.labelOrId !== "Auto");
 
-        rules.push({ event, condition, commands });
+        if (commands.length > 0) {
+            rules.push({ event, condition, commands });
+        }
     }
 
     return rules;
@@ -166,8 +170,8 @@ export async function triggerConditionalCommands(
                     supertagColName = String(schemaCols[0].values[0][0]);
                 }
 
-                const schemaConditional = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Conditional' OR key_name = '触发器' OR key_name = 'On Create' OR key_name = '创建时')`, [typeAvId]);
-                let conditionalColName = "Conditional";
+                const schemaConditional = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Auto' OR key_name = 'Conditional' OR key_name = '触发器' OR key_name = 'On Create' OR key_name = '创建时')`, [typeAvId]);
+                let conditionalColName = "Auto";
                 if (schemaConditional.length > 0 && schemaConditional[0].values.length > 0) {
                     conditionalColName = String(schemaConditional[0].values[0][0]);
                 }
@@ -182,8 +186,8 @@ export async function triggerConditionalCommands(
             }
         }
 
-        // 状态机规则：未实例化时（未创建 Type-DB AV）从种子常量读取 Conditional 脚本
-        if (!conditionalVal && !typeAvId) {
+        // 状态机规则：未实例化时（未创建 Type-DB AV）或读出表头名时，从种子常量读取 Conditional 脚本
+        if ((!conditionalVal || conditionalVal === "Conditional" || conditionalVal === "Auto") && !typeAvId) {
             conditionalVal = getSeedConditionalScript(cleanTag);
             if (conditionalVal) {
                 console.log(`[Supertag-Trigger] Found conditional script in seed data for #${cleanTag}`);

@@ -11,7 +11,7 @@
         type CommandScopeType
     } from "../registry/command-registry";
     import { generateRuleScript, parseRuleScript } from "./script-dsl";
-    import { outputsOf, outputName } from "./pipeline-auto-context";
+    import { outputsOf, outputName, suggestBinding, getCompositeOutputToken } from "./composite-auto-context";
 
     /** 可复用的命令序列编辑器：支持多步/重复命令（角标序号流）+ 多维元数据筛选 + 入参独立设置 + 茵蒂克丝金高亮 */
     export let initialScript: string | null = null;
@@ -283,15 +283,15 @@
     function getAutoSuggestion(stepUid: string, schema: any): { varName: string; note: string } | null {
         const stepIdx = steps.findIndex(s => s.uid === stepUid);
         if (stepIdx > 0) {
-            const prevOutputs = previousOutputsForStep(stepUid);
-            if (schema.key === "id" || schema.type === "blockid") {
-                const matched = prevOutputs.find(po => po.name.includes("block") || po.name.includes("id")) || prevOutputs[0];
-                if (matched) {
-                    return { varName: formatVarToken(matched.name), note: "(不填自动推导)" };
+            // 从紧邻的前置步骤依次向前寻找类型兼容或完全同名的出参
+            for (let i = stepIdx - 1; i >= 0; i--) {
+                const prev = steps[i];
+                const prevDef = commandRegistry.getCommand(prev.commandRef);
+                const outKey = suggestBinding(prevDef, schema.key, schema.type);
+                if (outKey) {
+                    const token = getCompositeOutputToken(prev.commandRef, outKey);
+                    return { varName: formatVarToken(token), note: `(第 ${i + 1} 步出参)` };
                 }
-            }
-            if (schema.key === "enabled") {
-                return { varName: `{{var.last_boolean_result}}`, note: "(不填受前一步控制)" };
             }
         }
         return null;
@@ -448,11 +448,11 @@
                                         tabindex="0"
                                         class="b3-chip"
                                         style="font-size: 10px; font-weight: 600; padding: 1px 6px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; {stepGold ? (isCurrentStep ? 'background: var(--indexos-detached-gold, #D9A74A) !important; color: #fff !important; font-weight: 700; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important;' : 'background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.14)) !important; color: var(--indexos-detached-gold, #D9A74A) !important; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; font-weight: 600;') : (isCurrentStep ? 'background: var(--indexos-accent-primary); color: #fff;' : 'background: rgba(40, 81, 127, 0.12); color: var(--indexos-text-main);')}"
-                                        title={stepGold ? `👑 第 ${item.num} 步 (已配置客制化入参或已激活智能推导)。点击配置本步；点击右侧 ✖ 单独移除` : `第 ${item.num} 步。点击配置本步；点击右侧 ✖ 单独移除`}
+                                        title={stepGold ? `第 ${item.num} 步 (已配置客制化入参或已激活智能推导)。点击配置本步；点击右侧 ✖ 单独移除` : `第 ${item.num} 步。点击配置本步；点击右侧 ✖ 单独移除`}
                                         on:click={() => openStepSettings(item.step.uid)}
                                         on:keydown={e => e.key === 'Enter' && openStepSettings(item.step.uid)}
                                     >
-                                        <span>{stepGold ? "👑 " : ""}第 {item.num} 步</span>
+                                        <span>第 {item.num} 步</span>
                                         <span
                                             role="button"
                                             tabindex="0"
@@ -473,10 +473,10 @@
                             type="button"
                             class="indexos-btn-bordered"
                             style="font-size: 11px; padding: 2px 8px; flex-shrink: 0; {hasGoldStep ? (isCurrentEditing ? 'background: var(--indexos-detached-gold, #D9A74A) !important; color: #fff !important; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; font-weight: 700;' : 'border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.09)) !important; font-weight: 600;') : (isCurrentEditing ? 'background: var(--indexos-accent-primary); color: #fff; border-color: var(--indexos-accent-primary);' : '')}"
-                            title={hasGoldStep ? "👑 包含已激活智能推荐或客制化入参的步骤" : "配置本命令的入参"}
+                            title={hasGoldStep ? "包含已激活智能推荐或客制化入参的步骤" : "配置本命令的入参"}
                             on:click={() => openStepSettings(matchedIndices[0].step.uid)}
                         >
-                            {hasGoldStep ? "👑 ⚙ 入参" : "⚙ 入参"}
+                            ⚙ 入参
                         </button>
                     {/if}
                 </div>
@@ -490,7 +490,7 @@
         </div>
 
         <div style="font-size: 10px; color: var(--indexos-text-muted); flex-shrink: 0; line-height: 1.4;">
-            💡 提示：点击命令左侧 <b>[+]</b> 可多次追加执行步骤（例如开头放烟花、结尾放烟花）。金色角标 <b>[👑 第 N 步]</b> 代表已客制化或激活智能推导。
+            💡 提示：点击命令左侧 <b>[+]</b> 可多次追加执行步骤（例如开头放烟花、结尾放烟花）。金色角标 <b>[第 N 步]</b> 代表已客制化或激活智能推导。
         </div>
     </div>
 
@@ -523,7 +523,7 @@
                             style="font-size: 10px; padding: 2px 6px; {sGold && editingStepUid !== s.uid ? 'color: var(--indexos-detached-gold, #D9A74A) !important; font-weight: 600;' : ''}"
                             on:click={() => editingStepUid = s.uid}
                         >
-                            {sGold ? "👑 " : ""}第 {s.stepNum} 步参数
+                            第 {s.stepNum} 步参数
                         </button>
                     {/each}
                 </div>
@@ -548,7 +548,7 @@
                                 </label>
                                 {#if sug}
                                     <div style="font-size: 10px; color: var(--indexos-text-muted); display: flex; align-items: center; gap: 3px;">
-                                        <span style="color: var(--indexos-detached-gold, #D9A74A); font-weight: 600;">👑 推荐:</span>
+                                        <span style="color: var(--indexos-detached-gold, #D9A74A); font-weight: 600;">推荐:</span>
                                         <span
                                             role="button"
                                             tabindex="0"
@@ -565,7 +565,7 @@
                                 type="text"
                                 style="font-size: 11px; padding: 4px 8px; border: 1px solid {(currentEditingStep.params || {})[schema.key] ? 'var(--indexos-detached-gold, #D9A74A)' : 'var(--indexos-border-light)'}; border-radius: 4px; background: var(--indexos-bg-container); color: var(--indexos-text-main);"
                                 value={(currentEditingStep.params || {})[schema.key] || ""}
-                                placeholder={schema.default !== undefined ? `默认: ${schema.default}` : (schema.description || "空 = 继承缺省；支持 {{变量}}")}
+                                placeholder={sug ? `默认: ${sug.varName} (智能推导)` : (schema.default !== undefined ? `默认: ${schema.default}` : (schema.description || "空 = 继承缺省；支持 {{变量}}"))}
                                 on:focus={() => { activeParam = schema.key; }}
                                 on:input={e => setStepParam(schema.key, e.currentTarget.value)}
                             />

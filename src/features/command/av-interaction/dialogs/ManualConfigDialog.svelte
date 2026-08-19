@@ -100,8 +100,14 @@
         updateEntry(cmdId, () => ({ condition: next, blockFilter: next }));
     }
 
-    function clearCondition(cmdId: string) {
-        updateEntry(cmdId, () => ({ condition: "", blockFilter: "" }));
+    function isEntryCustomized(entry: ManualCommandEntry | undefined): boolean {
+        if (!entry) return false;
+        if (entry.showInButton || entry.showInVirtualButton) return true;
+        if (!entry.showInSlash || !entry.showInMenu) return true;
+        if (entry.buttonLabel && entry.buttonLabel.trim() !== "") return true;
+        if ((entry.condition || entry.blockFilter) && (entry.condition || entry.blockFilter)!.trim() !== "") return true;
+        if (entry.params && Object.keys(entry.params).length > 0) return true;
+        return false;
     }
 
     async function handleSave() {
@@ -153,6 +159,7 @@
                 {@const entry = getEntry(cmd.id, entries)}
                 {@const checked = !!entry}
                 {@const isExpanded = expandedCmdId === cmd.id && checked}
+                {@const isCustomized = isEntryCustomized(entry)}
                 {@const fullDef = commandRegistry.getCommand(cmd.id)}
                 {@const paramSchemas = fullDef?.params || cmd.params || []}
 
@@ -202,13 +209,13 @@
                             </div>
                         </div>
 
-                        <!-- 齿轮设置/展开折叠切换 -->
+                        <!-- 齿轮设置/展开折叠切换 (客制化时按钮边框线与文字呈现刺绣金高亮) -->
                         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                             {#if checked}
                                 <button
                                     type="button"
-                                    class="b3-button b3-button--text"
-                                    style="font-size: 11px; padding: 2px 8px; color: {isExpanded ? 'var(--indexos-accent-primary)' : 'var(--indexos-text-muted)'}; display: inline-flex; align-items: center; gap: 4px;"
+                                    class="b3-button"
+                                    style="font-size: 11px; padding: 2px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; {isCustomized ? 'color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.08)) !important; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; font-weight: 600;' : isExpanded ? 'color: var(--indexos-accent-primary) !important; background: rgba(40, 81, 127, 0.08) !important; border: 1px solid var(--indexos-accent-primary) !important;' : 'color: var(--indexos-text-muted); background: transparent; border: 1px solid var(--indexos-border-subtle, rgba(161,196,230,0.3));'}"
                                     on:click|stopPropagation={() => toggleExpand(cmd.id)}
                                 >
                                     <span>⚙️ {isExpanded ? '收起配置' : '配置'}</span>
