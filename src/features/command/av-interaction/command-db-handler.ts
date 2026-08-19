@@ -64,16 +64,6 @@ export function openGlobalAutomationDialog() {
 
 export async function handleAvFooterClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
-    
-    const isAvElement = target.closest(".av") || target.closest(".av__container") || target.closest("[data-av-id]");
-    if (isAvElement) {
-        console.log("[IndexOS-AV-Click-Debug] Click inside AV detected.", {
-            tagName: target.tagName,
-            className: target.className,
-            dataType: target.getAttribute("data-type"),
-            ariaLabel: target.getAttribute("aria-label")
-        });
-    }
 
     const avContainer = target.closest("[data-av-id]") || target.closest('[data-type="NodeAttributeView"]') || target.closest(".av__container") || target.closest(".av");
     if (!avContainer) return;

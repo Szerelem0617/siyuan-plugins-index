@@ -1,9 +1,9 @@
 import { post } from "../../../../shared/api-client/request";
 import { showMessage } from "siyuan";
 import { supertagMonitor } from "../core/supertag-listener";
-import { globalSupertagsCache, SUPERTAG_REGISTRY } from "../../registration";
+import { globalSupertagsCache, SUPERTAG_REGISTRY, getLayer2CommandDisplayName } from "../../registration";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
-import { evaluateBlockFilter } from "../core/block-filter";
+import { evaluateVirtualButtonCondition } from "../core/virtual-button-condition";
 import { dispatchCommand } from "../../command-dispatcher";
 import { commandRegistry } from "../../registry/command-registry";
 
@@ -220,7 +220,7 @@ export class SupertagRenderer {
 
         for (const entry of vEntries) {
             const cond = entry.condition || entry.blockFilter;
-            const isMatch = evaluateBlockFilter(cond, {
+            const isMatch = evaluateVirtualButtonCondition(cond, {
                 id: blockId,
                 attrs,
                 content: blockContent
@@ -240,7 +240,7 @@ export class SupertagRenderer {
         editorEl: HTMLElement
     ): HTMLElement {
         const cmdDef = commandRegistry.getCommand(entry.commandRef);
-        const displayName = entry.buttonLabel || cmdDef?.name || entry.methodName || entry.commandRef;
+        const displayName = entry.buttonLabel || entry.methodName || getLayer2CommandDisplayName(entry.commandRef, cmdDef?.name);
 
         const btn = document.createElement("button");
         btn.type = "button";

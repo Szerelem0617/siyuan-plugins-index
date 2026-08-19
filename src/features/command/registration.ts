@@ -142,3 +142,15 @@ export function getLayer2Commands(): { id: string; name: string; description?: s
         };
     }).sort((a, b) => a.name.localeCompare(b.name, "zh"));
 }
+
+/**
+ * 根据 Command ID / Reference 解析其在 Layer 2 中的准确显示名称 (如 index.setBlockAttribute-1 -> "🔘 转换为任务")
+ */
+export function getLayer2CommandDisplayName(commandRef: string, fallback?: string): string {
+    const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === commandRef || b.methodName === commandRef);
+    if (binding?.methodName) return binding.methodName;
+    const seed = getSeedCommandRows().find(r => r.commandID === commandRef || r.label === commandRef);
+    if (seed?.label) return seed.label;
+    const def = commandRegistry.getCommand(commandRef) || commandRegistry.findByNameOrId(commandRef);
+    return fallback || def?.name || commandRef;
+}

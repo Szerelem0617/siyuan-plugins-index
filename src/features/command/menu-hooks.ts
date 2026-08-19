@@ -5,7 +5,7 @@
 
 import { commandRegistry } from "./registry/command-registry";
 import { dispatchCommand } from "./command-dispatcher";
-import { COMMAND_BINDINGS, SUPERTAG_REGISTRY } from "./registration";
+import { COMMAND_BINDINGS, SUPERTAG_REGISTRY, getLayer2CommandDisplayName } from "./registration";
 import { getEntryConfigSync, positionCommands, blockMenuEntries, blockTypeOf, type BlockMenuEntry } from "./entry-config";
 import { parseSupertags } from "./supertag/core/supertag-diff";
 
@@ -125,7 +125,8 @@ function addSupertagIconMenuItems(menu: any, blockEl: HTMLElement | null, protyl
             addedCmdIds.add(entry.commandRef);
 
             const def = commandRegistry.getCommand(entry.commandRef) || commandRegistry.findByNameOrId(entry.commandRef);
-            const label = `🏷️ #${tag} » ${def?.name || entry.commandRef}`;
+            const cmdDisplayName = entry.buttonLabel || entry.methodName || getLayer2CommandDisplayName(entry.commandRef, def?.name);
+            const label = `🏷️ #${tag} » ${cmdDisplayName}`;
 
             menu.addItem({
                 icon: "iconTags",

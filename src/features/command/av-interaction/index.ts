@@ -25,16 +25,24 @@ export function destroyButtonLinkListener() {
 }
 
 async function handleAvAltClick(event: MouseEvent) {
+    if (!event.altKey) return;
     const clickCtx = parseAVClickEvent(event);
     if (!clickCtx) return;
 
     const { cell: cellEl, row: rowEl, avContainer, avId, rowId, colId, isHeader, isPrimaryKeyCell } = clickCtx;
-    const commandAvId = getCommandAvId();
-    const typeAvId = getTypeAvId();
-    console.log("[Interaction-Debug] avId:", avId, "commandAvId:", commandAvId, "typeAvId:", typeAvId);
+    let commandAvId = getCommandAvId();
+    let typeAvId = getTypeAvId();
+
+    if (!commandAvId || !typeAvId) {
+        try {
+            const { getTargetTablesInfo } = await import("../utils/sync-service");
+            await getTargetTablesInfo();
+            commandAvId = getCommandAvId();
+            typeAvId = getTypeAvId();
+        } catch (_) {}
+    }
 
     if (avId !== commandAvId && avId !== typeAvId) {
-        console.log("[Interaction-Debug] avId mismatch, returning early");
         return;
     }
     if (isHeader || rowEl.classList.contains("av__row--footer")) return;

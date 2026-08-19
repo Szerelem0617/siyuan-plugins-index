@@ -2,13 +2,13 @@
     import { evaluateCommandConstraints } from "../utils/constraint-checker";
     import { 
         commandRegistry, 
-        CommandDef, 
+        type CommandDef, 
         inferCommandSource, 
         inferCommandDomain, 
         inferCommandScope,
-        CommandSourceType,
-        CommandDomainType,
-        CommandScopeType
+        type CommandSourceType,
+        type CommandDomainType,
+        type CommandScopeType
     } from "../registry/command-registry";
     import { generateRuleScript, parseRuleScript } from "./script-dsl";
     import { outputsOf, outputName } from "./pipeline-auto-context";

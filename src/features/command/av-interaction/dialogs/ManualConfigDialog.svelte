@@ -2,7 +2,7 @@
     import { Dialog, showMessage } from "siyuan";
     import { commandRegistry } from "../../registry/command-registry";
     import { parseManualConfig, serializeManualConfig, type ManualConfig, type ManualCommandEntry, createDefaultManualEntry } from "../../utils/manual-config";
-    import { PRESET_CONDITIONS } from "../../supertag/core/block-filter";
+    import { PRESET_CONDITIONS } from "../../supertag/core/virtual-button-condition";
 
     import { getLayer2Commands } from "../../registration";
 
@@ -29,18 +29,18 @@
         return cmd.name.toLowerCase().includes(q) || cmd.id.toLowerCase().includes(q);
     });
 
-    // 辅助判定勾选
-    function isChecked(cmdId: string): boolean {
-        return entries.some(e => e.id === cmdId);
+    // 辅助判定勾选与获取条目 (显式声明 entries 参数以在 {#each} 中建立精准响应式依赖)
+    function isChecked(cmdId: string, _entries: ManualConfig): boolean {
+        return _entries.some(e => e.id === cmdId);
     }
 
-    function getEntry(cmdId: string): ManualCommandEntry | undefined {
-        return entries.find(e => e.id === cmdId);
+    function getEntry(cmdId: string, _entries: ManualConfig): ManualCommandEntry | undefined {
+        return _entries.find(e => e.id === cmdId);
     }
 
     // 切换勾选状态
     function toggleCommand(cmdId: string) {
-        if (isChecked(cmdId)) {
+        if (isChecked(cmdId, entries)) {
             entries = entries.filter(e => e.id !== cmdId);
             if (expandedCmdId === cmdId) {
                 expandedCmdId = null;
@@ -54,7 +54,7 @@
     }
 
     function toggleExpand(cmdId: string) {
-        if (!isChecked(cmdId)) {
+        if (!isChecked(cmdId, entries)) {
             toggleCommand(cmdId);
             expandedCmdId = cmdId;
         } else {
@@ -72,7 +72,7 @@
     }
 
     function setParam(cmdId: string, paramKey: string, val: string) {
-        const entry = getEntry(cmdId);
+        const entry = getEntry(cmdId, entries);
         if (!entry) return;
         const currentParams = { ...(entry.params || {}) };
         if (val === "") {
@@ -86,16 +86,16 @@
     }
 
     function insertPlaceholder(cmdId: string, paramKey: string, placeholder: string) {
-        const entry = getEntry(cmdId);
+        const entry = getEntry(cmdId, entries);
         if (!entry) return;
         const cur = entry.params?.[paramKey] || "";
         setParam(cmdId, paramKey, cur ? `${cur} ${placeholder}` : placeholder);
     }
 
     function appendCondition(cmdId: string, expr: string) {
-        const entry = getEntry(cmdId);
+        const entry = getEntry(cmdId, entries);
         if (!entry) return;
-        const cur = (entry.condition || "").trim();
+        const cur = (entry.condition || entry.blockFilter || "").trim();
         const next = cur ? `${cur} && ${expr}` : expr;
         updateEntry(cmdId, () => ({ condition: next, blockFilter: next }));
     }
@@ -150,8 +150,8 @@
             </div>
         {:else}
             {#each visibleCommands as cmd (cmd.id)}
-                {@const checked = isChecked(cmd.id)}
-                {@const entry = getEntry(cmd.id)}
+                {@const entry = getEntry(cmd.id, entries)}
+                {@const checked = !!entry}
                 {@const isExpanded = expandedCmdId === cmd.id && checked}
                 {@const fullDef = commandRegistry.getCommand(cmd.id)}
                 {@const paramSchemas = fullDef?.params || cmd.params || []}
@@ -341,15 +341,6 @@
                                                     + {p.label}
                                                 </button>
                                             {/each}
-                                        </div>
-
-                                        <!-- 实时效果预览 -->
-                                        <div style="display: flex; align-items: center; gap: 6px; padding-top: 4px; border-top: 1px dashed rgba(124,58,237,0.15); font-size: 10px; color: var(--indexos-text-muted);">
-                                            <span>块内渲染预览:</span>
-                                            <span style="display: inline-flex; align-items: center; gap: 4px;">
-                                                <span class="indexos-supertag-chip" style="font-size: 10px; padding: 1px 6px; border-radius: 3px; background: rgba(40,81,127,0.1); color: var(--indexos-text-main); font-weight: 600;">#{supertag}</span>
-                                                <span class="indexos-virtual-button indexos-btn-inline" style="font-size: 10px; padding: 1px 7px; height: 18px; line-height: 16px; margin: 0;">⚡ {entry.buttonLabel || cmd.name}</span>
-                                            </span>
                                         </div>
                                     </div>
                                 {/if}

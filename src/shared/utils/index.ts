@@ -126,10 +126,10 @@ export function parseAVClickEvent(event: MouseEvent): AVClickContext | null {
     if (!cell) return null;
 
     const row = (cell.closest(".av__row") || cell.closest(".av__gallery-item") || cell.closest(".av__kanban-item")) as HTMLElement;
-    const avContainer = cell.closest(".av") as HTMLElement;
+    const avContainer = (cell.closest(".av") || cell.closest("[data-av-id]") || cell.closest('[data-type="NodeAttributeView"]') || cell.closest(".av__container")) as HTMLElement;
     if (!avContainer || !row) return null;
 
-    const avId = avContainer.getAttribute("data-av-id") || "";
+    const avId = avContainer.getAttribute("data-av-id") || cell.closest("[data-av-id]")?.getAttribute("data-av-id") || "";
     const rowId = row.getAttribute("data-id") || "";
     const colId = cell.getAttribute("data-col-id") || cell.getAttribute("data-field-id") || "";
     const isHeader = !!cell.closest(".av__row--header") || cell.classList.contains("av__cell--header");

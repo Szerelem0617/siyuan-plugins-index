@@ -31,7 +31,7 @@ function commandMeta(id: string): { label: string; commandParam: string; require
     const def = commandRegistry.getCommand(id);
     const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === id);
     return {
-        label: def?.name || id,
+        label: binding?.methodName || def?.name || id,
         commandParam: binding?.inputMapping || "",
         requiresParams: def && def.params && def.params.length > 0 ? "true" : "false"
     };
@@ -167,11 +167,11 @@ export async function refreshEntryRegistrations() {
         seenPaletteCmdIds.add(id);
     }
     // 注入从 Supertag Manual 配置中启用 ;; 面板的命令
-    const { SUPERTAG_REGISTRY } = await import("../registration");
+    const { SUPERTAG_REGISTRY, getLayer2CommandDisplayName } = await import("../registration");
     for (const stCmd of SUPERTAG_REGISTRY) {
         if (stCmd.uiLocation === "Slash" && stCmd.commandRef && !seenPaletteCmdIds.has(stCmd.commandRef)) {
             const def = commandRegistry.getCommand(stCmd.commandRef);
-            const label = stCmd.methodName || def?.name || stCmd.commandRef;
+            const label = stCmd.buttonLabel || stCmd.methodName || getLayer2CommandDisplayName(stCmd.commandRef, def?.name);
             newPaletteCmds.push({
                 id: stCmd.commandRef,
                 label: `🏷️ #${stCmd.typeTag} » ${label}`,
