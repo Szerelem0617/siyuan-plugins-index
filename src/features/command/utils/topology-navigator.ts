@@ -29,15 +29,9 @@ export interface TopologyNode {
     sort?: number;
 }
 
-/** 缓存最近查询过的节点元数据，避免链式步进时重复查表 */
-const nodeMetaCache = new Map<string, TopologyNode>();
-
 export async function fetchNodeMeta(id: string): Promise<TopologyNode | null> {
     if (!id || typeof id !== "string") return null;
     const cleanId = id.trim();
-    if (nodeMetaCache.has(cleanId)) {
-        return nodeMetaCache.get(cleanId)!;
-    }
 
     try {
         const res = await post("/api/query/sql", {
@@ -45,7 +39,7 @@ export async function fetchNodeMeta(id: string): Promise<TopologyNode | null> {
         });
         const rows = Array.isArray(res) ? res : (res?.data || []);
         if (rows.length > 0) {
-            const node: TopologyNode = {
+            return {
                 id: rows[0].id,
                 type: rows[0].type,
                 root_id: rows[0].root_id,
@@ -54,8 +48,6 @@ export async function fetchNodeMeta(id: string): Promise<TopologyNode | null> {
                 path: rows[0].path,
                 sort: typeof rows[0].sort === "number" ? rows[0].sort : parseInt(rows[0].sort || "0", 10)
             };
-            nodeMetaCache.set(cleanId, node);
-            return node;
         }
     } catch (e) {
         console.warn(`[TopologyNavigator] fetchNodeMeta failed for ${cleanId}:`, e);
@@ -465,68 +457,5 @@ async function findChildDoc(docNode: TopologyNode, index: number, isLast: boolea
     } catch (_) {}
 
     console.groupEnd();
-    return null;
-}
-
-/**
- * 查询文档树中的父级文档
- */
-async function findParentDoc(docNode: TopologyNode): Promise<TopologyNode | null> {
-    if (!docNode.box) return null;
-
-    // 笔记本文档 (Box Doc) 自身无父文档
-    if (docNode.id === docNode.box || docNode.path === "/" || !docNode.path) return null;
-
-    const parts = docNode.path.split("/").filter(Boolean);
-    if (parts.length <= 1) {
-        // 顶级文档：尝试获取所在笔记本的 Box Doc (若存在)
-        const boxDocNode = await fetchNodeMeta(docNode.box);
-        if (boxDocNode && boxDocNode.type === "d") {
-            return boxDocNode;
-        }
-        return null;
-    }
-
-    // 父级文档的 path 为上一层路径拼接 .sy (如 /parentDocId/currentDocId.sy -> /parentDocId.sy)
-    const parentPath = "/" + parts.slice(0, -1).join("/") + ".sy";
-    try {
-        const res = await post("/api/query/sql", {
-            stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND path = '${parentPath}' LIMIT 1`
-        });
-        const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
-        if (rows.length > 0) {
-            return await fetchNodeMeta(rows[0].id);
-        }
-    } catch (e) {
-        console.warn(`[TopologyNavigator] findParentDoc failed:`, e);
-    }
-    return null;
-}
-
-/**
- * 查询子文档或页面首块
- */
-async function findChildDoc(docNode: TopologyNode, index: number, isLast: boolean): Promise<TopologyNode | null> {
-    if (!docNode.box) return null;
-
-    const isBoxDoc = docNode.id === docNode.box || docNode.path === "/" || !docNode.path;
-    const cleanPathWithoutSy = isBoxDoc ? "" : docNode.path.replace(/\.sy$/, "");
-    const orderSql = isLast ? "ORDER BY sort DESC" : "ORDER BY sort ASC";
-
-    try {
-        const wherePath = isBoxDoc 
-            ? `path LIKE '/%' AND path NOT LIKE '/%/%' AND id != '${docNode.box}'`
-            : `path LIKE '${cleanPathWithoutSy}/%' AND path NOT LIKE '${cleanPathWithoutSy}/%/%'`;
-
-        const res = await post("/api/query/sql", {
-            stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND ${wherePath} ${orderSql} LIMIT 1 OFFSET ${index - 1}`
-        });
-        const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
-        if (rows.length > 0) {
-            return await fetchNodeMeta(rows[0].id);
-        }
-    } catch (e) {
-        console.warn(`[TopologyNavigator] findChildDoc failed:`, e);
-    }
     return null;
 }
