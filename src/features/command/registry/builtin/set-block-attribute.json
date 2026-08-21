@@ -10,7 +10,7 @@
             "key": "id",
             "type": "blockid",
             "paramMode": "template",
-            "default": "{{block_id}}",
+            "default": "{{self.id}}",
             "description": "目标块 ID。留空默认取当前上下文块或前序创块。"
         },
         {

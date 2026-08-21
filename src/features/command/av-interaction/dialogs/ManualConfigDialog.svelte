@@ -385,9 +385,9 @@
                                                     <button
                                                         type="button"
                                                         style="font-size: 9px; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--indexos-border-light); background: transparent; cursor: pointer;"
-                                                        on:click={() => insertPlaceholder(cmd.id, schema.key, "{{block_id}}")}
+                                                        on:click={() => insertPlaceholder(cmd.id, schema.key, "{{self.id}}")}
                                                     >
-                                                        + &#123;&#123;block_id&#125;&#125;
+                                                        + &#123;&#123;self.id&#125;&#125;
                                                     </button>
                                                     <button
                                                         type="button"

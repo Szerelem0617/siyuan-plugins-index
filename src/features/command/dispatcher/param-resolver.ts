@@ -10,6 +10,7 @@ import { getSupertagAutoContextInfo } from "../supertag/core/supertag-auto-conte
 import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } from "../utils/context-extractor";
 import { renderTemplate, formatDate, formatTime } from "../utils/template-engine";
 import { promptUserModal } from "../utils/prompt-modal";
+import { navigateTopology } from "../utils/topology-navigator";
 import { COMMAND_BINDINGS } from "../registration";
 import type { CommandContext, ParamSources } from "./types";
 
@@ -205,7 +206,12 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
     const variables: Record<string, string> = {
         "date": formatDate(new Date()),
         "time": formatTime(new Date()),
+        "self.id": blockId || "",
+        "self": blockId || "",
+        "this.id": blockId || "",
+        "this": blockId || "",
         "block_id": blockId || "",
+        "id": blockId || "",
     };
 
     if (context.vars) {
@@ -218,11 +224,13 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
         }
     }
 
-    if (blockId && (normalizedText.includes("{{root_id}}") || normalizedText.includes("{{parent_id}}"))) {
+    if (blockId && (normalizedText.includes("{{root_id}}") || normalizedText.includes("{{parent_id}}") || normalizedText.includes("{{root.id}}") || normalizedText.includes("{{parent.id}}"))) {
         try {
             const { rootId, parentId } = await getParentIdAndRootId(blockId);
             variables["root_id"] = rootId;
+            variables["root.id"] = rootId;
             variables["parent_id"] = parentId;
+            variables["parent.id"] = parentId;
         } catch (_) {}
     }
 
@@ -280,6 +288,58 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
 
             console.log(`[TemplateEngine] 🔄 {{cycle}} 轮转计算: 当前值 "${currentVal}" ➔ 下一状态 "${nextVal}" (候选列表: [${options.join(", ")}])`);
             normalizedText = normalizedText.replace(fullPlaceholder, nextVal);
+        }
+    }
+
+    // 🌐 今日日记文档宏解析：{{daily_doc}}, {{daily_doc_id}}, {{daily_doc.id}}, {{today_doc}}
+    if (normalizedText.includes("{{daily_doc") || normalizedText.includes("{{today_doc")) {
+        try {
+            const todayStr = formatDate(new Date());
+            const dailyRes = await post("/api/query/sql", {
+                stmt: `SELECT id FROM blocks WHERE type = 'd' AND content = '${todayStr}' LIMIT 1`
+            });
+            const dailyRows = Array.isArray(dailyRes) ? dailyRes : (dailyRes?.data || []);
+            if (dailyRows.length > 0) {
+                variables["daily_doc"] = dailyRows[0].id;
+                variables["daily_doc.id"] = dailyRows[0].id;
+                variables["daily_doc_id"] = dailyRows[0].id;
+                variables["today_doc"] = dailyRows[0].id;
+                variables["today_doc.id"] = dailyRows[0].id;
+            }
+        } catch (_) {}
+    }
+
+    // 🌐 拓扑导航宏与链式路径解析 (如 {{self.id}}, {{doc.id}}, {{doc.next.id}}, {{doc.prev.id}}, {{prev.id}}, {{next.id}}, {{parent.id}}, {{root.id}}, {{notebook.id}}, {{block.id}}, {{block1.id}} 等)
+    const topologyMatches = normalizedText.match(/\{\{([a-zA-Z0-9_.:-]+)\}\}/g);
+    if (topologyMatches && blockId) {
+        for (const fullMatch of topologyMatches) {
+            const token = fullMatch.slice(2, -2).trim();
+            if (token in variables) continue;
+            if (token.startsWith("attr:") || token.startsWith("var.") || token.startsWith("cycle") || token.startsWith("prompt")) continue;
+
+            const navPattern = /^(?:self|this|doc|page|notebook|box|root|prev|previous|next|parent|child|children|block)(?:[._\d]|$)/i;
+            if (navPattern.test(token)) {
+                try {
+                    let pathExpr = token
+                        .replace(/_id$/i, "")
+                        .replace(/_block$/i, "")
+                        .replace(/parent_doc/i, "doc.parent")
+                        .replace(/doc_next/i, "doc.next")
+                        .replace(/doc_prev/i, "doc.prev")
+                        .replace(/prev_block/i, "prev")
+                        .replace(/next_block/i, "next")
+                        .replace(/parent_block/i, "parent")
+                        .replace(/_/g, ".");
+
+                    const resolvedNavId = await navigateTopology(blockId, pathExpr);
+                    if (resolvedNavId) {
+                        variables[token] = resolvedNavId;
+                        console.log(`[ParamResolver Topology] 🌐 拓扑路径解析成功: {{${token}}} ➔ "${resolvedNavId}" (起始: ${blockId})`);
+                    }
+                } catch (navErr) {
+                    console.warn(`[ParamResolver Topology] 解析 {{${token}}} 异常:`, navErr);
+                }
+            }
         }
     }
 

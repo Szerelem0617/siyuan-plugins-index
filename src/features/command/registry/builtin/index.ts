@@ -19,6 +19,7 @@ import safeUpdateBlock from "./safe-update-block.json";
 import apiBlockInsert from "./api-block-insert.json";
 import apiAttrSetAttrs from "./api-attr-set-attrs.json";
 import setBlockAttribute from "./set-block-attribute.json";
+import moveContent from "./move-content.json";
 
 export const BUILTIN_COMMANDS = [
     open,
@@ -34,7 +35,8 @@ export const BUILTIN_COMMANDS = [
     safeUpdateBlock,
     apiBlockInsert,
     apiAttrSetAttrs,
-    setBlockAttribute
+    setBlockAttribute,
+    moveContent
 ];
 
 export const commandsData = {

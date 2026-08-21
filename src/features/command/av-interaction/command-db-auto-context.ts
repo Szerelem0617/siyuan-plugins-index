@@ -25,9 +25,9 @@ export function getCommandDbTokens(paramKey: string, paramType?: string): Comman
     if (isBlockIdParam) {
         return [
             {
-                token: "{{block_id}}",
-                label: "⚡ {{block_id}}",
-                description: "显式绑定当前触发上下文块的 ID"
+                token: "{{self.id}}",
+                label: "⚡ {{self.id}}",
+                description: "显式绑定当前触发上下文实体的 ID"
             }
         ];
     }

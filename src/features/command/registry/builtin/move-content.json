@@ -1,0 +1,48 @@
+{
+    "id": "index.moveContent",
+    "name": "将内容移动到",
+    "description": "多态移动：将当前块或页面移动到指定的目标位置（支持文档移动为子文档、移动到笔记本根目录、或块级移动到目标文档顶部/底部/指定块之后）。",
+    "category": "block",
+    "icon": "iconMove",
+    "dispatch": {
+        "method": "custom"
+    },
+    "params": [
+        {
+            "key": "id",
+            "type": "blockid",
+            "paramMode": "template",
+            "default": "{{self.id}}",
+            "description": "需要移动的块或文档 ID（留空默认当前块/活动页面）。"
+        },
+        {
+            "key": "target",
+            "type": "string",
+            "paramMode": "template",
+            "default": "{{doc.id}}",
+            "description": "目标位置 ID（支持 {{doc.id}}, {{doc.next.id}}, {{doc.parent.id}}, {{prev.id}}, {{next.id}}, {{parent.id}}, {{notebook.id}} 等拓扑变量）。"
+        },
+        {
+            "key": "position",
+            "type": "enum",
+            "paramMode": "template",
+            "default": "bottom",
+            "description": "位置策略：目标为文档时(bottom末尾追加, top首行插入)；目标为块时(after正下方, inside作为子块)。",
+            "values": ["bottom", "top", "after", "inside"]
+        }
+    ],
+    "constraints": {
+        "environment": "universal",
+        "targetScope": "any"
+    },
+    "meta": {
+        "contextNeed": "block",
+        "category": "block",
+        "source": "builtin"
+    },
+    "seed": {
+        "rowID": "20260821153000-move0001",
+        "label": "📦 将内容移动到",
+        "paramMapping": "{\"target\":\"{{doc.id}}\",\"position\":\"bottom\"}"
+    }
+}

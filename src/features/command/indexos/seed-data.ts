@@ -51,11 +51,13 @@ export function getSeedCommandRows(): SeedCommandRow[] {
                 outputMapping = "{}";
             }
 
-            const commandID = s.commandID || (i === 0 ? cmd.id : `${cmd.id}-${i}`);
+            const commandID = (s.commandID || (i === 0 ? cmd.id : `${cmd.id}-${i}`)).trim();
+            const rowID = (s.rowID || `20260821000000-${cmd.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 7)}${i}`).trim();
+            const label = (s.label || cmd.name || cmd.id).trim();
 
             rows.push({
-                rowID: s.rowID,
-                label: s.label,
+                rowID,
+                label,
                 commandID,
                 inputMapping,
                 outputMapping

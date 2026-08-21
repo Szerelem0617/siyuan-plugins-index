@@ -10,7 +10,7 @@
             "key": "id",
             "type": "blockid",
             "paramMode": "template",
-            "default": "{{block_id}}",
+            "default": "{{self.id}}",
             "description": "目标块或页面 ID。留空自动绑定当前上下文。"
         },
         {

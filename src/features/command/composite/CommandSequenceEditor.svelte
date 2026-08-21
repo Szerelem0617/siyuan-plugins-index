@@ -27,7 +27,7 @@
         params: Record<string, string>;
     }
 
-    const ENV_VARS = ["block_id", "root_id", "parent_id", "date", "time", "prompt"];
+    const ENV_VARS = ["self.id", "doc.id", "doc.next.id", "doc.prev.id", "prev.id", "next.id", "parent.id", "block.id", "notebook.id", "date", "time", "prompt"];
 
     const COMMON_CONTROL_PARAMS = [
         { key: "enabled", label: "是否执行本步骤", type: "boolean", default: "true", description: "评估为 false 时跳过本步骤" },

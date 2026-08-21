@@ -40,6 +40,7 @@ import { triggerSafeUpdateBlock } from "./features/command/effect/safe-update-bl
 import { triggerAddSupertag } from "./features/command/effect/add-supertag";
 import { triggerInsertBlockBelow } from "./features/command/effect/insert-block-below";
 import { handleOpenTargetCommand } from "./features/command/effect/open-target";
+import { triggerMoveContent } from "./features/command/effect/move-content";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -102,6 +103,11 @@ export default class IndexPlugin extends Plugin {
         if (setAttrCmd) {
             const { setBlockAttribute } = await import("./features/command/effect/set-block-attribute");
             setAttrCmd.dispatch.executor = setBlockAttribute;
+        }
+
+        const moveContentCmd = commandRegistry.getCommand("index.moveContent");
+        if (moveContentCmd) {
+            moveContentCmd.dispatch.executor = triggerMoveContent;
         }
 
 

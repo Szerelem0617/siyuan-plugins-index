@@ -175,6 +175,34 @@
                             />
                         {/if}
 
+                        {#if param.type === "blockid" || param.key === "target" || param.key === "id"}
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px; padding-top: 2px;">
+                                <span style="font-size: 10px; color: var(--b3-theme-on-surface-light); margin-right: 2px; align-self: center;">快捷拓扑:</span>
+                                {#each [
+                                    { label: "自身", token: "{{self.id}}" },
+                                    { label: "当前文档", token: "{{doc.id}}" },
+                                    { label: "后一文档", token: "{{doc.next.id}}" },
+                                    { label: "前一文档", token: "{{doc.prev.id}}" },
+                                    { label: "父级文档", token: "{{doc.parent.id}}" },
+                                    { label: "前一块", token: "{{prev.id}}" },
+                                    { label: "后一块", token: "{{next.id}}" },
+                                    { label: "父容器块", token: "{{parent.id}}" },
+                                    { label: "页面首块", token: "{{block.id}}" },
+                                    { label: "笔记本", token: "{{notebook.id}}" },
+                                    { label: "交互输入", token: "{{prompt:请输入目标ID}}" }
+                                ] as pill}
+                                    <button 
+                                        type="button"
+                                        class="b3-chip" 
+                                        style="font-size: 10px; padding: 1px 6px; cursor: pointer; border-radius: 3px; background: var(--indexos-bg-container); border: 1px solid var(--indexos-border-light); color: var(--indexos-text-main);"
+                                        on:click={() => inputValues[param.key] = pill.token}
+                                    >
+                                        {pill.label}
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
+
                         {#if param.description}
                             <div style="font-size: 11px; color: var(--b3-theme-on-surface-light); line-height: 1.4; padding-left: 2px;">
                                 💡 {param.description}
