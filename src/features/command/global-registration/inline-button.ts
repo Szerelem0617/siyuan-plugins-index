@@ -405,7 +405,8 @@ export async function handleInlineButtonClick(event: MouseEvent) {
         protyleEl: null,
         triggerEl: linkEl
     };
-    dispatchCommand(payload.command, paramMapping, mockContext as any);
+    const sources = paramMapping !== null && paramMapping !== undefined ? { manual: paramMapping } : undefined;
+    dispatchCommand(payload.command, paramMapping, mockContext as any, sources);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

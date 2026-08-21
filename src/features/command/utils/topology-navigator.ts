@@ -251,11 +251,11 @@ async function executeNavigationStep(current: TopologyNode, step: string): Promi
     if (childMatch) {
         const isLast = childMatch[1] === "-1";
         const index = isLast ? 1 : (childMatch[1] ? Math.max(1, parseInt(childMatch[1], 10)) : 1);
-        const orderSql = isLast ? "ORDER BY sort DESC" : "ORDER BY sort ASC";
 
         if (current.type !== "d") {
             // 块的子块
             try {
+                const orderSql = isLast ? "ORDER BY sort DESC" : "ORDER BY sort ASC";
                 const res = await post("/api/query/sql", {
                     stmt: `SELECT id FROM blocks WHERE parent_id = '${current.id}' ${orderSql} LIMIT 1 OFFSET ${index - 1}`
                 });
@@ -268,21 +268,7 @@ async function executeNavigationStep(current: TopologyNode, step: string): Promi
             return current;
         } else {
             // 页面的子级：优先找子文档，若无子文档则找页面内的顶级块
-            const childDoc = await findChildDoc(current, index, isLast);
-            if (childDoc) return childDoc;
-
-            // 页面内直接顶级内容块
-            try {
-                const res = await post("/api/query/sql", {
-                    stmt: `SELECT id FROM blocks WHERE root_id = '${current.id}' AND parent_id = '${current.id}' ${orderSql} LIMIT 1 OFFSET ${index - 1}`
-                });
-                const rows = Array.isArray(res) ? res : (res?.data || []);
-                if (rows.length > 0) {
-                    const blockChildNode = await fetchNodeMeta(rows[0].id);
-                    if (blockChildNode) return blockChildNode;
-                }
-            } catch (_) {}
-            return current;
+            return (await findChildDoc(current, index, isLast)) || current;
         }
     }
 
@@ -303,26 +289,75 @@ async function findSiblingDoc(docNode: TopologyNode, offset: number): Promise<To
     // 笔记本文档 (Box Doc) 自身无同级文档兄弟
     if (docNode.id === docNode.box || docNode.path === "/" || !docNode.path) return null;
 
-    const lastSlashIdx = docNode.path.lastIndexOf("/");
-    const dirPath = lastSlashIdx <= 0 ? "/" : docNode.path.substring(0, lastSlashIdx + 1);
+    const parts = docNode.path.split("/").filter(Boolean);
+    const parentPath = parts.length <= 1 ? "/" : "/" + parts.slice(0, -1).join("/") + ".sy";
+    const dirPrefix = docNode.path.substring(0, docNode.path.lastIndexOf("/") + 1) || "/";
 
+    console.group(`[TopologyNavigator Debug] 🔍 寻找兄弟文档 (docNode=${docNode.id}, offset=${offset})`);
+    console.log(`📂 当前路径: "${docNode.path}", 父级查询路径: "${parentPath}", Notebook: "${docNode.box}"`);
+
+    let candidateDocIds: string[] = [];
+
+    // 1. 优先调用思源官方 listDocsByPath 接口
     try {
-        const res = await post("/api/query/sql", {
-            stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND id != '${docNode.box}' AND path LIKE '${dirPath === "/" ? "/%" : dirPath + "%"}' AND path NOT LIKE '${dirPath === "/" ? "/%/%" : dirPath + "%/%"}' ORDER BY sort ASC`
+        const res = await post("/api/filetree/listDocsByPath", {
+            notebook: docNode.box,
+            path: parentPath,
+            app: "siyuan"
         });
-        const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
-        if (rows.length <= 1) return null;
-
-        const currentIndex = rows.findIndex(r => r.id === docNode.id);
-        if (currentIndex === -1) return null;
-
-        const targetIndex = currentIndex + offset;
-        if (targetIndex >= 0 && targetIndex < rows.length) {
-            return await fetchNodeMeta(rows[targetIndex].id);
+        const files: any[] = res?.data?.files || [];
+        if (files.length > 0) {
+            candidateDocIds = files.map(f => f.id);
+            console.log(`📋 listDocsByPath 返回 ${files.length} 个同级文档:`, files.map((f, i) => `[${i}] ${f.id} (${f.name || f.path})`));
         }
     } catch (e) {
-        console.warn(`[TopologyNavigator] findSiblingDoc failed:`, e);
+        console.warn(`⚠️ listDocsByPath 请求异常:`, e);
     }
+
+    // 2. 若 API 返回为空，使用 SQL 查询同级文档
+    if (candidateDocIds.length === 0) {
+        try {
+            const sqlFilter = dirPrefix === "/"
+                ? `(path NOT LIKE '/%/%' OR path IS NULL)`
+                : `(path LIKE '${dirPrefix}%' AND path NOT LIKE '${dirPrefix}%/%')`;
+
+            const res = await post("/api/query/sql", {
+                stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND id != '${docNode.box}' AND ${sqlFilter} ORDER BY sort ASC, created ASC`
+            });
+            const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
+            candidateDocIds = rows.map(r => r.id);
+            console.log(`📋 SQL 兜底返回 ${rows.length} 个同级文档:`, rows.map((r, i) => `[${i}] ${r.id} (${r.path})`));
+        } catch (sqlErr) {
+            console.error(`❌ SQL 查找同级文档异常:`, sqlErr);
+        }
+    }
+
+    if (candidateDocIds.length <= 1) {
+        console.warn(`⚠️ 目录下只有 ${candidateDocIds.length} 个文档，无法向前后移动`);
+        console.groupEnd();
+        return null;
+    }
+
+    const currentIndex = candidateDocIds.indexOf(docNode.id);
+    console.log(`🎯 当前文档在列表中的 Index: ${currentIndex} / ${candidateDocIds.length}`);
+
+    if (currentIndex === -1) {
+        console.warn(`⚠️ 当前文档未在结果列表中找到`);
+        console.groupEnd();
+        return null;
+    }
+
+    const targetIndex = currentIndex + offset;
+    if (targetIndex >= 0 && targetIndex < candidateDocIds.length) {
+        const targetId = candidateDocIds[targetIndex];
+        console.log(`✅ 成功定位兄弟文档 [index ${targetIndex}]: id=${targetId}`);
+        console.groupEnd();
+        return await fetchNodeMeta(targetId);
+    } else {
+        console.warn(`⚠️ 目标索引越界: ${targetIndex} (有效范围 0 ~ ${candidateDocIds.length - 1})，已达首尾边界`);
+    }
+
+    console.groupEnd();
     return null;
 }
 
@@ -362,7 +397,7 @@ async function findParentDoc(docNode: TopologyNode): Promise<TopologyNode | null
 }
 
 /**
- * 查询子文档
+ * 查询子文档或页面首块
  */
 async function findChildDoc(docNode: TopologyNode, index: number, isLast: boolean): Promise<TopologyNode | null> {
     if (!docNode.box) return null;

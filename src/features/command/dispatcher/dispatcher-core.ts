@@ -43,10 +43,10 @@ export async function dispatchCommand(
             return { success: true, method: def.dispatch.method, detail: constraintCheck.reason || "Skipped" };
         }
 
-        // 3. 参数解析与模板替换
+        // 3. 参数解析与模板替换 (显式传入的 rawParam 作为 Layer 3 manual 优先解析)
         const resolvedParams = sources
             ? await resolveCommandParams(def, sources, context, commandId)
-            : await resolveCommandParams(def, { commandDb: rawParam }, context, commandId);
+            : await resolveCommandParams(def, { manual: rawParam }, context, commandId);
 
         if (resolvedParams.enabled === false || resolvedParams.enabled === "false" || resolvedParams.enabled === 0) {
             return { success: true, method: def.dispatch.method, detail: "Skipped via enabled=false" };
