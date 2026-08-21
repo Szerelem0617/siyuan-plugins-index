@@ -298,15 +298,17 @@ async function executeNavigationStep(current: TopologyNode, step: string): Promi
  * 查询同目录下的相邻文档 (offset > 0 向后，offset < 0 向前)
  */
 async function findSiblingDoc(docNode: TopologyNode, offset: number): Promise<TopologyNode | null> {
-    if (!docNode.path || !docNode.box) return null;
+    if (!docNode.box) return null;
 
-    // 解析当前文档的父级目录路径 (如 /20260810/20260821.sy -> 目录为 /20260810/)
+    // 笔记本文档 (Box Doc) 自身无同级文档兄弟
+    if (docNode.id === docNode.box || docNode.path === "/" || !docNode.path) return null;
+
     const lastSlashIdx = docNode.path.lastIndexOf("/");
     const dirPath = lastSlashIdx <= 0 ? "/" : docNode.path.substring(0, lastSlashIdx + 1);
 
     try {
         const res = await post("/api/query/sql", {
-            stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND path LIKE '${dirPath === "/" ? "/%" : dirPath + "%"}' AND path NOT LIKE '${dirPath === "/" ? "/%/%" : dirPath + "%/%"}' ORDER BY sort ASC`
+            stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND id != '${docNode.box}' AND path LIKE '${dirPath === "/" ? "/%" : dirPath + "%"}' AND path NOT LIKE '${dirPath === "/" ? "/%/%" : dirPath + "%/%"}' ORDER BY sort ASC`
         });
         const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
         if (rows.length <= 1) return null;
@@ -328,11 +330,18 @@ async function findSiblingDoc(docNode: TopologyNode, offset: number): Promise<To
  * 查询文档树中的父级文档
  */
 async function findParentDoc(docNode: TopologyNode): Promise<TopologyNode | null> {
-    if (!docNode.path || !docNode.box) return null;
+    if (!docNode.box) return null;
+
+    // 笔记本文档 (Box Doc) 自身无父文档
+    if (docNode.id === docNode.box || docNode.path === "/" || !docNode.path) return null;
 
     const parts = docNode.path.split("/").filter(Boolean);
     if (parts.length <= 1) {
-        // 根目录文档无父文档
+        // 顶级文档：尝试获取所在笔记本的 Box Doc (若存在)
+        const boxDocNode = await fetchNodeMeta(docNode.box);
+        if (boxDocNode && boxDocNode.type === "d") {
+            return boxDocNode;
+        }
         return null;
     }
 
@@ -356,14 +365,19 @@ async function findParentDoc(docNode: TopologyNode): Promise<TopologyNode | null
  * 查询子文档
  */
 async function findChildDoc(docNode: TopologyNode, index: number, isLast: boolean): Promise<TopologyNode | null> {
-    if (!docNode.path || !docNode.box) return null;
+    if (!docNode.box) return null;
 
-    const cleanPathWithoutSy = docNode.path.replace(/\.sy$/, "");
+    const isBoxDoc = docNode.id === docNode.box || docNode.path === "/" || !docNode.path;
+    const cleanPathWithoutSy = isBoxDoc ? "" : docNode.path.replace(/\.sy$/, "");
     const orderSql = isLast ? "ORDER BY sort DESC" : "ORDER BY sort ASC";
 
     try {
+        const wherePath = isBoxDoc 
+            ? `path LIKE '/%' AND path NOT LIKE '/%/%' AND id != '${docNode.box}'`
+            : `path LIKE '${cleanPathWithoutSy}/%' AND path NOT LIKE '${cleanPathWithoutSy}/%/%'`;
+
         const res = await post("/api/query/sql", {
-            stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND path LIKE '${cleanPathWithoutSy}/%' AND path NOT LIKE '${cleanPathWithoutSy}/%/%' ${orderSql} LIMIT 1 OFFSET ${index - 1}`
+            stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND ${wherePath} ${orderSql} LIMIT 1 OFFSET ${index - 1}`
         });
         const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
         if (rows.length > 0) {

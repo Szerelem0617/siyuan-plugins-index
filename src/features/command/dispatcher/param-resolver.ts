@@ -10,7 +10,7 @@ import { getSupertagAutoContextInfo } from "../supertag/core/supertag-auto-conte
 import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } from "../utils/context-extractor";
 import { renderTemplate, formatDate, formatTime } from "../utils/template-engine";
 import { promptUserModal } from "../utils/prompt-modal";
-import { navigateTopology } from "../utils/topology-navigator";
+import { navigateTopology, fetchNodeMeta } from "../utils/topology-navigator";
 import { COMMAND_BINDINGS } from "../registration";
 import type { CommandContext, ParamSources } from "./types";
 
@@ -294,19 +294,51 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
     // 🌐 今日日记文档宏解析：{{daily_doc}}, {{daily_doc_id}}, {{daily_doc.id}}, {{today_doc}}
     if (normalizedText.includes("{{daily_doc") || normalizedText.includes("{{today_doc")) {
         try {
-            const todayStr = formatDate(new Date());
-            const dailyRes = await post("/api/query/sql", {
-                stmt: `SELECT id FROM blocks WHERE type = 'd' AND content = '${todayStr}' LIMIT 1`
-            });
-            const dailyRows = Array.isArray(dailyRes) ? dailyRes : (dailyRes?.data || []);
-            if (dailyRows.length > 0) {
-                variables["daily_doc"] = dailyRows[0].id;
-                variables["daily_doc.id"] = dailyRows[0].id;
-                variables["daily_doc_id"] = dailyRows[0].id;
-                variables["today_doc"] = dailyRows[0].id;
-                variables["today_doc.id"] = dailyRows[0].id;
+            let targetBox = "";
+            if (blockId) {
+                const nodeMeta = await fetchNodeMeta(blockId);
+                targetBox = nodeMeta?.box || "";
             }
-        } catch (_) {}
+            if (!targetBox) {
+                const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
+                targetBox = activeProtyle?.notebookId || "";
+            }
+
+            let resolvedDailyId = "";
+            if (targetBox) {
+                // 1. 调用思源官方日记 API (支持按笔记本配置路径自动创建/获取)
+                const res = await post("/api/filetree/createDailyNote", {
+                    notebook: targetBox,
+                    app: "siyuan"
+                });
+                if (res?.data?.id) {
+                    resolvedDailyId = res.data.id;
+                }
+            }
+
+            if (!resolvedDailyId) {
+                // 2. 降级 SQL 查询当前笔记本或全局今日日记
+                const todayStr = formatDate(new Date());
+                const boxClause = targetBox ? `AND box = '${targetBox}'` : "";
+                const dailyRes = await post("/api/query/sql", {
+                    stmt: `SELECT id FROM blocks WHERE type = 'd' ${boxClause} AND content = '${todayStr}' LIMIT 1`
+                });
+                const dailyRows = Array.isArray(dailyRes) ? dailyRes : (dailyRes?.data || []);
+                if (dailyRows.length > 0) {
+                    resolvedDailyId = dailyRows[0].id;
+                }
+            }
+
+            if (resolvedDailyId) {
+                variables["daily_doc"] = resolvedDailyId;
+                variables["daily_doc.id"] = resolvedDailyId;
+                variables["daily_doc_id"] = resolvedDailyId;
+                variables["today_doc"] = resolvedDailyId;
+                variables["today_doc.id"] = resolvedDailyId;
+            }
+        } catch (e) {
+            console.warn(`[ParamResolver] 解析 daily_doc 失败:`, e);
+        }
     }
 
     // 🌐 拓扑导航宏与链式路径解析 (如 {{self.id}}, {{doc.id}}, {{doc.next.id}}, {{doc.prev.id}}, {{prev.id}}, {{next.id}}, {{parent.id}}, {{root.id}}, {{notebook.id}}, {{block.id}}, {{block1.id}} 等)
