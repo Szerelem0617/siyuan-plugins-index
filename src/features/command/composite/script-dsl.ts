@@ -11,6 +11,7 @@ export interface RuleCommand {
 export interface EventScopeFilter {
     scope?: "self" | "inner_blocks" | "current_doc" | "subtree";
     filter?: "all" | "todo" | "doc" | "heading" | "paragraph" | "av";
+    condition?: string;
 }
 
 export interface RuleScript {
@@ -20,6 +21,7 @@ export interface RuleScript {
     events?: string[];
     scope?: "self" | "inner_blocks" | "current_doc" | "subtree";
     filter?: "all" | "todo" | "doc" | "heading" | "paragraph" | "av";
+    condition?: string;
 }
 
 export interface MultiEventRuleScript {
@@ -95,9 +97,17 @@ export function generateMultiEventRuleScript(
         const cfg = eventConfigsMap?.[ev];
         const hasScope = cfg?.scope && cfg.scope !== "self";
         const hasFilter = cfg?.filter && cfg.filter !== "all";
+        const hasCond = cfg?.condition && cfg.condition.trim().length > 0;
         let metaComment = "";
-        if (hasScope || hasFilter) {
-            metaComment = `        // [Scope: ${cfg?.scope || "self"}, Filter: ${cfg?.filter || "all"}]\n`;
+        if (hasScope || hasFilter || hasCond) {
+            const parts = [
+                `Scope: ${cfg?.scope || "self"}`,
+                `Filter: ${cfg?.filter || "all"}`
+            ];
+            if (hasCond) {
+                parts.push(`Condition: ${cfg?.condition?.trim()}`);
+            }
+            metaComment = `        // [${parts.join(", ")}]\n`;
         }
 
         const lines = cmds.map(cmd => {
@@ -228,18 +238,20 @@ export function parseMultiEventRuleScript(text: string): MultiEventRuleScript | 
 
         eventCommandsMap[ev] = parseDispatchCallsFromText(blockText);
 
-        const metaMatch = blockText.match(/\/\/\s*\[Scope:\s*([a-zA-Z_]+)(?:,\s*Filter:\s*([a-zA-Z_]+))?\]/i);
+        const metaMatch = blockText.match(/\/\/\s*\[Scope:\s*([a-zA-Z_]+)(?:,\s*Filter:\s*([a-zA-Z_]+))?(?:,\s*Condition:\s*([^\]]+))?\]/i);
         if (metaMatch) {
             eventConfigsMap[ev] = {
                 scope: (metaMatch[1] as any) || "self",
-                filter: (metaMatch[2] as any) || "all"
+                filter: (metaMatch[2] as any) || "all",
+                condition: metaMatch[3] ? metaMatch[3].trim() : undefined
             };
         } else if (events.length === 1) {
-            const globalMatch = text.match(/\/\/\s*\[Scope:\s*([a-zA-Z_]+)(?:,\s*Filter:\s*([a-zA-Z_]+))?\]/i);
+            const globalMatch = text.match(/\/\/\s*\[Scope:\s*([a-zA-Z_]+)(?:,\s*Filter:\s*([a-zA-Z_]+))?(?:,\s*Condition:\s*([^\]]+))?\]/i);
             if (globalMatch) {
                 eventConfigsMap[ev] = {
                     scope: (globalMatch[1] as any) || "self",
-                    filter: (globalMatch[2] as any) || "all"
+                    filter: (globalMatch[2] as any) || "all",
+                    condition: globalMatch[3] ? globalMatch[3].trim() : undefined
                 };
             }
         }

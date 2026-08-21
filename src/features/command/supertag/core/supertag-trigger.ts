@@ -12,6 +12,7 @@ import { dispatchCommand, type CommandContext } from "../../command-dispatcher";
 import { executeTsScript } from "./supertag-sandbox";
 import { parseMultiEventRuleScript } from "../../composite/script-dsl";
 import { parseSupertags, cleanTagString } from "./supertag-diff";
+import { evaluateCondition } from "./condition-evaluator";
 
 export interface TriggerCommandRef {
     labelOrId: string;
@@ -514,9 +515,29 @@ export async function dispatchScopeEvents(
                     }
                 }
 
-                console.log(`[Supertag-Scope] 🏢 Host #${cleanTag} (${host.id}) on ${eventName}: scope="${scope}", filter="${filter}", filterMatched=${filterMatched}, scopeMatched=${scopeMatched}`);
+                // 4. 前置断言检查 (Condition Predicate)
+                let conditionMatched = true;
+                if (cfg.condition && cfg.condition.trim()) {
+                    let targetAttrs: Record<string, string> = {};
+                    try {
+                        const attrRes = await post("/api/attr/getBlockAttrs", { id: targetInfo.id });
+                        targetAttrs = attrRes?.data || attrRes || {};
+                    } catch (_) {}
 
-                if (filterMatched && scopeMatched) {
+                    conditionMatched = evaluateCondition(cfg.condition, {
+                        id: targetInfo.id,
+                        attrs: targetAttrs,
+                        content: targetInfo.markdown || domEl?.textContent || "",
+                        markdown: targetInfo.markdown || "",
+                        tags: targetInfo.tags,
+                        type: targetInfo.type,
+                        subType: targetInfo.subType
+                    });
+                }
+
+                console.log(`[Supertag-Scope] 🏢 Host #${cleanTag} (${host.id}) on ${eventName}: scope="${scope}", filter="${filter}", cond="${cfg.condition || ''}", filterMatched=${filterMatched}, scopeMatched=${scopeMatched}, condMatched=${conditionMatched}`);
+
+                if (filterMatched && scopeMatched && conditionMatched) {
                     // 如果目标块是列表容器 (type = 'l') 或列表项 (type = 'i')，尝试下寻到具体内容段落块以进行精准打标
                     let actualTargetId = targetInfo.id;
                     if ((targetInfo.type === "l" || targetInfo.type === "i") && domEl) {

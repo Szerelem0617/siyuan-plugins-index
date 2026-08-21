@@ -11,6 +11,7 @@
     } from "../../composite/script-dsl";
     import { createCompositeRow, registerCompositeCommand, compositeCommandId } from "../../composite/manager";
     import { refreshSupertagRegistry } from "../../utils/sync-service";
+    import { PRESET_CONDITIONS } from "../../supertag/core/condition-evaluator";
 
     export let dialog: Dialog;
     export let supertag: string;
@@ -90,7 +91,9 @@
     function isScopeFilterCustomized(evId: string): boolean {
         const cfg = eventConfigsMap[evId];
         if (!cfg) return false;
-        return (cfg.scope !== undefined && cfg.scope !== "self") || (cfg.filter !== undefined && cfg.filter !== "all");
+        return (cfg.scope !== undefined && cfg.scope !== "self") || 
+               (cfg.filter !== undefined && cfg.filter !== "all") ||
+               (cfg.condition !== undefined && cfg.condition.trim().length > 0);
     }
 
     function setScope(evId: string, scope: string) {
@@ -115,11 +118,22 @@
         };
     }
 
+    function setCondition(evId: string, cond: string) {
+        const current = eventConfigsMap[evId] || { scope: "self", filter: "all" };
+        eventConfigsMap = {
+            ...eventConfigsMap,
+            [evId]: {
+                ...current,
+                condition: cond
+            }
+        };
+    }
+
     function switchTab(eventId: string) {
         activeEventTab = eventId;
         showAddEventPicker = false;
         // 如果切换到的 Tab 不支持范围设置，则关闭面板
-        if (eventId !== "block_content_changed" && eventId !== "block_attribute_changed") {
+        if (eventId !== "block_created" && eventId !== "block_content_changed" && eventId !== "block_attribute_changed") {
             showScopeFilterPanel = false;
         }
     }
@@ -320,6 +334,7 @@
     {#if showScopeFilterPanel && (activeEventTab === "block_created" || activeEventTab === "block_content_changed" || activeEventTab === "block_attribute_changed")}
         {@const curScope = eventConfigsMap[activeEventTab]?.scope || "self"}
         {@const curFilter = eventConfigsMap[activeEventTab]?.filter || "all"}
+        {@const curCondition = eventConfigsMap[activeEventTab]?.condition || ""}
         <div style="background: var(--indexos-bg-surface); border: 1px solid {isScopeFilterCustomized(activeEventTab) ? 'var(--indexos-detached-gold, #D9A74A)' : 'var(--indexos-border-light)'}; border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="font-size: 12px; font-weight: 600; color: var(--indexos-text-main); display: flex; align-items: center; gap: 6px;">
@@ -375,6 +390,45 @@
                         >
                             <span>{opt.icon}</span>
                             <span>{opt.label}</span>
+                        </button>
+                    {/each}
+                </div>
+            </div>
+
+            <!-- 3. 前置断言 Condition (内容与属性过滤) -->
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px; padding-top: 6px; border-top: 1px dashed var(--indexos-border-divider);">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-size: 11px; font-weight: 600; color: var(--indexos-text-muted);">
+                        3. 前置断言表达式 (Condition / Predicate):
+                    </div>
+                    {#if curCondition}
+                        <button
+                            type="button"
+                            style="border: none; background: transparent; color: var(--indexos-text-muted); font-size: 10px; cursor: pointer; text-decoration: underline; padding: 0;"
+                            on:click={() => setCondition(activeEventTab, "")}
+                        >
+                            清空
+                        </button>
+                    {/if}
+                </div>
+                <input
+                    type="text"
+                    class="b3-text-field fn__flex-1"
+                    style="font-size: 11px; padding: 4px 8px; font-family: monospace; border-radius: 4px; {curCondition ? 'border-color: var(--indexos-detached-gold, #D9A74A);' : ''}"
+                    placeholder="如: content starts_with 'BUG:' 或 status != 'done'"
+                    value={curCondition}
+                    on:input={(e) => setCondition(activeEventTab, e.currentTarget.value)}
+                />
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 2px;">
+                    <span style="font-size: 10px; color: var(--indexos-text-muted);">快捷预设:</span>
+                    {#each PRESET_CONDITIONS as preset}
+                        <button
+                            type="button"
+                            class="b3-button b3-button--outline"
+                            style="font-size: 10px; padding: 2px 6px; height: 20px; line-height: 18px; border-radius: 3px;"
+                            on:click={() => setCondition(activeEventTab, preset.filter)}
+                        >
+                            {preset.label}
                         </button>
                     {/each}
                 </div>

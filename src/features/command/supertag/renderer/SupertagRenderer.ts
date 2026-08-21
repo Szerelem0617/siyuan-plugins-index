@@ -3,7 +3,7 @@ import { showMessage } from "siyuan";
 import { supertagMonitor } from "../core/supertag-listener";
 import { globalSupertagsCache, SUPERTAG_REGISTRY, getLayer2CommandDisplayName } from "../../registration";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
-import { evaluateVirtualButtonCondition } from "../core/virtual-button-condition";
+import { evaluateCondition } from "../core/condition-evaluator";
 import { dispatchCommand } from "../../command-dispatcher";
 import { commandRegistry } from "../../registry/command-registry";
 
@@ -220,7 +220,7 @@ export class SupertagRenderer {
 
         for (const entry of vEntries) {
             const cond = entry.condition || entry.blockFilter;
-            const isMatch = evaluateVirtualButtonCondition(cond, {
+            const isMatch = evaluateCondition(cond, {
                 id: blockId,
                 attrs,
                 content: blockContent
