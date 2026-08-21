@@ -281,81 +281,188 @@ async function executeNavigationStep(current: TopologyNode, step: string): Promi
 // ══════════════════════════════════════════════════════════════════
 
 /**
+ * 获取当前笔记本的生效文档排序模式 (SortMode)
+ * 思源规范：
+ * 0: 文件名升序, 1: 文件名降序, 2: 更新时间升序, 3: 更新时间降序,
+ * 4/5: 自然排序, 6: 自定义排序 (默认最常用), 9: 创建时间升序, 10: 创建时间降序,
+ * 15: 继承全局 fileTree.sort
+ */
+function getNotebookSortMode(boxId: string): number {
+    try {
+        const globalSort = (window as any).siyuan?.config?.fileTree?.sort ?? 6;
+        const notebookEl = document.querySelector(`ul[data-box="${boxId}"]`) || document.querySelector(`li[data-box="${boxId}"]`)?.parentElement;
+        const rawSortMode = notebookEl?.getAttribute("data-sortmode");
+        if (rawSortMode && rawSortMode !== "15") {
+            const parsed = parseInt(rawSortMode, 10);
+            if (!isNaN(parsed)) return parsed;
+        }
+        return globalSort;
+    } catch (_) {
+        return 6;
+    }
+}
+
+/**
+ * 根据 sortMode 生成精确对齐思源视觉文档树的 SQL ORDER BY 子句
+ */
+function getDocOrderByClause(sortMode: number, isReverse: boolean = false): string {
+    switch (sortMode) {
+        case 0: // 文件名升序
+            return isReverse ? "ORDER BY content DESC" : "ORDER BY content ASC";
+        case 1: // 文件名降序
+            return isReverse ? "ORDER BY content ASC" : "ORDER BY content DESC";
+        case 2: // 更新时间升序
+            return isReverse ? "ORDER BY updated DESC" : "ORDER BY updated ASC";
+        case 3: // 更新时间降序
+            return isReverse ? "ORDER BY updated ASC" : "ORDER BY updated DESC";
+        case 9: // 创建时间升序
+            return isReverse ? "ORDER BY created DESC" : "ORDER BY created ASC";
+        case 10: // 创建时间降序
+            return isReverse ? "ORDER BY created ASC" : "ORDER BY created DESC";
+        case 6: // 自定义拖拽排序 (思源默认真理源：blocks 表中的 sort 整数)
+        default:
+            return isReverse ? "ORDER BY sort DESC, created DESC" : "ORDER BY sort ASC, created ASC";
+    }
+}
+
+/**
  * 查询同目录下的相邻文档 (offset > 0 向后，offset < 0 向前)
+ * 单一权威源：基于 SQLite blocks 目录路径与真实排序字段纯净计算
  */
 async function findSiblingDoc(docNode: TopologyNode, offset: number): Promise<TopologyNode | null> {
-    if (!docNode.box) return null;
+    if (!docNode.box || !docNode.path || docNode.id === docNode.box || docNode.path === "/") {
+        return null;
+    }
 
-    // 笔记本文档 (Box Doc) 自身无同级文档兄弟
-    if (docNode.id === docNode.box || docNode.path === "/" || !docNode.path) return null;
+    // 提取同级目录前缀 (例如: /parent/doc.sy ➔ "/parent/"; 根目录 /doc.sy ➔ "/")
+    const lastSlashIdx = docNode.path.lastIndexOf("/");
+    const dirPrefix = lastSlashIdx <= 0 ? "/" : docNode.path.substring(0, lastSlashIdx + 1);
 
-    const parts = docNode.path.split("/").filter(Boolean);
-    const parentPath = parts.length <= 1 ? "/" : "/" + parts.slice(0, -1).join("/") + ".sy";
-    const dirPrefix = docNode.path.substring(0, docNode.path.lastIndexOf("/") + 1) || "/";
+    const sqlFilter = dirPrefix === "/"
+        ? `(path NOT LIKE '/%/%' OR path IS NULL)`
+        : `(path LIKE '${dirPrefix}%' AND path NOT LIKE '${dirPrefix}%/%')`;
 
-    console.group(`[TopologyNavigator Debug] 🔍 寻找兄弟文档 (docNode=${docNode.id}, offset=${offset})`);
-    console.log(`📂 当前路径: "${docNode.path}", 父级查询路径: "${parentPath}", Notebook: "${docNode.box}"`);
+    const sortMode = getNotebookSortMode(docNode.box);
+    const orderClause = getDocOrderByClause(sortMode);
 
-    let candidateDocIds: string[] = [];
+    console.group(`[TopologyNavigator] 🔍 寻找兄弟文档 (docNode=${docNode.id}, offset=${offset})`);
+    console.log(`📂 当前路径: "${docNode.path}", 目录前缀: "${dirPrefix}", SortMode: ${sortMode} ("${orderClause}")`);
 
-    // 1. 优先调用思源官方 listDocsByPath 接口
     try {
-        const res = await post("/api/filetree/listDocsByPath", {
-            notebook: docNode.box,
-            path: parentPath,
-            app: "siyuan"
+        const res = await post("/api/query/sql", {
+            stmt: `SELECT id, root_id, path, box, type, sort, content, updated, created FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND id != '${docNode.box}' AND ${sqlFilter} ${orderClause}`
         });
-        const files: any[] = res?.data?.files || [];
-        if (files.length > 0) {
-            candidateDocIds = files.map(f => f.id);
-            console.log(`📋 listDocsByPath 返回 ${files.length} 个同级文档:`, files.map((f, i) => `[${i}] ${f.id} (${f.name || f.path})`));
+        const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
+        console.log(`📋 同级文档列表 (${rows.length} 篇):`, rows.map((r, i) => `[${i}] ${r.id} (${r.content || r.path}) [sort=${r.sort}]`));
+
+        if (rows.length <= 1) {
+            console.warn(`⚠️ 目录下仅有 ${rows.length} 篇文档，无同级兄弟`);
+            console.groupEnd();
+            return null;
+        }
+
+        const currentIndex = rows.findIndex(r => r.id === docNode.id || r.path === docNode.path);
+        console.log(`🎯 当前文档在同级中的 Index: ${currentIndex} / ${rows.length}`);
+
+        if (currentIndex === -1) {
+            console.warn(`⚠️ 当前文档未在同级列表中找到`);
+            console.groupEnd();
+            return null;
+        }
+
+        const targetIndex = currentIndex + offset;
+        if (targetIndex >= 0 && targetIndex < rows.length) {
+            const targetId = rows[targetIndex].id;
+            console.log(`✅ 成功定位兄弟文档 [index ${targetIndex}]: id=${targetId} (${rows[targetIndex].content || ''})`);
+            console.groupEnd();
+            return await fetchNodeMeta(targetId);
+        } else {
+            console.warn(`⚠️ 目标索引越界: ${targetIndex} (有效范围 0 ~ ${rows.length - 1})，已达首尾边界`);
         }
     } catch (e) {
-        console.warn(`⚠️ listDocsByPath 请求异常:`, e);
+        console.error(`❌ 查询兄弟文档异常:`, e);
     }
 
-    // 2. 若 API 返回为空，使用 SQL 查询同级文档
-    if (candidateDocIds.length === 0) {
-        try {
-            const sqlFilter = dirPrefix === "/"
-                ? `(path NOT LIKE '/%/%' OR path IS NULL)`
-                : `(path LIKE '${dirPrefix}%' AND path NOT LIKE '${dirPrefix}%/%')`;
+    console.groupEnd();
+    return null;
+}
 
-            const res = await post("/api/query/sql", {
-                stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND id != '${docNode.box}' AND ${sqlFilter} ORDER BY sort ASC, created ASC`
-            });
-            const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
-            candidateDocIds = rows.map(r => r.id);
-            console.log(`📋 SQL 兜底返回 ${rows.length} 个同级文档:`, rows.map((r, i) => `[${i}] ${r.id} (${r.path})`));
-        } catch (sqlErr) {
-            console.error(`❌ SQL 查找同级文档异常:`, sqlErr);
+/**
+ * 查询文档树中的父级文档
+ */
+async function findParentDoc(docNode: TopologyNode): Promise<TopologyNode | null> {
+    if (!docNode.box || docNode.id === docNode.box || docNode.path === "/" || !docNode.path) return null;
+
+    const parts = docNode.path.split("/").filter(Boolean);
+    if (parts.length <= 1) {
+        // 顶级文档：尝试获取所在笔记本的 Box Doc (若存在)
+        const boxDocNode = await fetchNodeMeta(docNode.box);
+        if (boxDocNode && boxDocNode.type === "d") {
+            return boxDocNode;
         }
-    }
-
-    if (candidateDocIds.length <= 1) {
-        console.warn(`⚠️ 目录下只有 ${candidateDocIds.length} 个文档，无法向前后移动`);
-        console.groupEnd();
         return null;
     }
 
-    const currentIndex = candidateDocIds.indexOf(docNode.id);
-    console.log(`🎯 当前文档在列表中的 Index: ${currentIndex} / ${candidateDocIds.length}`);
+    // 父级文档的 path 为上一层路径拼接 .sy (如 /parentDocId/currentDocId.sy -> /parentDocId.sy)
+    const parentPath = "/" + parts.slice(0, -1).join("/") + ".sy";
+    try {
+        const res = await post("/api/query/sql", {
+            stmt: `SELECT id, root_id, path, box, type, sort FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND path = '${parentPath}' LIMIT 1`
+        });
+        const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
+        if (rows.length > 0) {
+            return await fetchNodeMeta(rows[0].id);
+        }
+    } catch (e) {
+        console.warn(`[TopologyNavigator] findParentDoc failed:`, e);
+    }
+    return null;
+}
 
-    if (currentIndex === -1) {
-        console.warn(`⚠️ 当前文档未在结果列表中找到`);
-        console.groupEnd();
-        return null;
+/**
+ * 查询子文档或页面首块
+ */
+async function findChildDoc(docNode: TopologyNode, index: number, isLast: boolean): Promise<TopologyNode | null> {
+    if (!docNode.box) return null;
+
+    const isBoxDoc = docNode.id === docNode.box || docNode.path === "/" || !docNode.path;
+    const cleanPathWithoutSy = isBoxDoc ? "" : docNode.path.replace(/\.sy$/, "");
+    const sortMode = getNotebookSortMode(docNode.box);
+    const orderSql = getDocOrderByClause(sortMode, isLast);
+
+    console.group(`[TopologyNavigator] 🔍 寻找子级 (docNode=${docNode.id}, isBoxDoc=${isBoxDoc}, index=${index}, isLast=${isLast}, sortMode=${sortMode})`);
+
+    // 1. 优先查找子文档
+    try {
+        const wherePath = isBoxDoc 
+            ? `(path NOT LIKE '/%/%' OR path IS NULL)`
+            : `(path LIKE '${cleanPathWithoutSy}/%' AND path NOT LIKE '${cleanPathWithoutSy}/%/%')`;
+
+        const res = await post("/api/query/sql", {
+            stmt: `SELECT id, root_id, path, box, type, sort, content, updated, created FROM blocks WHERE type = 'd' AND box = '${docNode.box}' AND id != '${docNode.id}' AND ${wherePath} ${orderSql} LIMIT 1 OFFSET ${index - 1}`
+        });
+        const rows: any[] = Array.isArray(res) ? res : (res?.data || []);
+        if (rows.length > 0) {
+            console.log(`✅ 命中子文档: id=${rows[0].id}, path=${rows[0].path}`);
+            console.groupEnd();
+            return await fetchNodeMeta(rows[0].id);
+        }
+    } catch (e) {
+        console.warn(`[TopologyNavigator] 查询子文档异常:`, e);
     }
 
-    const targetIndex = currentIndex + offset;
-    if (targetIndex >= 0 && targetIndex < candidateDocIds.length) {
-        const targetId = candidateDocIds[targetIndex];
-        console.log(`✅ 成功定位兄弟文档 [index ${targetIndex}]: id=${targetId}`);
-        console.groupEnd();
-        return await fetchNodeMeta(targetId);
-    } else {
-        console.warn(`⚠️ 目标索引越界: ${targetIndex} (有效范围 0 ~ ${candidateDocIds.length - 1})，已达首尾边界`);
-    }
+    // 2. 若无子文档，查找页面内的顶级正文块
+    try {
+        const res = await post("/api/query/sql", {
+            stmt: `SELECT id FROM blocks WHERE root_id = '${docNode.id}' AND parent_id = '${docNode.id}' ${orderSql} LIMIT 1 OFFSET ${index - 1}`
+        });
+        const rows = Array.isArray(res) ? res : (res?.data || []);
+        if (rows.length > 0) {
+            console.log(`✅ 命中页面顶级内容块: id=${rows[0].id}`);
+            console.groupEnd();
+            return await fetchNodeMeta(rows[0].id);
+        }
+    } catch (_) {}
 
     console.groupEnd();
     return null;
