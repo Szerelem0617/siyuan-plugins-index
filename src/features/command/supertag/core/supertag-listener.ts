@@ -10,7 +10,7 @@ import { getGlobalTypeConfigs } from "../../../av/av-setting/db-config";
 import { type TypeConfig } from "../../../av/av-setting/types";
 import { parseSupertags, diffSupertags, cleanTagString, tagCache } from "./supertag-diff";
 import { supertagBinder } from "./supertag-binder";
-import { triggerConditionalCommands } from "./supertag-trigger";
+import { triggerConditionalCommands, dispatchScopeEvents } from "./supertag-trigger";
 import { SupertagRenderer } from "../renderer/SupertagRenderer";
 import { commandRegistry } from "../../registry/command-registry";
 import { encodeBtnHref } from "../../global-registration/inline-button";
@@ -81,6 +81,7 @@ export class SupertagMonitor {
 
         for (const [blockId, eventData] of queueToProcess.entries()) {
             await this.processBlockTagsDiff(blockId, eventData.payload, eventData.action, eventData.opId);
+            await this.processBlockContentChanged(blockId);
         }
     }
 
@@ -420,13 +421,13 @@ export class SupertagMonitor {
             const rawTags = attrs["custom-supertags"];
             const currentTags = parseSupertags(rawTags).map(t => cleanTagString(t));
 
-            if (!currentTags.includes("task")) {
-                console.log(`[Supertag] 块 ${blockId} 未打上 #task 标签，跳过 task_completed 自动化触发`);
-                return;
+            if (currentTags.includes("task")) {
+                console.log(`[Supertag] Triggering task_completed event for block "${blockId}"...`);
+                await triggerConditionalCommands(blockId, "task", "task_completed");
             }
 
-            console.log(`[Supertag] Triggering task_completed event for block "${blockId}"...`);
-            await triggerConditionalCommands(blockId, "task", "task_completed");
+            // ⚡ 级联广播触发同文档或祖先树中监听了 task_completed 的组件 (如 #player 或 #project)
+            await dispatchScopeEvents(blockId, "task_completed");
         } catch (e) {
             console.error("[Supertag] Failed to process task completed:", blockId, e);
         }
@@ -443,6 +444,9 @@ export class SupertagMonitor {
                 const cleanTag = cleanTagString(tag);
                 await triggerConditionalCommands(blockId, cleanTag, "block_content_changed");
             }
+
+            // ⚡ 级联广播触发同文档或祖先树中监听了 block_content_changed 的组件 (如 #project 或 #player)
+            await dispatchScopeEvents(blockId, "block_content_changed");
         } catch (e) {
             console.error("[Supertag] Failed to process block content changed:", blockId, e);
         }

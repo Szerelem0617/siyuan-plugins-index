@@ -1,15 +1,17 @@
 /**
  * supertag-trigger.ts
  *
- * 条件触发规则查询与指令管道分发模块
+ * 条件触发规则查询、作用域匹配 (Scope Matching) 与指令管道分发模块
  */
 
 import { post } from "../../../../shared/api-client/request";
-import { SUPERTAG_REGISTRY, COMMAND_BINDINGS, getTypeAvId } from "../../registration";
+import { SUPERTAG_REGISTRY, COMMAND_BINDINGS, getTypeAvId, globalSupertagsCache } from "../../registration";
 import { getSqliteEngine } from "../../../sqlite/sqlite-manager";
 import { getSeedConditionalScript } from "../../indexos/seed-data";
 import { dispatchCommand, type CommandContext } from "../../command-dispatcher";
 import { executeTsScript } from "./supertag-sandbox";
+import { parseMultiEventRuleScript } from "../../composite/script-dsl";
+import { parseSupertags, cleanTagString } from "./supertag-diff";
 
 export interface TriggerCommandRef {
     labelOrId: string;
@@ -150,63 +152,69 @@ export function parseConditionalString(conditionalStr: string): TriggerRule[] {
     return rules;
 }
 
+export async function querySupertagRuleScript(cleanTag: string): Promise<string> {
+    let conditionalVal = "";
+    const typeAvId = getTypeAvId();
+
+    if (typeAvId) {
+        try {
+            const tableName = `av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+            const { db } = await getSqliteEngine();
+            
+            const schemaCols = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [typeAvId]);
+            let supertagColName = "supertag";
+            if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
+                supertagColName = String(schemaCols[0].values[0][0]);
+            }
+
+            const schemaConditional = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Auto' OR key_name = 'Conditional' OR key_name = '触发器' OR key_name = 'On Create' OR key_name = '创建时')`, [typeAvId]);
+            let conditionalColName = "Auto";
+            if (schemaConditional.length > 0 && schemaConditional[0].values.length > 0) {
+                conditionalColName = String(schemaConditional[0].values[0][0]);
+            }
+
+            const typeDbRes = db.exec(`SELECT "${conditionalColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag.toLowerCase()}' OR LOWER("${supertagColName}") = '${cleanTag.toLowerCase()}'`);
+
+            if (typeDbRes && typeDbRes.length > 0 && typeDbRes[0].values.length > 0) {
+                conditionalVal = String(typeDbRes[0].values[0][0] || "").trim();
+            }
+        } catch (dbErr) {
+            console.warn("[Supertag-Trigger] Failed to query SQLite for conditional script:", dbErr);
+        }
+    }
+
+    if ((!conditionalVal || conditionalVal === "Conditional" || conditionalVal === "Auto") && !typeAvId) {
+        conditionalVal = getSeedConditionalScript(cleanTag);
+    }
+
+    return conditionalVal;
+}
+
 export async function triggerConditionalCommands(
     blockId: string, 
     cleanTag: string, 
-    eventName: "tag_created" | "tag_removed" | "block_content_changed" | "block_attribute_changed" | "task_completed"
+    eventName: "tag_created" | "tag_removed" | "block_content_changed" | "block_attribute_changed" | "task_completed",
+    extraContext?: { targetBlockId?: string; hostBlockId?: string }
 ): Promise<void> {
     try {
-        let conditionalVal = "";
-        const typeAvId = getTypeAvId();
-
-        if (typeAvId) {
-            try {
-                const tableName = `av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-                const { db } = await getSqliteEngine();
-                
-                const schemaCols = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [typeAvId]);
-                let supertagColName = "supertag";
-                if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
-                    supertagColName = String(schemaCols[0].values[0][0]);
-                }
-
-                const schemaConditional = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Auto' OR key_name = 'Conditional' OR key_name = '触发器' OR key_name = 'On Create' OR key_name = '创建时')`, [typeAvId]);
-                let conditionalColName = "Auto";
-                if (schemaConditional.length > 0 && schemaConditional[0].values.length > 0) {
-                    conditionalColName = String(schemaConditional[0].values[0][0]);
-                }
-
-                const typeDbRes = db.exec(`SELECT "${conditionalColName}" FROM ${tableName} WHERE LOWER("${supertagColName}") = '#${cleanTag}' OR LOWER("${supertagColName}") = '${cleanTag}'`);
-
-                if (typeDbRes && typeDbRes.length > 0 && typeDbRes[0].values.length > 0) {
-                    conditionalVal = String(typeDbRes[0].values[0][0] || "").trim();
-                }
-            } catch (dbErr) {
-                console.warn("[Supertag-Trigger] Failed to query SQLite for conditional script:", dbErr);
-            }
-        }
-
-        // 状态机规则：未实例化时（未创建 Type-DB AV）或读出表头名时，从种子常量读取 Conditional 脚本
-        if ((!conditionalVal || conditionalVal === "Conditional" || conditionalVal === "Auto") && !typeAvId) {
-            conditionalVal = getSeedConditionalScript(cleanTag);
-            if (conditionalVal) {
-                console.log(`[Supertag-Trigger] Found conditional script in seed data for #${cleanTag}`);
-            }
-        }
+        const conditionalVal = await querySupertagRuleScript(cleanTag);
 
         if (conditionalVal) {
+            const hostId = extraContext?.hostBlockId || blockId;
+            const targetId = extraContext?.targetBlockId || blockId;
+
             const doc = document;
-            const blockEl = doc.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement || doc.createElement("div");
+            const blockEl = doc.querySelector(`[data-node-id="${hostId}"]`) as HTMLElement || doc.createElement("div");
             if (blockEl && !blockEl.getAttribute("data-node-id")) {
-                blockEl.setAttribute("data-node-id", blockId);
+                blockEl.setAttribute("data-node-id", hostId);
             }
 
             const protyle = (window as any).siyuan?.ws?.protyle || null;
             const pipelineVars: Record<string, any> = {};
 
-            // 1. 自动预加载目标块的持久化属性到 pipelineVars 中 (统一 vars 属性池)
+            // 1. 自动预加载属性到 pipelineVars 中 (统一 vars 属性池，注入双实体上下文)
             try {
-                const attrRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+                const attrRes = await post("/api/attr/getBlockAttrs", { id: targetId });
                 const attrs = attrRes?.data || attrRes || {};
                 if (attrs && typeof attrs === "object") {
                     for (const [k, v] of Object.entries(attrs)) {
@@ -223,9 +231,14 @@ export async function triggerConditionalCommands(
                 pipelineVars["task-status"] = taskVal;
                 pipelineVars["index-task"] = taskVal;
 
-                console.log(`[Supertag-Debug] Pre-loaded block attributes for ${blockId} on event ${eventName}:`, pipelineVars);
+                // 注入双实体标准化上下文参数
+                pipelineVars["target_id"] = targetId;
+                pipelineVars["block_id"] = targetId;
+                pipelineVars["id"] = targetId;
+                pipelineVars["host_id"] = hostId;
+                pipelineVars["project_id"] = hostId;
             } catch (e) {
-                console.warn(`[Supertag-Trigger] Failed to pre-load block attributes for ${blockId}:`, e);
+                console.warn(`[Supertag-Trigger] Failed to pre-load block attributes for ${targetId}:`, e);
             }
 
             const context: CommandContext = {
@@ -239,50 +252,252 @@ export async function triggerConditionalCommands(
             // 2. 判定是否为原生 TS/JS 动态脚本模式
             const isTsScript = conditionalVal.includes("async") || conditionalVal.includes("dispatch(") || (conditionalVal.includes("=>") && !conditionalVal.includes("->"));
             if (isTsScript) {
-                console.log(`[Supertag-Trigger] Executing native TS/JS dynamic script for tag #${cleanTag} on event ${eventName}`);
+                console.log(`[Supertag-Trigger] Executing dynamic script for tag #${cleanTag} on event ${eventName} (host=${hostId}, target=${targetId})`);
                 await executeTsScript(conditionalVal, context, eventName);
                 return;
             }
 
-            // 3. 否则走结构化命令管道解析
+            // 3. 结构化命令管道解析
             const rules = parseConditionalString(conditionalVal);
             const targetRule = rules.find(r => r.event === eventName);
 
             if (targetRule && targetRule.commands.length > 0) {
-                let conditionMet = true;
-                if (targetRule.condition) {
-                    console.log(`[Supertag-Trigger] Evaluating condition: ${targetRule.condition}`);
-                }
+                console.log(`[Supertag-Trigger] Executing commands for tag #${cleanTag} on event ${eventName}:`, targetRule.commands);
 
-                if (conditionMet) {
-                    console.log(`[Supertag-Trigger] Condition met. Executing commands for tag #${cleanTag} on event ${eventName}:`, targetRule.commands);
+                for (const cmdObj of targetRule.commands) {
+                    const cmdLabel = cmdObj.labelOrId;
+                    const cmdInfo = COMMAND_BINDINGS[cmdLabel];
+                    const commandRef = cmdInfo?.commandRef || cmdLabel;
 
-                    for (const cmdObj of targetRule.commands) {
-                        const cmdLabel = cmdObj.labelOrId;
-                        const cmdInfo = COMMAND_BINDINGS[cmdLabel];
-                        const commandRef = cmdInfo?.commandRef || cmdLabel;
-                        
-                        console.log(`[Supertag-Trigger] Dispatching command: "${cmdLabel}" (ID: ${commandRef}) on block ${blockId} [manual=${Object.keys(cmdObj.args || {}).length}, commandDb=${cmdInfo?.inputMapping ? 1 : 0}]`);
-
-                        try {
-                            // #1 pipeline 脚本内联参数 > #3 Command-DB inputMapping
-                            const dispatchRes = await dispatchCommand(commandRef, null, context, {
-                                manual: cmdObj.args || {},
-                                commandDb: cmdInfo?.inputMapping || ""
-                            });
-                            if (!dispatchRes.success || dispatchRes.continue === false || dispatchRes.value === false || dispatchRes.status === "break") {
-                                console.log(`[Supertag-Trigger] Pipeline execution halted: Command "${cmdLabel}" returned break, false, or failed.`);
-                                break;
-                            }
-                        } catch (cmdErr) {
-                            console.error(`[Supertag-Trigger] Failed to dispatch command: ${cmdLabel}`, cmdErr);
+                    try {
+                        const dispatchRes = await dispatchCommand(commandRef, null, context, {
+                            manual: cmdObj.args || {},
+                            commandDb: cmdInfo?.inputMapping || ""
+                        });
+                        if (!dispatchRes.success || dispatchRes.continue === false || dispatchRes.value === false || dispatchRes.status === "break") {
                             break;
                         }
+                    } catch (cmdErr) {
+                        console.error(`[Supertag-Trigger] Failed to dispatch command: ${cmdLabel}`, cmdErr);
+                        break;
                     }
                 }
             }
         }
     } catch (e) {
         console.error(`[Supertag-Trigger] Error triggering ${eventName} commands:`, e);
+    }
+}
+
+/**
+ * ⚡ 全局范围级联触发分发器 (Scope Cascade Dispatcher)
+ * 支持 self (自身)、current_doc (所在当前文档)、inner_blocks (内部子块)、subtree (全子树) 毫秒级匹配
+ */
+export async function dispatchScopeEvents(
+    targetBlockId: string, 
+    eventName: "block_content_changed" | "block_attribute_changed" | "task_completed"
+) {
+    if (!targetBlockId) return;
+
+    try {
+        let targetInfo: {
+            id: string;
+            root_id: string;
+            parent_id: string;
+            path: string;
+            type: string;
+            subType: string;
+            markdown: string;
+            tags: string[];
+        } | null = null;
+
+        // 1. 通过思源官方 HTTP SQL API (/api/query/sql) 查询目标块元数据
+        try {
+            const sqlRes = await post("/api/query/sql", {
+                stmt: `SELECT id, root_id, parent_id, path, type, subtype, markdown, ial FROM blocks WHERE id = '${targetBlockId}' LIMIT 1`
+            });
+            const rows = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
+            if (rows.length > 0) {
+                const row = rows[0];
+                targetInfo = {
+                    id: String(row.id || ""),
+                    root_id: String(row.root_id || ""),
+                    parent_id: String(row.parent_id || ""),
+                    path: String(row.path || ""),
+                    type: String(row.type || ""),
+                    subType: String(row.subtype || row.subType || ""),
+                    markdown: String(row.markdown || ""),
+                    tags: parseSupertags(String(row.ial || ""))
+                };
+
+                // 🌟 感知：如果当前块位于待办列表项内部，记录父级是否为待办
+                if (targetInfo.type === "p" && targetInfo.parent_id) {
+                    const parentRes = await post("/api/query/sql", {
+                        stmt: `SELECT id, type, subtype FROM blocks WHERE id = '${targetInfo.parent_id}' LIMIT 1`
+                    });
+                    const parentRows = Array.isArray(parentRes) ? parentRes : (parentRes?.data || []);
+                    if (parentRows.length > 0 && parentRows[0].type === "i" && (parentRows[0].subtype === "t" || parentRows[0].subtype === "u")) {
+                        targetInfo.subType = "t";
+                    }
+                }
+            }
+        } catch (queryErr) {
+            console.warn("[Supertag-Scope] /api/query/sql failed, fallback to getBlockAttrs:", queryErr);
+        }
+
+        if (!targetInfo) {
+            // Fallback via getBlockAttrs
+            try {
+                const attrRes = await post("/api/attr/getBlockAttrs", { id: targetBlockId });
+                const ial = attrRes?.["custom-supertags"] || "";
+                targetInfo = {
+                    id: targetBlockId,
+                    root_id: attrRes?.["root_id"] || targetBlockId,
+                    parent_id: attrRes?.["parent_id"] || "",
+                    path: "",
+                    type: "p",
+                    subType: "",
+                    markdown: "",
+                    tags: parseSupertags(ial)
+                };
+            } catch (_) {
+                return;
+            }
+        }
+
+        const isTodo = (targetInfo.subType === "t" || targetInfo.subType === "u") ||
+                       (targetInfo.type === "i" && (targetInfo.subType === "t" || targetInfo.subType === "u")) || 
+                       targetInfo.markdown.includes("- [ ]") || 
+                       targetInfo.markdown.includes("- [x]");
+        const isHeading = targetInfo.type === "h";
+        const isParagraph = targetInfo.type === "p";
+        const isDoc = targetInfo.type === "d";
+        const isAv = targetInfo.type === "av";
+
+        const matchesFilter = (filter?: string): boolean => {
+            if (!filter || filter === "all") return true;
+            if (filter === "todo") return isTodo;
+            if (filter === "heading") return isHeading;
+            if (filter === "paragraph") return isParagraph;
+            if (filter === "doc") return isDoc;
+            if (filter === "av") return isAv;
+            return true;
+        };
+
+        // 2. 检索可能作为宿主 (Host) 的所有候选块 (自身、同文档块、祖先文档块)
+        const hostCandidates: { id: string; root_id: string; parent_id: string; path: string; tags: string[] }[] = [];
+
+        try {
+            // A. 从思源 attributes 持久化属性表中查询宿主
+            const attrSql = `
+                SELECT a.block_id, a.value, b.root_id, b.parent_id, b.path 
+                FROM attributes a 
+                LEFT JOIN blocks b ON a.block_id = b.id 
+                WHERE a.name = 'custom-supertags' 
+                  AND (a.block_id = '${targetInfo.id}' 
+                       OR b.root_id = '${targetInfo.root_id}' 
+                       OR a.block_id = '${targetInfo.root_id}' 
+                       OR '${targetInfo.path}' LIKE '%' || a.block_id || '%')
+            `;
+            const attrSqlRes = await post("/api/query/sql", { stmt: attrSql });
+            const attrRows = Array.isArray(attrSqlRes) ? attrSqlRes : (attrSqlRes?.data || []);
+            if (attrRows.length > 0) {
+                for (const r of attrRows) {
+                    const hostId = String(r.block_id || r.id);
+                    const hostRootId = String(r.root_id || "");
+                    const hostParentId = String(r.parent_id || "");
+                    const hostPath = String(r.path || "");
+                    const hostTags = parseSupertags(String(r.value || ""));
+                    if (hostTags.length > 0) {
+                        hostCandidates.push({ id: hostId, root_id: hostRootId, parent_id: hostParentId, path: hostPath, tags: hostTags });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("[Supertag-Scope] Query attributes table failed:", e);
+        }
+
+        // B. 直接通过 getBlockAttrs 检查当前文档 root_id 自身是否拥有超级标签
+        if (targetInfo.root_id && !hostCandidates.some(h => h.id === targetInfo.root_id)) {
+            try {
+                const docAttrsRes = await post("/api/attr/getBlockAttrs", { id: targetInfo.root_id });
+                const docTags = parseSupertags(docAttrsRes?.["custom-supertags"] || "");
+                if (docTags.length > 0) {
+                    hostCandidates.push({
+                        id: targetInfo.root_id,
+                        root_id: targetInfo.root_id,
+                        parent_id: "",
+                        path: targetInfo.path,
+                        tags: docTags
+                    });
+                }
+            } catch (_) {}
+        }
+
+        // C. 补充内存全局缓存 globalSupertagsCache
+        globalSupertagsCache.forEach((tags, id) => {
+            if (!hostCandidates.some(h => h.id === id) && tags && tags.length > 0) {
+                hostCandidates.push({
+                    id,
+                    root_id: targetInfo?.root_id || "",
+                    parent_id: "",
+                    path: targetInfo?.path || "",
+                    tags
+                });
+            }
+        });
+
+        console.log(`[Supertag-Scope] 🔍 Target: id=${targetInfo.id}, type=${targetInfo.type}/${targetInfo.subType}, isTodo=${isTodo}, root=${targetInfo.root_id}, event=${eventName}, hostCandidatesCount=${hostCandidates.length}`);
+
+        // 3. 对每个宿主拥有的 Supertag 规则进行作用域与过滤器核验
+        const triggeredKeys = new Set<string>();
+
+        for (const host of hostCandidates) {
+            for (const tag of host.tags) {
+                const cleanTag = cleanTagString(tag);
+                if (!cleanTag) continue;
+
+                const script = await querySupertagRuleScript(cleanTag);
+                if (!script) continue;
+
+                const parsed = parseMultiEventRuleScript(script);
+                if (!parsed || !parsed.events.includes(eventName)) continue;
+
+                const cfg = parsed.eventConfigsMap?.[eventName] || { scope: "self", filter: "all" };
+                const scope = cfg.scope || "self";
+                const filter = cfg.filter || "all";
+                const filterMatched = matchesFilter(filter);
+
+                // 作用域匹配检查
+                let scopeMatched = false;
+                if (scope === "self") {
+                    scopeMatched = (host.id === targetInfo.id);
+                } else if (scope === "current_doc") {
+                    scopeMatched = (host.root_id === targetInfo.root_id || host.id === targetInfo.root_id);
+                } else if (scope === "inner_blocks") {
+                    scopeMatched = (targetInfo.parent_id === host.id || (host.id === targetInfo.root_id && targetInfo.id !== host.id));
+                } else if (scope === "subtree") {
+                    scopeMatched = (host.id === targetInfo.id) || 
+                                   (host.id === targetInfo.root_id) || 
+                                   (targetInfo.path && targetInfo.path.includes(host.id));
+                }
+
+                console.log(`[Supertag-Scope] 🏢 Host #${cleanTag} (${host.id}) on ${eventName}: scope="${scope}", filter="${filter}", filterMatched=${filterMatched}, scopeMatched=${scopeMatched}`);
+
+                if (filterMatched && scopeMatched) {
+                    const triggerKey = `${host.id}:${cleanTag}:${eventName}:${targetInfo.id}`;
+                    if (!triggeredKeys.has(triggerKey)) {
+                        triggeredKeys.add(triggerKey);
+                        console.log(`[Supertag-Scope] 🎯 匹配成功！执行 #${cleanTag} (宿主=${host.id}) ➔ 目标块=${targetInfo.id}`);
+                        await triggerConditionalCommands(host.id, cleanTag, eventName, {
+                            targetBlockId: targetInfo.id,
+                            hostBlockId: host.id
+                        });
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[Supertag-Scope] Failed to dispatch scope events:", e);
     }
 }

@@ -16,8 +16,10 @@ import { getGlobalTypeConfigs } from "../../av/av-setting/db-config";
 export function getBlockId(context: CommandContext): string {
     if (!context) return "";
 
-    // 1. 从 context.vars 显式缓存中提取
+    // 1. 从 context.vars 显式缓存中提取 (优先 target_id / block_id / id)
+    if (context.vars?.target_id) return String(context.vars.target_id);
     if (context.vars?.block_id) return String(context.vars.block_id);
+    if (context.vars?.id) return String(context.vars.id);
     if (context.vars?.root_id) return String(context.vars.root_id);
 
     // 2. 从 DOM 节点 data-node-id / data-id 提取

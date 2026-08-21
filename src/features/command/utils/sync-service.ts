@@ -28,7 +28,7 @@ import {
  */
 export async function syncGlobalSupertagsCache() {
     try {
-        const res = await post("/api/query", {
+        const res = await post("/api/query/sql", {
             stmt: "SELECT block_id, value FROM attributes WHERE name = 'custom-supertags'"
         });
         const rows = res?.data || res || [];

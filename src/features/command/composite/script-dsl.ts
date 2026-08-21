@@ -8,17 +8,25 @@ export interface RuleCommand {
     params: Record<string, string>;
 }
 
+export interface EventScopeFilter {
+    scope?: "self" | "inner_blocks" | "current_doc" | "subtree";
+    filter?: "all" | "todo" | "doc" | "heading" | "paragraph" | "av";
+}
+
 export interface RuleScript {
     name: string;
     commands: RuleCommand[];
     /** Conditional 用：触发事件列表（空 = 不限） */
     events?: string[];
+    scope?: "self" | "inner_blocks" | "current_doc" | "subtree";
+    filter?: "all" | "todo" | "doc" | "heading" | "paragraph" | "av";
 }
 
 export interface MultiEventRuleScript {
     name: string;
     events: string[];
     eventCommandsMap: Record<string, RuleCommand[]>;
+    eventConfigsMap?: Record<string, EventScopeFilter>;
 }
 
 /** 辅助函数：从一段 JS 文本中精准提取出所有的 dispatch("cmdId", {...}) 或 dispatch("cmdId") 调用 */
@@ -71,7 +79,8 @@ export function parseDispatchCallsFromText(text: string): RuleCommand[] {
 /** 生成多事件分支规则脚本 (每个事件 Tab 专属逻辑) */
 export function generateMultiEventRuleScript(
     name: string,
-    eventCommandsMap: Record<string, { commandRef: string; params: Record<string, unknown> }[]>
+    eventCommandsMap: Record<string, { commandRef: string; params: Record<string, unknown> }[]>,
+    eventConfigsMap?: Record<string, EventScopeFilter>
 ): string {
     const events = Object.keys(eventCommandsMap);
     if (events.length === 0) return "";
@@ -83,6 +92,14 @@ export function generateMultiEventRuleScript(
     const blocks: string[] = [];
     for (const [ev, cmds] of Object.entries(eventCommandsMap)) {
         if (!cmds || cmds.length === 0) continue;
+        const cfg = eventConfigsMap?.[ev];
+        const hasScope = cfg?.scope && cfg.scope !== "self";
+        const hasFilter = cfg?.filter && cfg.filter !== "all";
+        let metaComment = "";
+        if (hasScope || hasFilter) {
+            metaComment = `        // [Scope: ${cfg?.scope || "self"}, Filter: ${cfg?.filter || "all"}]\n`;
+        }
+
         const lines = cmds.map(cmd => {
             const hasParams = cmd.params && Object.keys(cmd.params).length > 0;
             if (hasParams) {
@@ -92,7 +109,7 @@ export function generateMultiEventRuleScript(
                 return `        await dispatch(${JSON.stringify(cmd.commandRef)});`;
             }
         });
-        blocks.push(`    if (${JSON.stringify([ev])}.includes(eventName)) {\n${lines.join("\n")}\n    }`);
+        blocks.push(`    if (${JSON.stringify([ev])}.includes(eventName)) {\n${metaComment}${lines.join("\n")}\n    }`);
     }
 
     if (blocks.length === 0) {
@@ -173,42 +190,66 @@ export function parseMultiEventRuleScript(text: string): MultiEventRuleScript | 
 
     const events = Array.from(eventsSet);
     const eventCommandsMap: Record<string, RuleCommand[]> = {};
+    const eventConfigsMap: Record<string, EventScopeFilter> = {};
 
-    // 针对每个事件提取其专属的 dispatch 调用
+    // 针对每个事件提取其专属的 dispatch 调用与 Scope / Filter
     for (const ev of events) {
         let blockText = text;
-        const evIndex = text.indexOf(ev);
-        if (evIndex !== -1) {
-            const braceStart = text.indexOf("{", evIndex);
-            if (braceStart !== -1) {
-                let depth = 0, inStr = false, quote = "", end = -1;
-                for (let j = braceStart; j < text.length; j++) {
-                    const ch = text[j];
-                    if (inStr) {
-                        if (ch === "\\") { j++; continue; }
-                        if (ch === quote) inStr = false;
-                        continue;
-                    }
-                    if (ch === '"' || ch === "'" || ch === "`") { inStr = true; quote = ch; continue; }
-                    if (ch === "{") depth++;
-                    else if (ch === "}") {
-                        depth--;
-                        if (depth === 0) { end = j; break; }
-                    }
+        
+        // 查找属于该事件的分支 if 语句: e.g. if (["block_content_changed"].includes(eventName)) { ... }
+        // 或 if (eventName === "block_content_changed") { ... }
+        const ifRegex = new RegExp(`if\\s*\\([^)]*["'\`]${ev}["'\`][^)]*\\)\\s*\\{`, "g");
+        const match = ifRegex.exec(text);
+        
+        if (match) {
+            const braceStart = match.index + match[0].length - 1; // 刚好指向匹配的 '{'
+            let depth = 0, inStr = false, quote = "", end = -1;
+            for (let j = braceStart; j < text.length; j++) {
+                const ch = text[j];
+                if (inStr) {
+                    if (ch === "\\") { j++; continue; }
+                    if (ch === quote) inStr = false;
+                    continue;
                 }
-                if (end !== -1) {
-                    blockText = text.slice(braceStart, end + 1);
+                if (ch === '"' || ch === "'" || ch === "`") { inStr = true; quote = ch; continue; }
+                if (ch === "{") depth++;
+                else if (ch === "}") {
+                    depth--;
+                    if (depth === 0) { end = j; break; }
                 }
             }
+            if (end !== -1) {
+                blockText = text.slice(braceStart, end + 1);
+            }
+        } else if (events.length === 1) {
+            // 如果单事件且没有分支 if 语句，则整个函数体都是它的
+            blockText = text;
         }
 
         eventCommandsMap[ev] = parseDispatchCallsFromText(blockText);
+
+        const metaMatch = blockText.match(/\/\/\s*\[Scope:\s*([a-zA-Z_]+)(?:,\s*Filter:\s*([a-zA-Z_]+))?\]/i);
+        if (metaMatch) {
+            eventConfigsMap[ev] = {
+                scope: (metaMatch[1] as any) || "self",
+                filter: (metaMatch[2] as any) || "all"
+            };
+        } else if (events.length === 1) {
+            const globalMatch = text.match(/\/\/\s*\[Scope:\s*([a-zA-Z_]+)(?:,\s*Filter:\s*([a-zA-Z_]+))?\]/i);
+            if (globalMatch) {
+                eventConfigsMap[ev] = {
+                    scope: (globalMatch[1] as any) || "self",
+                    filter: (globalMatch[2] as any) || "all"
+                };
+            }
+        }
     }
 
     return {
         name,
         events,
-        eventCommandsMap
+        eventCommandsMap,
+        eventConfigsMap
     };
 }
 

@@ -79,18 +79,18 @@ export async function triggerAddSupertag(
                 }
             });
             console.log(`[AddSupertag] 成功为块 ${targetBlockId} 写入超级标签 custom-supertags: "${newRawCustomTags}"`);
-        } else {
-            console.log(`[AddSupertag] 块 ${targetBlockId} 已包含超级标签 #${cleanTag}，跳过重写`);
-        }
 
-        // 3. 核心：广播触发 Supertag tag_created 联动事件
-        console.log(`[AddSupertag] ⚡ 联动广播 triggerConditionalCommands(#${cleanTag}, tag_created)...`);
-        await triggerConditionalCommands(targetBlockId, cleanTag, "tag_created");
+            // 3. 核心：仅在真正新增了标签时，才联动广播触发 Supertag tag_created 事件
+            console.log(`[AddSupertag] ⚡ 联动广播 triggerConditionalCommands(#${cleanTag}, tag_created)...`);
+            await triggerConditionalCommands(targetBlockId, cleanTag, "tag_created");
+        } else {
+            console.log(`[AddSupertag] 块 ${targetBlockId} 已包含超级标签 #${cleanTag}，跳过重写与 tag_created 触发`);
+        }
 
         return {
             success: true,
             method: "custom",
-            detail: `Added supertag #${cleanTag}`,
+            detail: `Supertag #${cleanTag} applied`,
             value: cleanTag,
             id: targetBlockId
         };

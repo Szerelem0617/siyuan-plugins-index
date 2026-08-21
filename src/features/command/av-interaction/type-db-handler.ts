@@ -161,8 +161,8 @@ async function openConditionalSelector(avId: string, rowId: string, colId: strin
         const dialog = new Dialog({
             title: `配置 Supertag #${supertagLabel} 自动触发 (Auto)`,
             content: `<div id="conditional-config-container" style="height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;"></div>`,
-            width: "740px",
-            height: "640px"
+            width: "820px",
+            height: "720px"
         });
         dialog.element.classList.add("indexos-dialog");
 

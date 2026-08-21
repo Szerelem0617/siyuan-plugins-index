@@ -98,6 +98,18 @@ async ({ dispatch, state, eventName }) => {
     }
 }`;
 
+const defaultProjectConditional = `// 名称: #project 级联任务标记
+// 事件: block_content_changed
+
+async ({ dispatch, state, eventName }) => {
+    if (["block_content_changed"].includes(eventName)) {
+        // [Scope: subtree, Filter: todo]
+        await dispatch("index.addSupertag", {
+            tag: "task"
+        });
+    }
+}`;
+
 /** Layer 3 种子行：内置 Supertag 及其绑定 */
 export function getSeedSupertagRows(): SeedSupertagRow[] {
     return [
@@ -109,6 +121,14 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
                 { id: "index.visualEffect", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
             ]),
             auto: defaultTaskConditional
+        },
+        {
+            rowID: "20260821113000-project",
+            supertag: "project",
+            manual: JSON.stringify([
+                { id: "index.addSupertag", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
+            ]),
+            auto: defaultProjectConditional
         },
         {
             rowID: "20260721140000-pipeline",
@@ -180,4 +200,4 @@ export const DATA_DBS_CONFIG = {
     attrName: "custom-index-data-dbs"
 };
 
-export const BUILTIN_SUPERTAGS = new Set(["task", "pipeline", "permanent"]);
+export const BUILTIN_SUPERTAGS = new Set(["task", "pipeline", "permanent", "project"]);
