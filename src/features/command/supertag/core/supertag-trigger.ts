@@ -129,6 +129,7 @@ export function parseConditionalString(conditionalStr: string): TriggerRule[] {
                     condition = match[2].trim();
 
                     if (eventCN.includes("移除")) event = "tag_removed";
+                    else if (eventCN.includes("新块") || eventCN.includes("新内容") || eventCN.includes("新建")) event = "block_created";
                     else if (eventCN.includes("内容")) event = "block_content_changed";
                     else if (eventCN.includes("属性")) event = "block_attribute_changed";
                     else if (eventCN.includes("完成")) event = "task_completed";
@@ -193,7 +194,7 @@ export async function querySupertagRuleScript(cleanTag: string): Promise<string>
 export async function triggerConditionalCommands(
     blockId: string, 
     cleanTag: string, 
-    eventName: "tag_created" | "tag_removed" | "block_content_changed" | "block_attribute_changed" | "task_completed",
+    eventName: "tag_created" | "tag_removed" | "block_created" | "block_content_changed" | "block_attribute_changed" | "task_completed",
     extraContext?: { targetBlockId?: string; hostBlockId?: string }
 ): Promise<void> {
     try {
@@ -295,7 +296,7 @@ export async function triggerConditionalCommands(
  */
 export async function dispatchScopeEvents(
     targetBlockId: string, 
-    eventName: "block_content_changed" | "block_attribute_changed" | "task_completed"
+    eventName: "block_created" | "block_content_changed" | "block_attribute_changed" | "task_completed"
 ) {
     if (!targetBlockId) return;
 
@@ -336,39 +337,57 @@ export async function dispatchScopeEvents(
                         stmt: `SELECT id, type, subtype FROM blocks WHERE id = '${targetInfo.parent_id}' LIMIT 1`
                     });
                     const parentRows = Array.isArray(parentRes) ? parentRes : (parentRes?.data || []);
-                    if (parentRows.length > 0 && parentRows[0].type === "i" && (parentRows[0].subtype === "t" || parentRows[0].subtype === "u")) {
+                    if (parentRows.length > 0 && (parentRows[0].subtype === "t" || parentRows[0].type === "l" && parentRows[0].subtype === "t")) {
                         targetInfo.subType = "t";
                     }
                 }
             }
         } catch (queryErr) {
-            console.warn("[Supertag-Scope] /api/query/sql failed, fallback to getBlockAttrs:", queryErr);
+            console.warn("[Supertag-Scope] /api/query/sql failed, fallback to getBlockInfo:", queryErr);
         }
 
-        if (!targetInfo) {
-            // Fallback via getBlockAttrs
+        if (!targetInfo || !targetInfo.root_id || targetInfo.root_id === targetBlockId) {
+            // 通过 getBlockInfo 及 DOM 补齐真实的 root_id 与 parent_id
             try {
+                const infoRes = await post("/api/block/getBlockInfo", { id: targetBlockId });
+                const rootID = infoRes?.rootID || infoRes?.root_id || "";
+                const parentID = infoRes?.parentID || infoRes?.parent_id || "";
                 const attrRes = await post("/api/attr/getBlockAttrs", { id: targetBlockId });
                 const ial = attrRes?.["custom-supertags"] || "";
+
+                // DOM 辅助推导
+                const domEl = document.querySelector(`[data-node-id="${targetBlockId}"]`);
+                const isDomTodo = Boolean(domEl?.closest('.li[data-subtype="t"], [data-subtype="t"], [data-task]'));
+
                 targetInfo = {
                     id: targetBlockId,
-                    root_id: attrRes?.["root_id"] || targetBlockId,
-                    parent_id: attrRes?.["parent_id"] || "",
-                    path: "",
-                    type: "p",
-                    subType: "",
-                    markdown: "",
-                    tags: parseSupertags(ial)
+                    root_id: rootID || (targetInfo?.root_id && targetInfo.root_id !== targetBlockId ? targetInfo.root_id : (domEl?.closest('[data-doc-id]')?.getAttribute('data-doc-id') || targetBlockId)),
+                    parent_id: parentID || targetInfo?.parent_id || "",
+                    path: targetInfo?.path || "",
+                    type: targetInfo?.type || (isDomTodo ? "i" : "p"),
+                    subType: isDomTodo ? "t" : (targetInfo?.subType || ""),
+                    markdown: targetInfo?.markdown || "",
+                    tags: targetInfo?.tags?.length ? targetInfo.tags : parseSupertags(ial)
                 };
             } catch (_) {
-                return;
+                if (!targetInfo) return;
             }
         }
 
-        const isTodo = (targetInfo.subType === "t" || targetInfo.subType === "u") ||
-                       (targetInfo.type === "i" && (targetInfo.subType === "t" || targetInfo.subType === "u")) || 
+        const domEl = document.querySelector(`[data-node-id="${targetBlockId}"]`);
+        const isDomTodo = Boolean(
+            domEl?.closest('.li[data-subtype="t"], [data-subtype="t"], [data-task], .protyle-action--task') ||
+            domEl?.querySelector('.li[data-subtype="t"], [data-subtype="t"], [data-task], .protyle-action--task')
+        );
+
+        const isTodo = (targetInfo.subType === "t") ||
+                       (targetInfo.type === "l" && targetInfo.subType === "t") ||
+                       (targetInfo.type === "i" && targetInfo.subType === "t") || 
                        targetInfo.markdown.includes("- [ ]") || 
-                       targetInfo.markdown.includes("- [x]");
+                       targetInfo.markdown.includes("- [x]") ||
+                       targetInfo.markdown.includes("* [ ]") ||
+                       targetInfo.markdown.includes("* [x]") ||
+                       isDomTodo;
         const isHeading = targetInfo.type === "h";
         const isParagraph = targetInfo.type === "p";
         const isDoc = targetInfo.type === "d";
@@ -480,17 +499,39 @@ export async function dispatchScopeEvents(
                     scopeMatched = (host.id === targetInfo.id) || 
                                    (host.id === targetInfo.root_id) || 
                                    (targetInfo.path && targetInfo.path.includes(host.id));
+                    
+                    // 如果 path 尚在构建中，通过查询文档祖先链补齐检查
+                    if (!scopeMatched && targetInfo.root_id) {
+                        try {
+                            const pathRes = await post("/api/query/sql", {
+                                stmt: `SELECT path FROM blocks WHERE id = '${targetInfo.root_id}' LIMIT 1`
+                            });
+                            const pRows = Array.isArray(pathRes) ? pathRes : (pathRes?.data || []);
+                            if (pRows.length > 0 && String(pRows[0].path || "").includes(host.id)) {
+                                scopeMatched = true;
+                            }
+                        } catch (_) {}
+                    }
                 }
 
                 console.log(`[Supertag-Scope] 🏢 Host #${cleanTag} (${host.id}) on ${eventName}: scope="${scope}", filter="${filter}", filterMatched=${filterMatched}, scopeMatched=${scopeMatched}`);
 
                 if (filterMatched && scopeMatched) {
-                    const triggerKey = `${host.id}:${cleanTag}:${eventName}:${targetInfo.id}`;
+                    // 如果目标块是列表容器 (type = 'l') 或列表项 (type = 'i')，尝试下寻到具体内容段落块以进行精准打标
+                    let actualTargetId = targetInfo.id;
+                    if ((targetInfo.type === "l" || targetInfo.type === "i") && domEl) {
+                        const childPara = domEl.querySelector('.p[data-node-id]');
+                        if (childPara) {
+                            actualTargetId = childPara.getAttribute("data-node-id") || actualTargetId;
+                        }
+                    }
+
+                    const triggerKey = `${host.id}:${cleanTag}:${eventName}:${actualTargetId}`;
                     if (!triggeredKeys.has(triggerKey)) {
                         triggeredKeys.add(triggerKey);
-                        console.log(`[Supertag-Scope] 🎯 匹配成功！执行 #${cleanTag} (宿主=${host.id}) ➔ 目标块=${targetInfo.id}`);
+                        console.log(`[Supertag-Scope] 🎯 匹配成功！执行 #${cleanTag} (宿主=${host.id}) ➔ 目标块=${actualTargetId}`);
                         await triggerConditionalCommands(host.id, cleanTag, eventName, {
-                            targetBlockId: targetInfo.id,
+                            targetBlockId: actualTargetId,
                             hostBlockId: host.id
                         });
                     }

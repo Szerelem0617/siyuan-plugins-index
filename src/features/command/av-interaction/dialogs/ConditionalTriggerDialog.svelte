@@ -20,6 +20,7 @@
     const ALL_EVENT_TYPES = [
         { id: "tag_created", label: "添加标签时", icon: "⚡" },
         { id: "tag_removed", label: "移除标签时", icon: "🗑️" },
+        { id: "block_created", label: "新内容创建时", icon: "➕" },
         { id: "block_content_changed", label: "内容变动时", icon: "✍️" },
         { id: "block_attribute_changed", label: "属性变动时", icon: "🏷️" },
         { id: "task_completed", label: "任务完成时", icon: "☑" }
@@ -242,7 +243,7 @@
         {#each selectedEvents as evId}
             {@const evObj = ALL_EVENT_TYPES.find(x => x.id === evId)}
             {@const cmdCount = (eventCommandsMap[evId] || []).length}
-            {@const supportsScope = (evId === "block_content_changed" || evId === "block_attribute_changed")}
+            {@const supportsScope = (evId === "block_created" || evId === "block_content_changed" || evId === "block_attribute_changed")}
             {@const isCustom = supportsScope && isScopeFilterCustomized(evId)}
             {#if evObj}
                 <div
@@ -257,7 +258,7 @@
                     <span>{evObj.icon} {evObj.label}</span>
                     <span class="indexos-tab-badge">{cmdCount}</span>
                     
-                    <!-- ⚙️ 仅在【内容变动时】与【属性变动时】Tab 内部放置设置图标 -->
+                    <!-- ⚙️ 在【新内容创建时】、【内容变动时】与【属性变动时】Tab 内部放置设置图标 -->
                     {#if supportsScope}
                         <span
                             role="button"
@@ -316,7 +317,7 @@
     </div>
 
     <!-- 展开的高级范围与过滤配置面板 (渐进式抽屉) -->
-    {#if showScopeFilterPanel && (activeEventTab === "block_content_changed" || activeEventTab === "block_attribute_changed")}
+    {#if showScopeFilterPanel && (activeEventTab === "block_created" || activeEventTab === "block_content_changed" || activeEventTab === "block_attribute_changed")}
         {@const curScope = eventConfigsMap[activeEventTab]?.scope || "self"}
         {@const curFilter = eventConfigsMap[activeEventTab]?.filter || "all"}
         <div style="background: var(--indexos-bg-surface); border: 1px solid {isScopeFilterCustomized(activeEventTab) ? 'var(--indexos-detached-gold, #D9A74A)' : 'var(--indexos-border-light)'}; border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">

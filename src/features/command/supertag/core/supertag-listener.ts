@@ -81,7 +81,16 @@ export class SupertagMonitor {
 
         for (const [blockId, eventData] of queueToProcess.entries()) {
             await this.processBlockTagsDiff(blockId, eventData.payload, eventData.action, eventData.opId);
-            await this.processBlockContentChanged(blockId);
+
+            const isInsert = eventData.action === "insert" || 
+                             eventData.action === "insertBlock" || 
+                             eventData.action === "append";
+
+            if (isInsert) {
+                await this.processBlockCreated(blockId);
+            } else {
+                await this.processBlockContentChanged(blockId);
+            }
         }
     }
 
@@ -430,6 +439,25 @@ export class SupertagMonitor {
             await dispatchScopeEvents(blockId, "task_completed");
         } catch (e) {
             console.error("[Supertag] Failed to process task completed:", blockId, e);
+        }
+    }
+
+    public async processBlockCreated(blockId: string) {
+        try {
+            const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+            const attrs = attrsRes?.data || attrsRes || {};
+            const rawTags = attrs["custom-supertags"];
+            const tags = parseSupertags(rawTags);
+
+            for (const tag of tags) {
+                const cleanTag = cleanTagString(tag);
+                await triggerConditionalCommands(blockId, cleanTag, "block_created");
+            }
+
+            // ⚡ 级联广播触发同文档或祖先树中监听了 block_created 的组件 (如 #project)
+            await dispatchScopeEvents(blockId, "block_created");
+        } catch (e) {
+            console.error("[Supertag] Failed to process block created:", blockId, e);
         }
     }
 

@@ -99,10 +99,10 @@ async ({ dispatch, state, eventName }) => {
 }`;
 
 const defaultProjectConditional = `// 名称: #project 级联任务标记
-// 事件: block_content_changed
+// 事件: block_created, block_content_changed
 
 async ({ dispatch, state, eventName }) => {
-    if (["block_content_changed"].includes(eventName)) {
+    if (["block_created", "block_content_changed"].includes(eventName)) {
         // [Scope: subtree, Filter: todo]
         await dispatch("index.addSupertag", {
             tag: "task"

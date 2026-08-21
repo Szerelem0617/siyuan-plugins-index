@@ -60,11 +60,27 @@ export async function triggerAddSupertag(
             }
             const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
             const editorEl = activeProtyle?.element || document.querySelector(".protyle-content") || document.body;
+            let siblingId: string | null = null;
             if (editorEl) {
                 const domBlock = editorEl.querySelector(`[data-node-id="${targetBlockId}"]`) as HTMLElement | null;
                 if (domBlock) {
                     domBlock.setAttribute("custom-supertags", newRawCustomTags);
                     SupertagRenderer.renderSingleBlockElement(domBlock);
+
+                    // 🌟 如果是列表项容器，将属性同时同步给其内部段落，确保双向右键自定义属性均立即可见
+                    const childPara = domBlock.querySelector('.p[data-node-id]') as HTMLElement | null;
+                    if (childPara) {
+                        childPara.setAttribute("custom-supertags", newRawCustomTags);
+                        SupertagRenderer.renderSingleBlockElement(childPara);
+                        siblingId = childPara.getAttribute("data-node-id");
+                    }
+                    // 🌟 如果是内部段落，将属性同时同步给其外层列表项容器
+                    const parentLi = domBlock.closest('.li[data-node-id]') as HTMLElement | null;
+                    if (parentLi) {
+                        parentLi.setAttribute("custom-supertags", newRawCustomTags);
+                        SupertagRenderer.renderSingleBlockElement(parentLi);
+                        siblingId = parentLi.getAttribute("data-node-id");
+                    }
                 }
             }
 
@@ -80,9 +96,24 @@ export async function triggerAddSupertag(
             });
             console.log(`[AddSupertag] 成功为块 ${targetBlockId} 写入超级标签 custom-supertags: "${newRawCustomTags}"`);
 
+            if (siblingId && siblingId !== targetBlockId) {
+                globalSupertagsCache.set(siblingId, currentSupertags);
+                try {
+                    await post("/api/attr/setBlockAttrs", {
+                        id: siblingId,
+                        attrs: {
+                            "custom-supertags": newRawCustomTags
+                        }
+                    });
+                } catch (_) {}
+            }
+
             // 3. 核心：仅在真正新增了标签时，才联动广播触发 Supertag tag_created 事件
             console.log(`[AddSupertag] ⚡ 联动广播 triggerConditionalCommands(#${cleanTag}, tag_created)...`);
             await triggerConditionalCommands(targetBlockId, cleanTag, "tag_created");
+            if (siblingId && siblingId !== targetBlockId) {
+                await triggerConditionalCommands(siblingId, cleanTag, "tag_created");
+            }
         } else {
             console.log(`[AddSupertag] 块 ${targetBlockId} 已包含超级标签 #${cleanTag}，跳过重写与 tag_created 触发`);
         }
