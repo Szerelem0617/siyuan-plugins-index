@@ -12,6 +12,13 @@
             "paramMode": "template",
             "default": "{{self.id}}",
             "description": "需要克隆的目标实体 ID（留空默认当前块/当前页面）。"
+        },
+        {
+            "key": "withChildren",
+            "type": "boolean",
+            "paramMode": "fixed",
+            "default": false,
+            "description": "是否递归复制子级。若为页面则同时复制所有子页面；若为标题块则同时复制其管辖的所有下级内容块。默认 false（仅复制自身）。"
         }
     ],
     "outputs": [

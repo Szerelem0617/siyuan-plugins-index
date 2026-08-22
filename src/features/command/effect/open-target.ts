@@ -1,47 +1,86 @@
 /**
  * open-target.ts
- * 多态 "打开" 命令执行器 (Target Scope: "any")
+ * 多态 "打开中枢" 命令执行器 (index.openTarget)
  *
  * 功能：
- * - 目标为文档页面 ID ➔ 在新页签中打开该文档；
- * - 目标为普通内容块 ID ➔ 在新页签中打开包含该块的文档，并平滑滚动高亮/聚焦到该块的位置。
+ * 1. 系统视图分流：
+ *    - target === 'graph' ➔ 唤起全局关系图 (globalCommand('graphView'))
+ *    - target === 'inbox' ➔ 唤起收集箱 (globalCommand('inbox'))
+ * 2. 实体导航分流：
+ *    - 页面 ID / 块 ID ➔ 根据 position ('tab' | 'right' | 'bottom') 在普通页签或分屏中打开，并支持高亮/聚焦。
  */
 
-import { openTab } from "siyuan";
+import { openTab, globalCommand } from "siyuan";
 import { plugin } from "../../../shared/utils";
-import type { CommandContext, DispatchResult } from "../dispatcher";
+import type { CommandContext, DispatchResult } from "../command-dispatcher";
 
 export async function handleOpenTargetCommand(
     params: Record<string, unknown>,
     context?: CommandContext
 ): Promise<DispatchResult> {
-    let targetId = String(params.id || "").trim();
+    // 兼容 target 与 id 两个参数 key
+    let target = String(params.target || params.id || "").trim();
 
-    // 自动捕获：未传 id 参数时，从当前上下文 DOM 节点抓取 ID
-    if (!targetId && context?.blockEl) {
-        targetId = context.blockEl.getAttribute("data-node-id")
+    // 自动捕获：未传 target 参数时，从当前上下文 DOM 节点抓取 ID
+    if (!target && context?.blockEl) {
+        target = context.blockEl.getAttribute("data-node-id")
             || context.blockEl.getAttribute("data-id")
             || "";
     }
 
-    if (!targetId) {
-        console.warn("[Command:Open] 未能从参数或上下文获取有效的目标 ID");
+    console.group(`⚡ [OpenTarget Execution] target=${target}, position=${params.position}`);
+
+    // 1. 系统全局视图分流
+    if (target === "graph" || target === "graphView") {
+        try {
+            globalCommand("graphView");
+            console.log("✅ 成功唤起全局关系图");
+            console.groupEnd();
+            return { success: true, method: "custom", detail: "Opened graphView" };
+        } catch (e: any) {
+            console.groupEnd();
+            return { success: false, method: "custom", detail: e.message };
+        }
+    }
+
+    if (target === "inbox") {
+        try {
+            globalCommand("inbox");
+            console.log("✅ 成功唤起收集箱");
+            console.groupEnd();
+            return { success: true, method: "custom", detail: "Opened inbox" };
+        } catch (e: any) {
+            console.groupEnd();
+            return { success: false, method: "custom", detail: e.message };
+        }
+    }
+
+    // 2. 普通块 / 页面实体导航
+    if (!target) {
+        console.warn("[Command:OpenTarget] 未能从参数或上下文获取有效的目标 ID");
+        console.groupEnd();
         return { success: false, method: "custom", detail: "Missing target ID" };
     }
 
     const shouldHl = params.highlight !== false && params.highlight !== "false" && params.highlight !== 0;
+    const rawPos = String(params.position || "tab").toLowerCase();
+    const position: "right" | "bottom" | undefined = (rawPos === "right" || rawPos === "bottom") ? rawPos : undefined;
 
     try {
         openTab({
             app: plugin.app,
             doc: {
-                id: targetId,
+                id: target,
                 action: shouldHl ? ["cb-get-focus", "cb-get-hl"] : ["cb-get-focus"]
-            }
+            },
+            position
         });
-        return { success: true, method: "custom", detail: `Opened target ${targetId}`, id: targetId };
+        console.log(`✅ 成功打开目标实体 [${target}] (position: ${position || "tab"})`);
+        console.groupEnd();
+        return { success: true, method: "custom", detail: `Opened target ${target}`, id: target };
     } catch (err: any) {
-        console.error("[Command:Open] 唤起 openTab 失败:", err);
+        console.error("[Command:OpenTarget] 唤起 openTab 失败:", err);
+        console.groupEnd();
         return { success: false, method: "custom", detail: String(err) };
     }
 }

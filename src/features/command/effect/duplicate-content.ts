@@ -16,8 +16,9 @@ export async function triggerDuplicateContent(
     _context?: CommandContext
 ): Promise<DispatchResult> {
     const targetId = String(resolvedParams?.id || "").trim();
+    const withChildren = resolvedParams?.withChildren === true || resolvedParams?.withChildren === "true";
 
-    console.group(`⚡ [DuplicateContent Execution] targetId=${targetId}`);
+    console.group(`⚡ [DuplicateContent Execution] targetId=${targetId}, withChildren=${withChildren}`);
 
     if (!targetId) {
         console.groupEnd();
@@ -34,19 +35,56 @@ export async function triggerDuplicateContent(
         throw new Error(`[DuplicateContent] 未在数据库中找到待克隆实体: ${targetId}`);
     }
     const meta = metaRows[0];
-    console.log(`🔍 待克隆实体元数据 (type=${meta.type}):`, meta);
+    console.log(`🔍 待克隆实体元数据 (type=${meta.type}, subtype=${meta.subtype}):`, meta);
 
     let createdId = "";
 
     // 2. 多态分流执行
     if (meta.type === "d") {
         // ── 页面/文档克隆 ─────────────────────────────────────────────
-        console.log(`🚀 [API] /api/filetree/duplicateDoc (克隆文档: ${targetId})`);
+        console.log(`🚀 [API] /api/filetree/duplicateDoc (克隆主文档: ${targetId})`);
         const dupRes = await post("/api/filetree/duplicateDoc", {
             id: targetId
         });
         if (dupRes?.data?.id) {
             createdId = dupRes.data.id;
+        }
+
+        // 若开启 withChildren，递归克隆子页面树
+        if (withChildren && createdId && meta.path && meta.box) {
+            try {
+                const cleanParentPath = meta.path.replace(/\.sy$/, "");
+                const childDocsRes = await post("/api/query/sql", {
+                    stmt: `SELECT id, path FROM blocks WHERE type = 'd' AND box = '${meta.box}' AND path LIKE '${cleanParentPath}/%' AND id != '${meta.box}' ORDER BY path ASC`
+                });
+                const childDocs = Array.isArray(childDocsRes) ? childDocsRes : (childDocsRes?.data || []);
+                console.log(`📂 [DuplicateContent] 发现 ${childDocs.length} 篇子文档待递归克隆`);
+
+                // 获取新生成主文档的新路径
+                const newParentMeta = await post("/api/query/sql", {
+                    stmt: `SELECT path FROM blocks WHERE id = '${createdId}' LIMIT 1`
+                });
+                const newParentRows = Array.isArray(newParentMeta) ? newParentMeta : (newParentMeta?.data || []);
+                const newParentCleanPath = newParentRows[0]?.path?.replace(/\.sy$/, "") || "";
+
+                if (newParentCleanPath) {
+                    for (const child of childDocs) {
+                        const childDup = await post("/api/filetree/duplicateDoc", { id: child.id });
+                        const newChildId = childDup?.data?.id;
+                        if (newChildId) {
+                            const subRelativePath = child.path.substring(cleanParentPath.length); // e.g. /sub.sy
+                            const toPath = newParentCleanPath + subRelativePath.substring(0, subRelativePath.lastIndexOf("/") + 1);
+                            await post("/api/filetree/moveDocs", {
+                                fromPaths: [childDup.data.path || ""],
+                                toPath: toPath || newParentCleanPath,
+                                toNotebook: meta.box
+                            });
+                        }
+                    }
+                }
+            } catch (childErr) {
+                console.warn(`⚠️ 递归克隆子文档出现异常:`, childErr);
+            }
         }
     } else {
         // ── 块级深克隆 ────────────────────────────────────────────────
@@ -73,6 +111,49 @@ export async function triggerDuplicateContent(
             createdId = ops[0].id;
         } else if (insertRes?.data?.id) {
             createdId = insertRes.data.id;
+        }
+
+        // 若为标题块且开启 withChildren，克隆其折叠管辖范围内的全部子块
+        if (withChildren && createdId && meta.type === "h" && meta.root_id) {
+            try {
+                const currentLevel = parseInt((meta.subtype || "h6").replace(/\D/g, ""), 10) || 6;
+                const siblingsRes = await post("/api/query/sql", {
+                    stmt: `SELECT id, type, subtype, sort FROM blocks WHERE root_id = '${meta.root_id}' AND parent_id = '${meta.parent_id}' ORDER BY sort ASC`
+                });
+                const siblings = Array.isArray(siblingsRes) ? siblingsRes : (siblingsRes?.data || []);
+                const currentIdx = siblings.findIndex((s: any) => s.id === targetId);
+
+                if (currentIdx !== -1) {
+                    const subBlocksToCopy: string[] = [];
+                    for (let i = currentIdx + 1; i < siblings.length; i++) {
+                        const s = siblings[i];
+                        if (s.type === "h") {
+                            const lvl = parseInt((s.subtype || "h6").replace(/\D/g, ""), 10) || 6;
+                            if (lvl <= currentLevel) break; // 遇到同级或更高级标题，子树结束
+                        }
+                        subBlocksToCopy.push(s.id);
+                    }
+
+                    let lastInsertedId = createdId;
+                    for (const subId of subBlocksToCopy) {
+                        const subDom = await post("/api/block/getBlockDOM", { id: subId });
+                        if (subDom?.data?.dom) {
+                            const subInsert = await post("/api/block/insertBlock", {
+                                previousID: lastInsertedId,
+                                dataType: "dom",
+                                data: subDom.data.dom
+                            });
+                            const subOps = subInsert?.data?.[0]?.doOperations;
+                            if (Array.isArray(subOps) && subOps[0]?.id) {
+                                lastInsertedId = subOps[0].id;
+                            }
+                        }
+                    }
+                    console.log(`✅ [DuplicateContent] 成功递归克隆标题下 ${subBlocksToCopy.length} 个子块`);
+                }
+            } catch (headingErr) {
+                console.warn(`⚠️ 递归克隆标题子块异常:`, headingErr);
+            }
         }
     }
 

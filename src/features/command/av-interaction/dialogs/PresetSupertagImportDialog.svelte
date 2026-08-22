@@ -20,16 +20,16 @@
             icon: "📖",
             tag: "read_note",
             desc: "用于书籍、论文与知识卡片管理，预置关系图与摘要指示。",
-            defaultCommands: "index.duplicateBlock",
-            defaultConditional: "// [打上标签时] -> 复制当前块"
+            defaultCommands: "index.duplicateContent",
+            defaultConditional: "// [打上标签时] -> 克隆内容"
         },
         {
             title: "📅 每日复盘 (Daily Review)",
             icon: "🗓️",
             tag: "daily_review",
             desc: "用于每日日记、时间追踪与心流总结。",
-            defaultCommands: "index.openInbox",
-            defaultConditional: "// [打上标签时] -> 打开收集箱"
+            defaultCommands: "index.openTarget",
+            defaultConditional: "// [打上标签时] -> 打开目标"
         },
         {
             title: "💡 创意点子 (Idea Spark)",

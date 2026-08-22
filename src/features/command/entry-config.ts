@@ -38,7 +38,7 @@ export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
         "侧栏左": [],
         "侧栏右": [],
         ";;菜单": [
-            "index.openGraph",
+            "index.openTarget",
             "index.duplicateContent",
             "index.insertBlockBelow",
             "index.safeUpdateBlock",

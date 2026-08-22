@@ -1,39 +1,47 @@
 {
     "id": "index.openTarget",
     "name": "打开目标",
-    "description": "多态打开命令：在页签中打开指定的目标页面或块。如为普通内容块，自动平滑滚动并高亮该块。",
+    "description": "多态打开中枢：支持在当前页签或分屏中打开文档/块，或一键唤起全局关系图、收集箱等系统面板。",
     "dispatch": {
         "method": "custom"
     },
     "params": [
         {
-            "key": "id",
-            "type": "blockid",
+            "key": "target",
+            "type": "string",
             "paramMode": "template",
-            "default": "",
-            "description": "要打开的目标页面或块 ID。不填时默认自动绑定当前上下文块。"
+            "default": "{{self.id}}",
+            "description": "目标实体 ID（块/页面 ID）或系统面板名称（'graph' 全局关系图 / 'inbox' 收集箱）。"
+        },
+        {
+            "key": "position",
+            "type": "enum",
+            "paramMode": "fixed",
+            "options": ["tab", "right", "bottom"],
+            "default": "tab",
+            "description": "打开位置：常规页签 (tab)、右侧分屏 (right)、下方分屏 (bottom)。"
         },
         {
             "key": "highlight",
             "type": "boolean",
-            "paramMode": "template",
+            "paramMode": "fixed",
             "default": true,
-            "description": "定位内容块时是否施加高亮动画效果。"
+            "description": "定位内容块时是否施加聚焦与高亮动画效果。"
         }
     ],
     "constraints": {
         "environment": "ui",
         "targetScope": "any",
-        "comment": "多态打开：既能在新页签打开页面，又能高亮定位到具体块"
+        "comment": "多态打开：既能开页签、分屏打开页面，又能高亮定位到具体块，或呼出系统面板"
     },
     "meta": {
-        "contextNeed": "block",
+        "contextNeed": "none",
         "category": "navigation",
         "source": "builtin"
     },
     "seed": {
         "rowID": "20260526204558-open0001",
-        "label": "📖 打开",
-        "paramMapping": "{}"
+        "label": "📖 打开目标",
+        "paramMapping": "{\"target\":\"{{self.id}}\"}"
     }
 }
