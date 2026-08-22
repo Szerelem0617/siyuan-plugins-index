@@ -5,6 +5,46 @@ import { getOutermostList, getBlockAttribute } from "../../../shared/utils/dom-u
 import { openDbConfigDialog } from "../av-setting/db-config";
 import { i18n } from "../../../shared/utils";
 import { addPluginMenuItem } from "../../../shared/utils/menu-utils";
+import { showMessage, Dialog } from "siyuan";
+import { supertagAVProjector } from "../../command/supertag/projection/supertag-av-projector";
+
+function openProjectSupertagPrompt(avId: string, blockId?: string) {
+    const dialog = new Dialog({
+        title: "🏷️ 投影 Supertag 到此数据库",
+        content: `
+        <div class="b3-dialog__content" style="padding: 16px;">
+            <div style="font-size: 13px; color: var(--b3-theme-on-surface); margin-bottom: 12px; line-height: 1.6;">
+                输入要提取并投影到当前数据库的 Supertag 标签名（例如 <code>task</code> 或 <code>read_note</code>）：
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <input id="indexos-proj-tag-input" class="b3-text-field fn__flex-1" placeholder="例如: task" value="task" autofocus />
+            </div>
+            <div class="b3-dialog__action" style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button class="b3-button b3-button--cancel" id="indexos-proj-cancel">取消</button>
+                <button class="b3-button b3-button--text" id="indexos-proj-confirm" style="background: var(--b3-theme-primary); color: #fff;">开始投影</button>
+            </div>
+        </div>
+        `,
+        width: "440px"
+    });
+
+    const input = dialog.element.querySelector("#indexos-proj-tag-input") as HTMLInputElement;
+    const confirmBtn = dialog.element.querySelector("#indexos-proj-confirm") as HTMLButtonElement;
+    const cancelBtn = dialog.element.querySelector("#indexos-proj-cancel") as HTMLButtonElement;
+
+    cancelBtn?.addEventListener("click", () => dialog.destroy());
+    confirmBtn?.addEventListener("click", async () => {
+        const tagName = (input?.value || "task").trim();
+        dialog.destroy();
+        showMessage(`⏳ 正在将 #${tagName} 块属性投影到数据库...`, 3000);
+        const res = await supertagAVProjector.projectSupertagToAV(tagName, avId, blockId);
+        if (res.success) {
+            showMessage(`✅ 成功将 ${res.rowCount} 个 #${tagName} 块数据投影到此数据库！`, 4000);
+        } else {
+            showMessage(`❌ 投影失败: ${res.message || "未知错误"}`, 5000, "error");
+        }
+    });
+}
 
 /**
  * Data 功能的块菜单回调 (针对列表块)
@@ -27,6 +67,27 @@ export function addDataMenuItems({ detail }: any) {
                 label: i18n.dbConfig.dialogTitle,
                 click: () => openDbConfigDialog(avId, blockId)
             });
+
+            const isProjected = supertagAVProjector.isVirtualProjection(avId);
+            if (isProjected) {
+                const boundTag = supertagAVProjector.getBoundTag(avId) || "";
+                addPluginMenuItem(menu, {
+                    id: "indexos-close-projection",
+                    icon: "iconClose",
+                    label: `🛑 IndexOS: 关闭虚拟投影 (#${boundTag})`,
+                    click: () => {
+                        supertagAVProjector.unbindTagFromAV(avId);
+                        showMessage("✓ 已关闭虚拟投影，恢复为普通数据库");
+                    }
+                });
+            } else {
+                addPluginMenuItem(menu, {
+                    id: "indexos-project-supertag",
+                    icon: "iconTags",
+                    label: "🏷️ IndexOS: 投影 Supertag 到此数据库",
+                    click: () => openProjectSupertagPrompt(avId, blockId)
+                });
+            }
         }
         return;
     }

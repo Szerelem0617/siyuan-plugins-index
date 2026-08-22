@@ -14,6 +14,7 @@ import { triggerConditionalCommands, dispatchScopeEvents } from "./supertag-trig
 import { SupertagRenderer } from "../renderer/SupertagRenderer";
 import { commandRegistry } from "../../registry/command-registry";
 import { encodeBtnHref } from "../../global-registration/inline-button";
+import { supertagAVProjector } from "../projection/supertag-av-projector";
 
 export class SupertagMonitor {
     private dataRegistry: TypeConfig[] = [];
@@ -28,16 +29,25 @@ export class SupertagMonitor {
             const detail = event?.detail || event;
             const cmd = detail?.cmd;
             if (cmd === "transactions" || cmd === "updateBlock" || cmd === "doOperations" || cmd === "setBlockAttrs" || cmd === "insertBlock") {
-                const ops = detail?.data?.[0]?.doOperations || detail?.data || [];
-                if (Array.isArray(ops)) {
-                    for (const op of ops) {
-                        const blockId = op.id || op.blockID;
-                        if (blockId) {
-                            this.enqueueBlockEvent(blockId, op.data || op.value || op, op.action, op.id);
+                const txList = Array.isArray(detail?.data) ? detail.data : [detail?.data];
+                for (const tx of txList) {
+                    const ops = tx?.doOperations || (Array.isArray(tx) ? tx : []);
+                    if (Array.isArray(ops)) {
+                        for (const op of ops) {
+                            // 1. 捕获原生 AV 单元格编辑并反向回写到块属性
+                            if (op.action === "updateAttrViewCell" || op.action === "updateAttrViewCells" || op.action === "setAttrViewCell") {
+                                supertagAVProjector.handleAVCellUpdate(op);
+                                continue;
+                            }
+
+                            const blockId = op.id || op.blockID || op.rowID || op.itemID;
+                            if (blockId && typeof blockId === "string" && !blockId.includes("_col_")) {
+                                this.enqueueBlockEvent(blockId, op.data || op.value || op, op.action, op.id);
+                            }
                         }
+                    } else if (tx?.id && typeof tx.id === "string" && !tx.id.includes("_col_")) {
+                        this.enqueueBlockEvent(tx.id, tx, detail.cmd);
                     }
-                } else if (detail?.data?.id) {
-                    this.enqueueBlockEvent(detail.data.id, detail.data, detail.cmd);
                 }
             }
         };

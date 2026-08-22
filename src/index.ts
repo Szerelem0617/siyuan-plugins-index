@@ -42,6 +42,7 @@ import { triggerInsertBlockBelow } from "./features/command/effect/insert-block-
 import { handleOpenTargetCommand } from "./features/command/effect/open-target";
 import { triggerMoveContent } from "./features/command/effect/move-content";
 import { triggerDuplicateContent } from "./features/command/effect/duplicate-content";
+import { supertagAVProjector } from "./features/command/supertag/projection/supertag-av-projector";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -65,6 +66,10 @@ export default class IndexPlugin extends Plugin {
                 unregisterPlugin: (pluginName: string) => commandRegistry.unregisterPlugin(pluginName),
                 getCommand: (id: string) => commandRegistry.getCommand(id),
                 executeCommand: (id: string, params?: any, context?: any) => dispatchCommand(id, params, context || { blockEl: document.body, protyleEl: null })
+            },
+            supertag: {
+                projectToAV: (tagName: string, avId: string) => supertagAVProjector.projectSupertagToAV(tagName, avId),
+                bindToAV: (tagName: string, avId: string) => supertagAVProjector.bindTagToAV(tagName, avId)
             }
         };
         // 内置命令表先行加载，其他所有模块（Dispatcher、第三方插件）均可安全地调用 getCommand()
