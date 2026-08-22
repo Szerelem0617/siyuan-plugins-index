@@ -41,6 +41,7 @@ import { triggerAddSupertag } from "./features/command/effect/add-supertag";
 import { triggerInsertBlockBelow } from "./features/command/effect/insert-block-below";
 import { handleOpenTargetCommand } from "./features/command/effect/open-target";
 import { triggerMoveContent } from "./features/command/effect/move-content";
+import { triggerDuplicateContent } from "./features/command/effect/duplicate-content";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -108,6 +109,11 @@ export default class IndexPlugin extends Plugin {
         const moveContentCmd = commandRegistry.getCommand("index.moveContent");
         if (moveContentCmd) {
             moveContentCmd.dispatch.executor = triggerMoveContent;
+        }
+
+        const duplicateContentCmd = commandRegistry.getCommand("index.duplicateContent");
+        if (duplicateContentCmd) {
+            duplicateContentCmd.dispatch.executor = triggerDuplicateContent;
         }
 
 

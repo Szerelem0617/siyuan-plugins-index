@@ -1,0 +1,40 @@
+{
+    "id": "index.duplicateContent",
+    "name": "克隆内容",
+    "description": "多态克隆当前块或文档。若为块则在其正下方生成全新副本块；若为文档则完整克隆该文档树。",
+    "dispatch": {
+        "method": "custom"
+    },
+    "params": [
+        {
+            "key": "id",
+            "type": "blockid",
+            "paramMode": "template",
+            "default": "{{self.id}}",
+            "description": "需要克隆的目标实体 ID（留空默认当前块/当前页面）。"
+        }
+    ],
+    "outputs": [
+        {
+            "key": "createdblock",
+            "type": "string",
+            "default": "var.createdblock",
+            "description": "新生成的副本块或副本页面 ID"
+        }
+    ],
+    "constraints": {
+        "environment": "universal",
+        "targetScope": "any",
+        "comment": "原生 API 实现，100% 支持前台交互与后台/定时任务"
+    },
+    "meta": {
+        "contextNeed": "block",
+        "category": "edit",
+        "source": "builtin"
+    },
+    "seed": {
+        "rowID": "20260822153000-dupl0001",
+        "label": "📋 克隆内容",
+        "paramMapping": "{\"id\":\"{{self.id}}\"}"
+    }
+}

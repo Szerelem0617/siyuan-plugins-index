@@ -10,14 +10,12 @@ import viewGraph from "./view-graph.json";
 import viewInbox from "./view-inbox.json";
 import uiToast from "./ui-toast.json";
 import viewSplitRight from "./view-split-right.json";
-import blockDuplicate from "./block-duplicate.json";
+import duplicateContent from "./duplicate-content.json";
 import blockCopyRef from "./block-copy-ref.json";
 import addSupertag from "./add-supertag.json";
 import insertBlockBelow from "./insert-block-below.json";
 import visualEffect from "./visual-effect.json";
 import safeUpdateBlock from "./safe-update-block.json";
-import apiBlockInsert from "./api-block-insert.json";
-import apiAttrSetAttrs from "./api-attr-set-attrs.json";
 import setBlockAttribute from "./set-block-attribute.json";
 import moveContent from "./move-content.json";
 
@@ -27,14 +25,12 @@ export const BUILTIN_COMMANDS = [
     viewInbox,
     uiToast,
     viewSplitRight,
-    blockDuplicate,
+    duplicateContent,
     blockCopyRef,
     addSupertag,
     insertBlockBelow,
     visualEffect,
     safeUpdateBlock,
-    apiBlockInsert,
-    apiAttrSetAttrs,
     setBlockAttribute,
     moveContent
 ];
