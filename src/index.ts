@@ -43,6 +43,7 @@ import { handleOpenTargetCommand } from "./features/command/effect/open-target";
 import { triggerMoveContent } from "./features/command/effect/move-content";
 import { triggerDuplicateContent } from "./features/command/effect/duplicate-content";
 import { supertagAVProjector } from "./features/command/supertag/projection/supertag-av-projector";
+import { initDockInspector } from "./features/command/supertag/inspector/dock-inspector";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;
@@ -174,6 +175,7 @@ export default class IndexPlugin extends Plugin {
         await initSupertagPalette(this);
         initTagMenuInterceptor();
         backgroundScheduler.init(this);
+        initDockInspector(this);
 
         // 监听设置变化事件，实现开发者模式开关实时刷新生效
         window.addEventListener("index-plugin-setting-changed", (e: CustomEvent) => {
