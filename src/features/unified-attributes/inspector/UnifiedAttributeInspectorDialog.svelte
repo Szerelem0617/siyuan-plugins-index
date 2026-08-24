@@ -5,7 +5,6 @@
         loadBlockAttributeData,
         updateBlockAttributeValue,
         updateAVCellAttributeValue,
-        toggleSupertagOnBlock,
         type BlockAttributeData,
         type SupertagField,
         type AVDatabaseField
@@ -21,8 +20,6 @@
     let activeTab: "governed" | "base" = "governed";
     let showSystemMeta = false;
 
-    let newTagInput = "";
-    let isAddingTag = false;
     let addingTagFieldFor: string | null = null;
     let newTagFieldKey = "";
     let newCustomKey = "";
@@ -100,25 +97,6 @@
         handleAVCellChange(avId, field.keyId, itemId, field.displayValue, field.colType);
     }
 
-    async function handleAddTag() {
-        const tag = newTagInput.replace(/#/g, "").trim();
-        if (!tag) {
-            isAddingTag = false;
-            return;
-        }
-        await toggleSupertagOnBlock(blockId, tag, "add");
-        newTagInput = "";
-        isAddingTag = false;
-        await reloadData();
-        showMessage(`✓ 已为当前块挂载 Supertag: #${tag}`);
-    }
-
-    async function handleRemoveTag(tag: string) {
-        await toggleSupertagOnBlock(blockId, tag, "remove");
-        await reloadData();
-        showMessage(`✓ 已移除 Supertag: #${tag}`);
-    }
-
     async function handleAddCustomField() {
         const key = newCustomKey.trim();
         const val = newCustomVal.trim();
@@ -168,40 +146,6 @@
                     ⚡ 虚拟投影已就绪 ({data.projectionInfo.tableName})
                 </div>
             {/if}
-        </div>
-
-        <!-- Supertag 标签列表与快速添加 -->
-        <div class="supertags-bar">
-            <span class="supertags-label">🏷️ 挂载标签：</span>
-            <div class="supertags-list">
-                {#if data && data.supertags.length > 0}
-                    {#each data.supertags as tag}
-                        <span class="supertag-chip">
-                            <span class="tag-hash">#</span>{tag}
-                            <button class="chip-del-btn" title="移除标签" on:click={() => handleRemoveTag(tag)}>✕</button>
-                        </span>
-                    {/each}
-                {:else}
-                    <span class="no-tag-tip">暂无挂载标签</span>
-                {/if}
-
-                {#if isAddingTag}
-                    <div class="inline-add-tag">
-                        <input
-                            type="text"
-                            class="b3-text-field"
-                            style="font-size: 11px; padding: 2px 6px; height: 22px; width: 90px;"
-                            placeholder="标签名称"
-                            bind:value={newTagInput}
-                            on:keydown={e => e.key === 'Enter' && handleAddTag()}
-                        />
-                        <button class="b3-button b3-button--text" style="font-size: 11px; padding: 0 4px;" on:click={handleAddTag}>✓</button>
-                        <button class="b3-button b3-button--text" style="font-size: 11px; padding: 0 4px; opacity: 0.6;" on:click={() => { isAddingTag = false; }}>✕</button>
-                    </div>
-                {:else}
-                    <button class="add-tag-btn" on:click={() => { isAddingTag = true; }}>+ 标签</button>
-                {/if}
-            </div>
         </div>
     </div>
 
@@ -680,85 +624,6 @@
         padding: 2px 6px;
         border-radius: 4px;
         font-weight: 500;
-    }
-
-    .supertags-bar {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
-
-    .supertags-label {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--b3-theme-on-surface-light);
-    }
-
-    .supertags-list {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
-
-    .supertag-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 11px;
-        font-weight: 600;
-        background: var(--b3-theme-background);
-        border: 1px solid var(--b3-border-color);
-        padding: 2px 6px;
-        border-radius: 12px;
-        color: var(--b3-theme-on-background);
-    }
-
-    .tag-hash {
-        color: var(--indexos-accent-primary, #3B82F6);
-    }
-
-    .chip-del-btn {
-        background: transparent;
-        border: none;
-        cursor: pointer;
-        padding: 0;
-        font-size: 10px;
-        opacity: 0.4;
-        transition: opacity 0.15s;
-    }
-
-    .chip-del-btn:hover {
-        opacity: 1;
-        color: #DC2626;
-    }
-
-    .no-tag-tip {
-        font-size: 11px;
-        opacity: 0.5;
-    }
-
-    .add-tag-btn {
-        background: transparent;
-        border: 1px dashed var(--b3-border-color);
-        font-size: 10px;
-        padding: 2px 6px;
-        border-radius: 10px;
-        cursor: pointer;
-        color: var(--b3-theme-on-surface-light);
-        transition: all 0.15s;
-    }
-
-    .add-tag-btn:hover {
-        border-color: var(--indexos-accent-primary, #3B82F6);
-        color: var(--indexos-accent-primary, #3B82F6);
-    }
-
-    .inline-add-tag {
-        display: flex;
-        align-items: center;
-        gap: 2px;
     }
 
     .inspector-tabs {
