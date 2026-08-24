@@ -13,7 +13,7 @@ import { post } from "../../../shared/api-client/request";
 import { supertagAVProjector, getColumnMeta } from "../projection/supertag-av-projector";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { getColIDMap } from "../../../shared/utils/av-utils";
-import { parseSupertags } from "../core/supertag-diff";
+import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
 
 export interface TypedFieldOption {
     id: string;
@@ -123,7 +123,7 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
     let rawAttrs: Record<string, string> = {};
     try {
         const res = await post("/api/attr/getBlockAttrs", { id: cleanId });
-        rawAttrs = res || {};
+        rawAttrs = res?.data || res || {};
     } catch (e) {
         console.warn("[AttributeModel] 获取块属性异常:", e);
     }
@@ -164,9 +164,8 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                     if (parentRows.length > 0) {
                         const pId = parentRows[0].id;
                         const parentAttrsRes = await post("/api/attr/getBlockAttrs", { id: pId });
-                        if (parentAttrsRes) {
-                            rawAttrs = { ...parentAttrsRes, ...rawAttrs };
-                        }
+                        const pAttrs = parentAttrsRes?.data || parentAttrsRes || {};
+                        rawAttrs = { ...pAttrs, ...rawAttrs };
                     }
                 } catch (_) {}
             }
@@ -212,11 +211,22 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
         supertagGroupsMap.set(tag, []);
     }
 
-    const processedKeys = new Set<string>(["id", "updated", "bookmark", "name", "alias", "memo", "custom-supertags", "custom-index-tags"]);
+    const processedKeys = new Set<string>([
+        "id", "updated", "created", "bookmark", "name", "alias", "memo", "style",
+        "custom-supertags", "custom-index-tags", "custom-avs", "av-names", "custom-av-name",
+        "custom-av-names", "custom-index-buttons", "custom-index-db-config"
+    ]);
     const rawCustomFields: RawCustomField[] = [];
 
     for (const [k, v] of Object.entries(rawAttrs)) {
-        if (processedKeys.has(k) || k.startsWith("custom-sy-") || k === "custom-riff-decks" || k.startsWith("custom-av-")) continue;
+        if (
+            processedKeys.has(k) || 
+            k.startsWith("custom-sy-") || 
+            k === "custom-riff-decks" || 
+            k.startsWith("custom-av-") ||
+            k === "custom-avs" ||
+            k === "av-names"
+        ) continue;
 
         if (k.startsWith("custom-")) {
             const rawClean = k.replace(/^custom-/, "");
@@ -312,13 +322,55 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
 
     // 6. 所属原生 AV 数据库属性聚合 (<dbName>.<colName> 与重名预警)
     const avGroups: AVDatabaseGroup[] = [];
+    const joinedAvIds = new Set<string>();
+
     try {
-        // 查找所有加入的 AV 数据库 (custom-av-<avId> 或 blocks 表中记录)
-        const joinedAvIds = new Set<string>();
+        // ① 从 custom-avs 属性解析 (思源标准关联数据库)
+        if (rawAttrs["custom-avs"]) {
+            const rawAvs = String(rawAttrs["custom-avs"]).trim();
+            try {
+                if (rawAvs.startsWith("[") && rawAvs.endsWith("]")) {
+                    const parsed = JSON.parse(rawAvs);
+                    if (Array.isArray(parsed)) {
+                        parsed.forEach((id: any) => id && joinedAvIds.add(String(id).trim()));
+                    }
+                } else {
+                    rawAvs.split(/[,;\s]+/).forEach(id => id && joinedAvIds.add(id.trim()));
+                }
+            } catch (_) {
+                rawAvs.split(/[,;\s]+/).forEach(id => id && joinedAvIds.add(id.trim()));
+            }
+        }
+
+        // ② 从 custom-av-<avId> 属性解析
         for (const k of Object.keys(rawAttrs)) {
-            if (k.startsWith("custom-av-")) {
-                const avId = k.replace(/^custom-av-/, "");
+            if (k.startsWith("custom-av-") && k !== "custom-av-name" && k !== "custom-av-names" && k !== "custom-av-config") {
+                const avId = k.replace(/^custom-av-/, "").trim();
                 if (avId) joinedAvIds.add(avId);
+            }
+        }
+
+        // ③ 从 av-names 属性反查 AV 库 ID
+        if (rawAttrs["av-names"]) {
+            const names = String(rawAttrs["av-names"]).split(/[,;\s]+/).map(n => n.trim()).filter(Boolean);
+            for (const n of names) {
+                try {
+                    const sqlRes = await post("/api/query/sql", {
+                        stmt: `SELECT id, content, ial FROM blocks WHERE type = 'av' AND (content = '${n}' OR ial LIKE '%${n}%') LIMIT 1;`
+                    });
+                    const rows = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
+                    if (rows.length > 0) {
+                        joinedAvIds.add(rows[0].id);
+                    }
+                } catch (_) {}
+            }
+        }
+
+        // ④ 从已绑定的 Supertag 关联的 AV 中感知
+        for (const tag of supertags) {
+            const boundAvId = supertagAVProjector.getBoundAVId(tag);
+            if (boundAvId) {
+                joinedAvIds.add(boundAvId);
             }
         }
 
@@ -338,8 +390,32 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
         for (const avId of Array.from(joinedAvIds)) {
             try {
                 const { keyValues, blockToItem, idToType } = await getColIDMap(avId);
-                const itemId = blockToItem.get(cleanId);
-                if (!itemId) continue;
+                
+                // 智能解析 itemId
+                let itemId = blockToItem.get(cleanId);
+                if (!itemId && parentId) itemId = blockToItem.get(parentId);
+                if (!itemId && rootId) itemId = blockToItem.get(rootId);
+
+                // 深度遍历 keyValues 匹配 block
+                if (!itemId) {
+                    for (const kv of keyValues) {
+                        if (kv.values && Array.isArray(kv.values)) {
+                            for (const v of kv.values) {
+                                const cellBid = v.block?.id || (v.type === 'block' ? (v.content || v.text?.content || v.block?.content) : null);
+                                if (cellBid === cleanId || (parentId && cellBid === parentId) || cellBid === rootId) {
+                                    itemId = v.itemID || v.itemId || v.blockID || v.id;
+                                    break;
+                                }
+                            }
+                        }
+                        if (itemId) break;
+                    }
+                }
+
+                // 若仍未获取到 itemId，使用当前 blockId 作为兜底 item 标识
+                if (!itemId) {
+                    itemId = cleanId;
+                }
 
                 // 获取 AV 名称
                 let avName = `数据库 ${avId.slice(0, 6)}`;
@@ -413,7 +489,9 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                 console.warn(`[AttributeModel] 解析所属 AV ${avId} 失败:`, avErr);
             }
         }
-    } catch (_) {}
+    } catch (err) {
+        console.error("[AttributeModel] 数据库关联解析异常:", err);
+    }
 
     // 7. 虚拟投影状态感知
     let projectionInfo = undefined;
@@ -432,6 +510,7 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
         } catch (_) {}
     }
 
+
     return {
         blockId: cleanId,
         rootId,
@@ -449,83 +528,59 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
 
 function buildFieldOptions(key: string, schema: any, curVal: string): TypedFieldOption[] {
     const options: TypedFieldOption[] = [];
-    if (schema?.defaultOptions) {
-        schema.defaultOptions.forEach((opt: string, idx: number) => {
-            options.push({
-                id: `opt_${key}_${opt}`,
-                name: opt,
-                color: String((idx % 8) + 1)
-            });
-        });
-    }
-    if (curVal && !options.some(o => o.name === curVal)) {
+    const defaults = schema.defaultOptions || [];
+    
+    defaults.forEach((optName: string, idx: number) => {
         options.push({
-            id: `opt_${key}_${curVal}`,
+            id: `opt_${idx}`,
+            name: optName,
+            color: String((idx % 8) + 1)
+        });
+    });
+
+    if (curVal && !defaults.includes(curVal)) {
+        options.push({
+            id: `opt_custom`,
             name: curVal,
-            color: String((options.length % 8) + 1)
+            color: "1"
         });
     }
+
     return options;
 }
 
 /**
- * 设置/更新指定块属性 (支持内置、自由 custom-* 以及 custom-<tag>.<attr> 命名空间)
+ * 实时更新块自定义属性 / 基础属性
  */
 export async function updateBlockAttributeValue(blockId: string, attrKey: string, attrValue: string): Promise<boolean> {
     const cleanId = blockId.trim();
-    const isBuiltin = ["name", "alias", "memo", "bookmark"].includes(attrKey);
-    let rawKey = attrKey;
-    if (!isBuiltin) {
-        let clean = attrKey.replace(/^custom-/, "");
-        clean = clean.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-");
-        rawKey = `custom-${clean}`;
-    }
+    if (!cleanId || !attrKey) return false;
 
     try {
         await post("/api/attr/setBlockAttrs", {
             id: cleanId,
             attrs: {
-                [rawKey]: attrValue
+                [attrKey]: attrValue
             }
         });
-
-        // 同步更新 SQLite 内存虚拟投影热表 (如果已挂载)
-        try {
-            const cleanColName = attrKey.replace(/^custom-/, "").replace(/^[a-zA-Z0-9_-]+\./, "");
-            const { db } = await getSqliteEngine();
-            const tables = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'proj_%';`);
-            if (tables && tables.length > 0 && tables[0].values.length > 0) {
-                for (const row of tables[0].values) {
-                    const tableName = String(row[0]);
-                    try {
-                        db.run(`UPDATE "${tableName}" SET "${cleanColName}" = ?, _updated = ? WHERE id = ?;`, [attrValue, Date.now(), cleanId]);
-                    } catch (_) {}
-                }
-            }
-        } catch (_) {}
-
         return true;
     } catch (e) {
-        console.error("[AttributeModel] 更新属性失败:", e);
+        console.error(`[AttributeModel] 保存块属性 ${attrKey} 失败:`, e);
         return false;
     }
 }
 
 /**
- * 回写原生 AV 数据库单元格属性
+ * 实时更新原生 AV 数据库的单元格属性值
  */
-export async function updateAVCellAttributeValue(
-    avId: string,
-    keyId: string,
-    itemId: string,
-    newValue: string,
-    colType: string
-): Promise<boolean> {
+export async function updateAVCellAttributeValue(avId: string, keyId: string, itemId: string, newValue: string, colType: string): Promise<boolean> {
+    if (!avId || !keyId || !itemId) return false;
+
     try {
-        let valuePayload: any = { content: newValue };
+        let valuePayload: any = null;
 
         if (colType === "number") {
-            const num = parseFloat(newValue);
+            const num = Number(newValue);
             valuePayload = {
                 number: {
                     content: isNaN(num) ? 0 : num,
@@ -588,8 +643,9 @@ export async function toggleSupertagOnBlock(blockId: string, tag: string, action
 
     try {
         const res = await post("/api/attr/getBlockAttrs", { id: cleanId });
-        const curTagsStr = res?.["custom-supertags"] || "";
-        const tagSet = new Set(curTagsStr.split(/[,#\s]+/).map(t => t.trim()).filter(Boolean));
+        const curAttrs = res?.data || res || {};
+        const curTags = parseSupertags(curAttrs["custom-supertags"] || "");
+        const tagSet = new Set(curTags);
 
         if (action === "add") {
             tagSet.add(cleanTag);
@@ -597,7 +653,7 @@ export async function toggleSupertagOnBlock(blockId: string, tag: string, action
             tagSet.delete(cleanTag);
         }
 
-        const newTagsStr = Array.from(tagSet).join(",");
+        const newTagsStr = serializeSupertags(Array.from(tagSet));
         await post("/api/attr/setBlockAttrs", {
             id: cleanId,
             attrs: {

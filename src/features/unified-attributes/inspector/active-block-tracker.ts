@@ -85,19 +85,46 @@ export class ActiveBlockTracker {
     }
 
     private handleSelectionChange = () => {
+        const active = document.activeElement as HTMLElement | null;
+        if (
+            active && (
+                active.closest(".sy__indexos_inspector_dock") || 
+                active.closest(".indexos-dock-inspector") || 
+                active.closest(".b3-dialog") ||
+                active.closest(".b3-menu") ||
+                active.closest(".indexos-dropdown")
+            )
+        ) {
+            return;
+        }
         this.triggerDetectionDebounced();
     };
 
     private handleClick = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
-        if (target.closest(".sy__indexos_inspector_dock") || target.closest(".b3-dialog")) {
-            // 点击属性面板自身，不触发块切走
+        if (
+            target.closest(".sy__indexos_inspector_dock") || 
+            target.closest(".indexos-dock-inspector") ||
+            target.closest(".b3-dialog") ||
+            target.closest(".b3-menu") ||
+            target.closest(".indexos-dropdown") ||
+            target.closest(".protyle-util")
+        ) {
+            // 点击属性面板自身/菜单/弹窗，不触发块切走
             return;
         }
         this.triggerDetectionDebounced();
     };
 
     private handleKeyup = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement;
+        if (
+            target.closest(".sy__indexos_inspector_dock") || 
+            target.closest(".indexos-dock-inspector") ||
+            target.closest(".b3-dialog")
+        ) {
+            return;
+        }
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Enter"].includes(e.key)) {
             this.triggerDetectionDebounced();
         }
@@ -112,6 +139,19 @@ export class ActiveBlockTracker {
 
     public detectCurrentActiveBlock() {
         if (this.pinnedBlockId) return;
+
+        const active = document.activeElement as HTMLElement | null;
+        if (
+            active && (
+                active.closest(".sy__indexos_inspector_dock") || 
+                active.closest(".indexos-dock-inspector") || 
+                active.closest(".b3-dialog") ||
+                active.closest(".b3-menu") ||
+                active.closest(".indexos-dropdown")
+            )
+        ) {
+            return;
+        }
 
         const sel = window.getSelection();
         let targetEl: HTMLElement | null = null;
@@ -184,8 +224,8 @@ export class ActiveBlockTracker {
                 textSnippet,
                 isDocRoot
             });
-        } else if (rootId) {
-            // 回退到当前打开文档的根块
+        } else if (!this.currentCtx && rootId) {
+            // 仅在首次无上下文时，回退到当前打开文档的根块
             this.updateContext({
                 blockId: rootId,
                 rootId: rootId,

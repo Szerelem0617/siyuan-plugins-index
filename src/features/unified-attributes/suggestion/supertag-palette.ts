@@ -192,41 +192,20 @@ function closePalette() {
     }
 }
 
+import { getUnifiedSupertagList, type UnifiedSupertagDefinition } from "../core/supertag-entity";
+
 async function renderList(query: string) {
     if (!paletteEl) return;
     paletteEl.innerHTML = "";
     currentTagList = [];
 
-    const dbConfigs = await getGlobalTypeConfigs();
-    let logicConfigs = getSupertagRegistry();
-    if (!logicConfigs || logicConfigs.length === 0) {
-        try {
-            const { refreshSupertagRegistry } = await import("../../command/utils/sync-service");
-            await refreshSupertagRegistry();
-            logicConfigs = getSupertagRegistry();
-        } catch (err) {
-            console.error("[SupertagPalette] Refresh registry error:", err);
-        }
-    }
+    const allSupertags = await getUnifiedSupertagList();
+    const queryLower = query.toLowerCase().trim();
 
-    const dataNames = new Set(dbConfigs.map((c: any) => c.typeName.trim().toLowerCase()).filter(Boolean));
-    const logicNames = new Set(logicConfigs.map(l => l.typeTag.trim().toLowerCase()).filter(Boolean));
-
-    const queryLower = query.toLowerCase();
-    const allSupertags = Array.from(new Set([...dataNames, ...logicNames]));
     const matched = allSupertags.filter(t => {
-        if (!t.includes(queryLower)) return false;
-        const pref = supertagBinder.getPref(t);
-        return pref !== "disabled";
-    });
-
-    console.log("[SupertagPalette Debug]", {
-        query,
-        logicConfigsCount: logicConfigs.length,
-        logicNames: Array.from(logicNames),
-        dataNames: Array.from(dataNames),
-        allSupertags,
-        matched
+        if (!t.enabled) return false;
+        if (!queryLower) return true;
+        return t.typeName.includes(queryLower);
     });
 
     let activeBlock = activeProtyle ? findActiveBlock(activeProtyle) : null;
@@ -240,14 +219,12 @@ async function renderList(query: string) {
 
     const incompatibleTags = new Set<string>();
     if (currentBlockType) {
-        for (const tag of matched) {
-            const tagLower = tag.toLowerCase();
-            const boundCmds = logicConfigs.filter(l => l.typeTag.trim().toLowerCase() === tagLower);
-            for (const bound of boundCmds) {
+        for (const item of matched) {
+            for (const bound of item.logicConfigs) {
                 const cmdDef = commandRegistry.getCommand(bound.commandRef);
                 if (cmdDef?.meta?.appliesTo && cmdDef.meta.appliesTo.length > 0 && !cmdDef.meta.appliesTo.includes("any")) {
                     if (!cmdDef.meta.appliesTo.includes(currentBlockType as any)) {
-                        incompatibleTags.add(tag);
+                        incompatibleTags.add(item.typeName);
                         break;
                     }
                 }
@@ -255,75 +232,54 @@ async function renderList(query: string) {
         }
     }
 
-    const cmdComps: string[] = [];
-    const dataComps: string[] = [];
-
-    matched.forEach(tag => {
-        const isLogic = logicNames.has(tag);
-        const isData = dataNames.has(tag);
-        if (isLogic) {
-            cmdComps.push(tag);
-        } else if (isData) {
-            dataComps.push(tag);
-        } else {
-            cmdComps.push(tag);
-        }
-    });
-
-    const sortedCmds = Array.from(new Set(cmdComps)).sort();
-    const sortedDatas = Array.from(new Set(dataComps)).sort();
-    currentTagList = [...sortedCmds, ...sortedDatas];
-
-    console.log("[SupertagPalette Debug Categorized]", { sortedCmds, sortedDatas, currentTagList });
+    currentTagList = matched.map(m => m.typeName);
 
     if (currentTagList.length === 0) {
         paletteEl.innerHTML = `<div style="font-size: 11px; text-align: center; padding: 16px 0; color: var(--indexos-text-muted); font-family: ui-monospace, monospace;">无匹配的超级标签 (@)</div>`;
         return;
     }
 
-    let flatIndex = 0;
-    const createSection = (title: string, tags: string[]) => {
-        if (tags.length === 0) return null;
+    const container = document.createElement("div");
+    container.style.cssText = "display: flex; flex-direction: column; gap: 3px;";
 
-        const section = document.createElement("div");
-        section.style.cssText = "display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;";
+    matched.forEach((item, index) => {
+        const isIncompat = incompatibleTags.has(item.typeName);
+        const isReady = item.isReady;
+        const el = document.createElement("div");
+        el.className = `b3-list-item b3-list-item--narrow ${index === selectedIndex ? "b3-list-item--focus" : ""}`;
+        el.setAttribute("data-tag-name", item.typeName);
+        el.setAttribute("data-index", String(index));
+        
+        const opacityStyle = isIncompat ? "opacity: 0.35;" : (isReady ? "" : "opacity: 0.62;");
+        el.style.cssText = `display: flex; align-items: center; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; transition: all 0.15s ease; ${opacityStyle}`;
 
-        const header = document.createElement("div");
-        header.style.cssText = "font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--indexos-text-muted); border-bottom: 1px solid var(--indexos-border-light); padding-bottom: 4px; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;";
-        header.innerHTML = `<span>${title}</span><span style="background: var(--indexos-accent-badge-bg); color: var(--indexos-accent-badge-text); font-family: ui-monospace, monospace; border-radius: 2px; padding: 1px 5px; font-size: 9px; font-weight: 600; border: 1px solid var(--indexos-border-light);">${tags.length}</span>`;
-        section.appendChild(header);
+        const iconColor = isIncompat ? "var(--indexos-text-muted)" : (isReady ? "var(--indexos-accent-primary)" : "var(--indexos-text-muted)");
+        let html = `<svg class="b3-list-item__graphic" style="width: 13px; height: 13px; color: ${iconColor}; margin-right: 8px; flex-shrink: 0;"><use xlink:href="#iconTags"></use></svg>`;
+        html += `<span class="b3-list-item__text" style="color: var(--indexos-text-main); font-weight: 600;">@${item.typeName}</span>`;
 
-        const list = document.createElement("div");
-        list.style.cssText = "display: flex; flex-direction: column; gap: 3px;";
+        if (item.isBuiltin) {
+            html += `<span class="indexos-tag-badge indexos-tag-badge--builtin" style="margin-left: 6px; font-size: 9px; padding: 1px 4px;">内置</span>`;
+        }
 
-        tags.forEach(tag => {
-            const thisIdx = flatIndex++;
-            const isIncompat = incompatibleTags.has(tag);
-            const item = document.createElement("div");
-            item.className = `b3-list-item b3-list-item--narrow ${thisIdx === selectedIndex ? "b3-list-item--focus" : ""}`;
-            item.setAttribute("data-tag-name", tag);
-            item.setAttribute("data-index", String(thisIdx));
-            item.style.cssText = `display: flex; align-items: center; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; transition: all 0.15s ease; ${isIncompat ? "opacity: 0.4;" : ""}`;
+        if (item.hasDataSchema) {
+            html += `<span style="font-size: 10px; opacity: 0.75; margin-left: 6px; font-weight: normal; color: var(--indexos-text-muted);">📊 属性</span>`;
+        }
 
-            const iconColor = isIncompat ? "var(--indexos-text-muted)" : "var(--indexos-accent-primary)";
-            let labelHtml = `<svg class="b3-list-item__graphic" style="width: 13px; height: 13px; color: ${iconColor}; margin-right: 8px; flex-shrink: 0;"><use xlink:href="#iconTags"></use></svg><span class="b3-list-item__text" style="color: var(--indexos-text-main); font-weight: 600;">@${tag}</span>`;
-            if (isIncompat) {
-                labelHtml += `<span style="margin-left: auto; font-size: 9px; color: var(--indexos-text-muted); opacity: 0.8; font-family: ui-monospace, monospace;">不推荐</span>`;
-            }
-            item.innerHTML = labelHtml;
-            list.appendChild(item);
-        });
+        if (item.hasBehavior) {
+            html += `<span style="font-size: 10px; opacity: 0.75; margin-left: 4px; font-weight: normal; color: var(--indexos-text-muted);">⚡ 动作</span>`;
+        }
 
-        section.appendChild(list);
-        return section;
-    };
+        if (!item.hasDataSchema && !item.hasBehavior) {
+            html += `<span style="font-size: 9px; opacity: 0.75; margin-left: auto; font-weight: normal; color: var(--indexos-text-muted); font-family: ui-monospace, monospace;">未建库 · 打标自建</span>`;
+        } else if (isIncompat) {
+            html += `<span style="margin-left: auto; font-size: 9px; color: var(--indexos-text-muted); opacity: 0.8; font-family: ui-monospace, monospace;">不推荐</span>`;
+        }
 
-    const cmdSec = createSection("命令 TAG", sortedCmds);
-    const dataSec = createSection("数据 TAG", sortedDatas);
+        el.innerHTML = html;
+        container.appendChild(el);
+    });
 
-    if (cmdSec) paletteEl.appendChild(cmdSec);
-    if (dataSec) paletteEl.appendChild(dataSec);
-
+    paletteEl.appendChild(container);
     updateSelectionHighlight();
 }
 

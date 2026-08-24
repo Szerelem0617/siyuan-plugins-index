@@ -357,7 +357,27 @@ export class SupertagMonitor {
                 console.log(`[Supertag] Step 1: Binding block "${blockId}" as row in Layer 4 AV "${targetConfig.avName}" (${targetConfig.avId})...`);
                 await supertagBinder.applySupertag(blockId, cleanTag, targetConfig);
             } else {
-                console.log(`[Supertag] Step 1: No Layer 4 AV matching #${cleanTag} found. Data will persist in block custom attributes.`);
+                console.log(`[Supertag] Step 1: No Layer 4 AV matching #${cleanTag} found. Auto-provisioning database...`);
+                try {
+                    const { isDataDbsInstantiated, createSupertagProjectionDatabase } = await import("../../command/data-db-management");
+                    const isInstantiated = await isDataDbsInstantiated();
+                    if (isInstantiated) {
+                        const templateAvId = supertagBinder.getTemplatePref(cleanTag);
+                        const newDb = await createSupertagProjectionDatabase(cleanTag, templateAvId);
+                        if (newDb?.avId) {
+                            const newConfig: TypeConfig = {
+                                typeName: cleanTag,
+                                avId: newDb.avId,
+                                avName: newDb.dbName,
+                                typeFieldId: ""
+                            };
+                            await supertagBinder.applySupertag(blockId, cleanTag, newConfig);
+                            showMessage(`🏷️ 已自动为 #${cleanTag} 生成专属投影库: ${newDb.dbName}`);
+                        }
+                    }
+                } catch (autoErr) {
+                    console.warn(`[Supertag] Auto-provision database for #${cleanTag} skipped/failed:`, autoErr);
+                }
             }
 
             console.log(`[Supertag] Step 2: Executing conditional trigger commands for #${cleanTag}...`);

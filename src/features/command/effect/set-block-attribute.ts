@@ -92,7 +92,7 @@ export async function setBlockAttribute(
         }
         if (cleanAttrName.includes("task") || cleanAttrName === "custom-supertags") {
             try {
-                const { SupertagRenderer } = await import("../supertag");
+                const { SupertagRenderer } = await import("../../unified-attributes/renderer/SupertagRenderer");
                 if (liveBlockEl.classList.contains("protyle-title") || liveBlockEl.closest(".protyle-title")) {
                     const editorEl = (liveBlockEl.closest(".protyle") || document.querySelector(".protyle")) as HTMLElement;
                     await SupertagRenderer.renderDocumentTags(rawId, editorEl);

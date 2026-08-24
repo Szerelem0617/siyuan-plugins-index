@@ -1,39 +1,25 @@
 <script lang="ts">
-    import { onMount, onDestroy } from "svelte";
-    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig, openDbConfigDialog } from "../../av/av-setting/db-config";
-    import { type TypeConfig } from "../../av/av-setting/types";
-    import { i18n } from "../../../shared/utils";
-    import { supertagMonitor } from "../core/supertag-listener";
+    import { onMount } from "svelte";
+    import { openDbConfigDialog } from "../../av/av-setting/db-config";
+    import { i18n, plugin, confirmDialog } from "../../../shared/utils";
     import { supertagBinder } from "../core/supertag-binder";
-    import { showMessage, openTab } from "siyuan";
-    import {
-        SUPERTAG_REGISTRY,
-        type SupertagCommand,
-    } from "../../command/registration";
-
-    import { BUILTIN_SUPERTAGS } from "../../command/indexos/seed-data";
+    import { showMessage, openTab, Dialog } from "siyuan";
+    import { getUnifiedSupertagList, type UnifiedSupertagDefinition } from "../core/supertag-entity";
     import { openIndexDropdown } from "../../../ui/components/index-dropdown";
-    import { plugin, confirmDialog } from "../../../shared/utils";
     import { post } from "../../../shared/api-client/request";
     import { constructCommandStorage } from "../../command/instantiate-storage";
     import { isDataDbsInstantiated, createSupertagProjectionDatabase } from "../../command/data-db-management";
+    import ConditionalTriggerDialog from "../../command/av-interaction/dialogs/ConditionalTriggerDialog.svelte";
+    import { getSqliteEngine } from "../../sqlite/sqlite-manager";
+    import { getTypeAvId, getTypeDocId } from "../../command/registration";
+    import { refreshSupertagRegistry } from "../../command/utils/sync-service";
 
     export let dialog: any;
     export let supertagManager: any = null;
 
     let loading = true;
-    let activeTab: "data" | "command" = "data";
-
-    interface TagGroup {
-        typeName: string;
-        dataConfigs: TypeConfig[];
-        logicConfigs: SupertagCommand[];
-        selectedAvId: string;
-        selectedTemplateAvId?: string;
-    }
-
-    let dataComponents: TagGroup[] = [];
-    let commandComponents: TagGroup[] = [];
+    let searchQuery = "";
+    let supertagList: UnifiedSupertagDefinition[] = [];
     let allTemplateOptions: Array<{ avId: string; name: string }> = [];
 
     function locateAv(avId: string) {
@@ -64,74 +50,17 @@
 
     async function loadData() {
         loading = true;
-        const scannedData = await getGlobalTypeConfigs();
-        const logicData = SUPERTAG_REGISTRY;
-
-        const allTagNames = new Set([
-            ...scannedData.map((d) => d.typeName.toLowerCase()),
-            ...logicData.map((l) => l.typeTag.toLowerCase()),
-        ]);
-
-        const dataMap = new Map<string, TypeConfig[]>();
-        scannedData.forEach((d) => {
-            const name = d.typeName.toLowerCase();
-            if (!dataMap.has(name)) dataMap.set(name, []);
-            dataMap.get(name)!.push(d);
-        });
-
-        const logicMap = new Map<string, SupertagCommand[]>();
-        logicData.forEach((l) => {
-            const name = l.typeTag.toLowerCase();
-            if (!logicMap.has(name)) logicMap.set(name, []);
-            logicMap.get(name)!.push(l);
-        });
-
-        const tempDataComp: TagGroup[] = [];
-        const tempCmdComp: TagGroup[] = [];
-
-        allTagNames.forEach((name) => {
-            const hasData = dataMap.has(name);
-            const hasLogic = logicMap.has(name);
-            const pref = supertagBinder.getPref(name);
-            const validPref = (pref && pref !== "enabled" && pref !== "disabled") ? pref : "";
-
-            const group: TagGroup = {
-                typeName: name,
-                dataConfigs: dataMap.get(name) || [],
-                logicConfigs: logicMap.get(name) || [],
-                selectedAvId: validPref || dataMap.get(name)?.[0]?.avId || "",
-            };
-
-            if (hasLogic) {
-                tempCmdComp.push(group);
-            } else if (hasData) {
-                // 仅当非命令 tag 时，才展示在数据 tag 列表中，避免重复显示
-                tempDataComp.push(group);
-            }
-        });
-
-        const sorter = (a: TagGroup, b: TagGroup) => {
-            const isBuiltinA = BUILTIN_SUPERTAGS.has(a.typeName.toLowerCase());
-            const isBuiltinB = BUILTIN_SUPERTAGS.has(b.typeName.toLowerCase());
-            if (isBuiltinA && !isBuiltinB) return -1;
-            if (!isBuiltinA && isBuiltinB) return 1;
-            return a.typeName.localeCompare(b.typeName);
-        };
-        commandComponents = tempCmdComp.sort(sorter);
-        dataComponents = tempDataComp.sort(sorter);
+        supertagList = await getUnifiedSupertagList();
 
         const uniqueDbs = new Map<string, string>();
-        scannedData.forEach((d) => {
-            if (d.avId && !uniqueDbs.has(d.avId)) {
-                uniqueDbs.set(d.avId, d.displayName || d.avName || d.typeName || ("DB: " + d.avId.substring(0, 6)));
+        for (const item of supertagList) {
+            for (const d of item.dataConfigs) {
+                if (d.avId && !uniqueDbs.has(d.avId)) {
+                    uniqueDbs.set(d.avId, d.displayName || d.avName || d.typeName || ("DB: " + d.avId.substring(0, 6)));
+                }
             }
-        });
+        }
         allTemplateOptions = Array.from(uniqueDbs.entries()).map(([avId, name]) => ({ avId, name }));
-
-        await enrichDuplicateDbNames([...dataComponents, ...commandComponents]);
-        dataComponents = [...dataComponents];
-        commandComponents = [...commandComponents];
-
         loading = false;
     }
 
@@ -148,74 +77,18 @@
         };
     });
 
-    async function enrichDuplicateDbNames(groups: TagGroup[]) {
-        for (const g of groups) {
-            if (!g.dataConfigs || g.dataConfigs.length <= 1) continue;
-
-            const blockIds = g.dataConfigs.map(c => c.blockId || c.avId).filter(Boolean);
-            if (blockIds.length === 0) continue;
-
-            try {
-                const stmt = `SELECT b.id, d.content as doc_title, d.hpath, b.created, b.updated FROM blocks b LEFT JOIN blocks d ON b.root_id = d.id WHERE b.id IN ('${blockIds.join("','")}')`;
-                const res = await post("/api/query/sql", { stmt });
-                const rows = (res && Array.isArray(res)) ? res : (res?.data || []);
-
-                const infoMap = new Map<string, { docTitle: string; created: string }>();
-                if (Array.isArray(rows)) {
-                    rows.forEach((r: any) => {
-                        let title = r.doc_title || "";
-                        if (!title && r.hpath) {
-                            const parts = r.hpath.split("/").filter(Boolean);
-                            title = parts[parts.length - 1] || "";
-                        }
-                        if (!title) title = "未命名页";
-                        infoMap.set(r.id, { docTitle: title, created: r.created || "" });
-                    });
-                }
-
-                // 1. 统计当前组内每个 docTitle 出现的频次
-                const docCountMap = new Map<string, number>();
-                g.dataConfigs.forEach(cfg => {
-                    const info = infoMap.get(cfg.blockId || cfg.avId);
-                    const docTitle = info ? info.docTitle : (cfg.avName || "未知页");
-                    docCountMap.set(docTitle, (docCountMap.get(docTitle) || 0) + 1);
-                });
-
-                // 2. 按组内出现顺序生成 displayName
-                const docIndexMap = new Map<string, number>();
-                g.dataConfigs.forEach(cfg => {
-                    const info = infoMap.get(cfg.blockId || cfg.avId);
-                    const docTitle = info ? info.docTitle : (cfg.avName || "未知页");
-                    const count = docCountMap.get(docTitle) || 1;
-
-                    if (count > 1) {
-                        // 同一页面有多个重名数据库：加上 .1, .2 后缀
-                        const currentIndex = (docIndexMap.get(docTitle) || 0) + 1;
-                        docIndexMap.set(docTitle, currentIndex);
-                        (cfg as any).displayName = `${docTitle}.${currentIndex}`;
-                    } else {
-                        // 不同页面：直接显示页面名称
-                        (cfg as any).displayName = docTitle;
-                    }
-                });
-            } catch (e) {
-                console.error("Failed to enrich duplicate db names:", e);
-            }
-        }
-    }
-
     async function handlePrefChange(typeName: string, avId: string) {
         if (avId && avId !== "enabled" && avId !== "disabled") {
-            supertagBinder.setPref(typeName, avId);
+            await supertagBinder.setPref(typeName, avId);
+            await loadData();
         }
     }
 
-    async function handleToggleEnable(group: TagGroup, checked: boolean) {
+    async function handleToggleEnable(group: UnifiedSupertagDefinition, checked: boolean) {
         try {
-            supertagBinder.setPref(group.typeName, checked ? "enabled" : "disabled");
-            
-            commandComponents = [...commandComponents];
-            dataComponents = [...dataComponents];
+            await supertagBinder.setPref(group.typeName, checked ? "enabled" : "disabled");
+            group.enabled = checked;
+            supertagList = [...supertagList];
 
             showMessage(checked ? `✓ 超级标签 #${group.typeName} 推荐已启用` : `✗ 超级标签 #${group.typeName} 推荐已禁用`);
         } catch (e: any) {
@@ -225,22 +98,21 @@
     }
 
     /** 开启与关闭合一：一键开关 */
-    function handleToggleAllSmart() {
+    async function handleToggleAllSmart() {
         try {
-            const targetList = activeTab === "data" ? dataComponents : commandComponents;
-            const allEnabled = targetList.every((group) => supertagBinder.getPref(group.typeName) !== "disabled");
+            const allEnabled = filteredList.every((group) => group.enabled);
             const targetState = !allEnabled;
 
-            targetList.forEach((group) => {
-                supertagBinder.setPref(group.typeName, targetState ? "enabled" : "disabled");
-            });
+            for (const group of filteredList) {
+                await supertagBinder.setPref(group.typeName, targetState ? "enabled" : "disabled");
+                group.enabled = targetState;
+            }
 
-            commandComponents = [...commandComponents];
-            dataComponents = [...dataComponents];
+            supertagList = [...supertagList];
 
             const msg = targetState
-                ? (i18n.supertagManager?.allEnabledMsg || "✓ 已一键开启当前分类下所有 Tag 推荐")
-                : (i18n.supertagManager?.allDisabledMsg || "✗ 已一键关闭当前分类下所有 Tag 推荐");
+                ? (i18n.supertagManager?.allEnabledMsg || "✓ 已一键开启所有 Supertag 推荐")
+                : (i18n.supertagManager?.allDisabledMsg || "✗ 已一键关闭所有 Supertag 推荐");
             showMessage(msg);
         } catch (e: any) {
             console.error("Failed to smart toggle all supertags:", e);
@@ -248,7 +120,7 @@
         }
     }
 
-    async function handleCreateDb(group: TagGroup, templateAvId?: string) {
+    async function handleCreateDb(group: UnifiedSupertagDefinition, templateAvId?: string) {
         try {
             const isInstantiated = await isDataDbsInstantiated();
             if (!isInstantiated) {
@@ -279,7 +151,7 @@
         }
     }
 
-    async function executeCreateSupertagDb(group: TagGroup, templateAvId?: string) {
+    async function executeCreateSupertagDb(group: UnifiedSupertagDefinition, templateAvId?: string) {
         const rootTag = group.typeName.split(/[\.\/]/)[0].toLowerCase();
         showMessage(`⏳ 正在为 #${group.typeName} 派生生成 supertag-${rootTag} 专属库...`, 4000);
         try {
@@ -294,46 +166,95 @@
         }
     }
 
-    $: currentList = activeTab === "data" ? dataComponents : commandComponents;
+    async function openTriggerConfig(group: UnifiedSupertagDefinition) {
+        try {
+            const supertagLabel = group.typeName;
+            const currentScript = group.conditionalScript || "";
+
+            const triggerDialog = new Dialog({
+                title: `⚡ 配置 Supertag #${supertagLabel} 自动化触发与虚拟按钮`,
+                content: `<div id="conditional-config-container" style="height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;"></div>`,
+                width: "820px",
+                height: "720px"
+            });
+            triggerDialog.element.classList.add("indexos-dialog");
+
+            new ConditionalTriggerDialog({
+                target: triggerDialog.element.querySelector("#conditional-config-container")!,
+                props: {
+                    dialog: triggerDialog,
+                    supertag: supertagLabel,
+                    currentValue: currentScript,
+                    onSave: async (updatedVal: string) => {
+                        try {
+                            const { db } = await getSqliteEngine();
+                            const typeAvId = getTypeAvId();
+                            if (typeAvId) {
+                                db.run(`UPDATE "supertag-db" SET "conditional_script" = ?, _updated = ? WHERE LOWER(type_tag) = ?;`, [updatedVal, Date.now(), supertagLabel.toLowerCase()]);
+                            }
+                            await refreshSupertagRegistry();
+                            await loadData();
+                            showMessage(`✓ 已更新 Supertag #${supertagLabel} 的自动化触发配置 ⚡`);
+                        } catch (err: any) {
+                            console.error("Save trigger config failed:", err);
+                            showMessage(`保存规则失败: ${err.message || err}`, 3000, "error");
+                        }
+                    }
+                }
+            });
+        } catch (e: any) {
+            console.error("Open Trigger Dialog error:", e);
+            showMessage(`打开触发器设置失败: ${e.message || e}`, 3000, "error");
+        }
+    }
+
+    $: filteredList = supertagList.filter(item => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase().trim();
+        return item.typeName.toLowerCase().includes(q);
+    });
+
+    $: totalDataCount = supertagList.filter(s => s.hasDataSchema).length;
+    $: totalBehaviorCount = supertagList.filter(s => s.hasBehavior).length;
 </script>
 
 <div
     class="fn__flex-1 fn__flex-column indexos-management-panel"
     style="height: 100%; display: flex; flex-direction: column;"
 >
-    <!-- Tabs Header -->
+    <!-- Unified Header Bar -->
     <div
         class="indexos-tab-bar layout-tab-bar fn__flex"
-        style="flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--indexos-border-subtle); align-items: center; justify-content: space-between; background: var(--indexos-bg-base) !important;"
+        style="flex-shrink: 0; padding: 10px 16px; border-bottom: 1px solid var(--indexos-border-subtle); align-items: center; justify-content: space-between; background: var(--indexos-bg-base) !important; gap: 12px;"
     >
-        <div class="fn__flex">
-            <div
-                class="item {activeTab === 'data' ? 'item--focus' : ''}"
-                role="tab"
-                tabindex="0"
-                on:click={() => (activeTab = "data")}
-                on:keydown={(e) => e.key === 'Enter' && (activeTab = "data")}
-            >
-                <span class="item__text">{i18n.supertagManager.tabData}</span>
-                <span
-                    class="b3-chip b3-chip--small"
-                    style="margin-left: 4px; opacity: 0.6;"
-                    >{dataComponents.length}</span
-                >
+        <div class="fn__flex" style="align-items: center; gap: 10px;">
+            <div class="fn__flex" style="align-items: center; gap: 6px;">
+                <svg style="width: 16px; height: 16px; color: var(--indexos-accent-primary);"><use xlink:href="#iconTags"></use></svg>
+                <span style="font-weight: 600; font-size: 14px; color: var(--indexos-text-main);">超级标签工作台</span>
             </div>
-            <div
-                class="item {activeTab === 'command' ? 'item--focus' : ''}"
-                role="tab"
-                tabindex="0"
-                on:click={() => (activeTab = "command")}
-                on:keydown={(e) => e.key === 'Enter' && (activeTab = "command")}
-            >
-                <span class="item__text">{i18n.supertagManager.tabCommand}</span>
-                <span
-                    class="b3-chip b3-chip--small"
-                    style="margin-left: 4px; opacity: 0.6;"
-                    >{commandComponents.length}</span
-                >
+            <div class="fn__flex" style="align-items: center; gap: 6px;">
+                <span class="b3-chip b3-chip--small" style="font-size: 11px; opacity: 0.8;" title="系统中登记的 Supertag 总数">
+                    共 {supertagList.length} 个
+                </span>
+                <span class="b3-chip b3-chip--small" style="font-size: 11px; opacity: 0.8;" title="已绑定数据库的标签数">
+                    📊 {totalDataCount} 数据库
+                </span>
+                <span class="b3-chip b3-chip--small" style="font-size: 11px; opacity: 0.8;" title="已配置自动化/虚拟按钮的标签数">
+                    ⚡ {totalBehaviorCount} 自动化
+                </span>
+            </div>
+        </div>
+
+        <div class="fn__flex" style="align-items: center; gap: 8px;">
+            <!-- 搜索框 -->
+            <div class="b3-form__icon" style="width: 200px;">
+                <input
+                    class="b3-text-field b3-text-field--small fn__flex-1"
+                    style="padding-left: 26px; height: 26px; font-size: 12px;"
+                    placeholder="搜索超级标签..."
+                    bind:value={searchQuery}
+                />
+                <svg class="b3-form__icon-icon" style="width: 12px; height: 12px; left: 8px;"><use xlink:href="#iconSearch"></use></svg>
             </div>
         </div>
     </div>
@@ -350,7 +271,7 @@
                     >
                 </span>
             </div>
-        {:else if currentList.length === 0}
+        {:else if filteredList.length === 0}
             <div
                 class="fn__flex-column fn__flex-center"
                 style="height: 200px; color: var(--b3-theme-on-surface-light);"
@@ -359,14 +280,8 @@
                     style="width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.5;"
                     ><use xlink:href="#iconTags"></use></svg
                 >
-                <p>{i18n.supertagManager.noContent}</p>
-                <p style="font-size: 0.9em; opacity: 0.6;">
-                    {#if activeTab === "data"}
-                        {i18n.supertagManager.noContentData}
-                    {:else}
-                        {i18n.supertagManager.noContentCommand}
-                    {/if}
-                </p>
+                <p>未找到匹配的超级标签</p>
+                <p style="font-size: 0.9em; opacity: 0.6;">可通过在思源块中输入 @标签名 实时创建并绑定</p>
             </div>
         {:else}
             <div class="tag-list-container b3-list b3-list--background" style="display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0;">
@@ -377,80 +292,91 @@
                 >
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.6; flex: 2; align-items: center;"
+                        style="font-weight: bold; opacity: 0.7; flex: 2.2; align-items: center;"
                     >
-                        <span>{i18n.supertagManager.colTag}</span>
+                        <span>超级标签 (Tag)</span>
                     </div>
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.6; flex: 4.5; align-items: center;"
+                        style="font-weight: bold; opacity: 0.7; flex: 4.2; align-items: center;"
                     >
-                        <span>{i18n.supertagManager.colBinding}</span>
+                        <span>数据能力 (Data Schema)</span>
                     </div>
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.8; flex: 1.5; justify-content: flex-end; align-items: center; gap: 6px;"
+                        style="font-weight: bold; opacity: 0.7; flex: 2.6; align-items: center;"
                     >
-                        <span style="opacity: 0.6; font-size: 11px;">{i18n.supertagManager.colStatus || "启用"}</span>
+                        <span>自动化行为 (Actions & Triggers)</span>
+                    </div>
+                    <div
+                        class="b3-list-item__text fn__flex"
+                        style="font-weight: bold; opacity: 0.8; flex: 1.0; justify-content: flex-end; align-items: center; gap: 6px;"
+                    >
                         <button
                             class="indexos-btn-bordered"
-                            title="一键切换当前分类下所有 Tag 的推荐状态"
+                            title="一键切换所有 Supertag 的推荐状态"
                             on:click={handleToggleAllSmart}
                         >
                             <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconRefresh"></use></svg>
-                            <span>{i18n.supertagManager.toggleAll || "一键开关"}</span>
+                            <span>一键开关</span>
                         </button>
                     </div>
                 </div>
 
-                {#each currentList as group}
-                    {@const isLogic = group.logicConfigs.length > 0}
-                    {@const isEnabled = supertagBinder.getPref(group.typeName) !== "disabled"}
-                    <div class="b3-list-item" style="display: flex; align-items: center; padding: 10px 16px; min-height: 48px; box-sizing: border-box; flex-shrink: 0;">
-                        <!-- Tag Name Column -->
+                {#each filteredList as group}
+                    <div
+                        class="b3-list-item {group.hasDataSchema || group.hasBehavior ? 'supertag-row--ready' : 'supertag-row--pending'}"
+                        style="display: flex; align-items: center; padding: 10px 16px; min-height: 52px; box-sizing: border-box; flex-shrink: 0; {group.hasDataSchema || group.hasBehavior ? '' : 'opacity: 0.72;'}"
+                    >
+                        <!-- Tag Column (2.2 flex) -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 2; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
+                            style="flex: 2.2; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
                         >
                             <svg
                                 class="b3-list-item__graphic"
-                                style="color: var(--indexos-accent-primary); width: 14px; height: 14px; flex-shrink: 0; margin: 0;"
+                                style="color: {group.hasDataSchema || group.hasBehavior ? 'var(--indexos-accent-primary)' : 'var(--indexos-text-muted)'}; width: 14px; height: 14px; flex-shrink: 0; margin: 0;"
                                 ><use xlink:href="#iconTags"></use></svg
                             >
-                            <span style="font-weight: 600; font-family: ui-monospace, monospace; line-height: 1.2; word-break: break-all; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; color: var(--indexos-text-main);">{group.typeName}</span>
+                            <span style="font-weight: 600; font-family: ui-monospace, monospace; line-height: 1.2; word-break: break-all; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; color: var(--indexos-text-main); font-size: 13px;">#{group.typeName}</span>
                             
-                            <!-- 不可操作的标签标志：品牌浅色 Dot 样式 -->
-                            {#if BUILTIN_SUPERTAGS.has(group.typeName.toLowerCase())}
+                            {#if group.isBuiltin}
                                 <span
                                     class="indexos-tag-badge indexos-tag-badge--builtin"
                                     style="flex-shrink: 0; color: var(--indexos-text-muted) !important;"
-                                    title={i18n.supertagManager.builtinTooltip}
+                                    title="系统内置 Supertag 原型"
                                 >
-                                    <span class="badge-dot" style="background-color: var(--indexos-index-blue) !important;"></span>{i18n.supertagManager.builtinTag}
+                                    <span class="badge-dot" style="background-color: var(--indexos-index-blue) !important;"></span>内置
+                                </span>
+                            {:else if !group.hasDataSchema && !group.hasBehavior}
+                                <span
+                                    class="indexos-tag-badge"
+                                    style="flex-shrink: 0; font-size: 10px; opacity: 0.7; background: var(--indexos-bg-container); border: 1px dashed var(--indexos-border-light);"
+                                    title="尚未创建专属数据库 (打标时将自动创建)"
+                                >
+                                    未建库
                                 </span>
                             {/if}
                         </div>
 
-                        <!-- Details Column -->
+                        <!-- Data Schema Column (4.2 flex) -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 4.5; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
+                            style="flex: 4.2; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
                         >
                             {#if group.dataConfigs.length > 0}
                                 <div
                                     class="fn__flex"
-                                    style="align-items: center; gap: 8px; width: 100%;"
+                                    style="align-items: center; gap: 6px; width: 100%;"
                                 >
                                     <svg
-                                        style="width: 12px; height: 12px; opacity: 0.5; color: var(--indexos-accent-primary); flex-shrink: 0;"
-                                        ><use xlink:href="#iconDatabase"
-                                        ></use></svg
+                                        style="width: 12px; height: 12px; opacity: 0.6; color: var(--indexos-accent-primary); flex-shrink: 0;"
+                                        ><use xlink:href="#iconDatabase"></use></svg
                                     >
                                     {#if group.dataConfigs.length > 1}
-                                        <!-- 重名数据库显示所在页面和块序号，如 测试页面.12 -->
                                         <button
                                             class="b3-select fn__flex"
-                                            style="align-items: center; justify-content: space-between; min-width: 130px; max-width: 220px; height: 26px; font-size: 11px; padding: 2px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer; transition: all 0.2s ease;"
+                                            style="align-items: center; justify-content: space-between; min-width: 120px; max-width: 180px; height: 26px; font-size: 11px; padding: 2px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer;"
                                             on:click={(e) => openIndexDropdown({
                                                 event: e,
                                                 options: group.dataConfigs.map(c => ({
@@ -461,60 +387,46 @@
                                                 onSelect: (val) => {
                                                     group.selectedAvId = val;
                                                     handlePrefChange(group.typeName, val);
-                                                    dataComponents = [...dataComponents];
-                                                    commandComponents = [...commandComponents];
                                                 }
                                             })}
                                         >
                                             <span style="font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                                 {group.dataConfigs.find(c => c.avId === group.selectedAvId)?.displayName || group.dataConfigs.find(c => c.avId === group.selectedAvId)?.avName || ("DB: " + group.selectedAvId.substring(0, 6))}
                                             </span>
-                                            <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.6; flex-shrink: 0; margin-left: 6px; fill: currentColor;"><use xlink:href="#iconDown"></use></svg>
+                                            <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.6; flex-shrink: 0; margin-left: 4px; fill: currentColor;"><use xlink:href="#iconDown"></use></svg>
                                         </button>
-
-                                        <!-- 不可操作的重名标记：品牌特质 Dot 样式 (非橘黄色) -->
-                                        <span class="indexos-tag-badge indexos-tag-badge--duplicate" style="flex-shrink: 0; color: var(--indexos-text-muted) !important;">
-                                            <span class="badge-dot" style="background-color: var(--indexos-index-blue) !important;"></span>{i18n.supertagManager.duplicateName}
+                                        <span class="indexos-tag-badge indexos-tag-badge--duplicate" style="flex-shrink: 0; font-size: 10px;">
+                                            多库
                                         </span>
                                     {:else}
                                         <span
-                                            style="font-size: 12px; opacity: 0.9; font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
-                                            >{group.dataConfigs[0].displayName || group.dataConfigs[0].avName ||
-                                                "DB: " +
-                                                    group.dataConfigs[0].avId.substring(
-                                                        0,
-                                                        8,
-                                                    )}</span
+                                            style="font-size: 12px; opacity: 0.9; font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;"
+                                            >{group.dataConfigs[0].displayName || group.dataConfigs[0].avName || ("DB: " + group.dataConfigs[0].avId.substring(0, 8))}</span
                                         >
                                     {/if}
 
-                                    <!-- 可点击框体按钮：定位 -->
+                                    <!-- 定位按钮 -->
                                     <button
                                         class="indexos-btn-bordered"
                                         style="font-size: 11px; padding: 2px 6px; flex-shrink: 0;"
-                                        title={i18n.supertagManager.locateTitle}
+                                        title="在编辑器中定位打开该数据库"
                                         on:click={() => locateAv(group.selectedAvId || group.dataConfigs[0]?.avId)}
                                     >
                                         <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconFocus"></use></svg>
-                                        <span>{i18n.supertagManager.locate}</span>
+                                        <span>定位</span>
                                     </button>
 
-                                    <!-- 可点击框体按钮：数据库设置 ⚙️ -->
+                                    <!-- 数据库设置按钮 ⚙️ -->
                                     <button
                                         class="indexos-btn-bordered"
                                         style="font-size: 11px; padding: 2px 6px; flex-shrink: 0;"
-                                        title="配置数据库设置"
+                                        title="配置字段列映射与继承规则"
                                         on:click={() => {
                                             const curConfig = group.dataConfigs.find(c => c.avId === (group.selectedAvId || group.dataConfigs[0]?.avId)) || group.dataConfigs[0];
-                                            console.log("[IndexOS-Supertag-Debug] ⚙️ Clicked for tag group:", group.typeName, "curConfig:", curConfig);
-                                            if (curConfig && curConfig.avId && curConfig.blockId) {
-                                                openDbConfigDialog(curConfig.avId, curConfig.blockId);
-                                            } else if (curConfig) {
+                                            if (curConfig) {
                                                 const targetAvId = curConfig.avId || curConfig.blockId;
                                                 const targetBlockId = curConfig.blockId || curConfig.avId;
                                                 openDbConfigDialog(targetAvId, targetBlockId);
-                                            } else {
-                                                console.error("[IndexOS-Supertag-Debug] Cannot open DB settings: curConfig is undefined");
                                             }
                                         }}
                                     >
@@ -528,8 +440,8 @@
                                     {#if allTemplateOptions.length > 0}
                                         <button
                                             class="b3-select fn__flex"
-                                            style="align-items: center; justify-content: space-between; min-width: 110px; max-width: 180px; height: 26px; font-size: 11px; padding: 2px 8px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer;"
-                                            title="选择用于复制字段结构的模板数据库（可选）"
+                                            style="align-items: center; justify-content: space-between; min-width: 100px; max-width: 140px; height: 26px; font-size: 11px; padding: 2px 6px; border: 1px solid var(--indexos-border-light); background: var(--indexos-bg-container); border-radius: 3px; cursor: pointer;"
+                                            title="选择模板数据库克隆字段结构 (打标时将自动克隆)"
                                             on:click={(e) => openIndexDropdown({
                                                 event: e,
                                                 options: [
@@ -537,42 +449,83 @@
                                                     ...allTemplateOptions.map(t => ({ value: t.avId, label: "模板: " + t.name }))
                                                 ],
                                                 selectedValue: group.selectedTemplateAvId || "",
-                                                onSelect: (val) => {
+                                                onSelect: async (val) => {
                                                     group.selectedTemplateAvId = val;
-                                                    dataComponents = [...dataComponents];
-                                                    commandComponents = [...commandComponents];
+                                                    await supertagBinder.setTemplatePref(group.typeName, val);
+                                                    supertagList = [...supertagList];
+                                                    showMessage(val ? `✓ 已预设克隆模板，打标 #${group.typeName} 时将自动按模板建库` : `已重置为默认空白表`);
                                                 }
                                             })}
                                         >
                                             <span style="font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                                {group.selectedTemplateAvId ? ("模板: " + (allTemplateOptions.find(t => t.avId === group.selectedTemplateAvId)?.name || group.selectedTemplateAvId.substring(0, 6))) : "-- 选择模板库 --"}
+                                                {group.selectedTemplateAvId ? ("模板: " + (allTemplateOptions.find(t => t.avId === group.selectedTemplateAvId)?.name || group.selectedTemplateAvId.substring(0, 6))) : "-- 预设模板库 --"}
                                             </span>
-                                            <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.6; flex-shrink: 0; margin-left: 4px; fill: currentColor;"><use xlink:href="#iconDown"></use></svg>
+                                            <svg class="dropdown-arrow" style="width: 9px; height: 9px; opacity: 0.6; flex-shrink: 0; margin-left: 4px; fill: currentColor;"><use xlink:href="#iconDown"></use></svg>
                                         </button>
                                     {/if}
 
                                     <button
                                         class="indexos-btn-bordered"
                                         style="font-size: 11px; padding: 2px 8px; color: var(--indexos-accent-primary);"
-                                        title={`在 /data-dbs 页面生成 supertag-${rootTag} 专属纯净投影库`}
+                                        title={`在 /data-dbs 页面立即生成 supertag-${rootTag} 专属纯净投影库`}
                                         on:click={() => handleCreateDb(group, group.selectedTemplateAvId)}
                                     >
                                         <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconAdd"></use></svg>
-                                        <span>生成 supertag-{rootTag} 专属库</span>
+                                        <span>生成专属库</span>
                                     </button>
                                 </div>
                             {/if}
                         </div>
 
-                        <!-- Status Column -->
+                        <!-- Behavior & Triggers Column (2.6 flex) -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 1.5; justify-content: flex-end; align-items: center;"
+                            style="flex: 2.6; align-items: center; gap: 6px; overflow: hidden; padding-right: 8px;"
+                        >
+                            {#if group.hasBehavior}
+                                <div class="fn__flex" style="align-items: center; gap: 6px; flex-wrap: wrap;">
+                                    {#if group.rulesCount > 0}
+                                        <span class="b3-chip b3-chip--small" style="font-size: 10px; background: var(--indexos-accent-badge-bg); color: var(--indexos-accent-badge-text); border: 1px solid var(--indexos-border-light);">
+                                            ⚡ {group.rulesCount} 条规则
+                                        </span>
+                                    {/if}
+                                    {#if group.hasVirtualButton}
+                                        <span class="b3-chip b3-chip--small" style="font-size: 10px; background: var(--indexos-bg-container); border: 1px solid var(--indexos-border-light);">
+                                            🔘 悬浮按钮
+                                        </span>
+                                    {/if}
+                                    <button
+                                        class="indexos-btn-bordered"
+                                        style="font-size: 11px; padding: 2px 6px; flex-shrink: 0;"
+                                        title="编辑自动化触发规则与虚拟按钮"
+                                        on:click={() => openTriggerConfig(group)}
+                                    >
+                                        <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconZap"></use></svg>
+                                        <span>规则</span>
+                                    </button>
+                                </div>
+                            {:else}
+                                <button
+                                    class="indexos-btn-bordered"
+                                    style="font-size: 11px; padding: 2px 8px; opacity: 0.8;"
+                                    title="为该标签配置生命周期触发器或虚拟按钮"
+                                    on:click={() => openTriggerConfig(group)}
+                                >
+                                    <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconAdd"></use></svg>
+                                    <span>添加自动化规则</span>
+                                </button>
+                            {/if}
+                        </div>
+
+                        <!-- Status Column (1.0 flex) -->
+                        <div
+                            class="b3-list-item__text fn__flex"
+                            style="flex: 1.0; justify-content: flex-end; align-items: center;"
                         >
                             <input
                                 class="b3-switch"
                                 type="checkbox"
-                                checked={isEnabled}
+                                checked={group.enabled}
                                 on:change={(e) => handleToggleEnable(group, e.currentTarget.checked)}
                             />
                         </div>
@@ -606,33 +559,6 @@
     :global(.indexos-tab-bar) {
         background: var(--indexos-bg-base) !important;
         border-bottom: 1px solid var(--indexos-border-subtle) !important;
-    }
-    :global(.indexos-tab-bar .item) {
-        cursor: pointer;
-        padding: 8px 16px;
-        position: relative;
-        color: var(--indexos-text-muted) !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-    }
-    :global(.indexos-tab-bar .item.item--focus) {
-        color: var(--indexos-accent-primary) !important;
-        font-weight: 600 !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-    }
-    :global(.indexos-tab-bar .item--focus::after) {
-        content: "";
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background-color: var(--indexos-accent-primary) !important;
-        box-shadow: 0 0 8px var(--indexos-accent-glow) !important;
     }
     .b3-dialog__action {
         padding: 8px 16px;

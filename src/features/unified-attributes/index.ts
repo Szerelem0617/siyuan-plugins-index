@@ -16,6 +16,12 @@ export {
 } from "./core/supertag-binder";
 
 export {
+    getUnifiedSupertagList,
+    type UnifiedSupertagDefinition,
+    type SupertagColumnInfo
+} from "./core/supertag-entity";
+
+export {
     getCommandOutputToken,
     getSupertagConditionalScript,
     getSupertagOutputPool,
