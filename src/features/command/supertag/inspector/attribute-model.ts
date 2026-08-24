@@ -10,7 +10,7 @@
  */
 
 import { post } from "../../../../shared/api-client/request";
-import { supertagAVProjector } from "../projection/supertag-av-projector";
+import { supertagAVProjector, getColumnMeta } from "../projection/supertag-av-projector";
 import { getSqliteEngine } from "../../../sqlite/sqlite-manager";
 import { getColIDMap } from "../../../../shared/utils/av-utils";
 import { parseSupertags } from "../core/supertag-diff";
@@ -250,15 +250,19 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
             }
 
             if (matchedTag) {
-                // 独占命名空间属性
-                const schema = KNOWN_SCHEMA_DEFS[subAttrKey] || { label: subAttrKey, type: "text" };
+                // 独占命名空间属性 (支持通过 getColumnMeta 还原中文 Label 与列类型)
+                const meta = getColumnMeta(matchedTag, subAttrKey);
+                const schema = KNOWN_SCHEMA_DEFS[subAttrKey] || {
+                    label: meta?.name || subAttrKey,
+                    type: meta?.type || "text"
+                };
                 const options = buildFieldOptions(subAttrKey, schema, v);
                 const field: SupertagField = {
                     key: subAttrKey,
-                    fullKey: `${matchedTag}.${subAttrKey}`,
+                    fullKey: `${matchedTag}.${meta?.name || subAttrKey}`,
                     rawKey: k,
-                    label: schema.label || subAttrKey,
-                    type: schema.type,
+                    label: meta?.name || schema.label || subAttrKey,
+                    type: meta?.type || schema.type,
                     value: v,
                     options,
                     isScoped: true,

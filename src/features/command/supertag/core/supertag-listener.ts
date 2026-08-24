@@ -340,15 +340,17 @@ export class SupertagMonitor {
             );
 
             let targetConfig: TypeConfig | null = null;
+            const prefAvId = supertagBinder.getPref(cleanTag);
 
-            if (dataMatches.length > 0) {
+            if (prefAvId && prefAvId !== "disabled" && prefAvId !== "enabled") {
+                targetConfig = this.dataRegistry.find(c => c.avId === prefAvId) || {
+                    typeName: cleanTag,
+                    avId: prefAvId,
+                    avName: cleanTag,
+                    typeFieldId: ""
+                };
+            } else if (dataMatches.length > 0) {
                 targetConfig = dataMatches[0];
-                if (dataMatches.length > 1) {
-                    const prefAvId = supertagBinder.getPref(cleanTag);
-                    if (prefAvId) {
-                        targetConfig = dataMatches.find(c => c.avId === prefAvId) || targetConfig;
-                    }
-                }
             }
 
             if (targetConfig) {
@@ -418,6 +420,9 @@ export class SupertagMonitor {
                     globalSupertagsCache.delete(blockId);
                 }
             }
+
+            // 从 Hot-SQLite 内存表中即时移除该块
+            await supertagAVProjector.removeBlockFromVirtualTable(blockId, cleanTag);
 
             console.log(`[Supertag] 🗑️ Processing removed tag #${cleanTag} for block "${blockId}"...`);
             await triggerConditionalCommands(blockId, cleanTag, "tag_removed");

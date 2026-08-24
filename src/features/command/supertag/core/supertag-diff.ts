@@ -12,17 +12,31 @@ export function parseSupertags(raw: any): string[] {
         return raw.map((t: any) => String(t || "").trim()).filter(Boolean);
     }
     if (typeof raw === "string") {
-        const trimmed = raw.trim();
+        let trimmed = raw.trim();
         if (!trimmed) return [];
+        // 解码常见 HTML 转义字符 (&quot;, &#34;, &amp; 等) 与转义引号
+        trimmed = trimmed
+            .replace(/&quot;/g, '"')
+            .replace(/&#34;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/\\"/g, '"');
         try {
             const parsed = JSON.parse(trimmed);
             if (Array.isArray(parsed)) {
                 return parsed.map((t: any) => String(t || "").trim()).filter(Boolean);
             }
         } catch (_) {}
+        // 支持纯数组字符串解析 (如 ["tag1", "tag2"])
+        const arrayMatch = trimmed.match(/^\[(.*)\]$/);
+        if (arrayMatch) {
+            return arrayMatch[1]
+                .split(",")
+                .map(t => t.replace(/["'\s]/g, "").trim())
+                .filter(Boolean);
+        }
         // Fallback for comma separated tags
         const sep = trimmed.includes(",") ? "," : " ";
-        return trimmed.split(sep).map(t => t.trim().replace(/^#/g, "")).filter(Boolean);
+        return trimmed.split(sep).map(t => t.trim().replace(/^#/g, "").replace(/["']/g, "")).filter(Boolean);
     }
     return [];
 }

@@ -23,11 +23,28 @@
 
     let newTagInput = "";
     let isAddingTag = false;
+    let addingTagFieldFor: string | null = null;
+    let newTagFieldKey = "";
     let newCustomKey = "";
     let newCustomVal = "";
     let isAddingCustom = false;
     let saveStatus = "✓ 已自动实时同步";
     let saveStatusTimer: any = null;
+
+    async function handleAddNewTagField(tag: string) {
+        if (!blockId || !newTagFieldKey.trim()) {
+            addingTagFieldFor = null;
+            newTagFieldKey = "";
+            return;
+        }
+        const cleanKey = newTagFieldKey.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+        const attrKey = `custom-${tag}-${cleanKey}`;
+        await updateBlockAttributeValue(blockId, attrKey, "");
+        addingTagFieldFor = null;
+        newTagFieldKey = "";
+        await reloadData();
+        showMessage(`✓ 已为 #${tag} 挂载专属属性: ${cleanKey}`);
+    }
 
     onMount(async () => {
         await reloadData();
@@ -177,7 +194,6 @@
                             placeholder="标签名称"
                             bind:value={newTagInput}
                             on:keydown={e => e.key === 'Enter' && handleAddTag()}
-                            autoFocus
                         />
                         <button class="b3-button b3-button--text" style="font-size: 11px; padding: 0 4px;" on:click={handleAddTag}>✓</button>
                         <button class="b3-button b3-button--text" style="font-size: 11px; padding: 0 4px; opacity: 0.6;" on:click={() => { isAddingTag = false; }}>✕</button>
@@ -299,6 +315,26 @@
                                             </div>
                                         {/each}
                                     {/if}
+                                    <div class="add-tag-field-wrap">
+                                        {#if addingTagFieldFor === group.tag}
+                                            <div class="inline-add-field-box">
+                                                <input
+                                                    type="text"
+                                                    class="b3-text-field"
+                                                    style="font-size: 11px; height: 24px; flex: 1;"
+                                                    placeholder="属性名 (如 cost, priority)"
+                                                    bind:value={newTagFieldKey}
+                                                    on:keydown={e => e.key === 'Enter' && handleAddNewTagField(group.tag)}
+                                                />
+                                                <button class="b3-button b3-button--primary" style="font-size: 11px; padding: 2px 8px;" on:click={() => handleAddNewTagField(group.tag)}>添加</button>
+                                                <button class="b3-button b3-button--text" style="font-size: 11px; padding: 2px 6px; opacity: 0.6;" on:click={() => { addingTagFieldFor = null; }}>✕</button>
+                                            </div>
+                                        {:else}
+                                            <button class="add-tag-field-btn" on:click={() => { addingTagFieldFor = group.tag; newTagFieldKey = ""; }}>
+                                                + 为 #{group.tag} 添加专属属性
+                                            </button>
+                                        {/if}
+                                    </div>
                                 </div>
                             </div>
                         {/each}
@@ -531,15 +567,15 @@
                             <div class="meta-table">
                                 <div class="meta-row">
                                     <span class="meta-k">块 ID (id):</span>
-                                    <span class="meta-v copyable" on:click={() => copyText(data.systemMeta.id, "块 ID 已复制")}>{data.systemMeta.id} 📋</span>
+                                    <button type="button" class="meta-v-btn copyable" title="点击复制" on:click={() => copyText(data.systemMeta.id, "块 ID 已复制")}>{data.systemMeta.id} 📋</button>
                                 </div>
                                 <div class="meta-row">
                                     <span class="meta-k">文档根 ID (root_id):</span>
-                                    <span class="meta-v copyable" on:click={() => copyText(data.systemMeta.rootId, "文档 ID 已复制")}>{data.systemMeta.rootId} 📋</span>
+                                    <button type="button" class="meta-v-btn copyable" title="点击复制" on:click={() => copyText(data.systemMeta.rootId, "文档 ID 已复制")}>{data.systemMeta.rootId} 📋</button>
                                 </div>
                                 <div class="meta-row">
                                     <span class="meta-k">父块 ID (parent_id):</span>
-                                    <span class="meta-v copyable" on:click={() => copyText(data.systemMeta.parentId, "父块 ID 已复制")}>{data.systemMeta.parentId} 📋</span>
+                                    <button type="button" class="meta-v-btn copyable" title="点击复制" on:click={() => copyText(data.systemMeta.parentId, "父块 ID 已复制")}>{data.systemMeta.parentId} 📋</button>
                                 </div>
                                 <div class="meta-row">
                                     <span class="meta-k">块类型 (type):</span>
@@ -956,6 +992,38 @@
         margin-top: 4px;
     }
 
+    .add-tag-field-wrap {
+        margin-top: 4px;
+    }
+
+    .add-tag-field-btn {
+        width: 100%;
+        background: transparent;
+        border: 1px dashed var(--b3-border-color);
+        font-size: 11px;
+        color: var(--b3-theme-on-surface-light);
+        padding: 5px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .add-tag-field-btn:hover {
+        color: var(--indexos-accent-primary, #3B82F6);
+        border-color: var(--indexos-accent-primary, #3B82F6);
+        background: var(--b3-theme-background);
+    }
+
+    .inline-add-field-box {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--b3-theme-background);
+        padding: 6px;
+        border-radius: 6px;
+        border: 1px dashed var(--indexos-accent-primary, #3B82F6);
+    }
+
     .add-custom-form {
         display: flex;
         align-items: center;
@@ -1013,6 +1081,17 @@
     .meta-v {
         font-family: monospace;
         color: var(--b3-theme-on-background);
+    }
+
+    .meta-v-btn {
+        background: transparent;
+        border: none;
+        padding: 0;
+        font-family: monospace;
+        font-size: 11px;
+        color: var(--b3-theme-on-background);
+        cursor: pointer;
+        text-align: left;
     }
 
     .copyable {
