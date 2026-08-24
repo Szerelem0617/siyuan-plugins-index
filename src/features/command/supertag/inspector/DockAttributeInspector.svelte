@@ -318,7 +318,7 @@
 
                                 <div class="group-fields">
                                     {#if group.fields.length === 0}
-                                        <div class="sub-empty-tip">暂无 Schema 定义字段</div>
+                                        <div class="sub-empty-tip">当前标签暂无专属属性字段</div>
                                     {:else}
                                         {#each group.fields as field}
                                             <div class="field-item">

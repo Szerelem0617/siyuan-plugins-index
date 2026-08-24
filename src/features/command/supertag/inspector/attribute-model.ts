@@ -13,6 +13,7 @@ import { post } from "../../../../shared/api-client/request";
 import { supertagAVProjector } from "../projection/supertag-av-projector";
 import { getSqliteEngine } from "../../../sqlite/sqlite-manager";
 import { getColIDMap } from "../../../../shared/utils/av-utils";
+import { parseSupertags } from "../core/supertag-diff";
 
 export interface TypedFieldOption {
     id: string;
@@ -186,10 +187,10 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
     // 3. 解析 Supertag 标签列表
     const tagSet = new Set<string>();
     if (rawAttrs["custom-supertags"]) {
-        rawAttrs["custom-supertags"].split(/[,#\s]+/).map(t => t.trim()).filter(Boolean).forEach(t => tagSet.add(t));
+        parseSupertags(rawAttrs["custom-supertags"]).forEach(t => tagSet.add(t));
     }
     if (rawAttrs["custom-index-tags"]) {
-        rawAttrs["custom-index-tags"].split(/[,#\s]+/).map(t => t.trim()).filter(Boolean).forEach(t => tagSet.add(t));
+        parseSupertags(rawAttrs["custom-index-tags"]).forEach(t => tagSet.add(t));
     }
     const tagMatches = content.match(/#([^#\s]+)#?/g);
     if (tagMatches) {
@@ -295,31 +296,6 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                         value: v
                     });
                     processedKeys.add(k);
-                }
-            }
-        }
-    }
-
-    // 为已知标签（如 #task）自动补全默认 Schema 字段
-    for (const tag of supertags) {
-        const fields = supertagGroupsMap.get(tag) || [];
-        if (tag === "task" || tag === "任务") {
-            const defaults = ["status", "priority", "due"];
-            for (const dKey of defaults) {
-                if (!fields.some(f => f.key === dKey)) {
-                    const schema = KNOWN_SCHEMA_DEFS[dKey];
-                    const options = buildFieldOptions(dKey, schema, "");
-                    fields.push({
-                        key: dKey,
-                        fullKey: `${tag}.${dKey}`,
-                        rawKey: `custom-${tag}.${dKey}`,
-                        label: schema.label,
-                        type: schema.type,
-                        value: "",
-                        options,
-                        isScoped: true,
-                        tag
-                    });
                 }
             }
         }

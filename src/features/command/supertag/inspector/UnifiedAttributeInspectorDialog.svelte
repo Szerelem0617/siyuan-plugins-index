@@ -228,7 +228,7 @@
 
                                 <div class="field-list">
                                     {#if group.fields.length === 0}
-                                        <div class="empty-tip">暂无 Schema 定义字段</div>
+                                        <div class="empty-tip">当前标签暂无专属属性字段</div>
                                     {:else}
                                         {#each group.fields as field}
                                             <div class="field-card">
