@@ -2,6 +2,7 @@
   "insertIndex": "插入目录",
   "insertoutline": "插入大纲",
   "openSqliteStatus": "数据库与命令管理",
+  "openUnifiedInspector": "IndexOS: 统一属性面板",
   "initSystemDB": "将数据存到思源",
   "initSystemDBHint": "进行此操作后，命令和超级标签数据将存储到思源本地，卸载插件后也不会丢失。也可以在数据库中自行修改配置。",
   "initSystemDBMeta": "数据将存储到思源本地，卸载插件不丢失",

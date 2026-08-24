@@ -1,12 +1,11 @@
 import {
-    Dialog, Menu,
-    //  fetchSyncPost,
-    //  openTab
+    Dialog, Menu, showMessage
 } from "siyuan";
 import { insertAction } from "../features/insert-moc/index/action";
 import { insertOutlineAction } from "../features/insert-moc/outline/action";
 import { i18n, isMobile, plugin } from "../shared/utils";
-import SettingsTab from "./components/setting.svelte"
+import { openUnifiedAttributeInspector } from "../features/command/supertag/inspector/inspector-controller";
+import SettingsTab from "./components/setting.svelte";
 
 // //tab类型
 // const TAB_TYPE = "custom_tab";

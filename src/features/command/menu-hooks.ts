@@ -8,6 +8,7 @@ import { dispatchCommand } from "./command-dispatcher";
 import { COMMAND_BINDINGS, SUPERTAG_REGISTRY, getLayer2CommandDisplayName } from "./registration";
 import { getEntryConfigSync, positionCommands, blockMenuEntries, blockTypeOf, type BlockMenuEntry } from "./entry-config";
 import { parseSupertags } from "./supertag/core/supertag-diff";
+import { openUnifiedAttributeInspector } from "./supertag/inspector/inspector-controller";
 
 /** 提取当前块或页面中绑定的所有 Supertag 名称 */
 function extractSupertagsFromBlock(blockEl: HTMLElement | null, protyleEl: HTMLElement | null): string[] {
@@ -166,7 +167,16 @@ function addEntryMenuSection(detail: any, position: "块菜单" | "页面菜单"
     const menu = detail?.menu;
     if (!menu || typeof menu.addItem !== "function") return;
 
-    const blockEl = (detail.blockElements?.[0] || detail.elements?.[0]) as HTMLElement | null;
+    let blockEl = (detail.blockElements?.[0] || detail.elements?.[0]) as HTMLElement | null;
+    
+    // 🌟 列表项层级提权：如果右键或点击的是 NodeParagraph，但处于 NodeListItem 内部，提权为 NodeListItem
+    if (blockEl && blockEl.getAttribute("data-type") === "NodeParagraph") {
+        const parentLi = blockEl.closest('[data-type="NodeListItem"]') as HTMLElement | null;
+        if (parentLi) {
+            blockEl = parentLi;
+        }
+    }
+
     const blockType = blockEl ? blockTypeOf(blockEl.getAttribute("data-type") || "") : null;
     const protyleEl = detail.protyle?.element || detail.protyle || null;
 
@@ -178,6 +188,21 @@ function addEntryMenuSection(detail: any, position: "块菜单" | "页面菜单"
     // 动态注入 Supertag Icon Menu 命令
     const supertagMenuAdded = addSupertagIconMenuItems(menu, blockEl, protyleEl);
     added += supertagMenuAdded;
+
+    // 针对块菜单，注入 IndexOS 统一属性工作台入口
+    if (position === "块菜单" && blockEl) {
+        const blockId = blockEl.getAttribute("data-node-id");
+        if (blockId) {
+            menu.addItem({
+                icon: "iconTags",
+                label: "🏷️ IndexOS: 统一属性面板",
+                click: () => {
+                    openUnifiedAttributeInspector(blockId, detail.protyle);
+                }
+            });
+            added++;
+        }
+    }
 
     if (added > 0) {
         try {

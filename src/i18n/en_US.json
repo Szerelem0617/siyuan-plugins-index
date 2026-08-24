@@ -2,6 +2,7 @@
   "insertIndex": "Insert Index",
   "insertoutline": "Insert Outline",
   "openSqliteStatus": "Database & Command Palette",
+  "openUnifiedInspector": "IndexOS: Unified Attribute Inspector",
   "initSystemDB": "Save Data to SiYuan",
   "initSystemDBHint": "After this operation, command & supertag data will be stored locally in SiYuan and survive plugin uninstall. You can also modify the configuration directly in the databases.",
   "initSystemDBMeta": "Data stored locally in SiYuan, survives uninstall",

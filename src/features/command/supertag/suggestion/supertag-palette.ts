@@ -229,7 +229,13 @@ async function renderList(query: string) {
         matched
     });
 
-    const activeBlock = activeProtyle ? findActiveBlock(activeProtyle) : null;
+    let activeBlock = activeProtyle ? findActiveBlock(activeProtyle) : null;
+    if (activeBlock) {
+        const parentLi = activeBlock.closest('[data-type="NodeListItem"]') as HTMLElement | null;
+        if (parentLi && parentLi !== activeBlock) {
+            activeBlock = parentLi;
+        }
+    }
     const currentBlockType = activeBlock ? getBlockType(activeBlock) : null;
 
     const incompatibleTags = new Set<string>();
@@ -392,8 +398,14 @@ async function applySupertag(tag: string) {
     closePalette();
 
     const protyle = activeProtyle || (window as any).activeProtyleInstance;
-    const blockEl = protyle ? findActiveBlock(protyle) : null;
+    let blockEl = protyle ? findActiveBlock(protyle) : null;
     if (!blockEl) return;
+
+    // 🌟 列表项层级提权：如果当前所在块是 NodeListItem 内部的段落，自动提权将 Supertag 绑定给宿主 NodeListItem
+    const parentLi = blockEl.closest('[data-type="NodeListItem"]') as HTMLElement | null;
+    if (parentLi && parentLi !== blockEl) {
+        blockEl = parentLi;
+    }
 
     const blockId = blockEl.getAttribute("data-node-id")!;
     const raw = blockEl.getAttribute("custom-supertags");
