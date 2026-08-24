@@ -4,9 +4,8 @@
  * Supertag 统一领域实体模型与聚合装配器 (Unified Supertag Entity Model)
  *
  * 核心设计：
- * 消除“数据 Tag”与“命令 Tag”的二元割裂，将 Supertag 建模为单一实体原型 (Entity Archetype)：
- * 1. Data Schema (数据能力)：绑定的思源 AV 数据库、列字段定义、Hot-SQLite 虚拟投影。
- * 2. Behavior (行为能力)：生命周期条件触发器 (tag_created 等)、虚拟悬浮按钮、Icon Menu 项。
+ * 1. Data Schema (数据能力)：100% 纯属性治理，主绑定 AV 数据库（二选一去重：优先专属 supertag- 库，次选外部业务库）。
+ * 2. Commands (命令能力)：生命周期条件触发器 (tag_created 等)、虚拟悬浮按钮、交互命令。
  */
 
 import { getGlobalTypeConfigs } from "../../av/av-setting/db-config";
@@ -33,23 +32,27 @@ export interface UnifiedSupertagDefinition {
     /** 推荐状态是否已开启 (true: 启用; false: 禁用) */
     enabled: boolean;
     
-    /** 是否已就绪 (已建立有效数据表绑定或拥有行为配置) */
+    /** 是否已就绪 (已建立有效数据表绑定或拥有命令配置) */
     isReady: boolean;
     
-    // ─── 数据组件 (Data Component) ───
-    /** 绑定的首选 AV 数据库 ID (如有) */
+    // ─── 数据库组件 (Database Component) ───
+    /** 唯一主绑定的 AV 数据库 ID (二选一去重后) */
     selectedAvId: string;
-    /** 关联的所有 AV 数据库配置 (支持重名/多库) */
+    /** 主绑定的数据库名称 (如 "supertag-task" 或 "读书笔记") */
+    selectedAvName: string;
+    /** 是否为 supertag- 专属投影库 */
+    isDedicatedDb: boolean;
+    /** 是否存在重名数据库警告 */
+    isDuplicateName: boolean;
+    /** 关联的所有 AV 数据库配置 */
     dataConfigs: TypeConfig[];
-    /** 是否已建立有效数据库绑定 */
+    /** 是否已拥有数据库 */
     hasDataSchema: boolean;
-    /** 选中的模板库 ID (用于克隆生成专属库) */
-    selectedTemplateAvId?: string;
 
-    // ─── 行为组件 (Behavior Component) ───
+    // ─── 命令组件 (Commands Component) ───
     /** 关联的命令与交互规则定义集合 */
     logicConfigs: SupertagCommand[];
-    /** 是否拥有行为或触发规则 */
+    /** 是否拥有命令或触发规则 */
     hasBehavior: boolean;
     /** 解析出的有效触发规则数量 */
     rulesCount: number;
@@ -87,19 +90,58 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
         ...Array.from(logicMap.keys())
     ]));
 
+    // 辅助：获取全局所有数据库名称用于重名检测
+    const globalAvNameCounts = new Map<string, number>();
+    try {
+        const sqlRes = await post("/api/query/sql", {
+            stmt: `SELECT content FROM blocks WHERE type = 'av' LIMIT 300;`
+        });
+        const rows = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
+        rows.forEach((r: any) => {
+            const n = (r.content || "").trim();
+            if (n) {
+                globalAvNameCounts.set(n, (globalAvNameCounts.get(n) || 0) + 1);
+            }
+        });
+    } catch (_) {}
+
     const result: UnifiedSupertagDefinition[] = [];
 
     for (const name of allTagNames) {
+        const rootTag = name.split(/[\.\/]/)[0].toLowerCase();
         const dataConfigs = dataMap.get(name) || [];
         const logicConfigs = logicMap.get(name) || [];
         const pref = supertagBinder.getPref(name);
         const validPref = (pref && pref !== "enabled" && pref !== "disabled") ? pref : "";
         const isEnabled = pref !== "disabled";
 
-        const hasDataSchema = dataConfigs.length > 0;
+        // 二选一去重选择主数据库：
+        // 1. 如果存在以 supertag- 开头的专属库，优先作为主库
+        // 2. 否则选择偏好库或第一个关联库
+        let primaryConfig: TypeConfig | null = null;
+        const dedicatedConfig = dataConfigs.find(c => (c.avName || "").toLowerCase().startsWith("supertag-"));
+
+        if (dedicatedConfig) {
+            primaryConfig = dedicatedConfig;
+        } else if (validPref) {
+            primaryConfig = dataConfigs.find(c => c.avId === validPref) || {
+                typeName: name,
+                avId: validPref,
+                avName: `DB ${validPref.slice(0, 6)}`,
+                typeFieldId: ""
+            };
+        } else if (dataConfigs.length > 0) {
+            primaryConfig = dataConfigs[0];
+        }
+
+        const selectedAvId = primaryConfig?.avId || "";
+        const selectedAvName = primaryConfig?.displayName || primaryConfig?.avName || (selectedAvId ? `数据库 ${selectedAvId.slice(0, 6)}` : "");
+        const isDedicatedDb = selectedAvName.toLowerCase().startsWith("supertag-");
+        const isDuplicateName = Boolean(selectedAvName && (globalAvNameCounts.get(selectedAvName) || 0) > 1);
+
+        const hasDataSchema = Boolean(selectedAvId);
         const hasBehavior = logicConfigs.length > 0;
         const isReady = hasDataSchema || hasBehavior;
-        const templatePref = supertagBinder.getTemplatePref(name);
 
         let rulesCount = 0;
         let hasVirtualButton = false;
@@ -126,10 +168,12 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
             isBuiltin: BUILTIN_SUPERTAGS.has(name),
             enabled: isEnabled,
             isReady,
-            selectedAvId: validPref || dataConfigs[0]?.avId || "",
+            selectedAvId,
+            selectedAvName,
+            isDedicatedDb,
+            isDuplicateName,
             dataConfigs,
             hasDataSchema,
-            selectedTemplateAvId: templatePref || "",
             logicConfigs,
             hasBehavior,
             rulesCount,
@@ -138,10 +182,7 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
         });
     }
 
-    // 智能补充重名数据库的文档标题
-    await enrichDuplicateDbNames(result);
-
-    // 排序：已就绪（含库或含行为）置顶 ➔ 未建库/待初始化置灰沉底；组内内置标签排前，其余按字母排序
+    // 排序：已就绪置顶，组内内置标签排前，其余按字母排序
     return result.sort((a, b) => {
         if (a.isReady && !b.isReady) return -1;
         if (!a.isReady && b.isReady) return 1;
@@ -149,59 +190,4 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
         if (!a.isBuiltin && b.isBuiltin) return 1;
         return a.typeName.localeCompare(b.typeName);
     });
-}
-
-/**
- * 为重名数据库补充文档标题 (如 "工作日志.1", "工作日志.2")
- */
-async function enrichDuplicateDbNames(groups: UnifiedSupertagDefinition[]) {
-    for (const g of groups) {
-        if (!g.dataConfigs || g.dataConfigs.length <= 1) continue;
-
-        const blockIds = g.dataConfigs.map(c => c.blockId || c.avId).filter(Boolean);
-        if (blockIds.length === 0) continue;
-
-        try {
-            const stmt = `SELECT b.id, d.content as doc_title, d.hpath, b.created, b.updated FROM blocks b LEFT JOIN blocks d ON b.root_id = d.id WHERE b.id IN ('${blockIds.join("','")}')`;
-            const res = await post("/api/query/sql", { stmt });
-            const rows = (res && Array.isArray(res)) ? res : (res?.data || []);
-
-            const infoMap = new Map<string, { docTitle: string; created: string }>();
-            if (Array.isArray(rows)) {
-                rows.forEach((r: any) => {
-                    let title = r.doc_title || "";
-                    if (!title && r.hpath) {
-                        const parts = r.hpath.split("/").filter(Boolean);
-                        title = parts[parts.length - 1] || "";
-                    }
-                    if (!title) title = "未命名页";
-                    infoMap.set(r.id, { docTitle: title, created: r.created || "" });
-                });
-            }
-
-            const docCountMap = new Map<string, number>();
-            g.dataConfigs.forEach(cfg => {
-                const info = infoMap.get(cfg.blockId || cfg.avId);
-                const docTitle = info ? info.docTitle : (cfg.avName || "未知页");
-                docCountMap.set(docTitle, (docCountMap.get(docTitle) || 0) + 1);
-            });
-
-            const docIndexMap = new Map<string, number>();
-            g.dataConfigs.forEach(cfg => {
-                const info = infoMap.get(cfg.blockId || cfg.avId);
-                const docTitle = info ? info.docTitle : (cfg.avName || "未知页");
-                const count = docCountMap.get(docTitle) || 1;
-
-                if (count > 1) {
-                    const currentIndex = (docIndexMap.get(docTitle) || 0) + 1;
-                    docIndexMap.set(docTitle, currentIndex);
-                    (cfg as any).displayName = `${docTitle}.${currentIndex}`;
-                } else {
-                    (cfg as any).displayName = docTitle;
-                }
-            });
-        } catch (e) {
-            console.error("Failed to enrich duplicate db names:", e);
-        }
-    }
 }
