@@ -12,11 +12,11 @@
 import { post } from "../../../shared/api-client/request";
 import type { CommandContext, DispatchResult } from "../command-dispatcher";
 import { getBlockId } from "../utils/context-extractor";
-import { triggerConditionalCommands } from "../supertag/core/supertag-trigger";
-import { parseSupertags, serializeSupertags } from "../supertag/core/supertag-diff";
+import { triggerConditionalCommands } from "../../unified-attributes/core/supertag-trigger";
+import { parseSupertags, serializeSupertags } from "../../unified-attributes/core/supertag-diff";
 import { globalSupertagsCache } from "../registration";
 
-import { SupertagRenderer } from "../supertag/renderer/SupertagRenderer";
+import { SupertagRenderer } from "../../unified-attributes/renderer/SupertagRenderer";
 
 export async function triggerAddSupertag(
     resolvedParams: Record<string, unknown>,

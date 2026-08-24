@@ -11,7 +11,7 @@
 
 import { post } from "../../../shared/api-client/request";
 import { commandRegistry } from "../registry/command-registry";
-import { getCommandOutputToken } from "../supertag/core/supertag-auto-context";
+import { getCommandOutputToken } from "../../unified-attributes/core/supertag-auto-context";
 import { getBlockId } from "../utils/context-extractor";
 import { evaluateCommandConstraints } from "../utils/constraint-checker";
 import { sanitizeBlockAttrName } from "../utils/attribute-sanitizer";

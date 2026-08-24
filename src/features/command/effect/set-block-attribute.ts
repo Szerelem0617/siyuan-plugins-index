@@ -106,7 +106,7 @@ export async function setBlockAttribute(
     // 内存虚拟投影联动：若该 Supertag 已建立虚拟投影，同步更新内存 SQLite 热表
     if (cleanTag) {
         try {
-            const { supertagAVProjector } = await import("../supertag/projection/supertag-av-projector");
+            const { supertagAVProjector } = await import("../../unified-attributes/projection/supertag-av-projector");
             const { getSqliteEngine } = await import("../../sqlite/sqlite-manager");
             const boundAvId = supertagAVProjector.getBoundAVId(cleanTag);
             if (boundAvId) {

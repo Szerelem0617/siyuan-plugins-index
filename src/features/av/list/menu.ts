@@ -2,22 +2,63 @@ import { focusDatabaseView } from "./focus-db";
 import { createDatabaseWithBlocks } from "./create-db";
 import { ATTR_LINKED_AV } from "../../../shared/constants";
 import { getOutermostList, getBlockAttribute } from "../../../shared/utils/dom-utils";
-import { openDbConfigDialog } from "../av-setting/db-config";
+import { openDbConfigDialog, getGlobalTypeConfigs } from "../av-setting/db-config";
 import { i18n } from "../../../shared/utils";
 import { addPluginMenuItem } from "../../../shared/utils/menu-utils";
 import { showMessage, Dialog } from "siyuan";
-import { supertagAVProjector } from "../../command/supertag/projection/supertag-av-projector";
+import { supertagAVProjector } from "../../unified-attributes/projection/supertag-av-projector";
+import { supertagBinder } from "../../unified-attributes/core/supertag-binder";
 
-function openProjectSupertagPrompt(avId: string, blockId?: string) {
+async function openProjectSupertagPrompt(avId: string, blockId?: string) {
+    let suggestedTag = "";
+    const allKnownTags = new Set<string>();
+
+    try {
+        const configs = await getGlobalTypeConfigs();
+        const matchedConfig = configs.find(c => c.avId === avId);
+        if (matchedConfig) {
+            suggestedTag = (matchedConfig.typeName || matchedConfig.avName || "").replace(/^#/, "").trim();
+        }
+        configs.forEach(c => {
+            if (c.typeName) allKnownTags.add(c.typeName.replace(/^#/, "").trim());
+        });
+    } catch (_) {}
+
+    // 检查 SupertagBinder 偏好
+    if (!suggestedTag) {
+        try {
+            const prefs = (supertagBinder as any).prefs || {};
+            for (const [tag, boundAvId] of Object.entries(prefs)) {
+                if (boundAvId === avId) {
+                    suggestedTag = tag.replace(/^#/, "").trim();
+                    break;
+                }
+            }
+        } catch (_) {}
+    }
+
+    if (!suggestedTag) {
+        suggestedTag = "task";
+    }
+
+    allKnownTags.add(suggestedTag);
+    allKnownTags.add("task");
+    allKnownTags.add("project");
+
+    const datalistOptions = Array.from(allKnownTags).map(t => `<option value="${t}"></option>`).join("");
+
     const dialog = new Dialog({
         title: "🏷️ 投影 Supertag 到此数据库",
         content: `
         <div class="b3-dialog__content" style="padding: 16px;">
             <div style="font-size: 13px; color: var(--b3-theme-on-surface); margin-bottom: 12px; line-height: 1.6;">
-                输入要提取并投影到当前数据库的 Supertag 标签名（例如 <code>task</code> 或 <code>read_note</code>）：
+                输入或选择要提取并投影到当前数据库的 Supertag 标签名（已自动匹配当前数据库对应的标签）：
             </div>
             <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-                <input id="indexos-proj-tag-input" class="b3-text-field fn__flex-1" placeholder="例如: task" value="task" autofocus />
+                <input id="indexos-proj-tag-input" list="indexos-proj-tag-list" class="b3-text-field fn__flex-1" placeholder="例如: ${suggestedTag}" value="${suggestedTag}" autofocus />
+                <datalist id="indexos-proj-tag-list">
+                    ${datalistOptions}
+                </datalist>
             </div>
             <div class="b3-dialog__action" style="display: flex; justify-content: flex-end; gap: 8px;">
                 <button class="b3-button b3-button--cancel" id="indexos-proj-cancel">取消</button>
@@ -34,7 +75,7 @@ function openProjectSupertagPrompt(avId: string, blockId?: string) {
 
     cancelBtn?.addEventListener("click", () => dialog.destroy());
     confirmBtn?.addEventListener("click", async () => {
-        const tagName = (input?.value || "task").trim();
+        const tagName = (input?.value || suggestedTag || "task").trim();
         dialog.destroy();
         showMessage(`⏳ 正在将 #${tagName} 块属性投影到数据库...`, 3000);
         const res = await supertagAVProjector.projectSupertagToAV(tagName, avId, blockId);

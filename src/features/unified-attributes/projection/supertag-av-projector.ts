@@ -16,9 +16,9 @@
  *    开启/关闭/修改投影时，向当前编辑器全域派发原生 refreshAttributeView 消息，就地瞬间重绘。
  */
 
-import { post } from "../../../../shared/api-client/request";
-import { getSqliteEngine } from "../../../sqlite/sqlite-manager";
-import { settings } from "../../../../core/settings";
+import { post } from "../../../shared/api-client/request";
+import { getSqliteEngine } from "../../sqlite/sqlite-manager";
+import { settings } from "../../../core/settings";
 import { showMessage } from "siyuan";
 import { parseSupertags } from "../core/supertag-diff";
 
@@ -655,9 +655,10 @@ export class SupertagAVProjector {
 
             // 5. 组装标准 IAV 数据对象
             const viewId = "view_sql_table";
+            const cleanTagName = (binding.tagName || "").replace(/^#/, "").toLowerCase();
             const tableData = {
                 id: avId,
-                name: `Supertag 投影: #${binding.tagName}`,
+                name: `supertag-${cleanTagName}`,
                 viewID: viewId,
                 viewType: "table",
                 views: [
@@ -734,9 +735,10 @@ export class SupertagAVProjector {
             });
         }
 
+        const cleanTagName = (tagName || "").replace(/^#/, "").toLowerCase();
         return {
             id: avId,
-            name: `Supertag 投影: #${tagName}`,
+            name: `supertag-${cleanTagName}`,
             viewID: viewId,
             viewType: "table",
             views: [{

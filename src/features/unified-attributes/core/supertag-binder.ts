@@ -11,12 +11,13 @@
  *    - 内存 SQLite 虚拟投影表实时更新并刷新视图。
  */
 
-import { post } from "../../../../shared/api-client/request";
-import { getColIDMap } from "../../../../shared/utils/av-utils";
-import { sanitizeBlockAttrName } from "../../utils/attribute-sanitizer";
+import { post } from "../../../shared/api-client/request";
+import { getColIDMap } from "../../../shared/utils/av-utils";
+import { sanitizeBlockAttrName } from "../../command/utils/attribute-sanitizer";
 import { supertagAVProjector, registerColumnMeta } from "../projection/supertag-av-projector";
 import { showMessage } from "siyuan";
-import type { TypeConfig } from "../../../av/av-setting/types";
+import { plugin } from "../../../shared/utils";
+import type { TypeConfig } from "../../av/av-setting/types";
 
 export interface SupertagPrefs {
     [tag: string]: string; // tag -> avId preference
@@ -31,11 +32,11 @@ export class SupertagBinder {
 
     public async loadPrefs() {
         try {
-            const res = await post("/api/file/getFile", {
-                path: "/data/storage/petal/siyuan-plugins-index/supertag-prefs.json"
-            });
-            if (res && typeof res === "object") {
-                this.prefs = res;
+            if (plugin && plugin.loadData) {
+                const res = await plugin.loadData("supertag-prefs.json");
+                if (res && typeof res === "object") {
+                    this.prefs = res;
+                }
             }
         } catch (_) {
             this.prefs = {};
@@ -44,11 +45,9 @@ export class SupertagBinder {
 
     public async savePrefs() {
         try {
-            await post("/api/file/putFile", {
-                path: "/data/storage/petal/siyuan-plugins-index/supertag-prefs.json",
-                isDir: false,
-                file: new Blob([JSON.stringify(this.prefs, null, 2)], { type: "application/json" })
-            });
+            if (plugin && plugin.saveData) {
+                await plugin.saveData("supertag-prefs.json", this.prefs);
+            }
         } catch (e) {
             console.error("[SupertagBinder] Failed to save supertag prefs:", e);
         }
@@ -84,7 +83,7 @@ export class SupertagBinder {
      * 1. 100% 走 custom attr 挂载，不向物理 .av/*.json 写入任何行；
      * 2. 读取该数据库的所有列定义，将属性声明为 custom-<tag>-<col> = "" (blank 空属性语义)；
      *    - 英文列名: custom-<tag>-status
-     *    - 中文/特殊列名: custom-<tag>-k_<keyId> (符合 Go 内核白名单且与原生列绑定)
+     *    - 中文/特殊列名: custom-<tag>-k-<keyId> (符合 Go 内核白名单且与原生列绑定)
      * 3. 内存 SQLite 投影视图即时同步 (0 延迟)。
      */
     public async applySupertag(blockId: string, cleanTag: string, config: TypeConfig) {

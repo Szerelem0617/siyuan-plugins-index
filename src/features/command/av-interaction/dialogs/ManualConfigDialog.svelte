@@ -2,7 +2,7 @@
     import { Dialog, showMessage } from "siyuan";
     import { commandRegistry } from "../../registry/command-registry";
     import { parseManualConfig, serializeManualConfig, type ManualConfig, type ManualCommandEntry, createDefaultManualEntry } from "../../utils/manual-config";
-    import { PRESET_CONDITIONS } from "../../supertag/core/condition-evaluator";
+    import { PRESET_CONDITIONS } from "../../../unified-attributes/core/condition-evaluator";
 
     import { getLayer2Commands } from "../../registration";
 

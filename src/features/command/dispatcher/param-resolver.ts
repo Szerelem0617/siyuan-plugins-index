@@ -6,7 +6,7 @@
  */
 
 import type { CommandDef } from "../registry/command-registry";
-import { getSupertagAutoContextInfo } from "../supertag/core/supertag-auto-context";
+import { getSupertagAutoContextInfo } from "../../unified-attributes/core/supertag-auto-context";
 import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } from "../utils/context-extractor";
 import { renderTemplate, formatDate, formatTime } from "../utils/template-engine";
 import { promptUserModal } from "../utils/prompt-modal";

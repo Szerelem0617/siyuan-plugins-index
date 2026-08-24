@@ -23,8 +23,10 @@ import {
     initSupertagPalette, 
     destroySupertagPalette,
     SupertagRenderer, 
-    initTagMenuInterceptor 
-} from "./features/command/supertag";
+    initTagMenuInterceptor,
+    supertagAVProjector,
+    initDockInspector
+} from "./features/unified-attributes";
 import { refreshEntryRegistrations, destroyEntryRegistrations } from "./features/command/global-registration/entry-registration";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
@@ -42,8 +44,6 @@ import { triggerInsertBlockBelow } from "./features/command/effect/insert-block-
 import { handleOpenTargetCommand } from "./features/command/effect/open-target";
 import { triggerMoveContent } from "./features/command/effect/move-content";
 import { triggerDuplicateContent } from "./features/command/effect/duplicate-content";
-import { supertagAVProjector } from "./features/command/supertag/projection/supertag-av-projector";
-import { initDockInspector } from "./features/command/supertag/inspector/dock-inspector";
 
 export default class IndexPlugin extends Plugin {
     private switchHandler: any;

@@ -5,7 +5,7 @@ import { initSystemTables } from "../indexos/command-sqlite";
 import { getSeedCommandRows, getSeedSupertagRows } from "../indexos/seed-data";
 import { syncCompositesFromCommandDb } from "../composite/manager";
 import { parseManualConfig, type ManualCommandEntry } from "./manual-config";
-import { parseSupertags } from "../supertag/core/supertag-diff";
+import { parseSupertags } from "../../unified-attributes/core/supertag-diff";
 import { 
     isDevInitSysEnabled,
     getCommandAvId,
@@ -484,7 +484,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
 
         // 触发前端编辑器重新渲染 Supertag 与 Virtual Buttons
         try {
-            const { SupertagRenderer } = await import("../supertag/renderer/SupertagRenderer");
+            const { SupertagRenderer } = await import("../../unified-attributes/renderer/SupertagRenderer");
             const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
             const editorEl = activeProtyle?.element || document.querySelector(".protyle-content") || document.body;
             if (editorEl) {

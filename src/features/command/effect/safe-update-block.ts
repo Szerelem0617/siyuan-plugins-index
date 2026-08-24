@@ -1,6 +1,6 @@
 import { post } from "../../../shared/api-client/request";
 import { resolveTemplate, getBlockId, type CommandContext } from "../command-dispatcher";
-import { SupertagRenderer } from "../supertag";
+import { SupertagRenderer } from "../../unified-attributes/renderer/SupertagRenderer";
 import { formatDate } from "../../../shared/utils";
 
 /**
@@ -88,6 +88,13 @@ export async function triggerSafeUpdateBlock(params: Record<string, unknown>, co
             };
         }
     }
+
+    // 1. 获取原块所有属性
+    let oldAttrs: Record<string, string> = {};
+    try {
+        const attrRes = await post("/api/attr/getBlockAttrs", { id });
+        oldAttrs = attrRes?.data || attrRes || {};
+    } catch (_) {}
 
     const preserveAttrs: Record<string, string> = {};
     for (const [key, val] of Object.entries(oldAttrs)) {

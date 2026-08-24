@@ -455,7 +455,7 @@ export async function executeDDL(processedSql: string, db: any, options?: DDLOpt
         await triggerAvBlockRender(avId);
         
         await instantiateAV(avId, true);
-        return { success: true, message: `Table '${tableName}' created successfully with avID '${avId}'.` };
+        return { success: true, message: `Table '${tableName}' created successfully with avID '${avId}'.`, avId, blockId: avBlockId };
     }
 
     // ─── 2. ALTER TABLE Statement ───

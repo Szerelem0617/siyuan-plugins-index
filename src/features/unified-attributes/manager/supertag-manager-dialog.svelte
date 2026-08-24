@@ -1,20 +1,22 @@
 <script lang="ts">
-    import { onMount } from "svelte";
-    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig, openDbConfigDialog } from "../../../av/av-setting/db-config";
-    import { type TypeConfig } from "../../../av/av-setting/types";
-    import { i18n } from "../../../../shared/utils";
+    import { onMount, onDestroy } from "svelte";
+    import { getGlobalTypeConfigs, loadDbConfig, saveDbConfig, openDbConfigDialog } from "../../av/av-setting/db-config";
+    import { type TypeConfig } from "../../av/av-setting/types";
+    import { i18n } from "../../../shared/utils";
     import { supertagMonitor } from "../core/supertag-listener";
     import { supertagBinder } from "../core/supertag-binder";
-    import { showMessage } from "siyuan";
+    import { showMessage, openTab } from "siyuan";
     import {
         SUPERTAG_REGISTRY,
         type SupertagCommand,
-    } from "../../registration";
+    } from "../../command/registration";
 
-    import { BUILTIN_SUPERTAGS } from "../../indexos/seed-data";
-    import { openIndexDropdown } from "../../../../ui/components/index-dropdown";
-    import { openTab } from "siyuan";
-    import { plugin } from "../../../../shared/utils";
+    import { BUILTIN_SUPERTAGS } from "../../command/indexos/seed-data";
+    import { openIndexDropdown } from "../../../ui/components/index-dropdown";
+    import { plugin, confirmDialog } from "../../../shared/utils";
+    import { post } from "../../../shared/api-client/request";
+    import { constructCommandStorage } from "../../command/instantiate-storage";
+    import { isDataDbsInstantiated, createSupertagProjectionDatabase } from "../../command/data-db-management";
 
     export let dialog: any;
     export let supertagManager: any = null;
@@ -32,8 +34,7 @@
 
     let dataComponents: TagGroup[] = [];
     let commandComponents: TagGroup[] = [];
-
-    import { post } from "../../../../shared/api-client/request";
+    let allTemplateOptions: Array<{ avId: string; name: string }> = [];
 
     function locateAv(avId: string) {
         if (!avId) return;
@@ -41,7 +42,7 @@
         post("/api/query/sql", {
             stmt: `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avId}%' OR ial LIKE '%${avId}%') LIMIT 1`
         }).then((res) => {
-            let targetBlockId = (res && res.length > 0) ? res[0].id : (avIdToBlockIdMap.get(avId) || avId);
+            let targetBlockId = (res && res.length > 0) ? res[0].id : avId;
             openTab({
                 app: plugin.app,
                 doc: {
@@ -134,8 +135,6 @@
         loading = false;
     }
 
-    import { onDestroy } from "svelte";
-
     onMount(() => {
         loadData();
         const handleRefresh = () => {
@@ -204,12 +203,6 @@
             }
         }
     }
-
-    import { confirmDialog } from "../../../../shared/utils";
-    import { constructCommandStorage } from "../../instantiate-storage";
-    import { isDataDbsInstantiated, getOrStoreDataDbDoc, createSupertagProjectionDatabase } from "../../data-db-management";
-
-    let allTemplateOptions: Array<{ avId: string; name: string }> = [];
 
     async function handlePrefChange(typeName: string, avId: string) {
         if (avId && avId !== "enabled" && avId !== "disabled") {

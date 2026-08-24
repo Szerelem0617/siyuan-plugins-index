@@ -136,7 +136,7 @@
         typeMappings = newMappings;
     }
 
-    import { supertagMonitor } from "../../command/supertag/core/supertag-listener";
+    import { supertagMonitor } from "../../unified-attributes/core/supertag-listener";
 
     const save = async () => {
         const activeMappings = typeMappings.filter((m) => m.name.trim() !== "");

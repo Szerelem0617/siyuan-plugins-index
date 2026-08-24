@@ -11,7 +11,7 @@
     } from "../../composite/script-dsl";
     import { createCompositeRow, registerCompositeCommand, compositeCommandId } from "../../composite/manager";
     import { refreshSupertagRegistry } from "../../utils/sync-service";
-    import { PRESET_CONDITIONS } from "../../supertag/core/condition-evaluator";
+    import { PRESET_CONDITIONS } from "../../../unified-attributes/core/condition-evaluator";
 
     export let dialog: Dialog;
     export let supertag: string;

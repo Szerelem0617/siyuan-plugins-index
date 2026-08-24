@@ -133,7 +133,7 @@ stateDiagram-v2
 - **调度中枢与执行协议**：`src/features/command/dispatcher/` (`dispatcher-core.ts`, `param-resolver.ts`, `executors.ts`, `context-builder.ts`)
 - **原子执行器**：`src/features/command/effect/` (`visual-effect.ts`, `safe-update-block.ts`, `insert-block-below.ts`, `set-block-attribute.ts`, `add-supertag.ts`, `open-target.ts`, `show-message.ts`)
 - **复合命令编排引擎**：`src/features/command/pipeline/` (`engine.ts`, `manager.ts`, `script-dsl.ts`, `pipeline-step-schema.ts`, `PipelineEditorDialog.svelte`)
-- **超级标签与条件触发**：`src/features/command/supertag/` (`core/`, `renderer/`, `manager/`, `suggestion/`)
+- **统一属性管理与超级标签 (Unified Attributes & Supertags)**：`src/features/unified-attributes/` (`core/`, `projection/`, `inspector/`, `manager/`, `renderer/`, `suggestion/`)
 - **属性视图与配置弹窗**：`src/features/command/av-interaction/` (`command-db-handler.ts`, `type-db-handler.ts`, `dialogs/`)
 - **入口注册与菜单挂载**：`src/features/command/global-registration/` 与 `src/features/command/menu-hooks.ts`
 - **后台调度与通用工具**：`src/features/command/background/` 与 `src/features/command/utils/`

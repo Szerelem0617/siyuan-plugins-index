@@ -7,8 +7,8 @@ import { commandRegistry } from "./registry/command-registry";
 import { dispatchCommand } from "./command-dispatcher";
 import { COMMAND_BINDINGS, SUPERTAG_REGISTRY, getLayer2CommandDisplayName } from "./registration";
 import { getEntryConfigSync, positionCommands, blockMenuEntries, blockTypeOf, type BlockMenuEntry } from "./entry-config";
-import { parseSupertags } from "./supertag/core/supertag-diff";
-import { openUnifiedAttributeInspector } from "./supertag/inspector/inspector-controller";
+import { parseSupertags } from "../unified-attributes/core/supertag-diff";
+import { openUnifiedAttributeInspector } from "../unified-attributes/inspector/inspector-controller";
 
 /** 提取当前块或页面中绑定的所有 Supertag 名称 */
 function extractSupertagsFromBlock(blockEl: HTMLElement | null, protyleEl: HTMLElement | null): string[] {
