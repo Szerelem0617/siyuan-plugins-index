@@ -368,10 +368,18 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
 
         // ④ 从已绑定的 Supertag 关联的 AV 中感知
         for (const tag of supertags) {
-            const boundAvId = supertagAVProjector.getBoundAVId(tag);
-            if (boundAvId) {
-                joinedAvIds.add(boundAvId);
-            }
+            const cleanTag = tag.replace(/^#/, "").trim();
+            const rootTag = cleanTag.split(/[\.\/]/)[0].toLowerCase();
+            try {
+                const projAvId = supertagAVProjector.getBoundAv(cleanTag) || supertagAVProjector.getBoundAv(rootTag);
+                if (projAvId) joinedAvIds.add(projAvId);
+            } catch (_) {}
+            try {
+                const prefAvId = supertagBinder.getPref(cleanTag) || supertagBinder.getPref(rootTag);
+                if (prefAvId && prefAvId !== "disabled" && prefAvId !== "enabled") {
+                    joinedAvIds.add(prefAvId);
+                }
+            } catch (_) {}
         }
 
         // 辅助查询全局所有 AV 名称，用以判定重名
@@ -382,7 +390,7 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
             });
             const avRows = Array.isArray(allAvSql) ? allAvSql : (allAvSql?.data || []);
             avRows.forEach((r: any) => {
-                const n = r.content || "未命名数据库";
+                const n = (r.content || "").trim() || "未命名数据库";
                 avNameCounts.set(n, (avNameCounts.get(n) || 0) + 1);
             });
         } catch (_) {}
@@ -417,14 +425,30 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                     itemId = cleanId;
                 }
 
-                // 获取 AV 名称
-                let avName = `数据库 ${avId.slice(0, 6)}`;
+                // 获取 AV 名称 (优先 API，兜底 SQL 与 ID)
+                let avName = "";
                 try {
                     const avDoc = await post("/api/av/getAttributeView", { id: avId });
                     if (avDoc?.name || avDoc?.av?.name) {
-                        avName = avDoc.name || avDoc.av.name;
+                        avName = (avDoc.name || avDoc.av.name).trim();
                     }
                 } catch (_) {}
+
+                if (!avName) {
+                    try {
+                        const sqlRes = await post("/api/query/sql", {
+                            stmt: `SELECT content FROM blocks WHERE id = '${avId}' OR ial LIKE '%data-av-id="${avId}"%' LIMIT 1;`
+                        });
+                        const rows = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
+                        if (rows.length > 0 && rows[0].content) {
+                            avName = rows[0].content.trim();
+                        }
+                    } catch (_) {}
+                }
+
+                if (!avName) {
+                    avName = `数据库 ${avId.slice(0, 8)}`;
+                }
 
                 const isDuplicateName = (avNameCounts.get(avName) || 0) > 1;
                 const fields: AVDatabaseField[] = [];

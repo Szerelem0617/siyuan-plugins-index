@@ -181,6 +181,10 @@ export class SupertagAVProjector {
         return this.tagToAvMap.get(clean) || this.tagToAvMap.get(root);
     }
 
+    public getBoundAVId(tagName: string): string | undefined {
+        return this.getBoundAv(tagName);
+    }
+
     /**
      * 将单个块的属性实时同步/插入到 SQLite 内存虚拟投影热表中 (0 延迟即时呈现)
      */
