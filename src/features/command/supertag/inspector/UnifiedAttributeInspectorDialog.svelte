@@ -4,9 +4,11 @@
     import {
         loadBlockAttributeData,
         updateBlockAttributeValue,
+        updateAVCellAttributeValue,
         toggleSupertagOnBlock,
         type BlockAttributeData,
-        type TypedField
+        type SupertagField,
+        type AVDatabaseField
     } from "./attribute-model";
     import { supertagAVProjector } from "../projection/supertag-av-projector";
 
@@ -16,7 +18,9 @@
 
     let loading = true;
     let data: BlockAttributeData | null = null;
-    let activeTab: "typed" | "builtin" | "custom" = "typed";
+    let activeTab: "governed" | "base" = "governed";
+    let showSystemMeta = false;
+
     let newTagInput = "";
     let isAddingTag = false;
     let newCustomKey = "";
@@ -33,10 +37,11 @@
         loading = true;
         try {
             data = await loadBlockAttributeData(blockId);
-            if (data.typedFields.length === 0 && data.rawCustomFields.length > 0) {
-                activeTab = "custom";
-            } else if (data.typedFields.length === 0 && data.supertags.length === 0) {
-                activeTab = "builtin";
+            const hasGoverned = (data.supertagGroups.some(g => g.fields.length > 0) || data.avGroups.length > 0);
+            if (!hasGoverned && (data.rawCustomFields.length > 0 || data.builtin.name || data.builtin.memo)) {
+                activeTab = "base";
+            } else {
+                activeTab = "governed";
             }
         } catch (e) {
             console.error("[UnifiedInspector] 加载属性异常:", e);
@@ -50,22 +55,32 @@
         if (saveStatusTimer) clearTimeout(saveStatusTimer);
         saveStatusTimer = setTimeout(() => {
             saveStatus = "✓ 已自动实时同步";
-        }, 600);
+        }, 500);
     }
 
-    async function handleFieldChange(attrKey: string, attrValue: string) {
+    async function handleBlockFieldChange(attrKey: string, attrValue: string) {
         triggerSaveFeedback();
         await updateBlockAttributeValue(blockId, attrKey, attrValue);
-        // 通知可能存在的活动编辑器局部重绘
         if (data?.projectionInfo?.isProjected) {
             supertagAVProjector.notifyFrontendToRerender(data.projectionInfo.tableName || "", blockId);
         }
     }
 
-    function handleCheckboxToggle(field: TypedField, e: Event) {
+    async function handleAVCellChange(avId: string, keyId: string, itemId: string, newValue: string, colType: string) {
+        triggerSaveFeedback();
+        await updateAVCellAttributeValue(avId, keyId, itemId, newValue, colType);
+    }
+
+    function handleCheckboxToggle(field: SupertagField, e: Event) {
         const target = e.target as HTMLInputElement;
         field.value = target?.checked ? 'true' : 'false';
-        handleFieldChange(field.key, field.value);
+        handleBlockFieldChange(field.rawKey, field.value);
+    }
+
+    function handleAVCheckboxToggle(avId: string, field: AVDatabaseField, itemId: string, e: Event) {
+        const target = e.target as HTMLInputElement;
+        field.displayValue = target?.checked ? 'true' : 'false';
+        handleAVCellChange(avId, field.keyId, itemId, field.displayValue, field.colType);
     }
 
     async function handleAddTag() {
@@ -104,20 +119,20 @@
         await reloadData();
     }
 
-    function copyBlockId() {
-        navigator.clipboard.writeText(blockId);
-        showMessage("✓ 块 ID 已复制到剪贴板");
+    function copyText(txt: string, tip = "已复制") {
+        navigator.clipboard.writeText(txt);
+        showMessage(`✓ ${tip}`);
     }
 
     const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
-        "1": { bg: "rgba(59, 130, 246, 0.12)", text: "#2563EB", border: "rgba(59, 130, 246, 0.3)" },  // Blue
-        "2": { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.3)" },  // Green
-        "3": { bg: "rgba(245, 158, 11, 0.12)", text: "#D97706", border: "rgba(245, 158, 11, 0.3)" },  // Amber/Orange
-        "4": { bg: "rgba(239, 68, 68, 0.12)", text: "#DC2626", border: "rgba(239, 68, 68, 0.3)" },    // Red
-        "5": { bg: "rgba(139, 92, 246, 0.12)", text: "#7C3AED", border: "rgba(139, 92, 246, 0.3)" },  // Purple
-        "6": { bg: "rgba(236, 72, 153, 0.12)", text: "#DB2777", border: "rgba(236, 72, 153, 0.3)" },  // Pink
-        "7": { bg: "rgba(20, 184, 166, 0.12)", text: "#0D9488", border: "rgba(20, 184, 166, 0.3)" },  // Teal
-        "8": { bg: "rgba(107, 114, 128, 0.12)", text: "#4B5563", border: "rgba(107, 114, 128, 0.3)" }  // Gray
+        "1": { bg: "rgba(59, 130, 246, 0.12)", text: "#2563EB", border: "rgba(59, 130, 246, 0.3)" },
+        "2": { bg: "rgba(16, 185, 129, 0.12)", text: "#059669", border: "rgba(16, 185, 129, 0.3)" },
+        "3": { bg: "rgba(245, 158, 11, 0.12)", text: "#D97706", border: "rgba(245, 158, 11, 0.3)" },
+        "4": { bg: "rgba(239, 68, 68, 0.12)", text: "#DC2626", border: "rgba(239, 68, 68, 0.3)" },
+        "5": { bg: "rgba(139, 92, 246, 0.12)", text: "#7C3AED", border: "rgba(139, 92, 246, 0.3)" },
+        "6": { bg: "rgba(236, 72, 153, 0.12)", text: "#DB2777", border: "rgba(236, 72, 153, 0.3)" },
+        "7": { bg: "rgba(20, 184, 166, 0.12)", text: "#0D9488", border: "rgba(20, 184, 166, 0.3)" },
+        "8": { bg: "rgba(107, 114, 128, 0.12)", text: "#4B5563", border: "rgba(107, 114, 128, 0.3)" }
     };
 </script>
 
@@ -127,13 +142,13 @@
         <div class="header-top">
             <div class="block-meta">
                 <span class="block-type-badge">{data?.blockType || 'NodeBlock'}</span>
-                <span class="block-id-badge" role="button" tabindex="0" title="点击复制 Block ID" on:click={copyBlockId} on:keydown={e => e.key === 'Enter' && copyBlockId()}>
+                <span class="block-id-badge" role="button" tabindex="0" title="点击复制 Block ID" on:click={() => copyText(blockId, "块 ID 已复制")} on:keydown={e => e.key === 'Enter' && copyText(blockId, "块 ID 已复制")}>
                     📋 {blockId}
                 </span>
             </div>
             {#if data?.projectionInfo?.isProjected}
                 <div class="projection-tag" title="当前 Supertag 已通过 Hot-SQLite 投影至数据库">
-                    ⚡ 投影已就绪 ({data.projectionInfo.tableName})
+                    ⚡ 虚拟投影已就绪 ({data.projectionInfo.tableName})
                 </div>
             {/if}
         </div>
@@ -174,25 +189,19 @@
         </div>
     </div>
 
-    <!-- Tab 导航栏 -->
+    <!-- 双 Tab 导航栏 -->
     <div class="inspector-tabs">
         <button
-            class="tab-item {activeTab === 'typed' ? 'active' : ''}"
-            on:click={() => { activeTab = 'typed'; }}
+            class="tab-item {activeTab === 'governed' ? 'active' : ''}"
+            on:click={() => { activeTab = 'governed'; }}
         >
-            ✨ 强类型属性 ({data?.typedFields.length || 0})
+            🧩 统一结构化属性
         </button>
         <button
-            class="tab-item {activeTab === 'builtin' ? 'active' : ''}"
-            on:click={() => { activeTab = 'builtin'; }}
+            class="tab-item {activeTab === 'base' ? 'active' : ''}"
+            on:click={() => { activeTab = 'base'; }}
         >
-            ⚙️ 系统内置属性 (4)
-        </button>
-        <button
-            class="tab-item {activeTab === 'custom' ? 'active' : ''}"
-            on:click={() => { activeTab = 'custom'; }}
-        >
-            🧩 自定义属性 ({data?.rawCustomFields.length || 0})
+            🏷️ 基础与零散属性
         </button>
     </div>
 
@@ -204,209 +213,351 @@
                 <span>正在加载统一属性...</span>
             </div>
         {:else if data}
-            <!-- 1. 强类型属性面板 (Supertag Schema) -->
-            {#if activeTab === 'typed'}
-                <div class="field-list">
-                    {#if data.typedFields.length === 0}
-                        <div class="empty-field-state">
-                            <span>当前块尚未绑定包含强类型字段的 Supertag</span>
-                            <span style="font-size: 11px; opacity: 0.7;">可在上方添加如 <b>#task</b> 等标签快速启用类型化字段</span>
-                        </div>
-                    {:else}
-                        {#each data.typedFields as field}
-                            <div class="field-card">
-                                <div class="field-header">
-                                    <div class="field-name-wrap">
-                                        <span class="field-label">{field.label}</span>
-                                        <span class="field-key-raw">custom-{field.key}</span>
-                                    </div>
-                                    <span class="field-type-pill">{field.type}</span>
+            <!-- ═══════════ Tab 1: 结构化属性 (Governed) ═══════════ -->
+            {#if activeTab === 'governed'}
+                <div class="governed-list">
+                    <!-- A. Supertag 独占命名空间组件 -->
+                    {#if data.supertagGroups.length > 0}
+                        <div class="sub-header">🏷️ Supertag 属性组件</div>
+                        {#each data.supertagGroups as group}
+                            <div class="group-box">
+                                <div class="group-box-header">
+                                    <span class="group-title">#{group.tag}</span>
+                                    <span class="group-tag-pill">Supertag 组件</span>
                                 </div>
 
-                                <!-- 根据类型渲染强类型输入控件 -->
-                                <div class="field-control">
-                                    {#if field.type === 'select'}
-                                        <!-- 单选胶囊列表 -->
-                                        <div class="capsule-options">
-                                            {#if field.options}
-                                                {#each field.options as opt}
-                                                    {@const colorInfo = COLOR_MAP[opt.color] || COLOR_MAP["1"]}
-                                                    <button
-                                                        class="capsule-btn {field.value === opt.name ? 'selected' : ''}"
-                                                        style="background: {field.value === opt.name ? colorInfo.bg : 'var(--b3-theme-background)'}; color: {field.value === opt.name ? colorInfo.text : 'var(--b3-theme-on-background)'}; border-color: {field.value === opt.name ? colorInfo.border : 'var(--b3-border-color)'};"
-                                                        on:click={() => {
-                                                            field.value = (field.value === opt.name ? "" : opt.name);
-                                                            handleFieldChange(field.key, field.value);
-                                                        }}
-                                                    >
-                                                        {opt.name}
-                                                    </button>
-                                                {/each}
-                                            {/if}
-                                            <!-- 自定义输入 -->
-                                            <input
-                                                type="text"
-                                                class="b3-text-field"
-                                                style="font-size: 11px; height: 26px; width: 100px;"
-                                                placeholder="自定义值..."
-                                                bind:value={field.value}
-                                                on:change={() => handleFieldChange(field.key, field.value)}
-                                            />
-                                        </div>
-
-                                    {:else if field.type === 'date'}
-                                        <input
-                                            type="date"
-                                            class="b3-text-field"
-                                            style="font-size: 12px; height: 30px; width: 100%; max-width: 220px;"
-                                            bind:value={field.value}
-                                            on:change={() => handleFieldChange(field.key, field.value)}
-                                        />
-
-                                    {:else if field.type === 'checkbox'}
-                                        <label class="switch-wrap">
-                                            <input
-                                                type="checkbox"
-                                                class="b3-switch"
-                                                checked={field.value === 'true' || field.value === '1'}
-                                                on:change={(e) => handleCheckboxToggle(field, e)}
-                                            />
-                                            <span style="font-size: 12px; font-weight: 500;">{field.value === 'true' ? '已启用 (True)' : '已关闭 (False)'}</span>
-                                        </label>
-
-                                    {:else if field.type === 'number'}
-                                        <input
-                                            type="number"
-                                            class="b3-text-field"
-                                            style="font-size: 12px; height: 30px; width: 140px;"
-                                            bind:value={field.value}
-                                            on:change={() => handleFieldChange(field.key, field.value)}
-                                        />
-
+                                <div class="field-list">
+                                    {#if group.fields.length === 0}
+                                        <div class="empty-tip">暂无 Schema 定义字段</div>
                                     {:else}
-                                        <textarea
-                                            class="b3-text-field"
-                                            style="font-size: 12px; width: 100%; resize: vertical;"
-                                            rows="2"
-                                            bind:value={field.value}
-                                            on:change={() => handleFieldChange(field.key, field.value)}
-                                            placeholder="输入属性值..."
-                                        ></textarea>
+                                        {#each group.fields as field}
+                                            <div class="field-card">
+                                                <div class="field-header">
+                                                    <div class="field-name-wrap">
+                                                        <span class="field-label">{field.label}</span>
+                                                        <span class="field-key-raw" title="物理键名: {field.rawKey}">{field.fullKey}</span>
+                                                    </div>
+                                                    <span class="field-type-pill">{field.type}</span>
+                                                </div>
+
+                                                <div class="field-control">
+                                                    {#if field.type === 'select'}
+                                                        <div class="capsule-options">
+                                                            {#if field.options}
+                                                                {#each field.options as opt}
+                                                                    {@const colorInfo = COLOR_MAP[opt.color] || COLOR_MAP["1"]}
+                                                                    <button
+                                                                        class="capsule-btn {field.value === opt.name ? 'selected' : ''}"
+                                                                        style="background: {field.value === opt.name ? colorInfo.bg : 'var(--b3-theme-background)'}; color: {field.value === opt.name ? colorInfo.text : 'var(--b3-theme-on-background)'}; border-color: {field.value === opt.name ? colorInfo.border : 'var(--b3-border-color)'};"
+                                                                        on:click={() => {
+                                                                            field.value = (field.value === opt.name ? "" : opt.name);
+                                                                            handleBlockFieldChange(field.rawKey, field.value);
+                                                                        }}
+                                                                    >
+                                                                        {opt.name}
+                                                                    </button>
+                                                                {/each}
+                                                            {/if}
+                                                        </div>
+                                                    {:else if field.type === 'date'}
+                                                        <input
+                                                            type="date"
+                                                            class="b3-text-field"
+                                                            style="font-size: 12px; height: 30px; width: 100%; max-width: 220px;"
+                                                            bind:value={field.value}
+                                                            on:change={() => handleBlockFieldChange(field.rawKey, field.value)}
+                                                        />
+                                                    {:else if field.type === 'checkbox'}
+                                                        <label class="switch-wrap">
+                                                            <input
+                                                                type="checkbox"
+                                                                class="b3-switch"
+                                                                checked={field.value === 'true' || field.value === '1'}
+                                                                on:change={(e) => handleCheckboxToggle(field, e)}
+                                                            />
+                                                            <span style="font-size: 12px; font-weight: 500;">{field.value === 'true' ? '已启用 (True)' : '已关闭 (False)'}</span>
+                                                        </label>
+                                                    {:else if field.type === 'number'}
+                                                        <input
+                                                            type="number"
+                                                            class="b3-text-field"
+                                                            style="font-size: 12px; height: 30px; width: 140px;"
+                                                            bind:value={field.value}
+                                                            on:change={() => handleBlockFieldChange(field.rawKey, field.value)}
+                                                        />
+                                                    {:else}
+                                                        <textarea
+                                                            class="b3-text-field"
+                                                            style="font-size: 12px; width: 100%; resize: vertical;"
+                                                            rows="2"
+                                                            bind:value={field.value}
+                                                            on:change={() => handleBlockFieldChange(field.rawKey, field.value)}
+                                                            placeholder="输入属性值..."
+                                                        ></textarea>
+                                                    {/if}
+                                                </div>
+                                            </div>
+                                        {/each}
                                     {/if}
                                 </div>
                             </div>
                         {/each}
                     {/if}
-                </div>
 
-            <!-- 2. 系统内置属性面板 (Builtin) -->
-            {:else if activeTab === 'builtin'}
-                <div class="builtin-list">
-                    <div class="field-card">
-                        <span class="field-label">🔖 书签 (Bookmark)</span>
-                        <input
-                            type="text"
-                            class="b3-text-field"
-                            style="font-size: 12px; width: 100%; margin-top: 4px;"
-                            placeholder="书签标记..."
-                            bind:value={data.builtin.bookmark}
-                            on:change={() => handleFieldChange('bookmark', data?.builtin.bookmark || '')}
-                        />
-                    </div>
-
-                    <div class="field-card">
-                        <span class="field-label">🏷️ 命名 (Name)</span>
-                        <input
-                            type="text"
-                            class="b3-text-field"
-                            style="font-size: 12px; width: 100%; margin-top: 4px;"
-                            placeholder="块命名..."
-                            bind:value={data.builtin.name}
-                            on:change={() => handleFieldChange('name', data?.builtin.name || '')}
-                        />
-                    </div>
-
-                    <div class="field-card">
-                        <span class="field-label">🔤 别名 (Alias)</span>
-                        <input
-                            type="text"
-                            class="b3-text-field"
-                            style="font-size: 12px; width: 100%; margin-top: 4px;"
-                            placeholder="多个别名用逗号隔开..."
-                            bind:value={data.builtin.alias}
-                            on:change={() => handleFieldChange('alias', data?.builtin.alias || '')}
-                        />
-                    </div>
-
-                    <div class="field-card">
-                        <span class="field-label">📝 备注 (Memo)</span>
-                        <textarea
-                            class="b3-text-field"
-                            style="font-size: 12px; width: 100%; margin-top: 4px; resize: vertical;"
-                            rows="2"
-                            placeholder="块备注内容..."
-                            bind:value={data.builtin.memo}
-                            on:change={() => handleFieldChange('memo', data?.builtin.memo || '')}
-                        ></textarea>
-                    </div>
-                </div>
-
-            <!-- 3. 自定义属性面板 (Custom) -->
-            {:else if activeTab === 'custom'}
-                <div class="custom-list">
-                    {#if data.rawCustomFields.length === 0}
-                        <div class="empty-field-state">
-                            <span>暂无未分类的 custom-* 自定义属性</span>
-                        </div>
-                    {:else}
-                        {#each data.rawCustomFields as customItem}
-                            <div class="custom-field-row">
-                                <div class="custom-key-col">
-                                    <span class="custom-key-text">{customItem.rawKey}</span>
+                    <!-- B. 所属原生 AV 数据库属性 -->
+                    {#if data.avGroups.length > 0}
+                        <div class="sub-header" style="margin-top: 14px;">⚡ 所属数据库属性</div>
+                        {#each data.avGroups as avGroup}
+                            <div class="group-box av-border">
+                                <div class="group-box-header">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span class="group-title" style="color: #059669;">⚡ {avGroup.avName}</span>
+                                        {#if avGroup.isDuplicateName}
+                                            <span class="dup-badge" title="存在同名数据库，已附加 ID 标识区分">⚠️ 同名库 ({avGroup.avId.slice(0, 4)})</span>
+                                        {/if}
+                                    </div>
+                                    <span class="group-tag-pill" style="color: #059669; border-color: rgba(16,185,129,0.3);">原生 AV</span>
                                 </div>
-                                <div class="custom-val-col">
-                                    <input
-                                        type="text"
-                                        class="b3-text-field"
-                                        style="font-size: 12px; width: 100%;"
-                                        bind:value={customItem.value}
-                                        on:change={() => handleFieldChange(customItem.rawKey, customItem.value)}
-                                    />
+
+                                <div class="field-list">
+                                    {#each avGroup.fields as avField}
+                                        <div class="field-card">
+                                            <div class="field-header">
+                                                <div class="field-name-wrap">
+                                                    <span class="field-label">{avField.colName}</span>
+                                                    <span class="field-key-raw">{avGroup.avName}.{avField.colName}</span>
+                                                </div>
+                                                <div style="display: flex; gap: 4px;">
+                                                    {#if avField.isReadonly}
+                                                        <span class="readonly-pill">只读计算列</span>
+                                                    {/if}
+                                                    <span class="field-type-pill">{avField.colType}</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="field-control">
+                                                {#if avField.isReadonly}
+                                                    <div class="readonly-box">{avField.displayValue || '(计算中或空)'}</div>
+                                                {:else if avField.colType === 'select' || avField.colType === 'mSelect'}
+                                                    <div class="capsule-options">
+                                                        {#if avField.options}
+                                                            {#each avField.options as opt}
+                                                                {@const colorInfo = COLOR_MAP[opt.color] || COLOR_MAP["1"]}
+                                                                <button
+                                                                    class="capsule-btn {avField.displayValue === opt.name ? 'selected' : ''}"
+                                                                    style="background: {avField.displayValue === opt.name ? colorInfo.bg : 'var(--b3-theme-background)'}; color: {avField.displayValue === opt.name ? colorInfo.text : 'var(--b3-theme-on-background)'}; border-color: {avField.displayValue === opt.name ? colorInfo.border : 'var(--b3-border-color)'};"
+                                                                    on:click={() => {
+                                                                        avField.displayValue = (avField.displayValue === opt.name ? "" : opt.name);
+                                                                        handleAVCellChange(avGroup.avId, avField.keyId, avGroup.itemId, avField.displayValue, avField.colType);
+                                                                    }}
+                                                                >
+                                                                    {opt.name}
+                                                                </button>
+                                                            {/each}
+                                                        {/if}
+                                                    </div>
+                                                {:else if avField.colType === 'date'}
+                                                    <input
+                                                        type="date"
+                                                        class="b3-text-field"
+                                                        style="font-size: 12px; height: 30px; width: 100%; max-width: 220px;"
+                                                        bind:value={avField.displayValue}
+                                                        on:change={() => handleAVCellChange(avGroup.avId, avField.keyId, avGroup.itemId, avField.displayValue, avField.colType)}
+                                                    />
+                                                {:else if avField.colType === 'checkbox'}
+                                                    <label class="switch-wrap">
+                                                        <input
+                                                            type="checkbox"
+                                                            class="b3-switch"
+                                                            checked={avField.displayValue === 'true' || avField.displayValue === '1'}
+                                                            on:change={(e) => handleAVCheckboxToggle(avGroup.avId, avField, avGroup.itemId, e)}
+                                                        />
+                                                        <span style="font-size: 12px; font-weight: 500;">{avField.displayValue === 'true' ? '已启用 (True)' : '已关闭 (False)'}</span>
+                                                    </label>
+                                                {:else if avField.colType === 'number'}
+                                                    <input
+                                                        type="number"
+                                                        class="b3-text-field"
+                                                        style="font-size: 12px; height: 30px; width: 140px;"
+                                                        bind:value={avField.displayValue}
+                                                        on:change={() => handleAVCellChange(avGroup.avId, avField.keyId, avGroup.itemId, avField.displayValue, avField.colType)}
+                                                    />
+                                                {:else}
+                                                    <textarea
+                                                        class="b3-text-field"
+                                                        style="font-size: 12px; width: 100%; resize: vertical;"
+                                                        rows="2"
+                                                        bind:value={avField.displayValue}
+                                                        on:change={() => handleAVCellChange(avGroup.avId, avField.keyId, avGroup.itemId, avField.displayValue, avField.colType)}
+                                                        placeholder="输入单元格值..."
+                                                    ></textarea>
+                                                {/if}
+                                            </div>
+                                        </div>
+                                    {/each}
                                 </div>
-                                <button
-                                    class="custom-del-btn"
-                                    title="删除此自定义属性"
-                                    on:click={() => handleRemoveCustomField(customItem.rawKey)}
-                                >✕</button>
                             </div>
                         {/each}
                     {/if}
 
-                    <!-- 新建自定义属性 -->
-                    <div class="add-custom-box">
-                        {#if isAddingCustom}
-                            <div class="add-custom-form">
-                                <input
-                                    type="text"
-                                    class="b3-text-field"
-                                    style="font-size: 11px; width: 120px;"
-                                    placeholder="属性名 (如 my-attr)"
-                                    bind:value={newCustomKey}
-                                />
-                                <input
-                                    type="text"
-                                    class="b3-text-field"
-                                    style="font-size: 11px; flex: 1;"
-                                    placeholder="属性初始值..."
-                                    bind:value={newCustomVal}
-                                />
-                                <button class="b3-button b3-button--primary" style="font-size: 11px; padding: 2px 10px;" on:click={handleAddCustomField}>添加</button>
-                                <button class="b3-button b3-button--text" style="font-size: 11px; padding: 2px 6px;" on:click={() => { isAddingCustom = false; }}>取消</button>
-                            </div>
+                    {#if data.supertagGroups.length === 0 && data.avGroups.length === 0}
+                        <div class="empty-field-state">
+                            <span>当前块未绑定 Supertag，且未加入任何 AV 数据库</span>
+                            <span style="font-size: 11px; opacity: 0.7;">可在上方添加如 <b>#task</b> 等标签快速启用类型化字段</span>
+                        </div>
+                    {/if}
+                </div>
+
+            <!-- ═══════════ Tab 2: 基础与零散属性 (Base) ═══════════ -->
+            {:else if activeTab === 'base'}
+                <div class="base-list">
+                    <!-- A. 系统内置属性 -->
+                    <div class="sub-header">⚙️ 思源内置属性</div>
+                    <div class="builtin-card-group">
+                        <div class="field-card">
+                            <span class="field-label">🔖 书签 (Bookmark)</span>
+                            <input
+                                type="text"
+                                class="b3-text-field"
+                                style="font-size: 12px; width: 100%; margin-top: 4px;"
+                                placeholder="书签标记..."
+                                bind:value={data.builtin.bookmark}
+                                on:change={() => handleBlockFieldChange('bookmark', data?.builtin.bookmark || '')}
+                            />
+                        </div>
+
+                        <div class="field-card">
+                            <span class="field-label">🏷️ 命名 (Name)</span>
+                            <input
+                                type="text"
+                                class="b3-text-field"
+                                style="font-size: 12px; width: 100%; margin-top: 4px;"
+                                placeholder="块命名..."
+                                bind:value={data.builtin.name}
+                                on:change={() => handleBlockFieldChange('name', data?.builtin.name || '')}
+                            />
+                        </div>
+
+                        <div class="field-card">
+                            <span class="field-label">🔤 别名 (Alias)</span>
+                            <input
+                                type="text"
+                                class="b3-text-field"
+                                style="font-size: 12px; width: 100%; margin-top: 4px;"
+                                placeholder="多个别名用逗号隔开..."
+                                bind:value={data.builtin.alias}
+                                on:change={() => handleBlockFieldChange('alias', data?.builtin.alias || '')}
+                            />
+                        </div>
+
+                        <div class="field-card">
+                            <span class="field-label">📝 备注 (Memo)</span>
+                            <textarea
+                                class="b3-text-field"
+                                style="font-size: 12px; width: 100%; margin-top: 4px; resize: vertical;"
+                                rows="2"
+                                placeholder="块备注内容..."
+                                bind:value={data.builtin.memo}
+                                on:change={() => handleBlockFieldChange('memo', data?.builtin.memo || '')}
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <!-- B. 自由自定义属性 -->
+                    <div class="sub-header" style="margin-top: 14px;">🧩 自由自定义属性 (custom-*)</div>
+                    <div class="custom-card-group">
+                        {#if data.rawCustomFields.length === 0}
+                            <div class="empty-tip">暂无自由 custom-* 自定义属性</div>
                         {:else}
-                            <button class="b3-button b3-button--outline" style="font-size: 11px; width: 100%;" on:click={() => { isAddingCustom = true; }}>
-                                + 添加自定义属性
-                            </button>
+                            {#each data.rawCustomFields as customItem}
+                                <div class="custom-field-row">
+                                    <div class="custom-key-col">
+                                        <span class="custom-key-text">{customItem.rawKey}</span>
+                                    </div>
+                                    <div class="custom-val-col">
+                                        <input
+                                            type="text"
+                                            class="b3-text-field"
+                                            style="font-size: 12px; width: 100%;"
+                                            bind:value={customItem.value}
+                                            on:change={() => handleBlockFieldChange(customItem.rawKey, customItem.value)}
+                                        />
+                                    </div>
+                                    <button
+                                        class="custom-del-btn"
+                                        title="删除此自定义属性"
+                                        on:click={() => handleRemoveCustomField(customItem.rawKey)}
+                                    >✕</button>
+                                </div>
+                            {/each}
+                        {/if}
+
+                        <div class="add-custom-box">
+                            {#if isAddingCustom}
+                                <div class="add-custom-form">
+                                    <input
+                                        type="text"
+                                        class="b3-text-field"
+                                        style="font-size: 11px; width: 120px;"
+                                        placeholder="属性名 (如 my-attr)"
+                                        bind:value={newCustomKey}
+                                    />
+                                    <input
+                                        type="text"
+                                        class="b3-text-field"
+                                        style="font-size: 11px; flex: 1;"
+                                        placeholder="属性初始值..."
+                                        bind:value={newCustomVal}
+                                    />
+                                    <button class="b3-button b3-button--primary" style="font-size: 11px; padding: 2px 10px;" on:click={handleAddCustomField}>添加</button>
+                                    <button class="b3-button b3-button--text" style="font-size: 11px; padding: 2px 6px;" on:click={() => { isAddingCustom = false; }}>取消</button>
+                                </div>
+                            {:else}
+                                <button class="b3-button b3-button--outline" style="font-size: 11px; width: 100%;" on:click={() => { isAddingCustom = true; }}>
+                                    + 添加自定义属性
+                                </button>
+                            {/if}
+                        </div>
+                    </div>
+
+                    <!-- C. 系统元数据折叠抽屉 -->
+                    <div class="meta-drawer">
+                        <button class="meta-toggle-btn" on:click={() => { showSystemMeta = !showSystemMeta; }}>
+                            <span>ℹ️ 查看系统底层元数据 (只读)</span>
+                            <span style="font-size: 11px; opacity: 0.6;">{showSystemMeta ? '▲ 折叠' : '▼ 展开'}</span>
+                        </button>
+
+                        {#if showSystemMeta && data.systemMeta}
+                            <div class="meta-table">
+                                <div class="meta-row">
+                                    <span class="meta-k">块 ID (id):</span>
+                                    <span class="meta-v copyable" on:click={() => copyText(data.systemMeta.id, "块 ID 已复制")}>{data.systemMeta.id} 📋</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-k">文档根 ID (root_id):</span>
+                                    <span class="meta-v copyable" on:click={() => copyText(data.systemMeta.rootId, "文档 ID 已复制")}>{data.systemMeta.rootId} 📋</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-k">父块 ID (parent_id):</span>
+                                    <span class="meta-v copyable" on:click={() => copyText(data.systemMeta.parentId, "父块 ID 已复制")}>{data.systemMeta.parentId} 📋</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-k">块类型 (type):</span>
+                                    <span class="meta-v">{data.systemMeta.type}</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-k">更新时间 (updated):</span>
+                                    <span class="meta-v">{data.systemMeta.updated || '-'}</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-k">创建时间 (created):</span>
+                                    <span class="meta-v">{data.systemMeta.created || '-'}</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-k">内容字符数:</span>
+                                    <span class="meta-v">{data.systemMeta.contentLength} 字符</span>
+                                </div>
+                            </div>
                         {/if}
                     </div>
                 </div>
@@ -578,7 +729,7 @@
         display: flex;
         gap: 4px;
         background: var(--b3-theme-surface);
-        padding: 3px;
+        padding: 4px;
         border-radius: 6px;
         border: 1px solid var(--b3-border-color);
         flex-shrink: 0;
@@ -588,9 +739,9 @@
         flex: 1;
         background: transparent;
         border: none;
-        font-size: 11px;
-        font-weight: 500;
-        padding: 5px 8px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 8px;
         border-radius: 4px;
         cursor: pointer;
         color: var(--b3-theme-on-surface-light);
@@ -600,7 +751,7 @@
     .tab-item.active {
         background: var(--b3-theme-background);
         color: var(--indexos-accent-primary, #3B82F6);
-        font-weight: 600;
+        font-weight: 700;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
@@ -609,19 +760,81 @@
         overflow-y: auto;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 12px;
         min-height: 0;
     }
 
-    .field-list, .builtin-list, .custom-list {
+    .sub-header {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--b3-theme-on-surface-light);
+        margin-bottom: 6px;
+    }
+
+    .group-box {
+        background: var(--b3-theme-surface);
+        border: 1px solid var(--b3-border-color);
+        border-radius: 8px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .av-border {
+        border-left: 4px solid #059669;
+    }
+
+    .group-box-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 6px;
+        border-bottom: 1px dashed var(--b3-border-color);
+    }
+
+    .group-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--indexos-accent-primary, #3B82F6);
+    }
+
+    .dup-badge {
+        font-size: 10px;
+        background: rgba(245, 158, 11, 0.15);
+        color: #D97706;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-weight: 600;
+    }
+
+    .group-tag-pill {
+        font-size: 10px;
+        background: var(--b3-theme-background);
+        padding: 1px 6px;
+        border-radius: 4px;
+        color: var(--b3-theme-on-surface-light);
+        border: 1px solid var(--b3-border-color);
+    }
+
+    .readonly-pill {
+        font-size: 10px;
+        background: rgba(107, 114, 128, 0.12);
+        color: #6B7280;
+        padding: 1px 5px;
+        border-radius: 3px;
+    }
+
+    .field-list, .builtin-card-group, .custom-card-group {
         display: flex;
         flex-direction: column;
         gap: 8px;
     }
 
     .field-card {
-        background: var(--b3-theme-surface);
-        padding: 10px 12px;
+        background: var(--b3-theme-background);
+        padding: 8px 10px;
         border-radius: 6px;
         border: 1px solid var(--b3-border-color);
         display: flex;
@@ -656,7 +869,7 @@
 
     .field-type-pill {
         font-size: 9px;
-        background: var(--b3-theme-background);
+        background: var(--b3-theme-surface);
         padding: 1px 5px;
         border-radius: 3px;
         color: var(--b3-theme-on-surface-light);
@@ -688,6 +901,15 @@
         cursor: pointer;
     }
 
+    .readonly-box {
+        font-size: 11px;
+        color: var(--b3-theme-on-surface-light);
+        background: var(--b3-theme-surface);
+        padding: 6px 8px;
+        border-radius: 4px;
+        border: 1px dashed var(--b3-border-color);
+    }
+
     .custom-field-row {
         display: flex;
         align-items: center;
@@ -699,7 +921,7 @@
     }
 
     .custom-key-col {
-        width: 140px;
+        width: 160px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -742,6 +964,72 @@
         padding: 8px;
         border-radius: 6px;
         border: 1px dashed var(--b3-border-color);
+    }
+
+    .meta-drawer {
+        border-top: 1px solid var(--b3-border-color);
+        padding-top: 10px;
+        margin-top: 8px;
+    }
+
+    .meta-toggle-btn {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--b3-theme-surface);
+        border: 1px solid var(--b3-border-color);
+        padding: 8px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        color: var(--b3-theme-on-background);
+    }
+
+    .meta-table {
+        background: var(--b3-theme-surface);
+        border: 1px solid var(--b3-border-color);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-top: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .meta-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+    }
+
+    .meta-k {
+        color: var(--b3-theme-on-surface-light);
+        font-weight: 500;
+    }
+
+    .meta-v {
+        font-family: monospace;
+        color: var(--b3-theme-on-background);
+    }
+
+    .copyable {
+        cursor: pointer;
+    }
+
+    .copyable:hover {
+        color: var(--indexos-accent-primary, #3B82F6);
+        text-decoration: underline;
+    }
+
+    .empty-tip {
+        font-size: 11px;
+        color: var(--b3-theme-on-surface-light);
+        opacity: 0.6;
+        text-align: center;
+        padding: 8px 0;
     }
 
     .empty-field-state {

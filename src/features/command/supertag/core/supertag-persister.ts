@@ -1,17 +1,17 @@
 /**
  * supertag-persister.ts
  *
- * 将命令执行后动态产出的变量全白盒落盘保存。
- * 规则：仅当出参存在下游消费场景 (Layer 4 AV 数据库 / IconMenu 绑定命令 / 后续 Pipeline 步骤) 时才落盘写物理属性。
+ * Supertag 数据存储大一统治理：
+ * 1. 唯一物理持久化真理源：所有命令产出的业务变量 100% 统一写入块自身的物理 IAL (custom-<tag>.<varName>)
+ * 2. 0-Disk 物理 AV 写入：不再向物理 .av/*.json 写入冗余数据，彻底杜绝文件膨胀与双写漂移
+ * 3. 内存投影联动：若该 Supertag 已建立 Hot-SQLite 虚拟投影，自动同步更新内存热表并通知视图就地重绘
  */
 
 import { post } from "../../../../shared/api-client/request";
-import { getGlobalTypeConfigs } from "../../../av/av-setting/db-config";
-import { getColIDMap } from "../../../../shared/utils/av-utils";
-import { sleep } from "../../../../shared/utils";
-
 import { sanitizeBlockAttrName } from "../../utils/attribute-sanitizer";
 import { SUPERTAG_REGISTRY } from "../../registration";
+import { supertagAVProjector } from "../projection/supertag-av-projector";
+import { getSqliteEngine } from "../../../sqlite/sqlite-manager";
 
 /**
  * 校验出参变量是否在下游有实际消费使用者 (IconMenu / Button 绑定命令或 Pipeline 后续步骤)
@@ -27,7 +27,6 @@ function isOutputUsedByDownstream(supertagLabel: string, varName: string): boole
     );
 
     for (const entry of boundEntries) {
-        // 若绑定了 safeUpdateBlock 等更新块命令，默认需要消费创块 ID 出参
         if (entry.commandRef.includes("safeUpdateBlock") || entry.commandRef.includes("updateBlock")) {
             return true;
         }
@@ -48,6 +47,9 @@ function isOutputUsedByDownstream(supertagLabel: string, varName: string): boole
     return false;
 }
 
+/**
+ * 将出参变量统一持久化到物理块 IAL (custom-<tag>.<varName>)
+ */
 export async function persistOutputVariablesToLayer4(
     blockId: string,
     tag: string,
@@ -57,119 +59,75 @@ export async function persistOutputVariablesToLayer4(
     if (!blockId || !cleanTag || !outputVars || Object.keys(outputVars).length === 0) return;
 
     try {
-        const configs = await getGlobalTypeConfigs();
-        const tagMatch = configs.find(c => c.typeName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase() === cleanTag.toLowerCase());
-        
         const targetOutputEntries: [string, string][] = [];
-
         const SYSTEM_ENV_KEYS = new Set(["date", "time", "block_id", "root_id", "parent_id", "id", "last_id"]);
 
-        // 1. 全白盒精准收集：只保存以 var. 开头且有值的出参变量
+        // 1. 收集所有以 var. 开头或自定义的有效出参变量
         for (const [k, v] of Object.entries(outputVars)) {
             if (k.startsWith("_")) continue;
             if (SYSTEM_ENV_KEYS.has(k)) continue;
             if (!k.startsWith("var.")) continue;
             if (v !== undefined && v !== null && String(v).trim() !== "") {
-                targetOutputEntries.push([k, String(v).trim()]);
+                const varName = k.replace(/^var\./, "").trim();
+                targetOutputEntries.push([varName, String(v).trim()]);
             }
         }
 
         if (targetOutputEntries.length === 0) return;
 
-        // 2. 若未实例化 AV 数据库，检查是否存在下游消费使用；若无消费依赖，跳过持久化！
-        if (!tagMatch) {
-            const activeEntries = targetOutputEntries.filter(([k]) => isOutputUsedByDownstream(cleanTag, k));
-            if (activeEntries.length === 0) {
-                console.log(`[Supertag-Output] 🍃 Supertag #${cleanTag} 出参无下游 (IconMenu/Button/Pipeline) 消费依赖，不进行无谓的物理属性持久化。`);
-                return;
-            }
-
-            console.log(`[Supertag-Output] Layer 4 AV for supertag #${cleanTag} not found. Persisting ${activeEntries.length} output variables to block custom attributes instead.`);
-            const customAttrs: Record<string, string> = {};
-            for (const [varName, valStr] of activeEntries) {
-                const attrName = sanitizeBlockAttrName(varName);
-                customAttrs[attrName] = valStr;
-            }
-            if (Object.keys(customAttrs).length > 0) {
-                try {
-                    await post("/api/attr/setBlockAttrs", {
-                        id: blockId,
-                        attrs: customAttrs
-                    });
-                    console.log(`[Supertag-Output] Successfully set custom attributes on block ${blockId}:`, customAttrs);
-                } catch (attrErr) {
-                    console.warn(`[Supertag-Output] Bulk setBlockAttrs failed, falling back to item-by-item safe set:`, attrErr);
-                    for (const [k, v] of Object.entries(customAttrs)) {
-                        try {
-                            await post("/api/attr/setBlockAttrs", {
-                                id: blockId,
-                                attrs: { [k]: v }
-                            });
-                        } catch (_) {}
-                    }
-                }
-            }
+        // 2. 检查是否有下游消费需求
+        const activeEntries = targetOutputEntries.filter(([varName]) => isOutputUsedByDownstream(cleanTag, varName));
+        if (activeEntries.length === 0) {
+            console.log(`[Supertag-Output] 🍃 Supertag #${cleanTag} 出参无下游消费依赖，不进行无谓的物理属性持久化。`);
             return;
         }
 
-        const avId = tagMatch.avId;
-        let { blockToItem } = await getColIDMap(avId);
-        let itemId = blockToItem.get(blockId);
-
-        if (!itemId) {
-            // @ts-ignore
-            const newGenItemId = window.Lute?.NewNodeID() || Date.now().toString();
-            await post("/api/av/addAttributeViewBlocks", {
-                avID: avId,
-                srcs: [{ itemID: newGenItemId, id: blockId, isDetached: false }]
-            });
-            await sleep(300);
-            const refreshedMap = await getColIDMap(avId);
-            itemId = refreshedMap.blockToItem.get(blockId) || newGenItemId;
+        // 3. 构造带命名空间的物理属性键名: custom-<tag>.<varName>
+        const customAttrs: Record<string, string> = {};
+        for (const [varName, valStr] of activeEntries) {
+            const cleanVar = sanitizeBlockAttrName(varName);
+            const namespacedKey = `custom-${cleanTag}.${cleanVar}`;
+            customAttrs[namespacedKey] = valStr;
         }
 
-        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
-        const existingKeys: any[] = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
-        let lastKeyId = existingKeys.length > 0 ? existingKeys[existingKeys.length - 1].id : "";
-
-        console.log(`[Supertag-Output] 📤 Persisting ${targetOutputEntries.length} explicit output variables to Layer 4 AV #${cleanTag} (${avId}):`, targetOutputEntries);
-
-        for (const [colName, valStr] of targetOutputEntries) {
-            let keyObj = existingKeys.find((k: any) => k.name === colName);
-            let keyId = keyObj?.id;
-
-            if (!keyId) {
-                // @ts-ignore
-                keyId = window.Lute?.NewNodeID() || Date.now().toString();
-                console.log(`[Supertag-Output] ✨ Auto-creating missing Text Column "${colName}" in Layer 4 AV #${cleanTag}...`);
-                
-                await post("/api/av/addAttributeViewKey", {
-                    avID: avId,
-                    keyID: keyId,
-                    keyName: colName,
-                    keyType: "text",
-                    keyIcon: "iconText",
-                    previousKeyID: lastKeyId
+        // 4. 统一写入物理 Markdown 块自身 (单一物理真理源)
+        if (Object.keys(customAttrs).length > 0) {
+            try {
+                await post("/api/attr/setBlockAttrs", {
+                    id: blockId,
+                    attrs: customAttrs
                 });
-
-                lastKeyId = keyId;
-                existingKeys.push({ id: keyId, name: colName, type: "text" });
-                await new Promise(r => setTimeout(r, 200));
+                console.log(`[Supertag-Output] ✓ 已将 ${Object.keys(customAttrs).length} 个出参属性持久化至块 ${blockId}:`, customAttrs);
+            } catch (attrErr) {
+                console.warn(`[Supertag-Output] 批量写入属性异常，回退单项安全写入:`, attrErr);
+                for (const [k, v] of Object.entries(customAttrs)) {
+                    try {
+                        await post("/api/attr/setBlockAttrs", {
+                            id: blockId,
+                            attrs: { [k]: v }
+                        });
+                    } catch (_) {}
+                }
             }
+        }
 
-            await post("/api/av/batchSetAttributeViewBlockAttrs", {
-                avID: avId,
-                values: [{
-                    keyID: keyId,
-                    itemID: itemId,
-                    value: {
-                        type: "text",
-                        text: { content: valStr }
+        // 5. 内存虚拟投影热表联动：若该 Supertag 已建立虚拟投影，同步更新内存 SQLite 热表并重绘
+        const boundAvId = supertagAVProjector.getBoundAVId(cleanTag);
+        if (boundAvId) {
+            const binding = supertagAVProjector.getBinding(boundAvId);
+            if (binding) {
+                try {
+                    const { db } = await getSqliteEngine();
+                    for (const [varName, valStr] of activeEntries) {
+                        try {
+                            db.run(`UPDATE "${binding.tableName}" SET "${varName}" = ?, _updated = ? WHERE id = ?;`, [valStr, Date.now(), blockId]);
+                        } catch (_) {}
                     }
-                }]
-            });
+                    supertagAVProjector.notifyFrontendToRerender(boundAvId, blockId);
+                } catch (_) {}
+            }
         }
     } catch (e) {
-        console.error("[Supertag-Output] Failed to persist output variables to Layer 4:", e);
+        console.error("[Supertag-Output] 持久化出参属性异常:", e);
     }
 }

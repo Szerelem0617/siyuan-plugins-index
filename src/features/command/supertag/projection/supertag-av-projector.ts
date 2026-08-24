@@ -203,7 +203,15 @@ export class SupertagAVProjector {
 
                 for (const k of Object.keys(attrs)) {
                     if (k.startsWith("custom-") && k !== "custom-supertags" && k !== "custom-index-tags") {
-                        attrKeysSet.add(k.replace(/^custom-/, ""));
+                        const rawClean = k.replace(/^custom-/, "");
+                        if (rawClean.startsWith(`${cleanTag}.`)) {
+                            attrKeysSet.add(rawClean.replace(`${cleanTag}.`, ""));
+                        } else if (rawClean.startsWith(`${cleanTag}_`)) {
+                            attrKeysSet.add(rawClean.replace(`${cleanTag}_`, ""));
+                        } else if (!rawClean.includes(".") && !rawClean.includes("_")) {
+                            // 全局共享列
+                            attrKeysSet.add(rawClean);
+                        }
                     } else if (["status", "priority", "due", "memo", "bookmark"].includes(k)) {
                         attrKeysSet.add(k);
                     }
@@ -245,7 +253,13 @@ export class SupertagAVProjector {
                         r.root_id,
                         r.updated,
                         0,
-                        ...attrNames.map(a => r.attrs[`custom-${a}`] || r.attrs[a] || "")
+                        ...attrNames.map(a => {
+                            return r.attrs[`custom-${cleanTag}.${a}`] ||
+                                   r.attrs[`custom-${cleanTag}_${a}`] ||
+                                   r.attrs[`custom-${a}`] ||
+                                   r.attrs[a] ||
+                                   "";
+                        })
                     ];
                     stmt.run(rowValues);
                 }
@@ -548,7 +562,8 @@ export class SupertagAVProjector {
             // 2. 根据设置判断是否即时写回物理 Markdown 属性
             const syncMode = (settings.get("virtualAvSyncMode") as string) || "realtime";
             if (syncMode === "realtime") {
-                const attrKey = `custom-${cleanAttrName}`;
+                const tag = binding.tagName;
+                const attrKey = `custom-${tag}.${cleanAttrName}`;
                 await post("/api/attr/setBlockAttrs", {
                     id: blockId,
                     attrs: {
