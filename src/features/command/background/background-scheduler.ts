@@ -120,7 +120,6 @@ class BackgroundScheduler {
         this.hasBoundLifecycleListeners = true;
 
         const checkMissedTasks = () => {
-            console.log("[BackgroundScheduler] 🔔 Window visible/focus, checking scheduled tasks...");
             this.evaluateAndRunDueTasks();
         };
 
@@ -195,7 +194,6 @@ class BackgroundScheduler {
     }
 
     public async reloadTasks() {
-        console.log("[BackgroundScheduler] 🔄 Reloading background tasks from storage...");
         const blockId = await this.resolveTargetCommandDbBlockId();
 
         let scriptText = "";
@@ -231,6 +229,11 @@ class BackgroundScheduler {
             const tasks = this.parseTsScriptToTasks(scriptText);
             const activeTaskIds = new Set<string>();
             const now = Date.now();
+
+            // TODO: [Cleanup in v1.11.0+] 自动清理 v1.10.x 测试版本残留的默认空定时规则 (新建 Cron 任务/占位空规则)
+            if (scriptText.trim() && tasks.length === 0) {
+                this.saveRules("").catch(() => {});
+            }
 
             for (const task of tasks) {
                 if (!task.enabled) continue;
@@ -300,6 +303,9 @@ class BackgroundScheduler {
             if (cronMatch) {
                 const cronExpr = cronMatch[1].trim();
                 const { ids: boundCommands, params: commandParams } = extractDispatchCommands(fullText);
+                // 只有当规则真实绑定了待执行的命令时才注册定时器，防止空草稿/占位注释空转
+                if (boundCommands.length === 0) continue;
+
                 tasks.push({
                     id: `task_cron_${taskIndex}_${cronExpr}`,
                     name: ruleName,
@@ -319,6 +325,8 @@ class BackgroundScheduler {
             if (condMatch) {
                 const evMatch = /event:\s*([^\]\)]+)/i.exec(condMatch[1] || fullText);
                 const { ids: boundCommands, params: commandParams } = extractDispatchCommands(fullText);
+                if (boundCommands.length === 0) continue;
+
                 tasks.push({
                     id: `task_cond_${taskIndex}`,
                     name: ruleName,
@@ -359,10 +367,8 @@ class BackgroundScheduler {
 
         if (earliestTimestamp === Infinity) return;
 
-        const delayMs = Math.max(1000, Math.min(earliestTimestamp - now, 3600 * 1000));
-        console.log(`[BackgroundScheduler] ⏱️ Next scheduled task in ${Math.round(delayMs / 1000)}s (at ${new Date(now + delayMs).toLocaleTimeString()})`);
-
-        this.wakeTimerId = setTimeout(() => {
+        const delayMs = Math.max(1000, earliestTimestamp - now);
+        this.wakeTimerId = window.setTimeout(() => {
             this.evaluateAndRunDueTasks();
         }, delayMs);
     }

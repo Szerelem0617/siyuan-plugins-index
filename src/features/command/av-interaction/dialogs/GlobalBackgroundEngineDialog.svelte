@@ -168,12 +168,16 @@
     }
 
     function compileAllRulesToTsScript(ruleList: AutomationRule[]): string {
+        const validRules = ruleList.filter(r => r.commandIds && r.commandIds.length > 0);
+        if (validRules.length === 0) {
+            return "";
+        }
         const scriptLines = [
             "// ─── IndexOS Background Engine Automation Script ───",
             "// 集中自动化任务脚本：支持定时周期与全局事件响应",
             ""
         ];
-        for (const r of ruleList) {
+        for (const r of validRules) {
             if (!r.enabled) continue;
             scriptLines.push(compileSingleRuleToScript(r));
             scriptLines.push("");
@@ -270,7 +274,8 @@
                 } catch {}
             }
 
-            rules = parseTsScriptToRules(storedVal);
+            // TODO: [Cleanup in v1.11.0+] 过滤并自动丢弃之前版本残留的无命令空规则/占位规则
+            rules = parseTsScriptToRules(storedVal).filter(r => r.commandIds && r.commandIds.length > 0);
             if (rules.length > 0 && !selectedRuleId) {
                 selectedRuleId = rules[0].id;
             }
