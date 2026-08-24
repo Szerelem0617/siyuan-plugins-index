@@ -467,8 +467,6 @@ export async function dispatchScopeEvents(
             }
         });
 
-        console.log(`[Supertag-Scope] 🔍 Target: id=${targetInfo.id}, type=${targetInfo.type}/${targetInfo.subType}, isTodo=${isTodo}, root=${targetInfo.root_id}, event=${eventName}, hostCandidatesCount=${hostCandidates.length}`);
-
         // 3. 对每个宿主拥有的 Supertag 规则进行作用域与过滤器核验
         const triggeredKeys = new Set<string>();
 
@@ -535,8 +533,6 @@ export async function dispatchScopeEvents(
                     });
                 }
 
-                console.log(`[Supertag-Scope] 🏢 Host #${cleanTag} (${host.id}) on ${eventName}: scope="${scope}", filter="${filter}", cond="${cfg.condition || ''}", filterMatched=${filterMatched}, scopeMatched=${scopeMatched}, condMatched=${conditionMatched}`);
-
                 if (filterMatched && scopeMatched && conditionMatched) {
                     // 如果目标块是列表容器 (type = 'l') 或列表项 (type = 'i')，尝试下寻到具体内容段落块以进行精准打标
                     let actualTargetId = targetInfo.id;
@@ -550,7 +546,6 @@ export async function dispatchScopeEvents(
                     const triggerKey = `${host.id}:${cleanTag}:${eventName}:${actualTargetId}`;
                     if (!triggeredKeys.has(triggerKey)) {
                         triggeredKeys.add(triggerKey);
-                        console.log(`[Supertag-Scope] 🎯 匹配成功！执行 #${cleanTag} (宿主=${host.id}) ➔ 目标块=${actualTargetId}`);
                         await triggerConditionalCommands(host.id, cleanTag, eventName, {
                             targetBlockId: actualTargetId,
                             hostBlockId: host.id

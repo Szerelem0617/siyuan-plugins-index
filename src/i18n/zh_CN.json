@@ -120,6 +120,14 @@
         "title": "开发者模式",
         "content": "开启命令管理，supertag，数据库管理等功能"
       },
+      "virtualAvSyncMode": {
+        "title": "虚拟投影回写模式",
+        "content": "选择虚拟 AV 数据库中修改属性时的回写策略",
+        "options": [
+          { "value": "realtime", "label": "内存即时同步 (防抖及时写回原属性)" },
+          { "value": "delayed", "label": "实体 SQLite 表延迟回写 (仅在关闭投影时统一回写)" }
+        ]
+      },
 
       "builderDesc": "📄 跳转子文档 · ➖ 跳转标题行"
     }

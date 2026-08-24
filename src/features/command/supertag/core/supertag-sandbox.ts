@@ -10,8 +10,6 @@ import { persistOutputVariablesToLayer4 } from "./supertag-persister";
 
 export async function executeTsScript(scriptText: string, context: CommandContext, eventName?: string): Promise<boolean> {
     try {
-        console.log(`[Supertag-TS] Executing dynamic TS/JS script for block ${context.blockEl?.getAttribute("data-node-id")} on event ${eventName}`);
-        
         const delay = (ms: number | string) => {
             let numMs = typeof ms === "number" ? ms : 0;
             if (typeof ms === "string") {
@@ -23,7 +21,6 @@ export async function executeTsScript(scriptText: string, context: CommandContex
         };
 
         const dispatch = async (commandId: string, params?: any) => {
-            console.log(`[Supertag-TS-Dispatch] Executing dispatch("${commandId}") on event "${eventName}"`);
             // TS 脚本参数 = #1 Pipeline 人为规划（最高优先级）
             const res = await dispatchCommand(commandId, null, context, { manual: params || {} });
             if (res && res.id) {
@@ -68,8 +65,6 @@ export async function executeTsScript(scriptText: string, context: CommandContex
         } else {
             body = `return (async ({ dispatch, state, delay, context, eventName, showMessage, updateVar }) => {\n${body}\n})(arguments[0]);`;
         }
-
-        console.log(`[Supertag-TS-CompiledBody] Executing compiled body for event "${eventName}":\n${body}`);
 
         const fn = new AsyncFunction("env", body);
         const env = {

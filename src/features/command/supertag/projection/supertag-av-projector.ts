@@ -1,22 +1,37 @@
 /**
  * supertag-av-projector.ts
  *
- * Supertag ➔ 思源原生 AV (Attribute View) 纯内存虚拟动态投影引擎 (Approach A)
+ * Supertag ➔ 思源原生 AV (Attribute View) 纯热 SQLite 数据库投影与双向同步引擎
  *
- * 核心能力：
- * 1. 【0 磁盘物理双存】通过 Hook 拦截前端 /api/av/renderAttributeView 请求，直接由 SQLite 内存生成标准的 IAV 结构体返回给前端。
- * 2. 【事务拦截防报错】拦截 /api/transactions 中的 updateAttrViewCell 事务，在内存中直接回写物理块 custom-* 属性，避免 Go 后端因找不到虚拟表抛出“操作失败”。
- * 3. 【就地即时渲染】建立/关闭绑定时，自动向前端派发轻量虚拟事务通知，无需重启思源即可在当前视口即时渲染/卸载。
- * 4. 【开闭状态自适应】支持一键开启/关闭虚拟投影，动态切换菜单状态。
+ * 核心架构：
+ * 1. 【热 SQLite 表单一真理源】
+ *    为每一个虚拟投影建立专属的 SQLite 数据表 (如 proj_xxx)，所有增删改查全量走标准 SQL 驱动。
+ * 2. 【双回写模式支持 (Settings 自适应)】
+ *    - 模式 1 (realtime 实时同步)：在 SQLite 热表中执行 UPDATE，并及时将变更写回物理块 custom-* 属性。
+ *    - 模式 2 (delayed 延迟统一回写)：在投影期间物理 Markdown 文件保持 0 写入，仅在用户点击“关闭虚拟投影”时，统一提取 _dirty 标记的行进行批量回写，随后清理 SQL 表。
+ * 3. 【零磁盘双存 + 事务拦截防报错】
+ *    通过 Hook 拦截 /api/av/renderAttributeView (从 SQL 表合成 IAV 视图) 与 /api/transactions (拦截虚拟表操作，阻止 Go 后端报错)。
+ * 4. 【就地即时渲染】
+ *    开启/关闭/修改投影时，向当前编辑器派发微事务刷新，无需重启思源即可即刻生效。
  */
 
 import { post } from "../../../../shared/api-client/request";
+import { getSqliteEngine } from "../../../sqlite/sqlite-manager";
+import { settings } from "../../../../core/settings";
 import { showMessage } from "siyuan";
+
+export interface VirtualAVBinding {
+    tagName: string;
+    tableName: string;
+    attrNames: string[];
+    blockId?: string;
+    createdAt: number;
+}
 
 export class SupertagAVProjector {
     private static instance: SupertagAVProjector | null = null;
-    /** 记录虚拟投影绑定关系: avId -> tagName */
-    private avToTagMap = new Map<string, string>();
+    /** 记录虚拟投影绑定关系: avId -> VirtualAVBinding */
+    private bindings = new Map<string, VirtualAVBinding>();
     /** 记录 Supertag -> avId 映射 */
     private tagToAvMap = new Map<string, string>();
     /** 标记拦截器是否已安装 */
@@ -47,7 +62,7 @@ export class SupertagAVProjector {
             try {
                 const url = typeof input === "string" ? input : (input instanceof Request ? input.url : input.toString());
 
-                // 1. 拦截 AV 渲染请求 -> 纯内存组装虚拟 IAV
+                // 1. 拦截 AV 渲染请求 -> 直接从热 SQLite 表合成虚拟 IAV 返回前端
                 if (url.includes("/api/av/renderAttributeView")) {
                     let reqBody: any = null;
                     if (typeof init?.body === "string") {
@@ -58,8 +73,7 @@ export class SupertagAVProjector {
 
                     const avId = reqBody?.id || reqBody?.avID;
                     if (avId && self.isVirtualProjection(avId)) {
-                        console.log(`⚡ [SupertagAVProjector] 拦截到虚拟 AV 渲染请求: ${avId}`);
-                        const virtualData = await self.generateVirtualIAV(avId);
+                        const virtualData = await self.generateVirtualIAVFromSQLite(avId);
                         if (virtualData) {
                             return new Response(JSON.stringify({
                                 code: 0,
@@ -73,7 +87,7 @@ export class SupertagAVProjector {
                     }
                 }
 
-                // 2. 拦截虚拟 AV 的单元格编辑事务 -> 直接在前端完成回写并返回成功，防止 Go 后端报错“操作失败”
+                // 2. 拦截虚拟 AV 的单元格编辑事务 -> 在 SQLite 中执行 UPDATE 并阻止 Go 后端报错
                 if (url.includes("/api/transactions")) {
                     let reqBody: any = null;
                     if (typeof init?.body === "string") {
@@ -96,7 +110,6 @@ export class SupertagAVProjector {
                     }
 
                     if (hasVirtualAvOp) {
-                        // 拦截成功，返回合成成功的事务响应，阻止后端报错
                         return new Response(JSON.stringify({
                             code: 0,
                             msg: "",
@@ -114,69 +127,456 @@ export class SupertagAVProjector {
             return originalFetch.apply(this, arguments as any);
         };
 
-        console.log(`🚀 [SupertagAVProjector] Fetch 渲染拦截网关已就绪 (虚拟视图 + 事务拦截防报错)`);
-    }
-
-    /**
-     * 绑定 Supertag ➔ 指定的 AV 数据库块
-     */
-    public bindTagToAV(tagName: string, avId: string) {
-        const cleanTag = tagName.replace(/^#/, "").trim();
-        const cleanAvId = avId.trim();
-        this.avToTagMap.set(cleanAvId, cleanTag);
-        this.tagToAvMap.set(cleanTag, cleanAvId);
-        this.persistBindings();
-        console.log(`[SupertagAVProjector] 🔗 成功建立虚拟投影绑定: AV(${cleanAvId}) ➔ #${cleanTag}`);
-    }
-
-    /**
-     * 关闭/解绑虚拟投影
-     */
-    public unbindTagFromAV(avId: string) {
-        const cleanAvId = avId.trim();
-        const tag = this.avToTagMap.get(cleanAvId);
-        this.avToTagMap.delete(cleanAvId);
-        if (tag) {
-            this.tagToAvMap.delete(tag);
-        }
-        this.persistBindings();
-        this.notifyFrontendToRerender(cleanAvId);
-        console.log(`[SupertagAVProjector] 🛑 已关闭虚拟投影绑定: AV(${cleanAvId})`);
+        console.log(`🚀 [SupertagAVProjector] 热 SQLite 拦截网关已就绪 (SQL驱动 + 零磁盘双存)`);
     }
 
     public isVirtualProjection(avId: string): boolean {
-        return this.avToTagMap.has(avId.trim());
+        return this.bindings.has(avId.trim());
     }
 
     public getBoundTag(avId: string): string | undefined {
-        return this.avToTagMap.get(avId.trim());
+        return this.bindings.get(avId.trim())?.tagName;
+    }
+
+    public getBinding(avId: string): VirtualAVBinding | undefined {
+        return this.bindings.get(avId.trim());
     }
 
     /**
-     * 触发对指定 AV 数据库的 Supertag 虚拟投影
+     * 触发对指定 AV 数据库的 Supertag 虚拟投影，并在 SQLite 中初始化热表
      */
     public async projectSupertagToAV(tagName: string, avId: string, blockId?: string): Promise<{ success: boolean; rowCount: number; message?: string }> {
         const cleanTag = tagName.replace(/^#/, "").trim();
         const cleanAvId = avId.trim();
-        this.bindTagToAV(cleanTag, cleanAvId);
+        const tableName = "proj_" + cleanAvId.replace(/[^a-zA-Z0-9_]/g, "_");
 
-        // 即刻通知前端所有打开的 Protyle 视图重新渲染该 AV 块
+        console.group(`🚀 [SupertagAVProjector] 正在初始化热 SQLite 表: ${tableName} (Supertag: #${cleanTag})`);
+
+        // 1. 从思源主 SQLite 查询挂载该 Supertag 的所有块实体
+        const sqlRes = await post("/api/query/sql", {
+            stmt: `SELECT id, root_id, content, ial, updated, created FROM blocks WHERE ial LIKE '%${cleanTag}%' ORDER BY updated DESC LIMIT 500`
+        });
+        const rows: any[] = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
+        console.log(`📋 扫描到 ${rows.length} 个实体块`);
+
+        // 2. 收集解析所有的属性名
+        const attrKeysSet = new Set<string>();
+        const parsedRows: Array<{ id: string; content: string; root_id: string; updated: number; attrs: Record<string, string> }> = [];
+
+        for (const row of rows) {
+            const attrs = this.parseIALString(row.ial || "");
+            parsedRows.push({
+                id: row.id,
+                content: row.content || "未命名项",
+                root_id: row.root_id || "",
+                updated: parseInt(row.updated || "0") || Date.now(),
+                attrs
+            });
+
+            for (const k of Object.keys(attrs)) {
+                if (k.startsWith("custom-") && k !== "custom-supertags" && k !== "custom-index-tags") {
+                    attrKeysSet.add(k.replace(/^custom-/, ""));
+                } else if (["status", "priority", "due", "memo", "bookmark"].includes(k)) {
+                    attrKeysSet.add(k);
+                }
+            }
+        }
+
+        if (attrKeysSet.size === 0) {
+            attrKeysSet.add("status");
+        }
+
+        const attrNames = Array.from(attrKeysSet);
+
+        // 3. 在纯内存 SQLite 引擎中构建热表
+        try {
+            const { db } = await getSqliteEngine();
+            db.exec(`DROP TABLE IF EXISTS "${tableName}";`);
+
+            const colDefs = [
+                `"id" TEXT PRIMARY KEY`,
+                `"title" TEXT`,
+                `"_root_id" TEXT`,
+                `"_updated" INTEGER`,
+                `"_dirty" INTEGER DEFAULT 0`,
+                ...attrNames.map(a => `"${a}" TEXT`)
+            ].join(",\n    ");
+
+            const createSql = `CREATE TABLE "${tableName}" (\n    ${colDefs}\n);`;
+            db.exec(createSql);
+            console.log(`🏗️ SQLite 热表建表成功:\n${createSql}`);
+
+            // 批量插入初始数据
+            if (parsedRows.length > 0) {
+                const colNames = ["id", "title", "_root_id", "_updated", "_dirty", ...attrNames];
+                const placeholders = colNames.map(() => "?").join(", ");
+                const insertSql = `INSERT INTO "${tableName}" (${colNames.map(c => `"${c}"`).join(", ")}) VALUES (${placeholders});`;
+                const stmt = db.prepare(insertSql);
+
+                for (const r of parsedRows) {
+                    const rowValues = [
+                        r.id,
+                        r.content,
+                        r.root_id,
+                        r.updated,
+                        0,
+                        ...attrNames.map(a => r.attrs[`custom-${a}`] || r.attrs[a] || "")
+                    ];
+                    stmt.run(rowValues);
+                }
+                stmt.free();
+                console.log(`📥 成功向 SQLite 热表注入 ${parsedRows.length} 条数据`);
+            }
+        } catch (dbErr) {
+            console.error(`❌ SQLite 热表初始化失败:`, dbErr);
+            console.groupEnd();
+            return { success: false, rowCount: 0, message: String(dbErr) };
+        }
+
+        // 4. 记录绑定信息
+        const binding: VirtualAVBinding = {
+            tagName: cleanTag,
+            tableName,
+            attrNames,
+            blockId,
+            createdAt: Date.now()
+        };
+        this.bindings.set(cleanAvId, binding);
+        this.tagToAvMap.set(cleanTag, cleanAvId);
+        this.persistBindings();
+
+        console.log(`🔗 虚拟投影已成功接入 SQLite 引擎: AV(${cleanAvId}) ➔ 表 ${tableName}`);
+        console.groupEnd();
+
+        // 5. 即刻通知前端编辑器重新拉取数据渲染
         this.notifyFrontendToRerender(cleanAvId, blockId);
 
-        // 查询当前挂载数作为反馈
-        const countRes = await post("/api/query/sql", {
-            stmt: `SELECT count(1) as total FROM blocks WHERE ial LIKE '%${cleanTag}%'`
-        });
-        const total = (Array.isArray(countRes) ? countRes[0]?.total : countRes?.data?.[0]?.total) || 0;
-
-        return { success: true, rowCount: total };
+        return { success: true, rowCount: parsedRows.length };
     }
 
     /**
-     * 通知当前前端编辑器即时重绘指定 AV 块 (无需重启思源)
+     * 关闭/解绑虚拟投影 (支持延迟模式下自动统一回写)
+     */
+    public async unbindTagFromAV(avId: string): Promise<void> {
+        const cleanAvId = avId.trim();
+        const binding = this.bindings.get(cleanAvId);
+        if (!binding) return;
+
+        console.group(`🛑 [SupertagAVProjector] 正在关闭虚拟投影: AV(${cleanAvId})`);
+
+        const syncMode = (settings.get("virtualAvSyncMode") as string) || "realtime";
+
+        // 如果是延迟回写模式，在关闭投影时将 _dirty = 1 的所有修改统一回写到文档本体
+        if (syncMode === "delayed") {
+            try {
+                const { db } = await getSqliteEngine();
+                const dirtyRes = db.exec(`SELECT * FROM "${binding.tableName}" WHERE _dirty = 1;`);
+                
+                if (dirtyRes && dirtyRes.length > 0 && dirtyRes[0].values.length > 0) {
+                    const columns = dirtyRes[0].columns;
+                    const rows = dirtyRes[0].values;
+                    console.log(`💾 [Delayed Flush] 检测到 ${rows.length} 条脏数据，正在统一回写到物理块属性...`);
+
+                    const idIdx = columns.indexOf("id");
+                    const batchAttrs: Array<{ id: string; attrs: Record<string, string> }> = [];
+
+                    for (const row of rows) {
+                        const blockId = String(row[idIdx]);
+                        const attrs: Record<string, string> = {};
+
+                        for (let c = 0; c < columns.length; c++) {
+                            const col = columns[c];
+                            if (col !== "id" && col !== "title" && !col.startsWith("_")) {
+                                const val = row[c] !== null && row[c] !== undefined ? String(row[c]) : "";
+                                attrs[`custom-${col}`] = val;
+                            }
+                        }
+                        batchAttrs.push({ id: blockId, attrs });
+                    }
+
+                    // 调用批量属性写入
+                    try {
+                        await post("/api/attr/batchSetBlockAttrs", { blockAttrs: batchAttrs });
+                    } catch (batchErr) {
+                        // 备用逐个写入
+                        for (const item of batchAttrs) {
+                            await post("/api/attr/setBlockAttrs", { id: item.id, attrs: item.attrs });
+                        }
+                    }
+
+                    showMessage(`✓ 虚拟投影已关闭，已将 ${rows.length} 个修改的属性统一回写到文档本体。`, 4000);
+                }
+            } catch (flushErr) {
+                console.error(`[SupertagAVProjector] 统一回写异常:`, flushErr);
+            }
+        }
+
+        // 清理 SQLite 表
+        try {
+            const { db } = await getSqliteEngine();
+            db.exec(`DROP TABLE IF EXISTS "${binding.tableName}";`);
+            console.log(`🧹 已清理 SQLite 临时热表: ${binding.tableName}`);
+        } catch (e) {}
+
+        this.bindings.delete(cleanAvId);
+        this.tagToAvMap.delete(binding.tagName);
+        this.persistBindings();
+
+        console.groupEnd();
+
+        // 通知前端恢复为普通数据库视图
+        this.notifyFrontendToRerender(cleanAvId, binding.blockId);
+        if (syncMode === "realtime") {
+            showMessage("✓ 已关闭虚拟投影，恢复为普通数据库视图");
+        }
+    }
+
+    /**
+     * 【从热 SQLite 表组装 IAV 协议】
+     */
+    public async generateVirtualIAVFromSQLite(avId: string): Promise<any | null> {
+        const binding = this.bindings.get(avId);
+        if (!binding) return null;
+
+        try {
+            const { db } = await getSqliteEngine();
+
+            // 1. 查询热表所有行
+            const res = db.exec(`SELECT * FROM "${binding.tableName}" ORDER BY _updated DESC;`);
+            if (!res || res.length === 0) {
+                return null;
+            }
+
+            const columnsList = res[0].columns;
+            const valuesList = res[0].values;
+
+            // 2. 区分主键列与自定义属性列
+            const attrCols = columnsList.filter((c: string) => c !== "id" && c !== "title" && !c.startsWith("_"));
+
+            // 3. 构建列定义 (Columns)
+            const avColumns: any[] = [];
+
+            // 主键列
+            const primaryColId = "col_primary_block";
+            avColumns.push({
+                id: primaryColId,
+                name: "标题",
+                type: "block",
+                icon: "",
+                width: "320px",
+                hidden: false,
+                wrapField: true
+            });
+
+            // 自定义属性列
+            for (const attr of attrCols) {
+                const colId = `col_${attr}`;
+                
+                // 从 SQLite 查询当前列的所有去重枚举值用于构建 select options
+                const optRes = db.exec(`SELECT DISTINCT "${attr}" FROM "${binding.tableName}" WHERE "${attr}" IS NOT NULL AND "${attr}" != '';`);
+                const options: Array<{ id: string; name: string; color: string }> = [];
+
+                if (optRes && optRes.length > 0) {
+                    optRes[0].values.forEach((valArr: any[], idx: number) => {
+                        const optVal = String(valArr[0]);
+                        options.push({
+                            id: `opt_${attr}_${optVal}`,
+                            name: optVal,
+                            color: String((idx % 8) + 1)
+                        });
+                    });
+                }
+
+                let displayName = attr;
+                if (attr === "status" || attr === "index-task") displayName = "状态";
+                else if (attr === "priority") displayName = "优先级";
+                else if (attr === "due" || attr === "due_date") displayName = "截止时间";
+                else if (attr === "memo") displayName = "备注";
+
+                avColumns.push({
+                    id: colId,
+                    name: displayName,
+                    type: "select",
+                    icon: "",
+                    width: "160px",
+                    hidden: false,
+                    wrapField: false,
+                    options
+                });
+            }
+
+            // 4. 构建数据行 (Rows & Cells)
+            const idIdx = columnsList.indexOf("id");
+            const titleIdx = columnsList.indexOf("title");
+
+            const avRows = valuesList.map((rowArr: any[]) => {
+                const rowId = String(rowArr[idIdx]);
+                const rowTitle = String(rowArr[titleIdx] || "未命名项");
+
+                const cells: any[] = [];
+
+                // 主键单元格
+                cells.push({
+                    id: `${rowId}_${primaryColId}`,
+                    color: "",
+                    bgColor: "",
+                    valueType: "block",
+                    value: {
+                        id: `${rowId}_${primaryColId}`,
+                        keyID: primaryColId,
+                        blockID: rowId,
+                        type: "block",
+                        block: {
+                            id: rowId,
+                            content: rowTitle,
+                            icon: ""
+                        }
+                    }
+                });
+
+                // 各属性单元格
+                for (const attr of attrCols) {
+                    const colId = `col_${attr}`;
+                    const aIdx = columnsList.indexOf(attr);
+                    const val = aIdx !== -1 && rowArr[aIdx] !== null && rowArr[aIdx] !== undefined ? String(rowArr[aIdx]) : "";
+
+                    const selectItems = val ? [{
+                        id: `opt_${attr}_${val}`,
+                        content: val,
+                        name: val,
+                        color: "1"
+                    }] : [];
+
+                    cells.push({
+                        id: `${rowId}_${colId}`,
+                        color: "",
+                        bgColor: "",
+                        valueType: "select",
+                        value: {
+                            id: `${rowId}_${colId}`,
+                            keyID: colId,
+                            blockID: rowId,
+                            type: "select",
+                            mSelect: selectItems
+                        }
+                    });
+                }
+
+                return {
+                    id: rowId,
+                    cells
+                };
+            });
+
+            // 5. 组装标准 IAV 数据对象
+            const viewId = "view_sql_table";
+            const tableData = {
+                id: avId,
+                name: `Supertag 投影: #${binding.tagName}`,
+                viewID: viewId,
+                viewType: "table",
+                views: [
+                    {
+                        id: viewId,
+                        name: "表格",
+                        type: "table",
+                        icon: "iconTable",
+                        hideAttrViewName: false,
+                        pageSize: 50,
+                        showIcon: true,
+                        wrapField: false,
+                        filters: [],
+                        sorts: [],
+                        groups: []
+                    }
+                ],
+                view: {
+                    id: viewId,
+                    name: "表格",
+                    type: "table",
+                    icon: "iconTable",
+                    hideAttrViewName: false,
+                    pageSize: 50,
+                    showIcon: true,
+                    wrapField: false,
+                    columns: avColumns,
+                    rows: avRows,
+                    rowCount: avRows.length,
+                    filters: [],
+                    sorts: [],
+                    groups: []
+                }
+            };
+
+            console.log(`✅ 成功从 SQLite 热表生成 IAV 协议: ${avRows.length} 行`);
+            console.groupEnd();
+            return tableData;
+        } catch (err) {
+            console.error(`❌ generateVirtualIAVFromSQLite 异常:`, err);
+            console.groupEnd();
+            return null;
+        }
+    }
+
+    /**
+     * 【反向编辑回写】在 SQLite 中执行 SQL UPDATE，并根据设置判断是否即时回写块属性
+     */
+    public async handleAVCellUpdate(operation: any): Promise<void> {
+        if (!operation || this.isSyncing) return;
+        const avId = operation.avID || operation.avId;
+        const keyId = operation.keyID || operation.keyId;
+        const blockId = operation.rowID || operation.itemID || operation.rowId;
+        const rawData = operation.data !== undefined ? operation.data : operation.value;
+
+        const binding = this.bindings.get(avId);
+        if (!binding || !keyId || !blockId) return;
+
+        try {
+            this.isSyncing = true;
+            const cleanAttrName = keyId.replace(/^col_/, "");
+            if (cleanAttrName === "primary_block") {
+                this.isSyncing = false;
+                return;
+            }
+
+            const cleanValue = this.extractCleanValue(rawData);
+            const { db } = await getSqliteEngine();
+
+            // 1. 在 SQLite 热表中执行 SQL UPDATE
+            const updateSql = `UPDATE "${binding.tableName}" SET "${cleanAttrName}" = ?, _dirty = 1, _updated = ? WHERE id = ?;`;
+            db.run(updateSql, [cleanValue, Date.now(), blockId]);
+            console.log(`⚡ [SQLite Engine] 执行 SQL 更新: UPDATE "${binding.tableName}" SET "${cleanAttrName}" = '${cleanValue}' WHERE id = '${blockId}'`);
+
+            // 2. 根据设置判断是否即时写回物理 Markdown 属性
+            const syncMode = (settings.get("virtualAvSyncMode") as string) || "realtime";
+            if (syncMode === "realtime") {
+                const attrKey = `custom-${cleanAttrName}`;
+                await post("/api/attr/setBlockAttrs", {
+                    id: blockId,
+                    attrs: {
+                        [attrKey]: cleanValue
+                    }
+                });
+                console.log(`🔄 [Realtime Sync] 已及时写回原块属性: ${attrKey} = "${cleanValue}"`);
+            } else {
+                console.log(`💤 [Delayed Mode] 修改已保存在 SQLite 热表，将在关闭投影时统一回写。`);
+            }
+
+            // 3. 通知 Protyle 刷新表格显示
+            setTimeout(() => {
+                this.notifyFrontendToRerender(avId);
+                this.isSyncing = false;
+            }, 100);
+        } catch (e) {
+            console.error(`[SupertagAVProjector] handleAVCellUpdate 异常:`, e);
+            this.isSyncing = false;
+        }
+    }
+
+    /**
+     * 通知当前前端编辑器即时重绘指定 AV 块
      */
     public notifyFrontendToRerender(avId: string, blockId?: string) {
-        // 1. 派发 WebSocket 事务模拟事件，唤醒所有 open Protyle 内部的 refreshAV
         try {
             window.dispatchEvent(new CustomEvent("ws-main", {
                 detail: {
@@ -192,260 +592,15 @@ export class SupertagAVProjector {
             }));
         } catch (e) {}
 
-        // 2. 清理 DOM 上的旧缓存容器，促使 Protyle 重新发起 fetchSyncPost
         try {
             const els = document.querySelectorAll(`div[data-type="NodeAttributeView"]`);
             els.forEach((el: any) => {
                 const curAvId = el.getAttribute("data-av-id") || el.querySelector(".av")?.getAttribute("data-av-id");
                 if (curAvId === avId || (blockId && el.getAttribute("data-node-id") === blockId)) {
-                    const container = el.querySelector(".av__container");
-                    if (container) {
-                        container.remove();
-                    }
                     el.removeAttribute("data-render");
                 }
             });
         } catch (e) {}
-    }
-
-    /**
-     * 【核心纯内存生成器】从 SQLite 动态组装前端渲染所需的 IAV 结构体
-     */
-    public async generateVirtualIAV(avId: string): Promise<any | null> {
-        const tagName = this.avToTagMap.get(avId);
-        if (!tagName) return null;
-
-        console.group(`✨ [SupertagAVProjector] 纯内存组装虚拟 IAV 视图: #${tagName}`);
-
-        // 1. 从 SQLite 查询所有实体块
-        const sqlRes = await post("/api/query/sql", {
-            stmt: `SELECT id, root_id, content, ial, updated, created FROM blocks WHERE ial LIKE '%${tagName}%' ORDER BY updated DESC LIMIT 500`
-        });
-        const rows: any[] = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
-        console.log(`📋 找到 ${rows.length} 个实体块`);
-
-        // 2. 收集解析所有的属性名，动态推导列
-        const attrKeysSet = new Set<string>();
-        const parsedRows: Array<{ id: string; content: string; attrs: Record<string, string> }> = [];
-
-        for (const row of rows) {
-            const attrs = this.parseIALString(row.ial || "");
-            parsedRows.push({
-                id: row.id,
-                content: row.content || "未命名项",
-                attrs
-            });
-
-            for (const k of Object.keys(attrs)) {
-                if (k.startsWith("custom-") && k !== "custom-supertags" && k !== "custom-index-tags") {
-                    attrKeysSet.add(k.replace(/^custom-/, ""));
-                } else if (["status", "priority", "due", "memo", "bookmark"].includes(k)) {
-                    attrKeysSet.add(k);
-                }
-            }
-        }
-
-        // 如果没有其他属性，默认放一个 status 状态列
-        if (attrKeysSet.size === 0) {
-            attrKeysSet.add("status");
-        }
-
-        // 3. 构建列定义 (Columns)
-        const columns: any[] = [];
-
-        // 首列：主键 (Block)
-        const primaryColId = "col_primary_block";
-        columns.push({
-            id: primaryColId,
-            name: "标题",
-            type: "block",
-            icon: "",
-            width: "320px",
-            hidden: false,
-            wrapField: true
-        });
-
-        // 收集各属性列的所有候选值，用于为 select 生成 options
-        for (const attrName of attrKeysSet) {
-            const colId = `col_${attrName}`;
-            const optSet = new Set<string>();
-
-            for (const r of parsedRows) {
-                const val = r.attrs[`custom-${attrName}`] || r.attrs[attrName];
-                if (val) optSet.add(val);
-            }
-
-            const options = Array.from(optSet).map((optName, idx) => ({
-                id: `opt_${attrName}_${optName}`,
-                name: optName,
-                color: String((idx % 8) + 1)
-            }));
-
-            // 属性列名中英文映射
-            let displayName = attrName;
-            if (attrName === "status" || attrName === "index-task") displayName = "状态";
-            else if (attrName === "priority") displayName = "优先级";
-            else if (attrName === "due" || attrName === "due_date") displayName = "截止时间";
-            else if (attrName === "memo") displayName = "备注";
-
-            columns.push({
-                id: colId,
-                name: displayName,
-                type: "select",
-                icon: "",
-                width: "160px",
-                hidden: false,
-                wrapField: false,
-                options: options
-            });
-        }
-
-        // 4. 构建数据行与单元格 (Rows & Cells)
-        const avRows: any[] = [];
-
-        for (const r of parsedRows) {
-            const cells: any[] = [];
-
-            // 主键单元格 (必须包含 keyID 且与 columns[0].id 一致)
-            cells.push({
-                id: `${r.id}_${primaryColId}`,
-                color: "",
-                bgColor: "",
-                valueType: "block",
-                value: {
-                    id: `${r.id}_${primaryColId}`,
-                    keyID: primaryColId,
-                    blockID: r.id,
-                    type: "block",
-                    block: {
-                        id: r.id,
-                        content: r.content,
-                        icon: ""
-                    }
-                }
-            });
-
-            // 属性单元格
-            for (const attrName of attrKeysSet) {
-                const colId = `col_${attrName}`;
-                const val = r.attrs[`custom-${attrName}`] || r.attrs[attrName] || "";
-
-                const selectItem = val ? [{
-                    id: `opt_${attrName}_${val}`,
-                    content: val,
-                    name: val,
-                    color: "1"
-                }] : [];
-
-                cells.push({
-                    id: `${r.id}_${colId}`,
-                    color: "",
-                    bgColor: "",
-                    valueType: "select",
-                    value: {
-                        id: `${r.id}_${colId}`,
-                        keyID: colId,
-                        blockID: r.id,
-                        type: "select",
-                        mSelect: selectItem
-                    }
-                });
-            }
-
-            avRows.push({
-                id: r.id,
-                cells: cells
-            });
-        }
-
-        // 5. 组装标准 IAV 数据载荷
-        const viewId = "view_virtual_table";
-        const tableData = {
-            id: avId,
-            name: `Supertag 投影: #${tagName}`,
-            viewID: viewId,
-            viewType: "table",
-            views: [
-                {
-                    id: viewId,
-                    name: "表格",
-                    type: "table",
-                    icon: "iconTable",
-                    hideAttrViewName: false,
-                    pageSize: 50,
-                    showIcon: true,
-                    wrapField: false,
-                    filters: [],
-                    sorts: [],
-                    groups: []
-                }
-            ],
-            view: {
-                id: viewId,
-                name: "表格",
-                type: "table",
-                icon: "iconTable",
-                hideAttrViewName: false,
-                pageSize: 50,
-                showIcon: true,
-                wrapField: false,
-                columns: columns,
-                rows: avRows,
-                rowCount: avRows.length,
-                filters: [],
-                sorts: [],
-                groups: []
-            }
-        };
-
-        console.log(`✅ [SupertagAVProjector] 成功生成虚拟 IAV: ${avRows.length} 行, ${columns.length} 列`);
-        console.groupEnd();
-
-        return tableData;
-    }
-
-    /**
-     * 【反向回写】处理用户在前端编辑单元格时的事务回写
-     */
-    public async handleAVCellUpdate(operation: any): Promise<void> {
-        if (!operation || this.isSyncing) return;
-        const avId = operation.avID || operation.avId;
-        const keyId = operation.keyID || operation.keyId;
-        const blockId = operation.rowID || operation.itemID || operation.rowId;
-        const rawData = operation.data !== undefined ? operation.data : operation.value;
-
-        if (!avId || !keyId || !blockId || !this.isVirtualProjection(avId)) return;
-
-        try {
-            this.isSyncing = true;
-            // 从 keyId (如 "col_status") 提取出实际属性名 "status"
-            const cleanAttrName = keyId.replace(/^col_/, "");
-            if (cleanAttrName === "primary_block") {
-                this.isSyncing = false;
-                return;
-            }
-
-            const cleanValue = this.extractCleanValue(rawData);
-            const attrKey = `custom-${cleanAttrName}`;
-
-            console.log(`🔄 [SupertagAVProjector] 捕获虚拟 AV 编辑: 实体(${blockId}) ➔ ${attrKey} = "${cleanValue}"`);
-
-            await post("/api/attr/setBlockAttrs", {
-                id: blockId,
-                attrs: {
-                    [attrKey]: cleanValue
-                }
-            });
-
-            // 触发通知 Protyle 重新拉取虚拟视图
-            setTimeout(() => {
-                this.notifyFrontendToRerender(avId);
-                this.isSyncing = false;
-            }, 100);
-        } catch (e) {
-            console.error(`[SupertagAVProjector] 反向回写失败:`, e);
-            this.isSyncing = false;
-        }
     }
 
     private parseIALString(ial: string): Record<string, string> {
@@ -475,22 +630,22 @@ export class SupertagAVProjector {
 
     private persistBindings() {
         try {
-            const obj: Record<string, string> = {};
-            for (const [k, v] of this.avToTagMap.entries()) {
+            const obj: Record<string, VirtualAVBinding> = {};
+            for (const [k, v] of this.bindings.entries()) {
                 obj[k] = v;
             }
-            localStorage.setItem("indexos_virtual_av_bindings", JSON.stringify(obj));
+            localStorage.setItem("indexos_virtual_av_sql_bindings", JSON.stringify(obj));
         } catch (e) {}
     }
 
     private loadPersistedBindings() {
         try {
-            const raw = localStorage.getItem("indexos_virtual_av_bindings");
+            const raw = localStorage.getItem("indexos_virtual_av_sql_bindings");
             if (raw) {
                 const obj = JSON.parse(raw);
                 for (const [k, v] of Object.entries(obj)) {
-                    this.avToTagMap.set(k, String(v));
-                    this.tagToAvMap.set(String(v), k);
+                    this.bindings.set(k, v as VirtualAVBinding);
+                    this.tagToAvMap.set((v as VirtualAVBinding).tagName, k);
                 }
             }
         } catch (e) {}
