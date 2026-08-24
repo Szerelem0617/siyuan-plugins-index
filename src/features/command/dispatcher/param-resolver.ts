@@ -196,9 +196,15 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
         blockId = getBlockId(context);
     } catch (_) {}
 
+    const cleanTag = (context.supertag || "").replace(/#/g, "").trim();
+
     const variables: Record<string, string> = {
         "date": formatDate(new Date()),
         "time": formatTime(new Date()),
+        "supertag": cleanTag,
+        "tag": cleanTag,
+        "context.supertag": cleanTag,
+        "context.tag": cleanTag,
         "self.id": blockId || "",
         "self": blockId || "",
         "this.id": blockId || "",
