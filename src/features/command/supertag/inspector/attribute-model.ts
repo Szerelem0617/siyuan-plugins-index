@@ -238,6 +238,14 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                     matchedTag = prefixTag;
                     subAttrKey = parts.slice(1).join("_");
                 }
+            } else if (rawClean.includes("-")) {
+                for (const tag of supertags) {
+                    if (rawClean.startsWith(`${tag}-`)) {
+                        matchedTag = tag;
+                        subAttrKey = rawClean.slice(tag.length + 1);
+                        break;
+                    }
+                }
             }
 
             if (matchedTag) {
@@ -486,7 +494,12 @@ function buildFieldOptions(key: string, schema: any, curVal: string): TypedField
 export async function updateBlockAttributeValue(blockId: string, attrKey: string, attrValue: string): Promise<boolean> {
     const cleanId = blockId.trim();
     const isBuiltin = ["name", "alias", "memo", "bookmark"].includes(attrKey);
-    const rawKey = isBuiltin ? attrKey : (attrKey.startsWith("custom-") ? attrKey : `custom-${attrKey}`);
+    let rawKey = attrKey;
+    if (!isBuiltin) {
+        let clean = attrKey.replace(/^custom-/, "");
+        clean = clean.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-");
+        rawKey = `custom-${clean}`;
+    }
 
     try {
         await post("/api/attr/setBlockAttrs", {

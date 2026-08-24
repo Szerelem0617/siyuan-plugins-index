@@ -82,11 +82,11 @@ export async function persistOutputVariablesToLayer4(
             return;
         }
 
-        // 3. 构造带命名空间的物理属性键名: custom-<tag>.<varName>
+        // 3. 构造带命名空间的物理属性键名: custom-<tag>-<varName>
         const customAttrs: Record<string, string> = {};
         for (const [varName, valStr] of activeEntries) {
-            const cleanVar = sanitizeBlockAttrName(varName);
-            const namespacedKey = `custom-${cleanTag}.${cleanVar}`;
+            const cleanVar = sanitizeBlockAttrName(varName).replace(/^custom-/, "");
+            const namespacedKey = `custom-${cleanTag}-${cleanVar}`;
             customAttrs[namespacedKey] = valStr;
         }
 

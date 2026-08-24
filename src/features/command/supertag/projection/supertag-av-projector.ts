@@ -208,7 +208,9 @@ export class SupertagAVProjector {
                             attrKeysSet.add(rawClean.replace(`${cleanTag}.`, ""));
                         } else if (rawClean.startsWith(`${cleanTag}_`)) {
                             attrKeysSet.add(rawClean.replace(`${cleanTag}_`, ""));
-                        } else if (!rawClean.includes(".") && !rawClean.includes("_")) {
+                        } else if (rawClean.startsWith(`${cleanTag}-`)) {
+                            attrKeysSet.add(rawClean.replace(`${cleanTag}-`, ""));
+                        } else if (!rawClean.includes(".") && !rawClean.includes("_") && !rawClean.includes("-")) {
                             // 全局共享列
                             attrKeysSet.add(rawClean);
                         }
@@ -254,7 +256,8 @@ export class SupertagAVProjector {
                         r.updated,
                         0,
                         ...attrNames.map(a => {
-                            return r.attrs[`custom-${cleanTag}.${a}`] ||
+                            return r.attrs[`custom-${cleanTag}-${a}`] ||
+                                   r.attrs[`custom-${cleanTag}.${a}`] ||
                                    r.attrs[`custom-${cleanTag}_${a}`] ||
                                    r.attrs[`custom-${a}`] ||
                                    r.attrs[a] ||
@@ -563,7 +566,7 @@ export class SupertagAVProjector {
             const syncMode = (settings.get("virtualAvSyncMode") as string) || "realtime";
             if (syncMode === "realtime") {
                 const tag = binding.tagName;
-                const attrKey = `custom-${tag}.${cleanAttrName}`;
+                const attrKey = `custom-${tag}-${cleanAttrName}`;
                 await post("/api/attr/setBlockAttrs", {
                     id: blockId,
                     attrs: {

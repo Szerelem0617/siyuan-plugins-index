@@ -32,26 +32,21 @@ function resolveNamespacedAttrName(rawName: string, context?: CommandContext): s
 
     const cleanTag = (context?.supertag || "").replace(/#/g, "").trim().toLowerCase();
 
-    // 3. 在 Supertag 触发上下文中：自动赋予该 Tag 的命名空间
+    // 3. 在 Supertag 触发上下文中：自动赋予该 Tag 的命名空间 (物理存储格式: custom-<tag>-<attr>)
     if (cleanTag) {
         let pure = trimmed.replace(/^custom-/, "");
 
         // 已经带有当前 Tag 前缀 (如 task.status 或 task_status 或 task-status)
         if (pure.toLowerCase().startsWith(`${cleanTag}.`)) {
-            const sub = pure.slice(cleanTag.length + 1);
-            return `custom-${cleanTag}.${sub}`;
-        }
-        if (pure.toLowerCase().startsWith(`${cleanTag}_`)) {
-            const sub = pure.slice(cleanTag.length + 1);
-            return `custom-${cleanTag}.${sub}`;
-        }
-        if (pure.toLowerCase().startsWith(`${cleanTag}-`)) {
-            const sub = pure.slice(cleanTag.length + 1);
-            return `custom-${cleanTag}.${sub}`;
+            pure = pure.slice(cleanTag.length + 1);
+        } else if (pure.toLowerCase().startsWith(`${cleanTag}_`)) {
+            pure = pure.slice(cleanTag.length + 1);
+        } else if (pure.toLowerCase().startsWith(`${cleanTag}-`)) {
+            pure = pure.slice(cleanTag.length + 1);
         }
 
-        // 默认自动注入命名空间: custom-<tag>.<attr>
-        return `custom-${cleanTag}.${pure}`;
+        const cleanSub = sanitizeBlockAttrName(pure).replace(/^custom-/, "");
+        return `custom-${cleanTag}-${cleanSub}`;
     }
 
     // 4. 无 Supertag 上下文时作为普通自定义属性
@@ -117,7 +112,7 @@ export async function setBlockAttribute(
             if (boundAvId) {
                 const binding = supertagAVProjector.getBinding(boundAvId);
                 if (binding) {
-                    const cleanCol = cleanAttrName.replace(`custom-${cleanTag}.`, "").replace(`custom-`, "");
+                    const cleanCol = cleanAttrName.replace(new RegExp(`^custom-${cleanTag}[.-]`), "").replace(/^custom-/, "");
                     const { db } = await getSqliteEngine();
                     db.run(`UPDATE "${binding.tableName}" SET "${cleanCol}" = ?, _updated = ? WHERE id = ?;`, [rawVal, Date.now(), rawId]);
                     supertagAVProjector.notifyFrontendToRerender(boundAvId, rawId);
