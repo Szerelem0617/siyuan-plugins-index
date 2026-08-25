@@ -52,6 +52,8 @@ export class SupertagAVProjector {
     private bindings = new Map<string, VirtualAVBinding>();
     /** 记录 Supertag -> avId 映射 */
     private tagToAvMap = new Map<string, string>();
+    /** 记录用户切换的投影视图模式: avId -> boolean (true: 投影视图, false: 物理数据视图) */
+    private projectionModes = new Map<string, boolean>();
     /** 标记拦截器是否已安装 */
     private isHookInstalled = false;
     /** 防回环互锁 */
@@ -164,7 +166,44 @@ export class SupertagAVProjector {
     }
 
     public isVirtualProjection(avId: string): boolean {
-        return this.bindings.has(avId.trim());
+        const cleanId = avId.trim();
+        if (!this.bindings.has(cleanId)) return false;
+        // 如果用户显式关闭了该数据库的投影视图，返回 false
+        if (this.projectionModes.has(cleanId)) {
+            return Boolean(this.projectionModes.get(cleanId));
+        }
+        return true; // 默认开启投影视图
+    }
+
+    public isProjectionActive(avId: string): boolean {
+        return this.isVirtualProjection(avId);
+    }
+
+    public async toggleProjectionMode(avId: string, customTag?: string): Promise<boolean> {
+        const cleanId = avId.trim();
+        const currentActive = this.isVirtualProjection(cleanId);
+        const nextState = !currentActive;
+
+        const boundTag = customTag || this.getBoundTag(cleanId) || "";
+
+        if (nextState) {
+            // 切换为虚拟投影模式
+            if (boundTag && !this.bindings.has(cleanId)) {
+                await this.projectSupertagToAV(boundTag, cleanId);
+            }
+            this.projectionModes.set(cleanId, true);
+            this.persistBindings();
+            this.notifyFrontendToRerender(cleanId);
+            showMessage(`⚡ 已切换至 #${boundTag || "Supertag"} 标签虚拟投影视图`);
+        } else {
+            // 切换为原生物理数据模式
+            this.projectionModes.set(cleanId, false);
+            this.persistBindings();
+            this.notifyFrontendToRerender(cleanId);
+            showMessage(`📁 已切换至原生物理数据视图`);
+        }
+
+        return nextState;
     }
 
     public getBoundTag(avId: string): string | undefined {
@@ -1010,6 +1049,12 @@ export class SupertagAVProjector {
                 obj[k] = v;
             }
             localStorage.setItem("indexos_virtual_av_sql_bindings", JSON.stringify(obj));
+
+            const modesObj: Record<string, boolean> = {};
+            for (const [k, v] of this.projectionModes.entries()) {
+                modesObj[k] = v;
+            }
+            localStorage.setItem("indexos_av_projection_modes", JSON.stringify(modesObj));
         } catch (e) {}
     }
 
@@ -1021,6 +1066,14 @@ export class SupertagAVProjector {
                 for (const [k, v] of Object.entries(obj)) {
                     this.bindings.set(k, v as VirtualAVBinding);
                     this.tagToAvMap.set((v as VirtualAVBinding).tagName, k);
+                }
+            }
+
+            const rawModes = localStorage.getItem("indexos_av_projection_modes");
+            if (rawModes) {
+                const modesObj = JSON.parse(rawModes);
+                for (const [k, v] of Object.entries(modesObj)) {
+                    this.projectionModes.set(k, Boolean(v));
                 }
             }
         } catch (e) {}

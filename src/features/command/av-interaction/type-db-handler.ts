@@ -299,25 +299,9 @@ async function handleRelatedAvAltClick(
         const currentRelatedAv = String(supertagQuery[0].values[0][1] || "").trim();
 
         if (!currentRelatedAv) {
-            // 未关联数据库，弹出快速生成专属库确认框
-            const { confirmDialog } = await import("../../../shared/utils");
-            confirmDialog(
-                "生成专属数据库",
-                `是否为超级标签 #${supertagLabel} 在 data-dbs 中一键生成专属投影数据库？`,
-                async () => {
-                    try {
-                        const { createSupertagProjectionDatabase } = await import("../data-db-management");
-                        const res = await createSupertagProjectionDatabase(supertagLabel);
-                        if (res?.avId) {
-                            await updateCellValue(null, avId, rowId, colId, res.dbName);
-                            db.run(`UPDATE ${typeTableName} SET "${colName}" = ? WHERE _itemID = ?;`, [res.dbName, rowId]);
-                            showMessage(`✅ 成功为 #${supertagLabel} 生成并关联专属数据库: ${res.dbName}`);
-                        }
-                    } catch (err: any) {
-                        showMessage(`生成专属库失败: ${err.message || err}`, 5000, "error");
-                    }
-                }
-            );
+            const { openSupertagManagerDialog } = await import("../../unified-attributes/manager/supertag-manager-dialog");
+            openSupertagManagerDialog();
+            showMessage(`🏷️ 请在超级标签管理器中为 #${supertagLabel} 关联已有数据库`);
         } else {
             // 已有关联数据库，定位打开该数据库
             const { post } = await import("../../../shared/api-client/request");

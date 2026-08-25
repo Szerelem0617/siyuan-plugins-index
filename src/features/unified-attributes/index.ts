@@ -65,6 +65,11 @@ export {
     type VirtualAVBinding
 } from "./projection/supertag-av-projector";
 
+export {
+    AVProjectionToggleManager,
+    avProjectionToggle
+} from "./projection/av-projection-toggle";
+
 // 3. Inspector
 export {
     loadBlockAttributeData,

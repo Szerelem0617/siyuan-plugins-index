@@ -57,6 +57,16 @@ export class SupertagBinder {
         return this.prefs[tag];
     }
 
+    public findTagByAvId(avId: string): string | undefined {
+        const cleanAvId = avId.trim();
+        for (const [k, v] of Object.entries(this.prefs)) {
+            if (v === cleanAvId && !k.startsWith("template:")) {
+                return k;
+            }
+        }
+        return undefined;
+    }
+
     public getTemplatePref(tag: string): string | undefined {
         const cleanTag = tag.replace(/^#/, "").trim().toLowerCase();
         return this.prefs[`template:${cleanTag}`];

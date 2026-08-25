@@ -18,6 +18,7 @@ import {
     setTypeDocId,
     setCommandBindings,
     setSupertagRegistry,
+    SUPERTAG_REGISTRY,
     globalSupertagsCache,
     type CommandBinding,
     type SupertagCommand

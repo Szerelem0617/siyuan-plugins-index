@@ -16,8 +16,7 @@ import {
     getSeedSupertagRows
 } from "./indexos/seed-data";
 import { DEFAULT_ENTRY_CONFIG, ENTRY_CONFIG_KEY } from "./entry-config";
-import { getOrCreateDataDbsParentDoc, getOrStoreDataDbDoc } from "./data-db-management";
-export { getOrStoreDataDbDoc };
+import { getOrCreateDataDbsParentDoc } from "./data-db-management";
 
 /**
  * Helper to add columns to an Attribute View (AV)

@@ -25,6 +25,7 @@ import {
     SupertagRenderer, 
     initTagMenuInterceptor,
     supertagAVProjector,
+    avProjectionToggle,
     initDockInspector
 } from "./features/unified-attributes";
 import { refreshEntryRegistrations, destroyEntryRegistrations } from "./features/command/global-registration/entry-registration";
@@ -174,6 +175,7 @@ export default class IndexPlugin extends Plugin {
         SupertagRenderer.initAutoObserver();
         await initSupertagPalette(this);
         initTagMenuInterceptor();
+        avProjectionToggle.init();
         backgroundScheduler.init(this);
         initDockInspector(this);
 
@@ -256,6 +258,7 @@ export default class IndexPlugin extends Plugin {
         avEventHandler.destroy();
         supertagMonitor.destroy();
         supertagManager.destroy();
+        avProjectionToggle.destroy();
         if (isDevInitSysEnabled()) {
             destroyInlineButtonListener();
             destroyCommandPalette();

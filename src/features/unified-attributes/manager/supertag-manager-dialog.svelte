@@ -6,8 +6,6 @@
     import { showMessage, openTab, Dialog } from "siyuan";
     import { getUnifiedSupertagList, type UnifiedSupertagDefinition } from "../core/supertag-entity";
     import { post } from "../../../shared/api-client/request";
-    import { constructCommandStorage } from "../../command/instantiate-storage";
-    import { isDataDbsInstantiated, createSupertagProjectionDatabase } from "../../command/data-db-management";
     import ConditionalTriggerDialog from "../../command/av-interaction/dialogs/ConditionalTriggerDialog.svelte";
     import { getSqliteEngine } from "../../sqlite/sqlite-manager";
     import { getTypeAvId } from "../../command/registration";
@@ -101,49 +99,48 @@
         }
     }
 
-    async function handleCreateDb(group: UnifiedSupertagDefinition) {
+    import { Menu } from "siyuan";
+
+    async function openSelectDbDialog(group: UnifiedSupertagDefinition, event?: MouseEvent) {
         try {
-            const isInstantiated = await isDataDbsInstantiated();
-            if (!isInstantiated) {
-                confirmDialog(
-                    i18n.initSystemDB || "实例化",
-                    i18n.supertagManager?.notInstantiatedContent || "未实例化 IndexOS 命令管理系统，无法创建数据库。是否立即实例化？",
-                    async () => {
-                        try {
-                            showMessage("⏳ 正在将数据存储到思源...", 5000);
-                            await constructCommandStorage();
-                            showMessage("✓ 数据已存储到思源，正在为标签创建专属数据库...", 3000);
-                            await executeCreateSupertagDb(group);
-                        } catch (err: any) {
-                            console.error("Instantiation failed:", err);
-                            showMessage(`存储到思源失败: ${err.message || err}`, 5000, "error");
-                        }
-                    },
-                    undefined,
-                    i18n.supertagManager?.instantiateNow || "立即实例化"
-                );
+            const sqlRes = await post("/api/query/sql", {
+                stmt: `SELECT id, content FROM blocks WHERE type = 'av' ORDER BY updated DESC LIMIT 100;`
+            });
+            const rows: any[] = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
+            if (rows.length === 0) {
+                showMessage("当前工作区暂无可用数据库，请先在思源中创建数据库", 4000, "info");
                 return;
             }
 
-            await executeCreateSupertagDb(group);
+            const menu = new Menu();
+            for (const row of rows) {
+                const dbName = row.content?.trim() || `未命名库 (${row.id.slice(0, 6)})`;
+                menu.addItem({
+                    icon: "iconDatabase",
+                    label: dbName,
+                    click: async () => {
+                        await supertagBinder.setPref(group.typeName, row.id);
+                        await loadData();
+                        showMessage(`✓ 已将 #${group.typeName} 关联至数据库 "${dbName}"`);
+                    }
+                });
+            }
+
+            const x = event?.clientX || (window.innerWidth / 2 - 100);
+            const y = event?.clientY || (window.innerHeight / 3);
+            menu.open({ x, y });
         } catch (e: any) {
-            console.error("Create DB failed:", e);
-            showMessage(`创建数据库失败: ${e.message || e}`, 5000, "error");
+            showMessage(`获取数据库列表失败: ${e.message || e}`, 5000, "error");
         }
     }
 
-    async function executeCreateSupertagDb(group: UnifiedSupertagDefinition) {
-        const rootTag = group.typeName.split(/[\.\/]/)[0].toLowerCase();
-        showMessage(`⏳ 正在为 #${group.typeName} 在 /data-dbs 派生生成 supertag-${rootTag} 专属库...`, 4000);
+    async function handleUnbindDb(group: UnifiedSupertagDefinition) {
         try {
-            const res = await createSupertagProjectionDatabase(group.typeName);
-            if (res && res.avId) {
-                await loadData();
-                showMessage(`✅ 成功创建专属投影数据库: ${res.dbName}！`, 4000);
-            }
-        } catch (err: any) {
-            console.error("Failed to create supertag projection DB:", err);
-            showMessage(`生成专属库失败: ${err.message || err}`, 5000, "error");
+            await supertagBinder.setPref(group.typeName, "enabled");
+            await loadData();
+            showMessage(`✓ 已解除 #${group.typeName} 的数据库关联`);
+        } catch (e: any) {
+            showMessage(`解除关联失败: ${e.message || e}`, 5000, "error");
         }
     }
 
@@ -403,17 +400,27 @@
                                         <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconSettings"></use></svg>
                                         <span>设置</span>
                                     </button>
+
+                                    <!-- 解除关联按钮 ✕ -->
+                                    <button
+                                        class="indexos-btn-bordered"
+                                        style="font-size: 11px; padding: 2px 6px; flex-shrink: 0; color: var(--indexos-text-muted);"
+                                        title="解除该 Supertag 与该数据库的关联"
+                                        on:click={() => handleUnbindDb(group)}
+                                    >
+                                        <span>✕</span>
+                                    </button>
                                 </div>
                             {:else}
                                 <div class="fn__flex" style="align-items: center; gap: 6px;">
                                     <button
                                         class="indexos-btn-bordered"
                                         style="font-size: 11px; padding: 2px 8px; color: var(--indexos-accent-primary); border-color: rgba(59, 130, 246, 0.3);"
-                                        title="在 /data-dbs 页面立即生成专属投影数据库"
-                                        on:click={() => handleCreateDb(group)}
+                                        title="选择并关联已有数据库"
+                                        on:click={(e) => openSelectDbDialog(group, e)}
                                     >
-                                        <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconAdd"></use></svg>
-                                        <span>+ 生成专属数据库</span>
+                                        <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconDatabase"></use></svg>
+                                        <span>+ 关联已有数据库</span>
                                     </button>
                                 </div>
                             {/if}

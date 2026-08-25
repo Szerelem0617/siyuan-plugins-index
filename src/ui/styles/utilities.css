@@ -858,3 +858,59 @@ button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered:hove
     box-shadow: inset 0 0 0 2px rgba(161, 196, 230, 0.25) !important;
     transition: outline 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
 }
+
+/* ─── IndexOS 数据库界面原地「虚拟投影 / 原生物理数据」切换胶囊按钮 ─── */
+.indexos-av-mode-toggle {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    height: 22px !important;
+    padding: 0 9px !important;
+    border-radius: 11px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-sizing: border-box !important;
+    margin-right: 6px !important;
+    margin-left: 4px !important;
+    border: 1px solid transparent !important;
+    flex-shrink: 0 !important;
+}
+
+.indexos-av-mode-toggle--virtual {
+    background: rgba(161, 196, 230, 0.22) !important;
+    color: var(--indexos-accent-primary, #28517F) !important;
+    border-color: rgba(161, 196, 230, 0.55) !important;
+    box-shadow: 0 1px 3px rgba(161, 196, 230, 0.25) !important;
+}
+
+.indexos-av-mode-toggle--virtual:hover {
+    background: rgba(161, 196, 230, 0.38) !important;
+    border-color: var(--indexos-index-blue, #A1C4E6) !important;
+    box-shadow: 0 0 8px rgba(161, 196, 230, 0.45) !important;
+}
+
+.indexos-av-mode-toggle--physical {
+    background: var(--b3-theme-surface, rgba(0, 0, 0, 0.05)) !important;
+    color: var(--b3-theme-on-surface, #6B7280) !important;
+    border-color: var(--indexos-border-light, rgba(0, 0, 0, 0.1)) !important;
+}
+
+.indexos-av-mode-toggle--physical:hover {
+    background: var(--b3-theme-surface-lighter, rgba(0, 0, 0, 0.08)) !important;
+    color: var(--b3-theme-on-background, #111827) !important;
+    border-color: var(--b3-theme-on-surface, #6B7280) !important;
+}
+
+.indexos-av-mode-toggle .toggle-icon {
+    font-size: 11px !important;
+    line-height: 1 !important;
+}
+
+.indexos-av-mode-toggle .toggle-label {
+    line-height: 1 !important;
+    white-space: nowrap !important;
+}
+
