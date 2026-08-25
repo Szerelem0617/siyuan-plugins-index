@@ -163,6 +163,8 @@ export class AVProjectionToggleManager {
         this.updateToggleState(toggleBtn, currentIsVirtual, boundTag);
     }
 
+    private SYSTEM_EXCLUDED_TAGS = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag", "db"]);
+
     /**
      * 多渠道同步解析 AV 绑定的 Supertag 名称 (优先 custom-supertag-* 自定义属性)
      */
@@ -175,8 +177,8 @@ export class AVProjectionToggleManager {
 
         if (customTag) {
             const tag = customTag.replace(/^#/, "").trim().toLowerCase();
+            if (this.SYSTEM_EXCLUDED_TAGS.has(tag)) return undefined;
             if (avId) {
-                supertagBinder.setPref(tag, avId);
                 supertagAVProjector.bindTagToAV(tag, avId);
             }
             return tag;
@@ -185,11 +187,11 @@ export class AVProjectionToggleManager {
         if (avId) {
             // 渠道 2: 内存 Projector 映射
             const tag1 = supertagAVProjector.getBoundTag(avId);
-            if (tag1) return tag1.replace(/^#/, "");
+            if (tag1 && !this.SYSTEM_EXCLUDED_TAGS.has(tag1.toLowerCase())) return tag1.replace(/^#/, "");
 
             // 渠道 3: Binder 偏好设置
             const tag2 = supertagBinder.findTagByAvId(avId);
-            if (tag2) return tag2.replace(/^#/, "");
+            if (tag2 && !this.SYSTEM_EXCLUDED_TAGS.has(tag2.toLowerCase())) return tag2.replace(/^#/, "");
         }
 
         // 渠道 4: DOM 节点属性与标题识别 (例如 name="supertag-测试一下" 或 custom-av-name="supertag-测试一下")
@@ -204,11 +206,14 @@ export class AVProjectionToggleManager {
 
         for (const rawName of namesToCheck) {
             const trimmed = String(rawName).trim();
+            if (this.SYSTEM_EXCLUDED_TAGS.has(trimmed.toLowerCase())) continue;
+
             const match = trimmed.match(/^supertag-([^\s\/\.]+)/i) || trimmed.match(/supertag-([^\s\/\.]+)/i);
             if (match && match[1]) {
                 const inferredTag = match[1].trim().toLowerCase();
+                if (this.SYSTEM_EXCLUDED_TAGS.has(inferredTag)) continue;
+
                 if (avId) {
-                    supertagBinder.setPref(inferredTag, avId);
                     supertagAVProjector.bindTagToAV(inferredTag, avId);
                     // 自愈持久化自定义属性
                     post("/api/attr/setBlockAttrs", {
@@ -240,13 +245,19 @@ export class AVProjectionToggleManager {
                 const ial = rows[0].ial || "";
                 const content = rows[0].content || "";
 
+                // 排除系统内部表
+                if (ial.includes("custom-index-supertag-db") || ial.includes("custom-index-command-db") || ial.includes("custom-index-data-dbs")) {
+                    return;
+                }
+
                 // 优先从 ial 中提取 custom-supertag-tag 或 custom-supertag-id
                 const customTagMatch = ial.match(/custom-supertag-tag="([^"]+)"/) || ial.match(/custom-supertag-id="([^"]+)"/);
                 if (customTagMatch && customTagMatch[1]) {
                     const tag = customTagMatch[1].trim().toLowerCase();
-                    await supertagBinder.setPref(tag, avId);
-                    supertagAVProjector.bindTagToAV(tag, avId);
-                    this.mountToggleToHeader(headerEl);
+                    if (!this.SYSTEM_EXCLUDED_TAGS.has(tag)) {
+                        supertagAVProjector.bindTagToAV(tag, avId);
+                        this.mountToggleToHeader(headerEl);
+                    }
                     return;
                 }
 
@@ -255,16 +266,17 @@ export class AVProjectionToggleManager {
                 const match = combined.match(/supertag-([a-zA-Z0-9_\-\u4e00-\u9fa5]+)/i);
                 if (match && match[1]) {
                     const tag = match[1].trim().toLowerCase();
-                    await supertagBinder.setPref(tag, avId);
-                    await supertagAVProjector.bindTagToAV(tag, avId);
-                    await post("/api/attr/setBlockAttrs", {
-                        id: blockId,
-                        attrs: {
-                            "custom-supertag-tag": tag,
-                            "custom-supertag-id": tag
-                        }
-                    });
-                    this.mountToggleToHeader(headerEl);
+                    if (!this.SYSTEM_EXCLUDED_TAGS.has(tag)) {
+                        supertagAVProjector.bindTagToAV(tag, avId);
+                        await post("/api/attr/setBlockAttrs", {
+                            id: blockId,
+                            attrs: {
+                                "custom-supertag-tag": tag,
+                                "custom-supertag-id": tag
+                            }
+                        });
+                        this.mountToggleToHeader(headerEl);
+                    }
                 }
             }
         } catch (err) {
