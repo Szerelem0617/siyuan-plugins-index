@@ -256,7 +256,7 @@ export class SupertagAVProjector {
             // 确保表存在
             const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${binding.tableName}';`);
             if (!tableCheck || tableCheck.length === 0 || tableCheck[0].values.length === 0) {
-                await this.initSQLiteTableForTag(binding.tagName || rootTag, binding.tableName);
+                await this.projectSupertagToAV(binding.tagName || rootTag, avId);
             }
 
             // 获取热表的列定义
@@ -534,7 +534,7 @@ export class SupertagAVProjector {
             // 检查表是否存在，若因重启导致内存表不存在则自动重构
             const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${binding.tableName}';`);
             if (!tableCheck || tableCheck.length === 0 || tableCheck[0].values.length === 0) {
-                await this.initSQLiteTableForTag(binding.tagName, binding.tableName);
+                await this.projectSupertagToAV(binding.tagName, avId);
             }
 
             // 1. 查询热表所有行

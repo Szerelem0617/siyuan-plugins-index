@@ -86,17 +86,20 @@ export class SupertagBinder {
      * 设置 Supertag 绑定的数据库偏好，并默认自动开启虚拟投影
      */
     public async setPref(tag: string, avId: string) {
-        this.prefs[tag] = avId;
-        await this.savePrefs();
-
-        const cleanTag = tag.replace(/#/g, "").trim();
+        const cleanTag = tag.replace(/#/g, "").trim().toLowerCase();
         const cleanAvId = (avId || "").trim();
+
+        if (this.prefs[cleanTag] === cleanAvId) {
+            return;
+        }
+
+        this.prefs[cleanTag] = cleanAvId;
+        await this.savePrefs();
 
         // 默认自动开启 Hot-SQLite 内存虚拟投影
         if (cleanAvId && cleanAvId !== "disabled" && cleanAvId !== "enabled") {
             try {
                 await supertagAVProjector.projectSupertagToAV(cleanTag, cleanAvId);
-                console.log(`[Supertag-Binder] ✨ 已为 #${cleanTag} 自动建立与数据库 ${cleanAvId} 的虚拟投影`);
             } catch (err) {
                 console.warn(`[Supertag-Binder] 建立虚拟投影异常:`, err);
             }

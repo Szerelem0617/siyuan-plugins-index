@@ -11,11 +11,14 @@
 import { getGlobalTypeConfigs } from "../../av/av-setting/db-config";
 import { type TypeConfig } from "../../av/av-setting/types";
 import { SUPERTAG_REGISTRY, type SupertagCommand } from "../../command/registration";
-import { BUILTIN_SUPERTAGS } from "../../command/indexos/seed-data";
+import { BUILTIN_SUPERTAGS, getSeedSupertagRows } from "../../command/indexos/seed-data";
 import { supertagBinder } from "./supertag-binder";
 import { supertagAVProjector } from "../projection/supertag-av-projector";
 import { parseConditionalString } from "./supertag-trigger";
 import { post } from "../../../shared/api-client/request";
+import { fetchAllAVBlocks } from "../../sqlite/sqlite-data-fetcher";
+import { getAttrFromIAL } from "../../../shared/utils";
+import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 
 export interface SupertagColumnInfo {
     id: string;
@@ -61,45 +64,36 @@ export interface UnifiedSupertagDefinition {
     conditionalScript?: string;
 }
 
-import { fetchAllAVBlocks } from "../../sqlite/sqlite-data-fetcher";
-import { getAttrFromIAL } from "../../../shared/utils";
-import { getSqliteEngine } from "../../sqlite/sqlite-manager";
-
-/**
- * 规范化数据库名称提取 Supertag 匹配名
- */
-function normalizeDbName(raw: string): string {
-    return (raw || "")
-        .replace(/^#+/, "")
-        .replace(/^supertag-/i, "")
-        .trim()
-        .toLowerCase();
-}
-
 export interface SupertagDbRecord {
     rowId: string;
     typeTag: string;
+    manual: string;
+    auto: string;
     relatedAv: string;
 }
 
 /**
- * 获取 supertag-db 系统表中的所有 Supertag 记录 (包含行 ID, 标签名, 关联数据库 ID)
+ * 结构化获取 supertag-db 系统表中的所有 Supertag 记录 (单一真理源)
  */
 export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
     const records: SupertagDbRecord[] = [];
     
-    // 1. 优先尝试从内存 SQLite 引擎查询 "supertag-db"
+    // 1. 优先尝试从内存 SQLite 引擎查询 "supertag-db" (已实例化状态)
     try {
         const { db } = await getSqliteEngine();
         const check = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='supertag-db';`);
         if (check.length > 0 && check[0].values.length > 0) {
             const pragma = db.exec(`PRAGMA table_info("supertag-db");`);
             const colNames = pragma[0].values.map((v: any) => String(v[1]).toLowerCase());
-            const primaryKeyCol = colNames.includes("主键") ? "主键" : (colNames.includes("typetag") ? "typetag" : colNames[0]);
+            const primaryKeyCol = colNames.includes("主键") ? "主键" : (colNames.includes("supertag") ? "supertag" : colNames[0]);
+            const manualCol = colNames.includes("manual") ? "manual" : (colNames.includes("icon menu") ? "icon menu" : null);
+            const autoCol = colNames.includes("auto") ? "auto" : (colNames.includes("conditional") ? "conditional" : null);
             const relatedAvCol = colNames.includes("related_av") ? "related_av" : (colNames.includes("relatedav") ? "relatedav" : null);
 
             let sql = `SELECT rowid, "${primaryKeyCol}"`;
-            if (relatedAvCol) sql += `, "${relatedAvCol}"`;
+            sql += manualCol ? `, "${manualCol}"` : `, ''`;
+            sql += autoCol ? `, "${autoCol}"` : `, ''`;
+            sql += relatedAvCol ? `, "${relatedAvCol}"` : `, ''`;
             sql += ` FROM "supertag-db";`;
 
             const rows = db.exec(sql);
@@ -107,17 +101,21 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
                 for (const r of rows[0].values) {
                     const rowId = String(r[0] || "");
                     const typeTag = String(r[1] || "").replace(/^#+/, "").trim().toLowerCase();
-                    const relatedAv = relatedAvCol ? String(r[2] || "").trim() : "";
+                    const manual = String(r[2] || "").trim();
+                    const auto = String(r[3] || "").trim();
+                    const relatedAv = String(r[4] || "").trim();
                     if (typeTag) {
-                        records.push({ rowId, typeTag, relatedAv });
+                        records.push({ rowId, typeTag, manual, auto, relatedAv });
                     }
                 }
-                return records;
+                if (records.length > 0) {
+                    return records;
+                }
             }
         }
     } catch (_) {}
 
-    // 2. 如果 SQLite 未就绪，从 SiYuan 原生 AV 读取
+    // 2. 如果 SQLite 未就绪，尝试从 SiYuan 原生 AV 读取 "supertag-db" (已实例化状态)
     try {
         const typeDocSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-supertag-db' LIMIT 1`;
         const typeDocs = await post("/api/query/sql", { stmt: typeDocSql });
@@ -135,203 +133,137 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
                     const view = renderRes?.view || renderRes;
                     const rows: any[] = view?.rows || [];
                     const columns: any[] = view?.columns || [];
-                    const relAvIdx = columns.findIndex((c: any) => c.name === "related_av" || c.keyName === "related_av");
+                    const manualIdx = columns.findIndex((c: any) => c.name?.toLowerCase() === "manual");
+                    const autoIdx = columns.findIndex((c: any) => c.name?.toLowerCase() === "auto" || c.name?.toLowerCase() === "conditional");
+                    const relAvIdx = columns.findIndex((c: any) => c.name?.toLowerCase() === "related_av");
                     for (const row of rows) {
                         const rowId = row.id || "";
                         const typeTagRaw = row.cells?.[0]?.value?.text?.content || row.cells?.[0]?.value?.block?.content || "";
                         const cleanTag = typeTagRaw.replace(/^#+/, "").trim().toLowerCase();
+                        let manual = "";
+                        let auto = "";
                         let relatedAv = "";
+                        if (manualIdx >= 0 && row.cells?.[manualIdx]) {
+                            manual = row.cells[manualIdx]?.value?.text?.content || "";
+                        }
+                        if (autoIdx >= 0 && row.cells?.[autoIdx]) {
+                            auto = row.cells[autoIdx]?.value?.text?.content || "";
+                        }
                         if (relAvIdx >= 0 && row.cells?.[relAvIdx]) {
                             const val = row.cells[relAvIdx]?.value;
                             relatedAv = val?.text?.content || val?.block?.id || "";
                         }
                         if (cleanTag) {
-                            records.push({ rowId, typeTag: cleanTag, relatedAv });
+                            records.push({ rowId, typeTag: cleanTag, manual, auto, relatedAv });
                         }
+                    }
+                    if (records.length > 0) {
+                        return records;
                     }
                 }
             }
         }
     } catch (_) {}
 
+    // 3. 未实例化状态：读取 seed-data.ts TS 常量种子 (单一真理源)
+    const seedRows = getSeedSupertagRows();
+    for (const seed of seedRows) {
+        records.push({
+            rowId: seed.rowID,
+            typeTag: seed.supertag.toLowerCase().trim(),
+            manual: (seed as any).manual || "",
+            auto: (seed as any).auto || seed.conditional || "",
+            relatedAv: ""
+        });
+    }
+
     return records;
 }
 
 /**
- * 聚合查询并返回系统中所有统一超级标签实体 (Unified Supertags)
- * 依赖 custom-supertag-id / custom-supertag-tag 属性与 supertag-db 行 ID，不再脆弱依赖数据库名
+ * 聚合查询并返回系统中所有统一超级标签实体 (Unified Supertags) - 单一真理源 supertag-db
  */
 export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinition[]> {
-    const logicData = SUPERTAG_REGISTRY || [];
-
-    const logicMap = new Map<string, SupertagCommand[]>();
-    logicData.forEach((l) => {
-        const name = (l.typeTag || "").trim().toLowerCase().replace(/^#+/, "");
-        if (!name) return;
-        if (!logicMap.has(name)) logicMap.set(name, []);
-        logicMap.get(name)!.push(l);
-    });
-
-    // 1. 读取 supertag-db 系统表中的所有 Supertag 记录与行 ID
+    // 1. 读取单一真理源 supertag-db (未实例化时读取 seed-data.ts 常量)
     const supertagDbRecords = await getSupertagDbRecords();
-    const tagToDbRecord = new Map<string, SupertagDbRecord>();
-    const rowIdToDbRecord = new Map<string, SupertagDbRecord>();
-    const avIdToDbRecord = new Map<string, SupertagDbRecord>();
 
-    for (const rec of supertagDbRecords) {
-        tagToDbRecord.set(rec.typeTag, rec);
-        if (rec.rowId) rowIdToDbRecord.set(rec.rowId, rec);
-        if (rec.relatedAv) avIdToDbRecord.set(rec.relatedAv, rec);
-    }
-
-    // 2. 扫描全库所有 AV 数据库，优先根据 custom-supertag-* 属性与行 ID 关联
-    const dbsByTag = new Map<string, Array<{ id: string; name: string; blockId: string; rootId: string }>>();
-    const SYSTEM_EXCLUDED = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag"]);
+    // 2. 扫描全库所有 AV 数据库，按 custom-supertag-* 属性与 ID 索引
+    const avBlockMap = new Map<string, { blockId: string; name: string }>();
+    const avBlocksByTag = new Map<string, Array<{ id: string; name: string; blockId: string }>>();
 
     try {
         const rawAvBlocks = await fetchAllAVBlocks();
         for (const b of rawAvBlocks) {
             const targetAvId = b.avId;
             if (!targetAvId || targetAvId === "Not Found") continue;
+            avBlockMap.set(targetAvId, { blockId: b.blockId, name: b.name });
 
-            const cleanDbName = normalizeDbName(b.name || "");
-            if (SYSTEM_EXCLUDED.has(cleanDbName)) continue;
+            const customTag = (getAttrFromIAL(b.ial, "custom-supertag-tag") || "").trim().toLowerCase();
+            const customRowId = (getAttrFromIAL(b.ial, "custom-supertag-id") || "").trim();
 
-            // ① 优先检查块属性 custom-supertag-tag 与 custom-supertag-id (真理源)
-            const customTag = getAttrFromIAL(b.ial, "custom-supertag-tag");
-            const customRowId = getAttrFromIAL(b.ial, "custom-supertag-id");
-
-            let matchedTag = "";
-
-            if (customTag) {
-                matchedTag = customTag.replace(/^#+/, "").trim().toLowerCase();
-            } else if (customRowId && rowIdToDbRecord.has(customRowId)) {
-                matchedTag = rowIdToDbRecord.get(customRowId)!.typeTag;
-            } else if (avIdToDbRecord.has(targetAvId)) {
-                matchedTag = avIdToDbRecord.get(targetAvId)!.typeTag;
-            } else if (cleanDbName && cleanDbName !== "unnamed database" && cleanDbName !== "unnamed") {
-                // ② 备选降级：同名/初始路径匹配，一旦命中立即自动持久化 custom-supertag-tag 属性（自愈机制）
-                matchedTag = cleanDbName;
-                const rec = tagToDbRecord.get(matchedTag);
-                const persistRowId = rec?.rowId || matchedTag;
-                if (b.blockId) {
-                    post("/api/attr/setBlockAttrs", {
-                        id: b.blockId,
-                        attrs: {
-                            "custom-supertag-tag": matchedTag,
-                            "custom-supertag-id": persistRowId
-                        }
-                    }).catch(() => {});
-                }
+            let matchedTag = customTag;
+            if (!matchedTag && customRowId) {
+                const rec = supertagDbRecords.find(r => r.rowId === customRowId);
+                if (rec) matchedTag = rec.typeTag;
             }
 
-            if (matchedTag && !SYSTEM_EXCLUDED.has(matchedTag)) {
-                if (!dbsByTag.has(matchedTag)) dbsByTag.set(matchedTag, []);
-                dbsByTag.get(matchedTag)!.push({
-                    id: targetAvId,
-                    name: b.name || matchedTag,
-                    blockId: b.blockId,
-                    rootId: b.rootId || ""
-                });
+            if (matchedTag) {
+                if (!avBlocksByTag.has(matchedTag)) avBlocksByTag.set(matchedTag, []);
+                avBlocksByTag.get(matchedTag)!.push({ id: targetAvId, name: b.name, blockId: b.blockId });
             }
         }
-    } catch (err) {
-        console.warn("[SupertagEntity] 扫描 AV 数据库失败:", err);
-    }
-
-    // 3. 收集所有合法 Supertag 标签列表
-    const allTagNamesSet = new Set<string>();
-
-    // ① 内置 Supertag 种子
-    BUILTIN_SUPERTAGS.forEach(t => allTagNamesSet.add(t.toLowerCase().replace(/^#+/, "").trim()));
-
-    // ② supertag-db 系统表中的所有标签
-    supertagDbRecords.forEach(r => allTagNamesSet.add(r.typeTag));
-
-    // ③ 注册的命令 Supertag
-    logicMap.forEach((_, tag) => allTagNamesSet.add(tag.toLowerCase().replace(/^#+/, "").trim()));
-
-    // ④ 关联到的所有 Supertag 数据库
-    dbsByTag.forEach((_, tag) => allTagNamesSet.add(tag));
-
-    // ⑤ 工作区物理打标块中的标签 (#tag 或 custom-supertags)
-    try {
-        const tagBlocksRes = await post("/api/query/sql", {
-            stmt: `SELECT DISTINCT tag FROM blocks WHERE tag != '' LIMIT 500;`
-        });
-        const tagRows = Array.isArray(tagBlocksRes) ? tagBlocksRes : (tagBlocksRes?.data || []);
-        tagRows.forEach((r: any) => {
-            if (r.tag) {
-                String(r.tag).split(/[\s,]+/).forEach(t => {
-                    const clean = t.replace(/^#+|#+$/g, "").trim().toLowerCase();
-                    if (clean && /^[a-zA-Z0-9_\-\u4e00-\u9fa5]{1,24}$/.test(clean)) {
-                        allTagNamesSet.add(clean);
-                    }
-                });
-            }
-        });
-
-        const supertagRows = await post("/api/query/sql", {
-            stmt: `SELECT ial FROM blocks WHERE ial LIKE '%custom-supertags=%' LIMIT 300;`
-        });
-        const stRows = Array.isArray(supertagRows) ? supertagRows : (supertagRows?.data || []);
-        stRows.forEach((r: any) => {
-            const rawVal = getAttrFromIAL(r.ial, "custom-supertags");
-            if (rawVal) {
-                parseSupertags(rawVal).forEach(t => {
-                    const clean = t.replace(/^#+|#+$/g, "").trim().toLowerCase();
-                    if (clean && /^[a-zA-Z0-9_\-\u4e00-\u9fa5]{1,24}$/.test(clean)) {
-                        allTagNamesSet.add(clean);
-                    }
-                });
-            }
-        });
     } catch (_) {}
 
     const result: UnifiedSupertagDefinition[] = [];
 
-    for (const name of Array.from(allTagNamesSet)) {
-        const cleanTag = name.toLowerCase().replace(/^#+/, "").trim();
+    for (const rec of supertagDbRecords) {
+        const cleanTag = rec.typeTag;
         if (!cleanTag) continue;
 
-        const matchedDbs = dbsByTag.get(cleanTag) || [];
-        const logicConfigs = logicMap.get(cleanTag) || [];
-        const pref = supertagBinder.getPref(cleanTag);
-        const isEnabled = pref !== "disabled";
+        // 解析绑定的数据库
+        let selectedAvId = rec.relatedAv || "";
+        const tagMatchedDbs = avBlocksByTag.get(cleanTag) || [];
 
-        const hasDataSchema = matchedDbs.length > 0;
-        const isDuplicateName = matchedDbs.length > 1;
-        const matchedCount = matchedDbs.length;
-        const selectedAvId = matchedDbs[0]?.id || "";
-        const selectedAvName = matchedDbs[0]?.name || "";
+        if (!selectedAvId && tagMatchedDbs.length > 0) {
+            selectedAvId = tagMatchedDbs[0].id;
+        }
 
-        // 自动建立有效同名绑定
+        const hasDataSchema = Boolean(selectedAvId);
+        const isDuplicateName = tagMatchedDbs.length > 1;
+        const matchedCount = tagMatchedDbs.length || (selectedAvId ? 1 : 0);
+        const selectedAvName = avBlockMap.get(selectedAvId)?.name || (selectedAvId ? cleanTag : "");
+
+        // 自动建立有效投影绑定 (仅内存注册，不写存储)
         if (hasDataSchema && selectedAvId) {
-            supertagBinder.setPref(cleanTag, selectedAvId);
             supertagAVProjector.bindTagToAV(cleanTag, selectedAvId);
         }
 
-        const hasBehavior = logicConfigs.length > 0;
-        const isReady = hasDataSchema || hasBehavior;
-
+        // 解析命令与条件脚本配置
         let rulesCount = 0;
         let hasVirtualButton = false;
-        let conditionalScript = "";
-
-        for (const l of logicConfigs) {
-            if (l.uiLocation === "VirtualButton") {
-                hasVirtualButton = true;
-            }
-            if (l.conditionalScript) {
-                conditionalScript = l.conditionalScript;
-                try {
-                    const rules = parseConditionalString(l.conditionalScript);
-                    rulesCount += rules.length;
-                } catch (_) {
-                    rulesCount += 1;
-                }
+        const conditionalScript = rec.auto || "";
+        if (conditionalScript) {
+            try {
+                const rules = parseConditionalString(conditionalScript);
+                rulesCount = rules.length;
+            } catch (_) {
+                rulesCount = 1;
             }
         }
+
+        if (rec.manual) {
+            try {
+                const manualList = JSON.parse(rec.manual);
+                if (Array.isArray(manualList) && manualList.some((m: any) => m.showInVirtualButton || m.uiLocation === "VirtualButton")) {
+                    hasVirtualButton = true;
+                }
+            } catch (_) {}
+        }
+
+        const hasBehavior = Boolean(rec.manual || rec.auto);
+        const isReady = hasDataSchema || hasBehavior;
+        const pref = supertagBinder.getPref(cleanTag);
+        const isEnabled = pref !== "disabled";
 
         result.push({
             typeName: cleanTag,
@@ -344,7 +276,7 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
             isDuplicateName,
             matchedCount,
             hasDataSchema,
-            logicConfigs,
+            logicConfigs: [],
             hasBehavior,
             rulesCount,
             hasVirtualButton,
@@ -352,7 +284,6 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
         });
     }
 
-    // 排序：已就绪置顶，内置标签排前，其余按字母排序
     return result.sort((a, b) => {
         if (a.isReady && !b.isReady) return -1;
         if (!a.isReady && b.isReady) return 1;
