@@ -133,7 +133,7 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
             auto: defaultProjectConditional
         },
         {
-            rowID: "20260721140000-pipeline",
+            rowID: "20260721140000-composite",
             supertag: "composite",
             manual: JSON.stringify([
                 { id: "index.insertContentBelow", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false },
@@ -203,4 +203,4 @@ export const DATA_DBS_CONFIG = {
     attrName: "custom-index-data-dbs"
 };
 
-export const BUILTIN_SUPERTAGS = new Set(["task", "pipeline", "permanent", "project"]);
+export const BUILTIN_SUPERTAGS = new Set(["task", "composite", "permanent", "project"]);

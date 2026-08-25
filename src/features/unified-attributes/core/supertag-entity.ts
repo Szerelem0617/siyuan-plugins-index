@@ -181,15 +181,24 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
 }
 
 /**
- * 聚合查询并返回系统中所有统一超级标签实体 (Unified Supertags) - 单一真理源 supertag-db
+ * 聚合查询并返回系统中所有统一超级标签实体 (Unified Supertags)
+ * 双核心真理源：1. supertag-db 系统表  2. 工作区中建立的所有 AV 数据库
  */
 export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinition[]> {
-    // 1. 读取单一真理源 supertag-db (未实例化时读取 seed-data.ts 常量)
+    // 1. 读取第一源：supertag-db 系统表 (未实例化时读取 seed-data.ts 常量)
     const supertagDbRecords = await getSupertagDbRecords();
+    const recordsByTag = new Map<string, SupertagDbRecord>();
+    const recordsByRowId = new Map<string, SupertagDbRecord>();
 
-    // 2. 扫描全库所有 AV 数据库，按 custom-supertag-* 属性与 ID 索引
+    for (const rec of supertagDbRecords) {
+        recordsByTag.set(rec.typeTag, rec);
+        if (rec.rowId) recordsByRowId.set(rec.rowId, rec);
+    }
+
+    // 2. 读取第二源：扫描全库所有 AV 数据库 (排除 commanddb/supertagdb 等系统内建库)
     const avBlockMap = new Map<string, { blockId: string; name: string }>();
     const avBlocksByTag = new Map<string, Array<{ id: string; name: string; blockId: string }>>();
+    const SYSTEM_EXCLUDED = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag"]);
 
     try {
         const rawAvBlocks = await fetchAllAVBlocks();
@@ -198,32 +207,53 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
             if (!targetAvId || targetAvId === "Not Found") continue;
             avBlockMap.set(targetAvId, { blockId: b.blockId, name: b.name });
 
-            const customTag = (getAttrFromIAL(b.ial, "custom-supertag-tag") || "").trim().toLowerCase();
+            const customTag = (getAttrFromIAL(b.ial, "custom-supertag-tag") || "").trim().toLowerCase().replace(/^#+/, "");
             const customRowId = (getAttrFromIAL(b.ial, "custom-supertag-id") || "").trim();
+            const dbNameTag = (b.name || "").trim().toLowerCase().replace(/^#+/, "").replace(/^supertag-/i, "");
 
             let matchedTag = customTag;
             if (!matchedTag && customRowId) {
-                const rec = supertagDbRecords.find(r => r.rowId === customRowId);
+                const rec = recordsByRowId.get(customRowId);
                 if (rec) matchedTag = rec.typeTag;
             }
+            if (!matchedTag && dbNameTag && dbNameTag !== "unnamed database" && dbNameTag !== "unnamed") {
+                matchedTag = dbNameTag;
+                // 自愈持久化自定义属性
+                if (b.blockId) {
+                    post("/api/attr/setBlockAttrs", {
+                        id: b.blockId,
+                        attrs: {
+                            "custom-supertag-tag": matchedTag,
+                            "custom-supertag-id": matchedTag
+                        }
+                    }).catch(() => {});
+                }
+            }
 
-            if (matchedTag) {
+            if (matchedTag && !SYSTEM_EXCLUDED.has(matchedTag)) {
                 if (!avBlocksByTag.has(matchedTag)) avBlocksByTag.set(matchedTag, []);
                 avBlocksByTag.get(matchedTag)!.push({ id: targetAvId, name: b.name, blockId: b.blockId });
             }
         }
     } catch (_) {}
 
+    // 3. 聚合双源 Supertag 集合
+    const allTagsSet = new Set<string>([
+        ...Array.from(recordsByTag.keys()),
+        ...Array.from(avBlocksByTag.keys()),
+        ...Array.from(BUILTIN_SUPERTAGS)
+    ]);
+
     const result: UnifiedSupertagDefinition[] = [];
 
-    for (const rec of supertagDbRecords) {
-        const cleanTag = rec.typeTag;
+    for (const cleanTag of Array.from(allTagsSet)) {
         if (!cleanTag) continue;
 
-        // 解析绑定的数据库
-        let selectedAvId = rec.relatedAv || "";
+        const rec = recordsByTag.get(cleanTag);
         const tagMatchedDbs = avBlocksByTag.get(cleanTag) || [];
 
+        // 解析绑定的数据库
+        let selectedAvId = rec?.relatedAv || "";
         if (!selectedAvId && tagMatchedDbs.length > 0) {
             selectedAvId = tagMatchedDbs[0].id;
         }
@@ -241,7 +271,7 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
         // 解析命令与条件脚本配置
         let rulesCount = 0;
         let hasVirtualButton = false;
-        const conditionalScript = rec.auto || "";
+        const conditionalScript = rec?.auto || "";
         if (conditionalScript) {
             try {
                 const rules = parseConditionalString(conditionalScript);
@@ -251,7 +281,7 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
             }
         }
 
-        if (rec.manual) {
+        if (rec?.manual) {
             try {
                 const manualList = JSON.parse(rec.manual);
                 if (Array.isArray(manualList) && manualList.some((m: any) => m.showInVirtualButton || m.uiLocation === "VirtualButton")) {
@@ -260,7 +290,7 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
             } catch (_) {}
         }
 
-        const hasBehavior = Boolean(rec.manual || rec.auto);
+        const hasBehavior = Boolean(rec?.manual || rec?.auto);
         const isReady = hasDataSchema || hasBehavior;
         const pref = supertagBinder.getPref(cleanTag);
         const isEnabled = pref !== "disabled";
