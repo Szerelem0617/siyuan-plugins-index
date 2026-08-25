@@ -14,13 +14,36 @@
     let searchQuery = "";
     let supertagList: UnifiedSupertagDefinition[] = [];
 
-    function locateAv(avId: string) {
-        if (!avId) return;
+    let locateIndices: Record<string, number> = {};
+
+    function locateAv(group: UnifiedSupertagDefinition) {
+        if (!group) return;
         
+        const rawBlocks = group.matchedAvBlocks || [];
+        const blockList: string[] = [];
+
+        for (const b of rawBlocks) {
+            if (b.blockId) blockList.push(b.blockId);
+            else if (b.id) blockList.push(b.id);
+        }
+
+        if (blockList.length === 0 && group.selectedAvId) {
+            blockList.push(group.selectedAvId);
+        }
+
+        if (blockList.length === 0) {
+            showMessage("未找到关联数据库块", 3000, "error");
+            return;
+        }
+
+        const currentIdx = locateIndices[group.typeName] !== undefined ? locateIndices[group.typeName] : 0;
+        const targetId = blockList[currentIdx % blockList.length];
+        locateIndices[group.typeName] = (currentIdx + 1) % blockList.length;
+
         post("/api/query/sql", {
-            stmt: `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avId}%' OR ial LIKE '%${avId}%') LIMIT 1`
+            stmt: `SELECT id FROM blocks WHERE id = '${targetId}' OR (type = 'av' AND (markdown LIKE '%${targetId}%' OR ial LIKE '%${targetId}%')) LIMIT 1`
         }).then((res) => {
-            let targetBlockId = (res && res.length > 0) ? res[0].id : avId;
+            const targetBlockId = (res && res.length > 0) ? res[0].id : targetId;
             openTab({
                 app: plugin.app,
                 doc: {
@@ -28,12 +51,17 @@
                     action: ["cb-get-hl", "cb-get-focus"]
                 }
             });
+            if (blockList.length > 1) {
+                showMessage(`📍 已定位重名数据库 (${(currentIdx % blockList.length) + 1}/${blockList.length})`);
+            } else {
+                showMessage("📍 已定位到数据库");
+            }
         }).catch((e) => {
             console.error("Locate AV failed:", e);
             openTab({
                 app: plugin.app,
                 doc: {
-                    id: avId,
+                    id: targetId,
                     action: ["cb-get-hl", "cb-get-focus"]
                 }
             });
@@ -286,25 +314,25 @@
                 >
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.7; flex: 2.8; min-width: 150px; align-items: center;"
+                        style="font-weight: bold; opacity: 0.7; flex: 2.8; min-width: 140px; align-items: center;"
                     >
                         <span>超级标签 (Tag)</span>
                     </div>
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.7; flex: 3.4; min-width: 150px; align-items: center;"
+                        style="font-weight: bold; opacity: 0.7; flex: 3.0; min-width: 160px; align-items: center;"
                     >
                         <span>数据库 (Database)</span>
                     </div>
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.7; flex: 2.8; min-width: 140px; align-items: center;"
+                        style="font-weight: bold; opacity: 0.7; flex: 2.2; min-width: 120px; align-items: center;"
                     >
                         <span>命令 (Commands)</span>
                     </div>
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.8; flex: 0.8; justify-content: flex-end; align-items: center; gap: 6px;"
+                        style="font-weight: bold; opacity: 0.8; flex: 1.0; justify-content: flex-end; align-items: center; gap: 6px;"
                     >
                         <button
                             class="indexos-btn-bordered"
@@ -325,7 +353,7 @@
                         <!-- 1. Tag Column (2.8 flex) -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 2.8; min-width: 150px; align-items: center; gap: 6px; overflow: hidden; padding-right: 8px;"
+                            style="flex: 2.8; min-width: 140px; align-items: center; gap: 6px; overflow: hidden; padding-right: 8px;"
                         >
                             <svg
                                 class="b3-list-item__graphic"
@@ -358,10 +386,10 @@
                             {/if}
                         </div>
 
-                        <!-- 2. Database Column (3.4 flex) - 严格同名匹配与 data-dbs 快速创建 -->
+                        <!-- 2. Database Column (3.0 flex) - 严格同名匹配与 data-dbs 快速创建 -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 3.4; min-width: 150px; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
+                            style="flex: 3.0; min-width: 160px; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
                         >
                             {#if group.isDuplicateName}
                                 <div class="fn__flex" style="align-items: center; gap: 8px;">
@@ -372,12 +400,12 @@
                                     >
                                         <span class="badge-dot" style="background-color: var(--indexos-danger, #EF4444) !important;"></span>重名 ({group.matchedCount})
                                     </span>
-                                    {#if group.selectedAvId}
+                                    {#if group.selectedAvId || (group.matchedAvBlocks && group.matchedAvBlocks.length > 0)}
                                         <button
                                             class="indexos-btn-bordered"
                                             style="font-size: 11px; padding: 2px 7px; flex-shrink: 0;"
-                                            title="在编辑器中定位打开该数据库"
-                                            on:click={() => locateAv(group.selectedAvId)}
+                                            title="在编辑器中循环定位打开同名数据库"
+                                            on:click={() => locateAv(group)}
                                         >
                                             <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconFocus"></use></svg>
                                             <span>定位</span>
@@ -405,7 +433,7 @@
                                         class="indexos-btn-bordered"
                                         style="font-size: 11px; padding: 2px 7px; flex-shrink: 0;"
                                         title="在编辑器中定位打开该数据库"
-                                        on:click={() => locateAv(group.selectedAvId)}
+                                        on:click={() => locateAv(group)}
                                     >
                                         <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconFocus"></use></svg>
                                         <span>定位</span>
@@ -441,10 +469,10 @@
                             {/if}
                         </div>
 
-                        <!-- 3. Commands Column (2.6 flex) -->
+                        <!-- 3. Commands Column (2.2 flex) -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 2.6; align-items: center; gap: 6px; overflow: hidden; padding-right: 8px;"
+                            style="flex: 2.2; min-width: 120px; align-items: center; gap: 6px; overflow: hidden; padding-right: 8px;"
                         >
                             <button
                                 class="indexos-btn-bordered"

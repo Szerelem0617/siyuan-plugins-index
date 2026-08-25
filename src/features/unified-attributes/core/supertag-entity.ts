@@ -46,10 +46,10 @@ export interface UnifiedSupertagDefinition {
     selectedAvName: string;
     /** 是否存在重名数据库警告 */
     isDuplicateName: boolean;
-    /** 匹配到的同名数据库数量 */
-    matchedCount: number;
     /** 是否已拥有数据库 */
     hasDataSchema: boolean;
+    /** 匹配到的所有 AV 数据库块列表 (支持重名数据库循环定位) */
+    matchedAvBlocks?: Array<{ id: string; name: string; blockId: string }>;
 
     // ─── 命令组件 (Commands Component) ───
     /** 关联的命令与交互规则定义集合 */
@@ -315,6 +315,7 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
             isDuplicateName,
             matchedCount,
             hasDataSchema,
+            matchedAvBlocks: tagMatchedDbs,
             logicConfigs: [],
             hasBehavior,
             rulesCount,
