@@ -1,22 +1,23 @@
 <script lang="ts">
-    import { Dialog, showMessage } from "siyuan";
-    import { commandRegistry } from "../../registry/command-registry";
-    import { parseManualConfig, serializeManualConfig, type ManualConfig, type ManualCommandEntry, createDefaultManualEntry } from "../../utils/manual-config";
-    import { PRESET_CONDITIONS } from "../../../unified-attributes/core/condition-evaluator";
-
-    import { getLayer2Commands } from "../../registration";
     import { onMount } from "svelte";
+    import { commandRegistry } from "../../registry/command-registry";
+    import { 
+        parseManualConfig, 
+        serializeManualConfig, 
+        type ManualConfig, 
+        type ManualCommandEntry, 
+        createDefaultManualEntry 
+    } from "../../utils/manual-config";
+    import { PRESET_CONDITIONS } from "../../../unified-attributes/core/condition-evaluator";
+    import { getLayer2Commands } from "../../registration";
 
-    export let dialog: Dialog;
     export let supertag: string = "";
-    export let availableCommands: { id: string; name: string; description?: string; params?: any[] }[] = [];
     export let currentVal: string = "";
-    export let onSave: (updatedVal: string) => Promise<void>;
+    export let availableCommands: { id: string; name: string; description?: string; params?: any[] }[] = [];
+    export let entries: ManualConfig = parseManualConfig(currentVal || "");
 
-    let entries: ManualConfig = parseManualConfig(currentVal || "");
     let searchQuery = "";
     let expandedCmdId: string | null = null;
-    let saving = false;
     let availableDbColumns: { name: string; type: string }[] = [];
 
     onMount(async () => {
@@ -49,7 +50,6 @@
         return cmd.name.toLowerCase().includes(q) || cmd.id.toLowerCase().includes(q);
     });
 
-    // 辅助判定勾选与获取条目 (显式声明 entries 参数以在 {#each} 中建立精准响应式依赖)
     function isChecked(cmdId: string, _entries: ManualConfig): boolean {
         return _entries.some(e => e.id === cmdId);
     }
@@ -58,18 +58,14 @@
         return _entries.find(e => e.id === cmdId);
     }
 
-    // 切换勾选状态
     function toggleCommand(cmdId: string) {
         if (isChecked(cmdId, entries)) {
             entries = entries.filter(e => e.id !== cmdId);
-            if (expandedCmdId === cmdId) {
-                expandedCmdId = null;
-            }
+            if (expandedCmdId === cmdId) expandedCmdId = null;
         } else {
-            // 默认配置：;; 面板和 Icon Menu 开启，Button 与 Virtual Button 关闭
             const newEntry = createDefaultManualEntry(cmdId);
             entries = [...entries, newEntry];
-            expandedCmdId = cmdId; // 勾选后自动展开设置
+            expandedCmdId = cmdId;
         }
     }
 
@@ -112,6 +108,10 @@
         setParam(cmdId, paramKey, cur ? `${cur} ${placeholder}` : placeholder);
     }
 
+    function clearCondition(cmdId: string) {
+        updateEntry(cmdId, () => ({ condition: "", blockFilter: "" }));
+    }
+
     function appendCondition(cmdId: string, expr: string) {
         const entry = getEntry(cmdId, entries);
         if (!entry) return;
@@ -130,45 +130,26 @@
         return false;
     }
 
-    async function handleSave() {
-        try {
-            saving = true;
-            const jsonStr = serializeManualConfig(entries);
-            await onSave(jsonStr);
-            dialog.destroy();
-        } catch (err: any) {
-            showMessage(`保存失败: ${err?.message || err}`, 3000, "error");
-        } finally {
-            saving = false;
-        }
+    /** 导出获取序列化配置的方法供父组件统一调用 */
+    export function getSerializedConfig(): string {
+        return serializeManualConfig(entries);
     }
 </script>
 
-<div class="fn__flex-column" style="height: 100%; min-height: 0; padding: 16px; box-sizing: border-box; gap: 12px; overflow: hidden;">
-    <!-- 头部：标题与已勾选计数 -->
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
-        <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); display: flex; align-items: center; gap: 6px;">
-            <span>🏷️</span>
-            <span>配置 Supertag <span style="color: var(--indexos-accent-primary);">#{supertag}</span> 手动命令 (Manual)</span>
-        </div>
-        <span class="indexos-tag-badge" style="font-size: 11px;">
-            已启用 {entries.length} 个命令
-        </span>
-    </div>
-
+<div class="manual-config-panel" style="display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; overflow: hidden;">
     <!-- 搜索筛选栏 -->
     <div style="position: relative; flex-shrink: 0;">
         <input
             type="text"
             class="b3-text-field fn__block"
             style="font-size: 12px; padding: 6px 12px 6px 30px; box-sizing: border-box;"
-            placeholder="搜索全量命令 (如 插入块 / 更新属性 / 复合命令)..."
+            placeholder="搜索命令 (如 插入块 / 更新属性 / 复合命令)..."
             bind:value={searchQuery}
         />
         <svg style="position: absolute; left: 9px; top: 8px; width: 14px; height: 14px; opacity: 0.5; pointer-events: none;"><use xlink:href="#iconSearch"></use></svg>
     </div>
 
-    <!-- 主体：紧凑单列表 + 渐进式展开设置 (确保独立纵向滚动条) -->
+    <!-- 紧凑单列表 + 渐进式展开设置 (带独立纵向滚动条) -->
     <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
         {#if visibleCommands.length === 0}
             <div style="text-align: center; color: var(--indexos-text-muted); font-size: 12px; padding: 32px 0;">
@@ -205,7 +186,6 @@
                                         {cmd.name}
                                     </span>
 
-                                    <!-- 4 态生效指示微标 (仅勾选后显示) -->
                                     {#if checked && entry}
                                         <div style="display: flex; gap: 4px; align-items: center;">
                                             {#if entry.showInSlash}
@@ -229,7 +209,6 @@
                             </div>
                         </div>
 
-                        <!-- 齿轮设置/展开折叠切换 (客制化时按钮边框线与文字呈现刺绣金高亮) -->
                         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                             {#if checked}
                                 <button
@@ -244,7 +223,7 @@
                         </div>
                     </div>
 
-                    <!-- 展开的渐进式设置抽屉 (仅在点击配置时呈现) -->
+                    <!-- 展开的设置抽屉 -->
                     {#if isExpanded && entry}
                         <div style="padding: 12px; background: var(--indexos-bg-container); border-top: 1px dashed var(--indexos-border-divider); display: flex; flex-direction: column; gap: 12px;">
                             <!-- 1. 暴露形态设置 -->
@@ -291,7 +270,6 @@
                                     </label>
                                 </div>
 
-                                <!-- 实体按钮自定义名称 (仅勾选实体按钮时显示) -->
                                 {#if entry.showInButton}
                                     <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 6px 10px; background: var(--indexos-bg-card); border-radius: 4px; border: 1px solid var(--indexos-border-light);">
                                         <span style="font-size: 11px; color: var(--indexos-text-muted); flex-shrink: 0;">实体按钮名称:</span>
@@ -306,7 +284,6 @@
                                     </div>
                                 {/if}
 
-                                <!-- 虚拟按钮专属配置卡片 (仅勾选虚拟按钮时呈现！) -->
                                 {#if entry.showInVirtualButton}
                                     <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 10px 12px; background: rgba(124, 58, 237, 0.05); border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.25);">
                                         <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -318,7 +295,6 @@
                                             </span>
                                         </div>
 
-                                        <!-- 按钮自定义文字 -->
                                         <div style="display: flex; align-items: center; gap: 8px;">
                                             <span style="font-size: 11px; color: var(--indexos-text-muted); flex-shrink: 0; width: 72px;">按钮文案:</span>
                                             <input
@@ -331,7 +307,6 @@
                                             />
                                         </div>
 
-                                        <!-- 按钮显示条件 -->
                                         <div style="display: flex; flex-direction: column; gap: 4px;">
                                             <div style="display: flex; align-items: center; justify-content: space-between;">
                                                 <span style="font-size: 11px; color: var(--indexos-text-muted); width: 72px;">显示条件:</span>
@@ -347,7 +322,6 @@
                                             />
                                         </div>
 
-                                        <!-- 快捷预设条件胶囊 -->
                                         <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
                                             <span style="font-size: 10px; color: var(--indexos-text-muted);">快捷预设:</span>
                                             <button
@@ -373,7 +347,7 @@
                                 {/if}
                             </div>
 
-                            <!-- 2. 入参设置 (仅当该命令有入参时呈现) -->
+                            <!-- 2. 入参设置 -->
                             {#if paramSchemas.length > 0}
                                 <div style="display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--indexos-border-divider); padding-top: 8px;">
                                     <div style="font-size: 11px; font-weight: 600; color: var(--indexos-text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
@@ -451,13 +425,5 @@
                 </div>
             {/each}
         {/if}
-    </div>
-
-    <!-- 底部操作按钮 -->
-    <div class="fn__flex" style="justify-content: flex-end; gap: 8px; flex-shrink: 0; padding-top: 4px; border-top: 1px solid var(--indexos-border-divider);">
-        <button class="b3-button b3-button--cancel" on:click={() => dialog.destroy()}>取消</button>
-        <button class="b3-button b3-button--text" on:click={handleSave} disabled={saving}>
-            {saving ? "保存中..." : "保存配置"}
-        </button>
     </div>
 </div>

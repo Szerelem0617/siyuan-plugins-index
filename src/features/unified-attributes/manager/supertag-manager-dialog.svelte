@@ -6,10 +6,7 @@
     import { showMessage, openTab, Dialog } from "siyuan";
     import { getUnifiedSupertagList, type UnifiedSupertagDefinition } from "../core/supertag-entity";
     import { post } from "../../../shared/api-client/request";
-    import ConditionalTriggerDialog from "../../command/av-interaction/dialogs/ConditionalTriggerDialog.svelte";
-    import { getSqliteEngine } from "../../sqlite/sqlite-manager";
-    import { getTypeAvId } from "../../command/registration";
-    import { refreshSupertagRegistry } from "../../command/utils/sync-service";
+    import { openSupertagUnifiedConfigByTag } from "../../command/av-interaction/type-db-handler";
 
     export let dialog: any;
 
@@ -197,40 +194,8 @@
 
     async function openTriggerConfig(group: UnifiedSupertagDefinition) {
         try {
-            const supertagLabel = group.typeName;
-            const currentScript = group.conditionalScript || "";
-
-            const triggerDialog = new Dialog({
-                title: `⚡ Supertag #${supertagLabel} 命令配置`,
-                content: `<div id="conditional-config-container" style="height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;"></div>`,
-                width: "820px",
-                height: "720px"
-            });
-            triggerDialog.element.classList.add("indexos-dialog");
-
-            new ConditionalTriggerDialog({
-                target: triggerDialog.element.querySelector("#conditional-config-container")!,
-                props: {
-                    dialog: triggerDialog,
-                    supertag: supertagLabel,
-                    currentValue: currentScript,
-                    onSave: async (updatedVal: string) => {
-                        try {
-                            const { db } = await getSqliteEngine();
-                            const typeAvId = getTypeAvId();
-                            if (typeAvId) {
-                                db.run(`UPDATE "supertag-db" SET "conditional_script" = ?, _updated = ? WHERE LOWER(type_tag) = ?;`, [updatedVal, Date.now(), supertagLabel.toLowerCase()]);
-                            }
-                            await refreshSupertagRegistry();
-                            await loadData();
-                            showMessage(`✓ 已更新 Supertag #${supertagLabel} 的命令配置 ⚡`);
-                        } catch (err: any) {
-                            console.error("Save command config failed:", err);
-                            showMessage(`保存命令失败: ${err.message || err}`, 3000, "error");
-                        }
-                    }
-                }
-            });
+            const initialTab = (group.rulesCount > 0 && !group.hasVirtualButton) ? "auto" : "manual";
+            await openSupertagUnifiedConfigByTag(group.typeName, initialTab);
         } catch (e: any) {
             console.error("Open Command Dialog error:", e);
             showMessage(`打开命令设置失败: ${e.message || e}`, 3000, "error");
@@ -479,39 +444,15 @@
                             class="b3-list-item__text fn__flex"
                             style="flex: 2.6; align-items: center; gap: 6px; overflow: hidden; padding-right: 8px;"
                         >
-                            {#if group.hasBehavior}
-                                <div class="fn__flex" style="align-items: center; gap: 6px; flex-wrap: wrap;">
-                                    {#if group.rulesCount > 0}
-                                        <span class="b3-chip b3-chip--small" style="font-size: 10px; background: var(--indexos-accent-badge-bg); color: var(--indexos-accent-badge-text); border: 1px solid var(--indexos-border-light);">
-                                            ⚡ {group.rulesCount} 规则
-                                        </span>
-                                    {/if}
-                                    {#if group.hasVirtualButton}
-                                        <span class="b3-chip b3-chip--small" style="font-size: 10px; background: var(--indexos-bg-container); border: 1px solid var(--indexos-border-light);">
-                                            🔘 悬浮按钮
-                                        </span>
-                                    {/if}
-                                    <button
-                                        class="indexos-btn-bordered"
-                                        style="font-size: 11px; padding: 2px 6px; flex-shrink: 0;"
-                                        title="配置该标签的自动化触发规则与交互命令"
-                                        on:click={() => openTriggerConfig(group)}
-                                    >
-                                        <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconZap"></use></svg>
-                                        <span>命令配置</span>
-                                    </button>
-                                </div>
-                            {:else}
-                                <button
-                                    class="indexos-btn-bordered"
-                                    style="font-size: 11px; padding: 2px 8px; opacity: 0.8;"
-                                    title="为该标签配置自动化规则或交互命令"
-                                    on:click={() => openTriggerConfig(group)}
-                                >
-                                    <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconAdd"></use></svg>
-                                    <span>+ 配置命令</span>
-                                </button>
-                            {/if}
+                            <button
+                                class="indexos-btn-bordered"
+                                style="font-size: 11px; padding: 2px 8px; flex-shrink: 0; {group.hasBehavior ? 'color: var(--indexos-detached-gold, #D9A74A) !important; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.08)) !important; font-weight: 600;' : 'color: var(--indexos-accent-primary); border: 1px solid var(--indexos-index-blue, #A1C4E6) !important;'}"
+                                title="配置该标签的手动命令与自动触发规则"
+                                on:click={() => openTriggerConfig(group)}
+                            >
+                                <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconSettings"></use></svg>
+                                <span>命令设置</span>
+                            </button>
                         </div>
 
                         <!-- 4. Switch Column (1.0 flex) -->

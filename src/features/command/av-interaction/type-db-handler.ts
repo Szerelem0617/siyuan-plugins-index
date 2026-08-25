@@ -1,12 +1,12 @@
 import { Dialog, showMessage } from "siyuan";
-import { getCommandAvId, COMMAND_BINDINGS, getLayer2Commands } from "../registration";
+import { getCommandAvId, COMMAND_BINDINGS, getLayer2Commands, getTypeAvId } from "../registration";
 import { commandRegistry } from "../registry/command-registry";
 import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { openConfigForCommand } from "./command-db-handler";
-import ConditionalTriggerDialog from "./dialogs/ConditionalTriggerDialog.svelte";
-import ManualConfigDialog from "./dialogs/ManualConfigDialog.svelte";
+import UnifiedSupertagConfigDialog from "./dialogs/UnifiedSupertagConfigDialog.svelte";
 import PresetSupertagImportDialog from "./dialogs/PresetSupertagImportDialog.svelte";
+import { getSupertagDbRecords } from "../../unified-attributes/core/supertag-entity";
 
 export function openPresetSupertagImportDialog() {
     const dialog = new Dialog({
@@ -22,6 +22,110 @@ export function openPresetSupertagImportDialog() {
         props: {
             dialog,
             onImported: () => {}
+        }
+    });
+}
+
+/**
+ * 根据标签名直接打开 Supertag 统一聚合配置中心（用于超级标签管理器及全局触发）
+ */
+export async function openSupertagUnifiedConfigByTag(
+    supertag: string,
+    initialTab: "manual" | "auto" = "manual"
+) {
+    const cleanTag = supertag.replace(/^#+/, "").trim().toLowerCase();
+    let currentManualVal = "";
+    let currentAutoVal = "";
+    let matchedRowId = "";
+    let isAlreadyCustomized = false;
+
+    try {
+        const records = await getSupertagDbRecords();
+        const found = records.find(r => r.typeTag.toLowerCase() === cleanTag);
+        if (found) {
+            currentManualVal = found.manual || "";
+            currentAutoVal = found.auto || "";
+            matchedRowId = found.rowId || "";
+            isAlreadyCustomized = Boolean(found.manual || found.auto);
+        }
+    } catch (e) {
+        console.warn("[Supertag-UnifiedConfig] Failed to fetch existing supertag records:", e);
+    }
+
+    const typeAvId = getTypeAvId();
+
+    const dialog = new Dialog({
+        title: `⚡ Supertag #${cleanTag} 配置中心`,
+        content: `<div id="unified-supertag-config-container" style="height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;"></div>`,
+        width: "840px",
+        height: "720px"
+    });
+    dialog.element.classList.add("indexos-dialog");
+
+    new UnifiedSupertagConfigDialog({
+        target: dialog.element.querySelector("#unified-supertag-config-container")!,
+        props: {
+            dialog,
+            supertag: cleanTag,
+            initialTab,
+            currentManualVal,
+            currentAutoVal,
+            onSave: async ({ manual, auto }) => {
+                const cleanManual = (manual === "[]" || !manual) ? "" : manual.trim();
+                const cleanAuto = (auto || "").trim();
+                const initialCleanManual = (currentManualVal === "[]" || !currentManualVal) ? "" : currentManualVal.trim();
+                const initialCleanAuto = (currentAutoVal || "").trim();
+                const isUnchanged = (cleanManual === initialCleanManual && cleanAuto === initialCleanAuto);
+
+                // 纯数据库 (未客制化) 且未做任何编辑或配置为空时：不写入 supertag-db，保持纯数据库 (蓝色边框)
+                if (!isAlreadyCustomized && (!cleanManual && !cleanAuto || isUnchanged)) {
+                    return;
+                }
+
+                // 1. 同步更新 SQLite 内存表
+                try {
+                    const { db } = await getSqliteEngine();
+                    const check = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='supertag-db';`);
+                    if (check.length > 0 && check[0].values.length > 0) {
+                        const rowCheck = db.exec(`SELECT rowid FROM "supertag-db" WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`, [cleanTag, cleanTag]);
+                        if (rowCheck.length > 0 && rowCheck[0].values.length > 0) {
+                            db.run(
+                                `UPDATE "supertag-db" SET "Manual" = ?, "Auto" = ?, _updated = ? WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`,
+                                [manual, auto, Date.now(), cleanTag, cleanTag]
+                            );
+                        } else {
+                            db.run(
+                                `INSERT INTO "supertag-db" ("主键", "Manual", "Auto", _updated) VALUES (?, ?, ?, ?);`,
+                                [cleanTag, manual, auto, Date.now()]
+                            );
+                        }
+                    }
+                } catch (sqlErr) {
+                    console.error("[Supertag-UnifiedConfig] SQLite update error:", sqlErr);
+                }
+
+                // 2. 如果存在思源 AV 实例化表，同步更新单元格
+                if (typeAvId && matchedRowId) {
+                    try {
+                        const { db } = await getSqliteEngine();
+                        const schemaCols = db.exec(`SELECT key_name, key_id FROM _av_schema WHERE av_id = ?`, [typeAvId]);
+                        let manualKeyId = "";
+                        let autoKeyId = "";
+                        if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
+                            for (const row of schemaCols[0].values) {
+                                const kName = String(row[0] || "").toLowerCase();
+                                const kId = String(row[1] || "");
+                                if (kName === "manual" || kName === "icon menu") manualKeyId = kId;
+                                if (kName === "auto" || kName === "conditional") autoKeyId = kId;
+                            }
+                        }
+                        if (manualKeyId) await updateCellValue(null, typeAvId, matchedRowId, manualKeyId, manual);
+                        if (autoKeyId) await updateCellValue(null, typeAvId, matchedRowId, autoKeyId, auto);
+                    } catch (avErr) {
+                        console.error("[Supertag-UnifiedConfig] SiYuan AV cell update error:", avErr);
+                    }
+                }
+            }
         }
     });
 }
@@ -46,7 +150,7 @@ export async function handleTypeDbAltClick(
 
     const { db } = await getSqliteEngine();
 
-    // Check column type / name in Siyuan
+    // 检查点击的列类型与列名
     let isConditionalCol = false;
     let isIconMenuCol = false;
     let isRelatedAvCol = false;
@@ -56,9 +160,9 @@ export async function handleTypeDbAltClick(
         if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
             const keyName = checkColRes[0].values[0][0];
             clickedColName = checkColRes[0].values[0][1];
-            if (keyName === "Auto") {
+            if (keyName === "Auto" || keyName === "Conditional") {
                 isConditionalCol = true;
-            } else if (keyName === "Manual") {
+            } else if (keyName === "Manual" || keyName === "Icon Menu") {
                 isIconMenuCol = true;
             } else if (keyName === "related_av" || clickedColName.toLowerCase().includes("related") || clickedColName.toLowerCase().includes("database") || clickedColName.includes("数据库")) {
                 isRelatedAvCol = true;
@@ -68,211 +172,127 @@ export async function handleTypeDbAltClick(
         console.error("[AltClick-TypeDB] Schema check failed:", e);
     }
 
-    if (isConditionalCol) {
-        await openConditionalSelector(avId, rowId, colId);
-        return;
-    }
-
-    if (isIconMenuCol) {
-        await openIconMenuSelector(avId, rowId, colId, clickedColName, cellEl);
-        return;
-    }
-
     if (isRelatedAvCol) {
         await handleRelatedAvAltClick(avId, rowId, colId, cellEl);
         return;
     }
 
-    // 提取所点单元格内的命令名（可以是 Icon Menu 的逗号分隔，也可以是关联字段的标签）
-    const cellText = cellEl.textContent || "";
-    const tags = Array.from(cellEl.querySelectorAll(".av__cell--relation-tag, span")).map(el => el.textContent?.trim()).filter(Boolean);
-    const tokens = cellText.split(/[,，\n;；]/).map(s => s.trim()).filter(Boolean);
-    const cleanLabels = Array.from(new Set([...tags, ...tokens])).map(s => s.replace(/[\u200B-\uFEFF]/g, "").trim()).filter(Boolean);
-
-    const matchedCmds: { label: string; cmdDef: any }[] = [];
-    for (const label of cleanLabels) {
-        let cmdInfo = COMMAND_BINDINGS[label];
-        if (!cmdInfo) {
-            const foundKey = Object.keys(COMMAND_BINDINGS).find(k => label.includes(k) || k.includes(label));
-            if (foundKey) cmdInfo = COMMAND_BINDINGS[foundKey];
-        }
-        const commandRef = cmdInfo?.commandRef || label;
-        const cmdDef = commandRegistry.findByNameOrId(label) || commandRegistry.getCommand(commandRef);
-        if (cmdDef) {
-            matchedCmds.push({ label: cmdDef.name || label, cmdDef });
-        }
-    }
-
-    if (matchedCmds.length === 0) {
-        showMessage("此单元格没有绑定任何可配置的命令");
-        return;
-    }
-
-    if (matchedCmds.length === 1) {
-        await openConfigForCommand(matchedCmds[0].cmdDef, matchedCmds[0].label);
-    } else {
-        // 多个命令，弹出选择框
-        const selectDialog = new Dialog({
-            title: "选择要配置的命令",
-            content: `<div class="b3-dialog__content" style="padding: 16px; display: flex; flex-direction: column; gap: 8px;" id="command-selector-container"></div>`,
-            width: "360px"
-        });
-        selectDialog.element.classList.add("indexos-dialog");
-        const container = selectDialog.element.querySelector("#command-selector-container")!;
-        container.innerHTML = `<div style="margin-bottom: 12px; font-weight: bold; color: var(--b3-theme-on-surface-light); font-size: 13px;">检测到绑定了多个命令，请选择一个进行配置：</div>`;
-        
-        matchedCmds.forEach(cmd => {
-            const btn = document.createElement("button");
-            btn.className = "b3-button b3-button--outline fn__block";
-            btn.style.textAlign = "left";
-            btn.style.padding = "8px 12px";
-            btn.style.marginBottom = "4px";
-            btn.textContent = `⚡ ${cmd.label}`;
-            btn.addEventListener("click", async () => {
-                selectDialog.destroy();
-                await openConfigForCommand(cmd.cmdDef, cmd.label);
-            });
-            container.appendChild(btn);
-        });
-    }
+    // 统一聚合配置：无论是点击 Manual 还是 Auto 列，均唤起同一个聚合多 Tab 面板，智能激活对应 Tab
+    const initialTab = isConditionalCol ? "auto" : "manual";
+    await openSupertagUnifiedConfigForAvRow(avId, rowId, initialTab);
 }
 
-async function openConditionalSelector(avId: string, rowId: string, colId: string) {
+async function openSupertagUnifiedConfigForAvRow(
+    avId: string,
+    rowId: string,
+    initialTab: "manual" | "auto"
+) {
     try {
         const { db } = await getSqliteEngine();
-        
-        // 1. Query supertag name for the clicked row
         const typeTableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+        // 1. 获取主键列 (supertag)
         const supertagColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [avId]);
         let supertagCol = "supertag";
         if (supertagColRes.length > 0 && supertagColRes[0].values.length > 0) {
             supertagCol = supertagColRes[0].values[0][0];
         }
 
-        // Get SQLite column name for the clicked colId
-        const colNameRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
-        let colName = "Auto";
-        if (colNameRes.length > 0 && colNameRes[0].values.length > 0) {
-            colName = colNameRes[0].values[0][0];
+        // 2. 获取 Manual 与 Auto 列的列名与 key_id
+        let manualCol = "Manual";
+        let autoCol = "Auto";
+        let manualKeyId = "";
+        let autoKeyId = "";
+
+        const allSchemaCols = db.exec(`SELECT key_name, col_name, key_id FROM _av_schema WHERE av_id = ?`, [avId]);
+        if (allSchemaCols.length > 0 && allSchemaCols[0].values.length > 0) {
+            for (const row of allSchemaCols[0].values) {
+                const kName = String(row[0] || "").toLowerCase();
+                const cName = String(row[1] || "");
+                const kId = String(row[2] || "");
+                if (kName === "manual" || kName === "icon menu") {
+                    manualCol = cName;
+                    manualKeyId = kId;
+                } else if (kName === "auto" || kName === "conditional") {
+                    autoCol = cName;
+                    autoKeyId = kId;
+                }
+            }
         }
 
-        const supertagQuery = db.exec(`SELECT "${supertagCol}", "${colName}" FROM ${typeTableName} WHERE _itemID = ?`, [rowId]);
-        if (supertagQuery.length === 0 || supertagQuery[0].values.length === 0) {
+        // 3. 读取当前行的 supertag, Manual 和 Auto 数据
+        let supertagLabel = "supertag";
+        let currentManualVal = "";
+        let currentAutoVal = "";
+
+        const rowQuery = db.exec(
+            `SELECT "${supertagCol}", "${manualCol}", "${autoCol}" FROM ${typeTableName} WHERE _itemID = ?`,
+            [rowId]
+        );
+
+        if (rowQuery.length > 0 && rowQuery[0].values.length > 0) {
+            supertagLabel = String(rowQuery[0].values[0][0] || "").replace(/^#+/, "").trim();
+            currentManualVal = String(rowQuery[0].values[0][1] || "").trim();
+            currentAutoVal = String(rowQuery[0].values[0][2] || "").trim();
+        }
+
+        if (!supertagLabel) {
             showMessage("未找到该超级标签的行记录", 3000, "error");
             return;
         }
 
-        const supertagLabel = String(supertagQuery[0].values[0][0] || "").trim();
-        const currentConditionalVal = String(supertagQuery[0].values[0][1] || "").trim();
-
-        // 2. Open dialog and mount Svelte component
+        // 4. 唤起统一多 Tab 聚合配置弹窗
         const dialog = new Dialog({
-            title: `配置 Supertag #${supertagLabel} 自动触发 (Auto)`,
-            content: `<div id="conditional-config-container" style="height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;"></div>`,
-            width: "820px",
+            title: `⚡ Supertag #${supertagLabel} 配置中心`,
+            content: `<div id="unified-supertag-config-container" style="height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;"></div>`,
+            width: "840px",
             height: "720px"
         });
         dialog.element.classList.add("indexos-dialog");
 
-        new ConditionalTriggerDialog({
-            target: dialog.element.querySelector("#conditional-config-container")!,
+        new UnifiedSupertagConfigDialog({
+            target: dialog.element.querySelector("#unified-supertag-config-container")!,
             props: {
                 dialog,
                 supertag: supertagLabel,
-                currentValue: currentConditionalVal,
-                onSave: async (updatedVal: string) => {
-                    await updateCellValue(null, avId, rowId, colId, updatedVal);
-                    try {
-                        const { refreshSupertagRegistry } = await import("../utils/sync-service");
-                        await refreshSupertagRegistry();
-                    } catch (e) {
-                        console.error("[AltClick-Auto] 刷新 Supertag 注册表失败:", e);
+                initialTab,
+                currentManualVal,
+                currentAutoVal,
+                onSave: async ({ manual, auto }) => {
+                    // 更新 SiYuan AV 单元格
+                    if (manualKeyId) {
+                        await updateCellValue(null, avId, rowId, manualKeyId, manual);
                     }
-                    showMessage(`✓ 已更新 Supertag #${supertagLabel} 的自动触发 (Auto) 配置 ⚡`);
+                    if (autoKeyId) {
+                        await updateCellValue(null, avId, rowId, autoKeyId, auto);
+                    }
+
+                    // 更新 SQLite supertag-db 内存表
+                    try {
+                        const check = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='supertag-db';`);
+                        if (check.length > 0 && check[0].values.length > 0) {
+                            db.run(
+                                `UPDATE "supertag-db" SET "Manual" = ?, "Auto" = ?, _updated = ? WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`,
+                                [manual, auto, Date.now(), supertagLabel.toLowerCase(), supertagLabel.toLowerCase()]
+                            );
+                        }
+                    } catch (e) {
+                        console.error("[AltClick-UnifiedSave] SQLite update error:", e);
+                    }
                 }
             }
         });
-
     } catch (e: any) {
-        console.error("Open Conditional Config error:", e);
+        console.error("Open Supertag Unified Config error:", e);
         showMessage(`读取配置失败: ${e.message}`, 3000, "error");
     }
-}
-
-
-
-async function openIconMenuSelector(avId: string, rowId: string, colId: string, clickedColName: string, cellEl: HTMLElement) {
-    let currentIconMenuVal = "";
-    let supertagLabel = "supertag";
-    let conditionalVal = "";
-
-    try {
-        const { db } = await getSqliteEngine();
-        const tableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-
-        // 1. Get the primary key column name (supertag)
-        const supertagColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [avId]);
-        let supertagCol = "supertag";
-        if (supertagColRes.length > 0 && supertagColRes[0].values.length > 0) {
-            supertagCol = supertagColRes[0].values[0][0];
-        }
-
-        let condColName = "";
-        try {
-            const condColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Conditional' OR key_name = '条件')`, [avId]);
-            if (condColRes.length > 0 && condColRes[0].values.length > 0) {
-                condColName = String(condColRes[0].values[0][0]);
-            }
-        } catch (_) {}
-
-        const valRes = db.exec(`SELECT "${supertagCol}", "${clickedColName}"${condColName ? `, "${condColName}"` : ""} FROM ${tableName} WHERE _itemID = ?`, [rowId]);
-        if (valRes.length > 0 && valRes[0].values.length > 0) {
-            supertagLabel = String(valRes[0].values[0][0] || "supertag").trim();
-            currentIconMenuVal = String(valRes[0].values[0][1] || "");
-            if (condColName) {
-                conditionalVal = String(valRes[0].values[0][2] || "");
-            }
-        }
-    } catch (e) {
-        currentIconMenuVal = cellEl?.textContent?.trim() || "";
-    }
-
-    const selectableCommands = getLayer2Commands();
-
-    const dialog = new Dialog({
-        title: `配置 Supertag #${supertagLabel} 手动命令 (Manual)`,
-        content: `<div id="manual-config-dialog" style="height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;"></div>`,
-        width: "780px",
-        height: "660px"
-    });
-    dialog.element.classList.add("indexos-dialog");
-
-    new ManualConfigDialog({
-        target: dialog.element.querySelector("#manual-config-dialog")!,
-        props: {
-            dialog,
-            supertag: supertagLabel,
-            availableCommands: selectableCommands,
-            currentVal: currentIconMenuVal,
-            onSave: async (updatedVal: string) => {
-                await updateCellValue(null, avId, rowId, colId, updatedVal);
-                try {
-                    const { refreshSupertagRegistry } = await import("../utils/sync-service");
-                    await refreshSupertagRegistry();
-                } catch (e) {
-                    console.error("[AltClick-Manual] 刷新 Supertag 注册表失败:", e);
-                }
-                showMessage(`✓ 已更新 Supertag #${supertagLabel} 的手动命令 (Manual) 配置 ⚡`);
-            }
-        }
-    });
 }
 
 async function handleRelatedAvAltClick(
     avId: string,
     rowId: string,
     colId: string,
-    cellEl: HTMLElement
+    _cellEl: HTMLElement
 ) {
     try {
         const { db } = await getSqliteEngine();
