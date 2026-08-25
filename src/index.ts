@@ -20,6 +20,7 @@ import { dispatchCommand } from "./features/command/command-dispatcher";
 import { 
     supertagMonitor, 
     supertagManager, 
+    supertagBinder,
     initSupertagPalette, 
     destroySupertagPalette,
     SupertagRenderer, 
@@ -54,6 +55,9 @@ export default class IndexPlugin extends Plugin {
     //加载插件
     async onload() {
         console.log(`IndexPlugin onload v${version}`);
+        setI18n(this.i18n);
+        setPlugin(this);
+        await supertagBinder.loadPrefs();
         
         // Expose global database SQL API & Command API
         (window as any).indexOS = {

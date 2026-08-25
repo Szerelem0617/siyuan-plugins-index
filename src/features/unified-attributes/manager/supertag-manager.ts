@@ -76,23 +76,26 @@ export class SupertagManager {
     private openDialog(e: Event) {
         e.stopPropagation();
         e.preventDefault();
-
-        const dialog = new Dialog({
-            title: i18n.supertagManager.title,
-            content: `<div id="supertag-manager-container" style="height: 100%;"></div>`,
-            width: "720px",
-            height: "520px",
-        });
-        dialog.element.classList.add("indexos-dialog");
-        dialog.element.querySelector('.b3-dialog__header')?.remove();
-
-        new SupertagManagerDialog({
-            target: dialog.element.querySelector("#supertag-manager-container"),
-            props: {
-                dialog
-            }
-        });
+        openSupertagManagerDialog();
     }
+}
+
+export function openSupertagManagerDialog() {
+    const dialog = new Dialog({
+        title: i18n.supertagManager?.title || "超级标签管理",
+        content: `<div id="supertag-manager-container" style="height: 100%;"></div>`,
+        width: "720px",
+        height: "520px",
+    });
+    dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
+
+    new SupertagManagerDialog({
+        target: dialog.element.querySelector("#supertag-manager-container")!,
+        props: {
+            dialog
+        }
+    });
 }
 
 export const supertagManager = new SupertagManager();

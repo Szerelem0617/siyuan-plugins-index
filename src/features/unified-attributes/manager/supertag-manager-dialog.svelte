@@ -12,7 +12,6 @@
     import { refreshSupertagRegistry } from "../../command/utils/sync-service";
 
     export let dialog: any;
-    export let supertagManager: any = null;
 
     let loading = true;
     let searchQuery = "";

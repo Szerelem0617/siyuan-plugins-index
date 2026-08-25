@@ -94,22 +94,15 @@ export class SupertagAVProjector {
                     const avId = reqBody?.id || reqBody?.avID;
                     const isVirtual = avId ? self.isVirtualProjection(avId) : false;
 
-                    console.log(`[SupertagAVProjector Hook] 捕获 /api/av/renderAttributeView:`, {
-                        url,
-                        avId,
-                        isVirtual,
-                        reqBody
-                    });
-
                     if (avId && isVirtual) {
                         const virtualData = await self.generateVirtualIAVFromSQLite(avId);
-                        console.log(`[SupertagAVProjector Hook] 成功合成虚拟 IAV 数据:`, {
-                            avId,
-                            rowCount: virtualData?.view?.rowCount,
-                            rows: virtualData?.view?.rows,
-                            columns: virtualData?.view?.columns
-                        });
                         if (virtualData) {
+                            setTimeout(async () => {
+                                try {
+                                    const { avProjectionToggle } = await import("./av-projection-toggle");
+                                    avProjectionToggle.scanAndMountToggles();
+                                } catch (_) {}
+                            }, 40);
                             return new Response(JSON.stringify({
                                 code: 0,
                                 msg: "",
@@ -119,6 +112,13 @@ export class SupertagAVProjector {
                                 headers: { "Content-Type": "application/json" }
                             });
                         }
+                    } else {
+                        setTimeout(async () => {
+                            try {
+                                const { avProjectionToggle } = await import("./av-projection-toggle");
+                                avProjectionToggle.scanAndMountToggles();
+                            } catch (_) {}
+                        }, 60);
                     }
                 }
 
@@ -186,24 +186,40 @@ export class SupertagAVProjector {
 
         const boundTag = customTag || this.getBoundTag(cleanId) || "";
 
+        // 立即设置新状态并持久化，保证后续任何 fetch hook 均读取最新状态
+        this.projectionModes.set(cleanId, nextState);
+        this.persistBindings();
+
         if (nextState) {
-            // 切换为虚拟投影模式
-            if (boundTag && !this.bindings.has(cleanId)) {
+            // 切换为虚拟投影模式：从思源全库拉取打标块并构建热表
+            if (boundTag) {
                 await this.projectSupertagToAV(boundTag, cleanId);
             }
-            this.projectionModes.set(cleanId, true);
-            this.persistBindings();
             this.notifyFrontendToRerender(cleanId);
             showMessage(`⚡ 已切换至 #${boundTag || "Supertag"} 标签虚拟投影视图`);
         } else {
             // 切换为原生物理数据模式
-            this.projectionModes.set(cleanId, false);
-            this.persistBindings();
             this.notifyFrontendToRerender(cleanId);
             showMessage(`📁 已切换至原生物理数据视图`);
         }
 
         return nextState;
+    }
+
+    public bindTagToAV(tagName: string, avId: string) {
+        const cleanTag = tagName.replace(/^#/, "").trim();
+        const cleanAvId = avId.trim();
+        const tableName = "proj_" + cleanAvId.replace(/[^a-zA-Z0-9_]/g, "_");
+        if (!this.bindings.has(cleanAvId)) {
+            this.bindings.set(cleanAvId, {
+                tagName: cleanTag,
+                tableName,
+                attrNames: [],
+                createdAt: Date.now()
+            });
+            this.tagToAvMap.set(cleanTag, cleanAvId);
+            this.persistBindings();
+        }
     }
 
     public getBoundTag(avId: string): string | undefined {
@@ -873,14 +889,10 @@ export class SupertagAVProjector {
      */
     public notifyFrontendToRerender(avId: string, blockId?: string) {
         const cleanAvId = avId.trim();
-        console.group(`🔄 [SupertagAVProjector] 触发即时重绘流水线: AV(${cleanAvId})`);
-
-        let reloadedTabCount = 0;
 
         // 1. 精准遍历所有活动 Tab 与 Protyle 实例
         try {
             const editors = this.getAllActiveEditors();
-            console.log(`🎯 [SupertagAVProjector] 全局共探测到 ${editors.length} 个活动编辑器实例`);
 
             for (const ed of editors) {
                 try {
@@ -904,16 +916,31 @@ export class SupertagAVProjector {
                     }
 
                     if (typeof ed?.reload === "function") {
-                        console.log(`🔄 [SupertagAVProjector] 正在就地刷新编辑器: rootID=${protyle?.block?.rootID || "unknown"}`);
                         ed.reload(false);
-                        reloadedTabCount++;
                     } else if (typeof protyle?.reload === "function") {
                         protyle.reload(false);
-                        reloadedTabCount++;
                     }
                 } catch (err) {
                     console.warn(`[SupertagAVProjector] 单个编辑器刷新异常:`, err);
                 }
+            }
+
+            // 兜底检测全局 activeProtyleInstance
+            const globalProtyle = (window as any).activeProtyleInstance;
+            if (globalProtyle && !editors.includes(globalProtyle)) {
+                try {
+                    const wysiwygEl = globalProtyle?.wysiwyg?.element || globalProtyle?.element;
+                    if (wysiwygEl) {
+                        const avNodes = wysiwygEl.querySelectorAll(`div[data-type="NodeAttributeView"], .av[data-av-id="${cleanAvId}"]`);
+                        avNodes.forEach((node: HTMLElement) => {
+                            node.removeAttribute("data-render");
+                            node.removeAttribute("data-rendering");
+                        });
+                    }
+                    if (typeof globalProtyle.reload === "function") {
+                        globalProtyle.reload(false);
+                    }
+                } catch (_) {}
             }
         } catch (layoutErr) {
             console.warn(`⚠️ [SupertagAVProjector] Layout 遍历触发异常:`, layoutErr);
@@ -945,8 +972,13 @@ export class SupertagAVProjector {
             window.dispatchEvent(new Event("resize"));
         } catch (_) {}
 
-        console.log(`✅ [SupertagAVProjector] 重绘流水线执行完毕 (成功刷新 ${reloadedTabCount} 个活动编辑器 Tab)`);
-        console.groupEnd();
+        // 4. 异步刷新切换按钮状态
+        setTimeout(async () => {
+            try {
+                const { avProjectionToggle } = await import("./av-projection-toggle");
+                avProjectionToggle.scanAndMountToggles();
+            } catch (_) {}
+        }, 50);
     }
 
     /**

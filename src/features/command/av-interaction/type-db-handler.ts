@@ -299,7 +299,7 @@ async function handleRelatedAvAltClick(
         const currentRelatedAv = String(supertagQuery[0].values[0][1] || "").trim();
 
         if (!currentRelatedAv) {
-            const { openSupertagManagerDialog } = await import("../../unified-attributes/manager/supertag-manager-dialog");
+            const { openSupertagManagerDialog } = await import("../../unified-attributes/manager/supertag-manager");
             openSupertagManagerDialog();
             showMessage(`🏷️ 请在超级标签管理器中为 #${supertagLabel} 关联已有数据库`);
         } else {
