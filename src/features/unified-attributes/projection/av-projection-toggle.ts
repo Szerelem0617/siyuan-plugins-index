@@ -164,20 +164,35 @@ export class AVProjectionToggleManager {
     }
 
     /**
-     * 多渠道同步解析 AV 绑定的 Supertag 名称
+     * 多渠道同步解析 AV 绑定的 Supertag 名称 (优先 custom-supertag-* 自定义属性)
      */
     private resolveBoundTag(avId: string, avRootNode: HTMLElement | null, headerEl: HTMLElement): string | undefined {
+        // 渠道 1: 优先检查 DOM 节点上的 custom-supertag-* 自定义属性 (真理源)
+        const customTag = avRootNode?.getAttribute("custom-supertag-tag") ||
+                          headerEl.getAttribute("custom-supertag-tag") ||
+                          avRootNode?.getAttribute("custom-supertag-id") ||
+                          headerEl.getAttribute("custom-supertag-id");
+
+        if (customTag) {
+            const tag = customTag.replace(/^#/, "").trim().toLowerCase();
+            if (avId) {
+                supertagBinder.setPref(tag, avId);
+                supertagAVProjector.bindTagToAV(tag, avId);
+            }
+            return tag;
+        }
+
         if (avId) {
-            // 渠道 1: 内存 Projector 映射
+            // 渠道 2: 内存 Projector 映射
             const tag1 = supertagAVProjector.getBoundTag(avId);
             if (tag1) return tag1.replace(/^#/, "");
 
-            // 渠道 2: Binder 偏好设置
+            // 渠道 3: Binder 偏好设置
             const tag2 = supertagBinder.findTagByAvId(avId);
             if (tag2) return tag2.replace(/^#/, "");
         }
 
-        // 渠道 3: DOM 节点属性与标题识别 (例如 name="supertag-测试一下" 或 custom-av-name="supertag-测试一下")
+        // 渠道 4: DOM 节点属性与标题识别 (例如 name="supertag-测试一下" 或 custom-av-name="supertag-测试一下")
         const namesToCheck = [
             avRootNode?.getAttribute("custom-av-name"),
             avRootNode?.getAttribute("name"),
@@ -191,10 +206,18 @@ export class AVProjectionToggleManager {
             const trimmed = String(rawName).trim();
             const match = trimmed.match(/^supertag-([^\s\/\.]+)/i) || trimmed.match(/supertag-([^\s\/\.]+)/i);
             if (match && match[1]) {
-                const inferredTag = match[1].trim();
+                const inferredTag = match[1].trim().toLowerCase();
                 if (avId) {
                     supertagBinder.setPref(inferredTag, avId);
                     supertagAVProjector.bindTagToAV(inferredTag, avId);
+                    // 自愈持久化自定义属性
+                    post("/api/attr/setBlockAttrs", {
+                        id: avId,
+                        attrs: {
+                            "custom-supertag-tag": inferredTag,
+                            "custom-supertag-id": inferredTag
+                        }
+                    }).catch(() => {});
                 }
                 return inferredTag;
             }
@@ -204,23 +227,43 @@ export class AVProjectionToggleManager {
     }
 
     /**
-     * 异步从思源块数据库查询数据库名称 (兜底识别)
+     * 异步从思源块数据库查询自定义属性与数据库名称 (真理源识别)
      */
     private async asyncResolveBoundTagFromSql(avId: string, headerEl: HTMLElement) {
         this.sqlCheckingAvIds.add(avId);
         try {
             const rows = await post("/api/query/sql", {
-                stmt: `SELECT content, ial FROM blocks WHERE id = '${avId}' OR ial LIKE '%${avId}%' LIMIT 1;`
+                stmt: `SELECT id, content, ial FROM blocks WHERE id = '${avId}' OR ial LIKE '%${avId}%' LIMIT 1;`
             });
             if (rows && rows.length > 0) {
-                const content = rows[0].content || "";
+                const blockId = rows[0].id || avId;
                 const ial = rows[0].ial || "";
+                const content = rows[0].content || "";
+
+                // 优先从 ial 中提取 custom-supertag-tag 或 custom-supertag-id
+                const customTagMatch = ial.match(/custom-supertag-tag="([^"]+)"/) || ial.match(/custom-supertag-id="([^"]+)"/);
+                if (customTagMatch && customTagMatch[1]) {
+                    const tag = customTagMatch[1].trim().toLowerCase();
+                    await supertagBinder.setPref(tag, avId);
+                    supertagAVProjector.bindTagToAV(tag, avId);
+                    this.mountToggleToHeader(headerEl);
+                    return;
+                }
+
+                // 兜底从 supertag-* 名字匹配并自愈写入属性
                 const combined = `${content} ${ial}`;
                 const match = combined.match(/supertag-([a-zA-Z0-9_\-\u4e00-\u9fa5]+)/i);
                 if (match && match[1]) {
-                    const tag = match[1].trim();
+                    const tag = match[1].trim().toLowerCase();
                     await supertagBinder.setPref(tag, avId);
                     await supertagAVProjector.bindTagToAV(tag, avId);
+                    await post("/api/attr/setBlockAttrs", {
+                        id: blockId,
+                        attrs: {
+                            "custom-supertag-tag": tag,
+                            "custom-supertag-id": tag
+                        }
+                    });
                     this.mountToggleToHeader(headerEl);
                 }
             }

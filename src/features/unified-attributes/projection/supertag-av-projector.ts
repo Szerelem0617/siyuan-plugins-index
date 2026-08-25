@@ -348,7 +348,7 @@ export class SupertagAVProjector {
             const attrKeysSet = new Set<string>();
 
             for (const row of rows) {
-                const attrs = parseIAL(row.ial || "");
+                const attrs = this.parseIALString(row.ial || "");
                 const blockTags = new Set<string>();
 
                 // 解析显式 Supertags

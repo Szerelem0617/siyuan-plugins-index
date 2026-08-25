@@ -98,48 +98,100 @@
         }
     }
 
-    import { Menu } from "siyuan";
+    import { NOTEBOOK_NAME, DATA_DBS_CONFIG } from "../../command/indexos/seed-data";
+    import { getOrCreateDataDbsParentDoc } from "../../command/data-db-management";
+    import { supertagAVProjector } from "../projection/supertag-av-projector";
 
-    async function openSelectDbDialog(group: UnifiedSupertagDefinition, event?: MouseEvent) {
+    async function handleCreateDatabase(group: UnifiedSupertagDefinition) {
         try {
-            const sqlRes = await post("/api/query/sql", {
-                stmt: `SELECT id, content FROM blocks WHERE type = 'av' ORDER BY updated DESC LIMIT 100;`
-            });
-            const rows: any[] = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
-            if (rows.length === 0) {
-                showMessage("当前工作区暂无可用数据库，请先在思源中创建数据库", 4000, "info");
+            const tagName = group.typeName;
+            showMessage(`正在为 #${tagName} 在 data-dbs 中创建同名数据库...`, 3000, "info");
+            
+            // 1. 获取目标笔记本 (优先 IndexOS 笔记本，否则首个打开的笔记本)
+            const nbRes = await post("/api/notebook/lsNotebooks", {});
+            const notebooks = nbRes?.notebooks || [];
+            const targetNotebook = notebooks.find((n: any) => n.name === NOTEBOOK_NAME && !n.closed) || notebooks.find((n: any) => !n.closed) || notebooks[0];
+            if (!targetNotebook) {
+                showMessage("未找到可用笔记本", 4000, "error");
                 return;
             }
 
-            const menu = new Menu();
-            for (const row of rows) {
-                const dbName = row.content?.trim() || `未命名库 (${row.id.slice(0, 6)})`;
-                menu.addItem({
-                    icon: "iconDatabase",
-                    label: dbName,
-                    click: async () => {
-                        await supertagBinder.setPref(group.typeName, row.id);
-                        await loadData();
-                        showMessage(`✓ 已将 #${group.typeName} 关联至数据库 "${dbName}"`);
-                    }
-                });
+            // 2. 确保 /data-dbs 父文档存在
+            await getOrCreateDataDbsParentDoc(targetNotebook.id);
+
+            // 3. 在 /data-dbs 下创建名为 tagName 的子文档，并在文档内放置同名 AV 块
+            const docPath = `/${DATA_DBS_CONFIG.title}/${tagName}.sy`;
+            const mdContent = `# ${tagName}\n\n<div data-type="NodeAttributeView" data-av-type="table" name="${tagName}" custom-av-name="${tagName}"></div>\n`;
+            
+            const createRes = await post("/api/filetree/createDocWithMd", {
+                notebook: targetNotebook.id,
+                path: docPath,
+                markdown: mdContent
+            });
+            const docId = createRes;
+
+            // 4. 等待索引建立并获取生成的 AV 块 ID
+            await new Promise(r => setTimeout(r, 600));
+
+            let avId = "";
+            let avBlockId = "";
+            const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
+            const avRes = await post("/api/query/sql", { stmt: avSql });
+
+            if (avRes && avRes.length > 0) {
+                avBlockId = avRes[0].id;
+                try {
+                    const domRes = await post("/api/block/getBlockDOM", { id: avBlockId });
+                    const html = domRes?.data?.dom || domRes?.dom || "";
+                    const match = html.match(/data-av-id="([^"]+)"/);
+                    avId = match ? match[1] : avBlockId;
+                } catch (_) {
+                    avId = avBlockId;
+                }
             }
 
-            const x = event?.clientX || (window.innerWidth / 2 - 100);
-            const y = event?.clientY || (window.innerHeight / 3);
-            menu.open({ x, y });
-        } catch (e: any) {
-            showMessage(`获取数据库列表失败: ${e.message || e}`, 5000, "error");
-        }
-    }
+            if (!avId) {
+                avId = docId;
+            }
 
-    async function handleUnbindDb(group: UnifiedSupertagDefinition) {
-        try {
-            await supertagBinder.setPref(group.typeName, "enabled");
+            // 5. 唤醒并设置 AV 块自定义属性与 supertag-db 关联
+            if (avId) {
+                try {
+                    await post("/api/av/renderAttributeView", { id: avId });
+                } catch (_) {}
+                if (avBlockId) {
+                    try {
+                        await post("/api/attr/setBlockAttrs", {
+                            id: avBlockId,
+                            attrs: {
+                                "custom-supertag-tag": tagName,
+                                "custom-supertag-id": tagName,
+                                name: tagName,
+                                "custom-av-name": tagName
+                            }
+                        });
+                    } catch (_) {}
+                }
+
+                // 同步更新 supertag-db 系统表
+                try {
+                    const { db } = await getSqliteEngine();
+                    const check = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='supertag-db';`);
+                    if (check.length > 0 && check[0].values.length > 0) {
+                        db.run(`UPDATE "supertag-db" SET "related_av" = ?, _updated = ? WHERE LOWER("主键") = ?;`, [avId, Date.now(), tagName.toLowerCase()]);
+                    }
+                } catch (_) {}
+                
+                // 自动双向绑定 Supertag
+                await supertagBinder.setPref(tagName, avId);
+                supertagAVProjector.bindTagToAV(tagName, avId);
+            }
+
             await loadData();
-            showMessage(`✓ 已解除 #${group.typeName} 的数据库关联`);
+            showMessage(`✓ 成功为 #${tagName} 在 data-dbs 中创建并关联同名数据库！`, 3000);
         } catch (e: any) {
-            showMessage(`解除关联失败: ${e.message || e}`, 5000, "error");
+            console.error("Failed to create database for supertag:", e);
+            showMessage(`创建数据库失败: ${e.message || e}`, 5000, "error");
         }
     }
 
@@ -269,25 +321,25 @@
                 >
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.7; flex: 2.2; align-items: center;"
+                        style="font-weight: bold; opacity: 0.7; flex: 2.8; min-width: 150px; align-items: center;"
                     >
                         <span>超级标签 (Tag)</span>
                     </div>
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.7; flex: 4.2; align-items: center;"
+                        style="font-weight: bold; opacity: 0.7; flex: 3.4; min-width: 150px; align-items: center;"
                     >
                         <span>数据库 (Database)</span>
                     </div>
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.7; flex: 2.6; align-items: center;"
+                        style="font-weight: bold; opacity: 0.7; flex: 2.8; min-width: 140px; align-items: center;"
                     >
                         <span>命令 (Commands)</span>
                     </div>
                     <div
                         class="b3-list-item__text fn__flex"
-                        style="font-weight: bold; opacity: 0.8; flex: 1.0; justify-content: flex-end; align-items: center; gap: 6px;"
+                        style="font-weight: bold; opacity: 0.8; flex: 0.8; justify-content: flex-end; align-items: center; gap: 6px;"
                     >
                         <button
                             class="indexos-btn-bordered"
@@ -305,17 +357,22 @@
                         class="b3-list-item {group.hasDataSchema || group.hasBehavior ? 'supertag-row--ready' : 'supertag-row--pending'}"
                         style="display: flex; align-items: center; padding: 10px 16px; min-height: 52px; box-sizing: border-box; flex-shrink: 0; {group.hasDataSchema || group.hasBehavior ? '' : 'opacity: 0.72;'}"
                     >
-                        <!-- 1. Tag Column (2.2 flex) -->
+                        <!-- 1. Tag Column (2.8 flex) -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 2.2; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
+                            style="flex: 2.8; min-width: 150px; align-items: center; gap: 6px; overflow: hidden; padding-right: 8px;"
                         >
                             <svg
                                 class="b3-list-item__graphic"
                                 style="color: {group.hasDataSchema || group.hasBehavior ? 'var(--indexos-accent-primary)' : 'var(--indexos-text-muted)'}; width: 14px; height: 14px; flex-shrink: 0; margin: 0;"
                                 ><use xlink:href="#iconTags"></use></svg
                             >
-                            <span style="font-weight: 600; font-family: ui-monospace, monospace; line-height: 1.2; word-break: break-all; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; color: var(--indexos-text-main); font-size: 13px;">#{group.typeName}</span>
+                            <span
+                                style="font-weight: 600; font-family: ui-monospace, monospace; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; color: var(--indexos-text-main); font-size: 13px; max-width: 170px; flex-shrink: 1;"
+                                title="#{group.typeName}"
+                            >
+                                #{group.typeName}
+                            </span>
                             
                             {#if group.isBuiltin}
                                 <span
@@ -336,48 +393,50 @@
                             {/if}
                         </div>
 
-                        <!-- 2. Database Column (4.2 flex) - 二选一去重与专属库生成 -->
+                        <!-- 2. Database Column (3.4 flex) - 严格同名匹配与 data-dbs 快速创建 -->
                         <div
                             class="b3-list-item__text fn__flex"
-                            style="flex: 4.2; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
+                            style="flex: 3.4; min-width: 150px; align-items: center; gap: 8px; overflow: hidden; padding-right: 8px;"
                         >
-                            {#if group.hasDataSchema}
+                            {#if group.isDuplicateName}
+                                <div class="fn__flex" style="align-items: center; gap: 8px;">
+                                    <span
+                                        class="dup-danger-badge"
+                                        style="font-size: 11px; color: #DC2626; background: rgba(239, 68, 68, 0.12); padding: 3px 8px; border-radius: 4px; font-weight: 600; white-space: nowrap; border: 1px solid rgba(239, 68, 68, 0.3);"
+                                        title="工作区内存在多个同名数据库，请在思源中重命名以消除歧义"
+                                    >
+                                        ⚠️ 数据库有重名 ({group.matchedCount})
+                                    </span>
+                                    {#if group.selectedAvId}
+                                        <button
+                                            class="indexos-btn-bordered"
+                                            style="font-size: 11px; padding: 2px 7px; flex-shrink: 0;"
+                                            title="在编辑器中定位打开该数据库"
+                                            on:click={() => locateAv(group.selectedAvId)}
+                                        >
+                                            <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconFocus"></use></svg>
+                                            <span>定位</span>
+                                        </button>
+                                    {/if}
+                                </div>
+                            {:else if group.hasDataSchema}
                                 <div
                                     class="fn__flex"
-                                    style="align-items: center; gap: 6px; width: 100%;"
+                                    style="align-items: center; gap: 8px;"
                                 >
-                                    <svg
-                                        style="width: 12px; height: 12px; opacity: 0.8; color: #059669; flex-shrink: 0;"
-                                        ><use xlink:href="#iconDatabase"></use></svg
+                                    <!-- 高亮绿色数据库图标，不显示冗余库名 -->
+                                    <div
+                                        class="fn__flex-center"
+                                        style="width: 22px; height: 22px; border-radius: 4px; background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.25); flex-shrink: 0;"
+                                        title="已关联同名数据库"
                                     >
-                                    
-                                    {#if group.isDuplicateName}
-                                        <span
-                                            class="dup-danger-badge"
-                                            style="font-size: 11px; color: #DC2626; background: rgba(239, 68, 68, 0.12); padding: 2px 6px; border-radius: 3px; font-weight: 600; white-space: nowrap;"
-                                            title="全局存在同名数据库，请在思源中先重命名以消除歧义"
-                                        >
-                                            ⚠️ 重名库: {group.selectedAvName}
-                                        </span>
-                                    {:else}
-                                        <span
-                                            style="font-size: 12px; font-weight: 600; font-family: ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; color: var(--indexos-text-main);"
-                                            title={group.selectedAvName}
-                                        >
-                                            {group.selectedAvName}
-                                        </span>
-                                    {/if}
-
-                                    {#if group.isDedicatedDb}
-                                        <span class="indexos-tag-badge" style="flex-shrink: 0; font-size: 9px; color: #059669; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.08);">
-                                            专属库
-                                        </span>
-                                    {/if}
+                                        <svg style="width: 13px; height: 13px; fill: currentColor;"><use xlink:href="#iconDatabase"></use></svg>
+                                    </div>
 
                                     <!-- 定位按钮 -->
                                     <button
                                         class="indexos-btn-bordered"
-                                        style="font-size: 11px; padding: 2px 6px; flex-shrink: 0;"
+                                        style="font-size: 11px; padding: 2px 7px; flex-shrink: 0;"
                                         title="在编辑器中定位打开该数据库"
                                         on:click={() => locateAv(group.selectedAvId)}
                                     >
@@ -388,7 +447,7 @@
                                     <!-- 数据库设置按钮 ⚙️ -->
                                     <button
                                         class="indexos-btn-bordered"
-                                        style="font-size: 11px; padding: 2px 6px; flex-shrink: 0;"
+                                        style="font-size: 11px; padding: 2px 7px; flex-shrink: 0;"
                                         title="配置字段列映射与继承规则"
                                         on:click={() => {
                                             if (group.selectedAvId) {
@@ -399,27 +458,17 @@
                                         <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconSettings"></use></svg>
                                         <span>设置</span>
                                     </button>
-
-                                    <!-- 解除关联按钮 ✕ -->
-                                    <button
-                                        class="indexos-btn-bordered"
-                                        style="font-size: 11px; padding: 2px 6px; flex-shrink: 0; color: var(--indexos-text-muted);"
-                                        title="解除该 Supertag 与该数据库的关联"
-                                        on:click={() => handleUnbindDb(group)}
-                                    >
-                                        <span>✕</span>
-                                    </button>
                                 </div>
                             {:else}
                                 <div class="fn__flex" style="align-items: center; gap: 6px;">
                                     <button
                                         class="indexos-btn-bordered"
-                                        style="font-size: 11px; padding: 2px 8px; color: var(--indexos-accent-primary); border-color: rgba(59, 130, 246, 0.3);"
-                                        title="选择并关联已有数据库"
-                                        on:click={(e) => openSelectDbDialog(group, e)}
+                                        style="font-size: 11px; padding: 3px 10px; color: var(--indexos-accent-primary); border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.06); font-weight: 500;"
+                                        title="在 data-dbs 页面创建同名数据库"
+                                        on:click={() => handleCreateDatabase(group)}
                                     >
-                                        <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconDatabase"></use></svg>
-                                        <span>+ 关联已有数据库</span>
+                                        <svg style="width: 12px; height: 12px; fill: currentColor;"><use xlink:href="#iconDatabase"></use></svg>
+                                        <span>+ 创建数据库</span>
                                     </button>
                                 </div>
                             {/if}
