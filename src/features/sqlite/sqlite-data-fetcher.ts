@@ -37,26 +37,33 @@ export async function fetchAllAVBlocks() {
                 avId = block.id;
             }
 
-            let realName = "";
+            const isIdLike = (str: string) => !str || /^av_\d{14}/i.test(str) || /^\d{14}-[a-z0-9]{7}$/i.test(str);
 
             // 1. 优先从 /api/av/getAttributeView 获取原生数据库名称
             if (avId) {
                 try {
                     const avConfig = await post("/api/av/getAttributeView", { id: avId });
-                    realName = avConfig?.name || (avConfig?.av ? avConfig.av.name : "");
+                    const cand = avConfig?.name || (avConfig?.av ? avConfig.av.name : "");
+                    if (cand && !isIdLike(cand) && cand !== "Unnamed Database" && cand !== "Unnamed") {
+                        realName = cand.trim();
+                    }
                 } catch { /* Error fallback */ }
             }
 
-            // 2. 其次尝试从 IAL 属性 name 或 custom-av-name 读取
-            if (!realName || realName === "Unnamed Database" || realName === "Unnamed") {
-                const ialName = getAttrFromIAL(block.ial, "name") || getAttrFromIAL(block.ial, "custom-av-name") || block.name;
-                if (ialName) realName = ialName.trim();
+            // 2. 其次尝试从 IAL 属性 custom-av-name 或 name 读取
+            if (!realName) {
+                const ialName = getAttrFromIAL(block.ial, "custom-av-name") || getAttrFromIAL(block.ial, "name") || block.name;
+                if (ialName && !isIdLike(ialName) && ialName !== "Unnamed Database" && ialName !== "Unnamed") {
+                    realName = ialName.trim();
+                }
             }
 
             // 3. 再次尝试从所属文档标题读取
-            if (!realName || realName === "Unnamed Database" || realName === "Unnamed") {
+            if (!realName) {
                 const docTitle = docTitleMap.get(block.root_id);
-                if (docTitle) realName = docTitle.trim();
+                if (docTitle && !isIdLike(docTitle) && docTitle !== "Unnamed Database" && docTitle !== "Unnamed") {
+                    realName = docTitle.trim();
+                }
             }
 
             if (!realName) {

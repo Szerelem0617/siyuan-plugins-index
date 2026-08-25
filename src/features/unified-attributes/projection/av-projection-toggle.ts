@@ -15,6 +15,7 @@
 import { supertagAVProjector } from "./supertag-av-projector";
 import { supertagBinder } from "../core/supertag-binder";
 import { post } from "../../../shared/api-client/request";
+import { getTypeAvId, getCommandAvId } from "../../command/registration";
 
 export class AVProjectionToggleManager {
     private static instance: AVProjectionToggleManager | null = null;
@@ -100,6 +101,29 @@ export class AVProjectionToggleManager {
             if (!viewId) return;
         }
 
+        // 排除系统内部数据库 (supertag-db / command-db 等)
+        try {
+            const typeAvId = getTypeAvId();
+            const cmdAvId = getCommandAvId();
+            if (avId && (avId === typeAvId || avId === cmdAvId)) {
+                const existingBtn = headerEl.querySelector(".indexos-av-mode-toggle");
+                if (existingBtn) existingBtn.remove();
+                return;
+            }
+        } catch (_) {}
+
+        if (avRootNode?.getAttribute("custom-index-supertag-db") || 
+            avRootNode?.getAttribute("custom-index-command-db") ||
+            avRootNode?.getAttribute("custom-index-data-dbs") ||
+            headerEl.getAttribute("custom-index-supertag-db") ||
+            headerEl.getAttribute("custom-index-command-db") ||
+            headerEl.closest("[custom-index-supertag-db]") ||
+            headerEl.closest("[custom-index-command-db]")) {
+            const existingBtn = headerEl.querySelector(".indexos-av-mode-toggle");
+            if (existingBtn) existingBtn.remove();
+            return;
+        }
+
         // 2. 多渠道解析绑定的 Supertag
         let boundTag = this.resolveBoundTag(avId, avRootNode, headerEl);
 
@@ -163,7 +187,7 @@ export class AVProjectionToggleManager {
         this.updateToggleState(toggleBtn, currentIsVirtual, boundTag);
     }
 
-    private SYSTEM_EXCLUDED_TAGS = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag", "db"]);
+    private SYSTEM_EXCLUDED_TAGS = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag", "db", "datadbs", "data-dbs"]);
 
     /**
      * 多渠道同步解析 AV 绑定的 Supertag 名称 (优先 custom-supertag-* 自定义属性)
@@ -177,7 +201,7 @@ export class AVProjectionToggleManager {
 
         if (customTag) {
             const tag = customTag.replace(/^#/, "").trim().toLowerCase();
-            if (this.SYSTEM_EXCLUDED_TAGS.has(tag)) return undefined;
+            if (this.SYSTEM_EXCLUDED_TAGS.has(tag) || /^(supertag|command|data)[-_]dbs?$/i.test(tag)) return undefined;
             if (avId) {
                 supertagAVProjector.bindTagToAV(tag, avId);
             }
@@ -187,11 +211,11 @@ export class AVProjectionToggleManager {
         if (avId) {
             // 渠道 2: 内存 Projector 映射
             const tag1 = supertagAVProjector.getBoundTag(avId);
-            if (tag1 && !this.SYSTEM_EXCLUDED_TAGS.has(tag1.toLowerCase())) return tag1.replace(/^#/, "");
+            if (tag1 && !this.SYSTEM_EXCLUDED_TAGS.has(tag1.toLowerCase()) && !/^(supertag|command|data)[-_]dbs?$/i.test(tag1)) return tag1.replace(/^#/, "");
 
             // 渠道 3: Binder 偏好设置
             const tag2 = supertagBinder.findTagByAvId(avId);
-            if (tag2 && !this.SYSTEM_EXCLUDED_TAGS.has(tag2.toLowerCase())) return tag2.replace(/^#/, "");
+            if (tag2 && !this.SYSTEM_EXCLUDED_TAGS.has(tag2.toLowerCase()) && !/^(supertag|command|data)[-_]dbs?$/i.test(tag2)) return tag2.replace(/^#/, "");
         }
 
         // 渠道 4: DOM 节点属性与标题识别 (例如 name="supertag-测试一下" 或 custom-av-name="supertag-测试一下")
@@ -207,11 +231,12 @@ export class AVProjectionToggleManager {
         for (const rawName of namesToCheck) {
             const trimmed = String(rawName).trim();
             if (this.SYSTEM_EXCLUDED_TAGS.has(trimmed.toLowerCase())) continue;
+            if (/^(supertag|command|data)[-_]dbs?$/i.test(trimmed)) continue;
 
-            const match = trimmed.match(/^supertag-([^\s\/\.]+)/i) || trimmed.match(/supertag-([^\s\/\.]+)/i);
+            const match = trimmed.match(/^supertag-([^\s\/\.]+)/i);
             if (match && match[1]) {
                 const inferredTag = match[1].trim().toLowerCase();
-                if (this.SYSTEM_EXCLUDED_TAGS.has(inferredTag)) continue;
+                if (this.SYSTEM_EXCLUDED_TAGS.has(inferredTag) || /^(supertag|command|data)[-_]dbs?$/i.test(inferredTag) || inferredTag === "db") continue;
 
                 if (avId) {
                     supertagAVProjector.bindTagToAV(inferredTag, avId);
@@ -254,7 +279,7 @@ export class AVProjectionToggleManager {
                 const customTagMatch = ial.match(/custom-supertag-tag="([^"]+)"/) || ial.match(/custom-supertag-id="([^"]+)"/);
                 if (customTagMatch && customTagMatch[1]) {
                     const tag = customTagMatch[1].trim().toLowerCase();
-                    if (!this.SYSTEM_EXCLUDED_TAGS.has(tag)) {
+                    if (!this.SYSTEM_EXCLUDED_TAGS.has(tag) && !/^(supertag|command|data)[-_]dbs?$/i.test(tag) && tag !== "db") {
                         supertagAVProjector.bindTagToAV(tag, avId);
                         this.mountToggleToHeader(headerEl);
                     }
@@ -266,7 +291,7 @@ export class AVProjectionToggleManager {
                 const match = combined.match(/supertag-([a-zA-Z0-9_\-\u4e00-\u9fa5]+)/i);
                 if (match && match[1]) {
                     const tag = match[1].trim().toLowerCase();
-                    if (!this.SYSTEM_EXCLUDED_TAGS.has(tag)) {
+                    if (!this.SYSTEM_EXCLUDED_TAGS.has(tag) && !/^(supertag|command|data)[-_]dbs?$/i.test(tag) && tag !== "db") {
                         supertagAVProjector.bindTagToAV(tag, avId);
                         await post("/api/attr/setBlockAttrs", {
                             id: blockId,

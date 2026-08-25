@@ -37,16 +37,26 @@ export async function openSupertagUnifiedConfigByTag(
     let currentManualVal = "";
     let currentAutoVal = "";
     let matchedRowId = "";
+    let relatedAvId = "";
     let isAlreadyCustomized = false;
 
     try {
-        const records = await getSupertagDbRecords();
-        const found = records.find(r => r.typeTag.toLowerCase() === cleanTag);
+        const { getUnifiedSupertagList } = await import("../../unified-attributes/core/supertag-entity");
+        const allList = await getUnifiedSupertagList();
+        const found = allList.find(item => item.typeName.toLowerCase() === cleanTag);
         if (found) {
-            currentManualVal = found.manual || "";
-            currentAutoVal = found.auto || "";
-            matchedRowId = found.rowId || "";
-            isAlreadyCustomized = Boolean(found.manual || found.auto);
+            relatedAvId = found.selectedAvId || "";
+            currentAutoVal = found.conditionalScript || "";
+            isAlreadyCustomized = Boolean(found.hasBehavior);
+        }
+        const records = await getSupertagDbRecords();
+        const rec = records.find(r => r.typeTag.toLowerCase() === cleanTag);
+        if (rec) {
+            currentManualVal = rec.manual || "";
+            currentAutoVal = rec.auto || "";
+            matchedRowId = rec.rowId || "";
+            if (rec.relatedAv) relatedAvId = rec.relatedAv;
+            isAlreadyCustomized = Boolean(rec.manual || rec.auto);
         }
     } catch (e) {
         console.warn("[Supertag-UnifiedConfig] Failed to fetch existing supertag records:", e);
@@ -82,7 +92,24 @@ export async function openSupertagUnifiedConfigByTag(
                     return;
                 }
 
-                // 1. 同步更新 SQLite 内存表
+                // 1. 如果存在思源 AV 实例化表 (typeAvId)，通过统一 DML UPSERT 写入思源 AV 实体行与单元格属性
+                if (typeAvId) {
+                    try {
+                        const { runQuery } = await import("../../sqlite/sqlite-manager");
+                        const escapeSql = (str: string) => (str || "").replace(/'/g, "''");
+                        let dmlSql = "";
+                        if (relatedAvId) {
+                            dmlSql = `INSERT INTO "supertag-db" ("主键", "Manual", "Auto", "related_av") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(manual)}', '${escapeSql(auto)}', '${escapeSql(relatedAvId)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto", "related_av" = EXCLUDED."related_av"`;
+                        } else {
+                            dmlSql = `INSERT INTO "supertag-db" ("主键", "Manual", "Auto") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(manual)}', '${escapeSql(auto)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto"`;
+                        }
+                        await runQuery(dmlSql);
+                    } catch (dmlErr) {
+                        console.error("[Supertag-UnifiedConfig] runQuery DML error:", dmlErr);
+                    }
+                }
+
+                // 2. 同步更新 SQLite 内存热表 (无论是未实例化还是实例化，都保证本地 SQLite 内存表实时一致)
                 try {
                     const { db } = await getSqliteEngine();
                     const check = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='supertag-db';`);
@@ -90,40 +117,18 @@ export async function openSupertagUnifiedConfigByTag(
                         const rowCheck = db.exec(`SELECT rowid FROM "supertag-db" WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`, [cleanTag, cleanTag]);
                         if (rowCheck.length > 0 && rowCheck[0].values.length > 0) {
                             db.run(
-                                `UPDATE "supertag-db" SET "Manual" = ?, "Auto" = ?, _updated = ? WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`,
-                                [manual, auto, Date.now(), cleanTag, cleanTag]
+                                `UPDATE "supertag-db" SET "Manual" = ?, "Auto" = ?, "related_av" = COALESCE(NULLIF(?, ''), "related_av"), _updated = ? WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`,
+                                [manual, auto, relatedAvId, Date.now(), cleanTag, cleanTag]
                             );
                         } else {
                             db.run(
-                                `INSERT INTO "supertag-db" ("主键", "Manual", "Auto", _updated) VALUES (?, ?, ?, ?);`,
-                                [cleanTag, manual, auto, Date.now()]
+                                `INSERT INTO "supertag-db" ("主键", "Manual", "Auto", "related_av", _updated) VALUES (?, ?, ?, ?, ?);`,
+                                [cleanTag, manual, auto, relatedAvId, Date.now()]
                             );
                         }
                     }
                 } catch (sqlErr) {
-                    console.error("[Supertag-UnifiedConfig] SQLite update error:", sqlErr);
-                }
-
-                // 2. 如果存在思源 AV 实例化表，同步更新单元格
-                if (typeAvId && matchedRowId) {
-                    try {
-                        const { db } = await getSqliteEngine();
-                        const schemaCols = db.exec(`SELECT key_name, key_id FROM _av_schema WHERE av_id = ?`, [typeAvId]);
-                        let manualKeyId = "";
-                        let autoKeyId = "";
-                        if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
-                            for (const row of schemaCols[0].values) {
-                                const kName = String(row[0] || "").toLowerCase();
-                                const kId = String(row[1] || "");
-                                if (kName === "manual" || kName === "icon menu") manualKeyId = kId;
-                                if (kName === "auto" || kName === "conditional") autoKeyId = kId;
-                            }
-                        }
-                        if (manualKeyId) await updateCellValue(null, typeAvId, matchedRowId, manualKeyId, manual);
-                        if (autoKeyId) await updateCellValue(null, typeAvId, matchedRowId, autoKeyId, auto);
-                    } catch (avErr) {
-                        console.error("[Supertag-UnifiedConfig] SiYuan AV cell update error:", avErr);
-                    }
+                    console.error("[Supertag-UnifiedConfig] SQLite memory update error:", sqlErr);
                 }
             }
         }

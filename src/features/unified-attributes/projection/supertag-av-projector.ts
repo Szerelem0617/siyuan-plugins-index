@@ -27,7 +27,23 @@ import {
 } from "./hot-table-engine";
 import { installFetchInterceptor } from "./fetch-interceptor";
 
+import { getTypeAvId, getCommandAvId } from "../../command/registration";
+
 export { type VirtualAVBinding, type VirtualColumnMeta, registerColumnMeta, getColumnMeta };
+
+const SYSTEM_EXCLUDED_TAGS = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag", "db", "datadbs", "data-dbs"]);
+
+function isSystemDatabase(avId: string, tagName?: string): boolean {
+    const cleanId = (avId || "").trim();
+    if (!cleanId) return false;
+    try {
+        const typeAvId = getTypeAvId();
+        const cmdAvId = getCommandAvId();
+        if (cleanId === typeAvId || cleanId === cmdAvId) return true;
+    } catch (_) {}
+    if (tagName && SYSTEM_EXCLUDED_TAGS.has(tagName.toLowerCase().trim().replace(/^#+/, ""))) return true;
+    return false;
+}
 
 export class SupertagAVProjector {
     private static instance: SupertagAVProjector | null = null;
@@ -62,7 +78,10 @@ export class SupertagAVProjector {
 
     public isVirtualProjection(avId: string): boolean {
         const cleanId = (avId || "").trim();
+        if (!cleanId || isSystemDatabase(cleanId)) return false;
         if (!this.bindings.has(cleanId)) return false;
+        const boundTag = this.bindings.get(cleanId)?.tagName;
+        if (isSystemDatabase(cleanId, boundTag)) return false;
         // 如果用户显式设置了该数据库的投影视图模式
         if (this.projectionModes.has(cleanId)) {
             return Boolean(this.projectionModes.get(cleanId));
@@ -79,6 +98,10 @@ export class SupertagAVProjector {
      */
     public async toggleProjectionMode(avId: string, customTag?: string): Promise<boolean> {
         const cleanId = (avId || "").trim();
+        if (isSystemDatabase(cleanId, customTag)) {
+            showMessage("⚠️ 系统内部数据库严禁开启虚拟投影", 3000, "error");
+            return false;
+        }
         const currentActive = this.isVirtualProjection(cleanId);
         const nextState = !currentActive;
 
@@ -107,6 +130,16 @@ export class SupertagAVProjector {
     public bindTagToAV(tagName: string, avId: string) {
         const cleanTag = tagName.replace(/^#/, "").trim();
         const cleanAvId = avId.trim();
+        if (!cleanAvId || isSystemDatabase(cleanAvId, cleanTag)) {
+            // 严格清理对系统库的任何错误绑定
+            if (this.bindings.has(cleanAvId)) {
+                this.bindings.delete(cleanAvId);
+                this.projectionModes.delete(cleanAvId);
+                this.tagToAvMap.delete(cleanTag);
+                this.persistBindings();
+            }
+            return;
+        }
         const tableName = "proj_" + cleanAvId.replace(/[^a-zA-Z0-9_]/g, "_");
         if (!this.bindings.has(cleanAvId)) {
             this.bindings.set(cleanAvId, {
@@ -289,8 +322,10 @@ export class SupertagAVProjector {
             if (raw) {
                 const obj = JSON.parse(raw);
                 for (const [k, v] of Object.entries(obj)) {
-                    this.bindings.set(k, v as VirtualAVBinding);
-                    this.tagToAvMap.set((v as VirtualAVBinding).tagName, k);
+                    const binding = v as VirtualAVBinding;
+                    if (isSystemDatabase(k, binding.tagName)) continue;
+                    this.bindings.set(k, binding);
+                    this.tagToAvMap.set(binding.tagName, k);
                 }
             }
 
@@ -298,6 +333,7 @@ export class SupertagAVProjector {
             if (rawModes) {
                 const modesObj = JSON.parse(rawModes);
                 for (const [k, v] of Object.entries(modesObj)) {
+                    if (isSystemDatabase(k)) continue;
                     this.projectionModes.set(k, Boolean(v));
                 }
             }

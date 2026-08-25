@@ -77,6 +77,8 @@ export interface SupertagDbRecord {
  */
 export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
     const records: SupertagDbRecord[] = [];
+    const isIdLike = (str: string) => !str || /^av_\d{14}/i.test(str) || /^\d{14}-[a-z0-9]{7}$/i.test(str);
+    const SYSTEM_EXCLUDED = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag"]);
     
     // 1. 优先尝试从内存 SQLite 引擎查询 "supertag-db" (已实例化状态)
     try {
@@ -104,7 +106,7 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
                     const manual = String(r[2] || "").trim();
                     const auto = String(r[3] || "").trim();
                     const relatedAv = String(r[4] || "").trim();
-                    if (typeTag) {
+                    if (typeTag && !isIdLike(typeTag) && !SYSTEM_EXCLUDED.has(typeTag)) {
                         records.push({ rowId, typeTag, manual, auto, relatedAv });
                     }
                 }
@@ -153,7 +155,7 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
                             const val = row.cells[relAvIdx]?.value;
                             relatedAv = val?.text?.content || val?.block?.id || "";
                         }
-                        if (cleanTag) {
+                        if (cleanTag && !isIdLike(cleanTag) && !SYSTEM_EXCLUDED.has(cleanTag)) {
                             records.push({ rowId, typeTag: cleanTag, manual, auto, relatedAv });
                         }
                     }
@@ -185,20 +187,24 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
  * 双核心真理源：1. supertag-db 系统表  2. 工作区中建立的所有 AV 数据库
  */
 export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinition[]> {
+    const isIdLike = (str: string) => !str || /^av_\d{14}/i.test(str) || /^\d{14}-[a-z0-9]{7}$/i.test(str);
+    const SYSTEM_EXCLUDED = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag"]);
+
     // 1. 读取第一源：supertag-db 系统表 (未实例化时读取 seed-data.ts 常量)
     const supertagDbRecords = await getSupertagDbRecords();
     const recordsByTag = new Map<string, SupertagDbRecord>();
     const recordsByRowId = new Map<string, SupertagDbRecord>();
 
     for (const rec of supertagDbRecords) {
-        recordsByTag.set(rec.typeTag, rec);
-        if (rec.rowId) recordsByRowId.set(rec.rowId, rec);
+        if (!isIdLike(rec.typeTag) && !SYSTEM_EXCLUDED.has(rec.typeTag)) {
+            recordsByTag.set(rec.typeTag, rec);
+            if (rec.rowId) recordsByRowId.set(rec.rowId, rec);
+        }
     }
 
     // 2. 读取第二源：扫描全库所有 AV 数据库 (排除 commanddb/supertagdb 等系统内建库)
     const avBlockMap = new Map<string, { blockId: string; name: string }>();
     const avBlocksByTag = new Map<string, Array<{ id: string; name: string; blockId: string }>>();
-    const SYSTEM_EXCLUDED = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag"]);
 
     try {
         const rawAvBlocks = await fetchAllAVBlocks();
@@ -211,12 +217,15 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
             const customRowId = (getAttrFromIAL(b.ial, "custom-supertag-id") || "").trim();
             const dbNameTag = (b.name || "").trim().toLowerCase().replace(/^#+/, "").replace(/^supertag-/i, "");
 
-            let matchedTag = customTag;
+            let matchedTag = "";
+            if (customTag && !isIdLike(customTag)) {
+                matchedTag = customTag;
+            }
             if (!matchedTag && customRowId) {
                 const rec = recordsByRowId.get(customRowId);
-                if (rec) matchedTag = rec.typeTag;
+                if (rec && !isIdLike(rec.typeTag)) matchedTag = rec.typeTag;
             }
-            if (!matchedTag && dbNameTag && dbNameTag !== "unnamed database" && dbNameTag !== "unnamed") {
+            if (!matchedTag && dbNameTag && !isIdLike(dbNameTag) && dbNameTag !== "unnamed database" && dbNameTag !== "unnamed") {
                 matchedTag = dbNameTag;
                 // 自愈持久化自定义属性
                 if (b.blockId) {
@@ -230,7 +239,7 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
                 }
             }
 
-            if (matchedTag && !SYSTEM_EXCLUDED.has(matchedTag)) {
+            if (matchedTag && !isIdLike(matchedTag) && !SYSTEM_EXCLUDED.has(matchedTag)) {
                 if (!avBlocksByTag.has(matchedTag)) avBlocksByTag.set(matchedTag, []);
                 avBlocksByTag.get(matchedTag)!.push({ id: targetAvId, name: b.name, blockId: b.blockId });
             }
@@ -263,8 +272,8 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
         const matchedCount = tagMatchedDbs.length || (selectedAvId ? 1 : 0);
         const selectedAvName = avBlockMap.get(selectedAvId)?.name || (selectedAvId ? cleanTag : "");
 
-        // 自动建立有效投影绑定 (仅内存注册，不写存储)
-        if (hasDataSchema && selectedAvId) {
+        // 自动建立有效投影绑定 (仅内存注册，不写存储，严禁系统库)
+        if (hasDataSchema && selectedAvId && !SYSTEM_EXCLUDED.has(cleanTag)) {
             supertagAVProjector.bindTagToAV(cleanTag, selectedAvId);
         }
 
