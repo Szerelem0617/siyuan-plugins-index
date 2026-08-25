@@ -1,7 +1,7 @@
 {
     "id": "index.setBlockAttribute",
     "name": "设置块属性",
-    "description": "统一设置/更新块属性 (Upsert 模式)。在 Supertag 下执行时默认自动打上前缀 (如 custom-task.status)；支持使用 {{supertag}} 动态注入；支持使用 global. 声明全局共享属性 (如 global.status)。",
+    "description": "统一设置/更新块属性 (Upsert 模式)。支持一次性设置多个属性键值对（多行 key: value 形式或 JSON 格式）；在 Supertag 下执行时默认自动打上前缀 (如 custom-task-status)；支持使用 {{supertag}} 动态注入；支持使用 global. 声明全局共享属性 (如 global.status)。",
     "dispatch": {
         "method": "custom"
     },
@@ -14,24 +14,17 @@
             "description": "目标块 ID。留空默认取当前上下文块或前序创块。"
         },
         {
-            "key": "attrName",
-            "type": "string",
+            "key": "attrs",
+            "type": "attributes",
             "paramMode": "template",
-            "default": "status",
-            "description": "属性名称 (如 status)。在 Supertag 下默认自动加前缀；支持 {{supertag}}；全局跨标签共享属性请使用 global.属性名 (如 global.status)。"
-        },
-        {
-            "key": "attrValue",
-            "type": "string",
-            "paramMode": "template",
-            "default": "pending",
-            "description": "属性值，如 pending / done / {{time}} / {{cycle:Todo,Doing,Done}}。"
+            "default": "status: pending",
+            "description": "属性键值对。支持多行 key: value 形式 (如 status: pending\\npriority: high) 或 JSON 格式；支持 {{time}} / {{cycle:Todo,Doing,Done}}。"
         }
     ],
     "constraints": {
         "environment": "universal",
         "targetScope": "block",
-        "comment": "统一设置块属性 (Upsert 模式，支持命名空间与全局逃逸)"
+        "comment": "统一设置块属性 (Upsert 模式，支持多属性批量改写、命名空间与全局逃逸)"
     },
     "meta": {
         "contextNeed": "block",
@@ -43,19 +36,19 @@
             "rowID": "20260813180000-setattr0001",
             "label": "🏷️ 设置块属性",
             "commandID": "index.setBlockAttribute",
-            "paramMapping": "{}"
+            "paramMapping": "{\"attrs\":\"status: pending\"}"
         },
         {
             "rowID": "20260526204558-cvttsk9",
             "label": "🔘 转换为任务",
             "commandID": "index.setBlockAttribute-1",
-            "paramMapping": "{\"attrName\":\"status\",\"attrValue\":\"{{cycle:pending,}}\"}"
+            "paramMapping": "{\"attrs\":\"status: {{cycle:pending,}}\"}"
         },
         {
             "rowID": "20260526204558-sw91kl2",
             "label": "☑️ 切换任务状态",
             "commandID": "index.setBlockAttribute-2",
-            "paramMapping": "{\"attrName\":\"status\",\"attrValue\":\"{{cycle:pending,completed}}\"}"
+            "paramMapping": "{\"attrs\":\"status: {{cycle:pending,completed}}\"}"
         }
     ]
 }

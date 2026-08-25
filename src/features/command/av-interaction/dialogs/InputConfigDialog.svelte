@@ -97,6 +97,14 @@
                                 <svg class="dropdown-arrow" style="width: 10px; height: 10px; opacity: 0.5; flex-shrink: 0; margin-left: 4px;"><use xlink:href="#iconDown"></use></svg>
                             </button>
                         </div>
+                    {:else if param.type === "attributes" || param.type === "textarea"}
+                        <textarea 
+                            class="b3-text-field fn__block" 
+                            style="box-sizing: border-box; width: 100%; max-width: 100%; font-family: monospace; font-size: 12px; resize: vertical;"
+                            rows="3"
+                            placeholder={getCommandDbPlaceholder(param.key, param.type, param.default, param.description) || "status: pending\npriority: high"}
+                            bind:value={values[param.key]} 
+                        ></textarea>
                     {:else}
                         <input 
                             type="text" 

@@ -359,6 +359,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         // 2. Load Type Bindings (Layer 3 - Manual & Auto)
         let manualCol = "Manual";
         let autoCol = "Auto";
+        let relatedAvCol = "related_av";
         try {
             const schemaCols = db.exec(`SELECT key_name, col_name FROM _av_schema WHERE av_id = ?`, [tAvId]);
             if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
@@ -369,13 +370,25 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                         manualCol = cName;
                     } else if (kName === "Auto") {
                         autoCol = cName;
+                    } else if (kName === "related_av") {
+                        relatedAvCol = cName;
                     }
                 }
             }
         } catch { /* ignore */ }
 
-        const querySql = `SELECT "${typeSupertagCol}", "${manualCol}", "${autoCol}" FROM ${typesTable}`;
-        const typeRes = await runQuery(querySql);
+        let querySql = `SELECT "${typeSupertagCol}", "${manualCol}", "${autoCol}" FROM ${typesTable}`;
+        try {
+            // 尝试读取包含 related_av 的全量列
+            querySql = `SELECT "${typeSupertagCol}", "${manualCol}", "${autoCol}", "${relatedAvCol}" FROM ${typesTable}`;
+        } catch (_) {}
+
+        let typeRes = await runQuery(querySql);
+        if (!typeRes || !typeRes.values) {
+            // 降级只查 3 列
+            querySql = `SELECT "${typeSupertagCol}", "${manualCol}", "${autoCol}" FROM ${typesTable}`;
+            typeRes = await runQuery(querySql);
+        }
         if (!typeRes || !typeRes.values) return false;
 
         const newRegistry: SupertagCommand[] = [];
@@ -383,9 +396,18 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             const typeTagRaw = row[0];
             const manualText = row[1] || "";
             const autoText = row[2] || "";
+            const relatedAvText = row[3] || "";
 
             if (typeTagRaw) {
                 const cleanTag = String(typeTagRaw).replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
+
+                // 0. 同步 related_av 关联数据库
+                if (relatedAvText) {
+                    const cleanAv = String(relatedAvText).trim();
+                    if (cleanAv) {
+                        supertagBinder.setPref(cleanTag, cleanAv);
+                    }
+                }
 
                 // 1. Manual 列：4 态分流分发 (;; 面板 / Icon Menu / 块下方实体按钮 / 虚拟悬浮按钮)
                 const manualEntries = parseManualConfig(manualText);

@@ -49,6 +49,7 @@ export async function handleTypeDbAltClick(
     // Check column type / name in Siyuan
     let isConditionalCol = false;
     let isIconMenuCol = false;
+    let isRelatedAvCol = false;
     let clickedColName = "";
     try {
         const checkColRes = db.exec(`SELECT key_name, col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
@@ -59,6 +60,8 @@ export async function handleTypeDbAltClick(
                 isConditionalCol = true;
             } else if (keyName === "Manual") {
                 isIconMenuCol = true;
+            } else if (keyName === "related_av" || clickedColName.toLowerCase().includes("related") || clickedColName.toLowerCase().includes("database") || clickedColName.includes("数据库")) {
+                isRelatedAvCol = true;
             }
         }
     } catch (e) {
@@ -72,6 +75,11 @@ export async function handleTypeDbAltClick(
 
     if (isIconMenuCol) {
         await openIconMenuSelector(avId, rowId, colId, clickedColName, cellEl);
+        return;
+    }
+
+    if (isRelatedAvCol) {
+        await handleRelatedAvAltClick(avId, rowId, colId, cellEl);
         return;
     }
 
@@ -258,4 +266,82 @@ async function openIconMenuSelector(avId: string, rowId: string, colId: string, 
             }
         }
     });
+}
+
+async function handleRelatedAvAltClick(
+    avId: string,
+    rowId: string,
+    colId: string,
+    cellEl: HTMLElement
+) {
+    try {
+        const { db } = await getSqliteEngine();
+        const typeTableName = `av_${avId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        const supertagColRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [avId]);
+        let supertagCol = "supertag";
+        if (supertagColRes.length > 0 && supertagColRes[0].values.length > 0) {
+            supertagCol = supertagColRes[0].values[0][0];
+        }
+
+        const colNameRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
+        let colName = "related_av";
+        if (colNameRes.length > 0 && colNameRes[0].values.length > 0) {
+            colName = colNameRes[0].values[0][0];
+        }
+
+        const supertagQuery = db.exec(`SELECT "${supertagCol}", "${colName}" FROM ${typeTableName} WHERE _itemID = ?`, [rowId]);
+        if (supertagQuery.length === 0 || supertagQuery[0].values.length === 0) {
+            showMessage("未找到该超级标签的行记录", 3000, "error");
+            return;
+        }
+
+        const supertagLabel = String(supertagQuery[0].values[0][0] || "").replace(/#/g, "").trim();
+        const currentRelatedAv = String(supertagQuery[0].values[0][1] || "").trim();
+
+        if (!currentRelatedAv) {
+            // 未关联数据库，弹出快速生成专属库确认框
+            const { confirmDialog } = await import("../../../shared/utils");
+            confirmDialog(
+                "生成专属数据库",
+                `是否为超级标签 #${supertagLabel} 在 data-dbs 中一键生成专属投影数据库？`,
+                async () => {
+                    try {
+                        const { createSupertagProjectionDatabase } = await import("../data-db-management");
+                        const res = await createSupertagProjectionDatabase(supertagLabel);
+                        if (res?.avId) {
+                            await updateCellValue(null, avId, rowId, colId, res.dbName);
+                            db.run(`UPDATE ${typeTableName} SET "${colName}" = ? WHERE _itemID = ?;`, [res.dbName, rowId]);
+                            showMessage(`✅ 成功为 #${supertagLabel} 生成并关联专属数据库: ${res.dbName}`);
+                        }
+                    } catch (err: any) {
+                        showMessage(`生成专属库失败: ${err.message || err}`, 5000, "error");
+                    }
+                }
+            );
+        } else {
+            // 已有关联数据库，定位打开该数据库
+            const { post } = await import("../../../shared/api-client/request");
+            const { openTab } = await import("siyuan");
+            const { plugin } = await import("../../../shared/utils");
+
+            post("/api/query/sql", {
+                stmt: `SELECT id FROM blocks WHERE type = 'av' AND (content = '${currentRelatedAv}' OR ial LIKE '%${currentRelatedAv}%' OR markdown LIKE '%${currentRelatedAv}%') LIMIT 1`
+            }).then((res) => {
+                const targetBlockId = (res && res.length > 0) ? res[0].id : currentRelatedAv;
+                openTab({
+                    app: plugin.app,
+                    doc: {
+                        id: targetBlockId,
+                        action: ["cb-get-hl", "cb-get-focus"]
+                    }
+                });
+                showMessage(`✓ 已定位到数据库: ${currentRelatedAv}`);
+            }).catch(() => {
+                showMessage(`正在定位数据库: ${currentRelatedAv}`);
+            });
+        }
+    } catch (e: any) {
+        console.error("handleRelatedAvAltClick error:", e);
+        showMessage(`操作失败: ${e.message || e}`, 3000, "error");
+    }
 }

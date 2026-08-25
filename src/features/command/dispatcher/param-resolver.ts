@@ -114,6 +114,74 @@ export async function resolveCommandParams(
                 value = (layer2Val !== undefined && String(layer2Val).trim() !== "") ? layer2Val : schema.default;
             }
         }
+        if (schema.key === "attrs" || schema.type === "attributes") {
+            try {
+                if (typeof value === "object" && value !== null) {
+                    const resolvedObj: Record<string, any> = {};
+                    for (const [attrK, attrV] of Object.entries(value)) {
+                        const attrContext = { ...context, _currentAttrName: attrK };
+                        resolvedObj[attrK] = typeof attrV === "string" ? await resolveTemplate(attrV, attrContext) : attrV;
+                    }
+                    result[schema.key] = resolvedObj;
+                } else if (typeof value === "string") {
+                    const trimmed = value.trim();
+                    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                        try {
+                            const parsed = JSON.parse(trimmed);
+                            const resolvedObj: Record<string, any> = {};
+                            for (const [attrK, attrV] of Object.entries(parsed)) {
+                                const attrContext = { ...context, _currentAttrName: attrK };
+                                resolvedObj[attrK] = typeof attrV === "string" ? await resolveTemplate(String(attrV), attrContext) : attrV;
+                            }
+                            result[schema.key] = resolvedObj;
+                        } catch {
+                            const lines = value.split("\n");
+                            const resolvedLines: string[] = [];
+                            for (const line of lines) {
+                                const colonIdx = line.indexOf(":");
+                                const equalIdx = line.indexOf("=");
+                                const splitIdx = colonIdx !== -1 ? colonIdx : equalIdx;
+                                if (splitIdx !== -1) {
+                                    const k = line.slice(0, splitIdx).trim();
+                                    const v = line.slice(splitIdx + 1).trim();
+                                    const attrContext = { ...context, _currentAttrName: k };
+                                    const resV = await resolveTemplate(v, attrContext);
+                                    resolvedLines.push(`${k}: ${resV}`);
+                                } else if (line.trim()) {
+                                    resolvedLines.push(await resolveTemplate(line, context));
+                                }
+                            }
+                            result[schema.key] = resolvedLines.join("\n");
+                        }
+                    } else {
+                        const lines = value.split("\n");
+                        const resolvedLines: string[] = [];
+                        for (const line of lines) {
+                            const colonIdx = line.indexOf(":");
+                            const equalIdx = line.indexOf("=");
+                            const splitIdx = colonIdx !== -1 ? colonIdx : equalIdx;
+                            if (splitIdx !== -1) {
+                                const k = line.slice(0, splitIdx).trim();
+                                const v = line.slice(splitIdx + 1).trim();
+                                const attrContext = { ...context, _currentAttrName: k };
+                                const resV = await resolveTemplate(v, attrContext);
+                                resolvedLines.push(`${k}: ${resV}`);
+                            } else if (line.trim()) {
+                                resolvedLines.push(await resolveTemplate(line, context));
+                            }
+                        }
+                        result[schema.key] = resolvedLines.join("\n");
+                    }
+                } else {
+                    result[schema.key] = value;
+                }
+            } catch (err) {
+                console.error(`  [ParamResolver attrs Error]:`, err);
+                result[schema.key] = value;
+            }
+            continue;
+        }
+
         const attrNameVal = String(result["attrName"] || layer3Params["attrName"] || layer2Params["attrName"] || raw["attrName"] || "").trim();
         const contextualContext = attrNameVal ? { ...context, _currentAttrName: attrNameVal } : context;
         try {

@@ -152,7 +152,7 @@ export class SupertagBinder {
 
                         const attrKey = `custom-${rootTag}-${colSlug}`;
 
-                        // 若是类型分类列或子标签，设置映射初始值；其余字段初始化为 blank 空属性语义 ("")
+                        // 若是类型分类列且具有显式子标签/分类映射值，记录初始分类值；其余字段遵循惰性写入（不写入冗余空属性）
                         const isTypeField = (config?.typeFieldId && colId === config.typeFieldId) ||
                                             ["type", "分类", "类别", "subtype"].includes(colName.trim().toLowerCase());
 
@@ -160,9 +160,9 @@ export class SupertagBinder {
                             const subTagVal = config?.mappedValue !== undefined
                                 ? String(config.mappedValue).trim()
                                 : (cleanTag.includes(".") ? cleanTag.split(".")[1] : cleanTag.includes("/") ? cleanTag.split("/")[1] : "");
-                            initAttrs[attrKey] = subTagVal || "";
-                        } else {
-                            initAttrs[attrKey] = "";
+                            if (subTagVal) {
+                                initAttrs[attrKey] = subTagVal;
+                            }
                         }
                     }
                 } catch (colErr) {
@@ -170,13 +170,13 @@ export class SupertagBinder {
                 }
             }
 
-            // 3. 将属性一次性挂载写入物理块自身 IAL (零物理 AV 磁盘写入)
+            // 3. 仅在具有实际非空分类初值时挂载 IAL (零空白属性冗余，保持 Markdown 极度纯净)
             if (Object.keys(initAttrs).length > 0) {
                 await post("/api/attr/setBlockAttrs", {
                     id: blockId,
                     attrs: initAttrs
                 });
-                console.log(`[Supertag-Binder] ✓ 成功为块 ${blockId} 挂载 ${Object.keys(initAttrs).length} 个专属属性:`, initAttrs);
+                console.log(`[Supertag-Binder] ✓ 成功为块 ${blockId} 挂载分类属性:`, initAttrs);
             }
 
             // 4. 获取块标题内容

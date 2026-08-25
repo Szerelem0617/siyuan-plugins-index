@@ -373,14 +373,25 @@
                                                         </span>
                                                     {/if}
                                                 </div>
-                                                <input
-                                                    type="text"
-                                                    class="b3-text-field fn__block"
-                                                    style="font-size: 11px; padding: 3px 6px;"
-                                                    placeholder={schema.default ? `默认值: ${schema.default}` : "留空则使用默认/上下文"}
-                                                    value={curVal}
-                                                    on:input={e => setParam(cmd.id, schema.key, e.currentTarget.value)}
-                                                />
+                                                {#if schema.type === "attributes" || schema.type === "textarea"}
+                                                    <textarea
+                                                        class="b3-text-field fn__block"
+                                                        style="font-size: 11px; padding: 4px 6px; font-family: monospace; resize: vertical;"
+                                                        rows="3"
+                                                        placeholder={schema.default ? `默认值:\n${schema.default}` : "每行一个属性 (如 status: pending\npriority: high)"}
+                                                        value={curVal}
+                                                        on:input={e => setParam(cmd.id, schema.key, e.currentTarget.value)}
+                                                    ></textarea>
+                                                {:else}
+                                                    <input
+                                                        type="text"
+                                                        class="b3-text-field fn__block"
+                                                        style="font-size: 11px; padding: 3px 6px;"
+                                                        placeholder={schema.default ? `默认值: ${schema.default}` : "留空则使用默认/上下文"}
+                                                        value={curVal}
+                                                        on:input={e => setParam(cmd.id, schema.key, e.currentTarget.value)}
+                                                    />
+                                                {/if}
                                                 <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
                                                     <button
                                                         type="button"

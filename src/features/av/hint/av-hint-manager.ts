@@ -60,10 +60,13 @@ export function scanAvIndicators() {
                 // Supertag-DB: 仅高亮支持 Alt+Click 快捷交互的列
                 // - Manual: Alt+Click 打开手动触发配置 (;;菜单/IconMenu/实体按钮/虚拟按钮)
                 // - Auto: Alt+Click 打开多事件自动触发器编排器
-                // (注：Supertag 主键列无 Alt+Click 拦截行为，故不高亮)
+                // - related_av: Alt+Click 一键生成专属投影库 / 定位打开数据库
                 isConfigurableCol = isConfigurableCol || (
                     txt.includes("manual") ||
-                    txt.includes("auto")
+                    txt.includes("auto") ||
+                    txt.includes("related") ||
+                    txt.includes("database") ||
+                    txt.includes("数据库")
                 );
             }
 

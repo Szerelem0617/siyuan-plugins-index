@@ -189,11 +189,12 @@ export const COMMAND_DB_CONFIG: DbPageConfig = {
 export const TYPE_DB_CONFIG: DbPageConfig = {
     title: "supertag-db",
     attrName: "custom-index-supertag-db",
-    markdown: `该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射。**主键（第一列）即为需要绑定的 Supertag 名称（如 project 或 任何类名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
+    markdown: `该页面由 IndexOS 自动生成。这里是系统的 Layer 3，用于将逻辑工厂中的复合命令绑定到特定的 Supertag 上，并配置参数映射与关联数据库。**主键（第一列）即为需要绑定的 Supertag 名称（如 project 或 任何标签名）。**\n\n<div data-type="NodeAttributeView" data-av-type="table"></div>\n`,
     expectedColName: "Manual",
     columns: [
         { name: "Manual", type: "text", icon: "iconMenu" },
-        { name: "Auto", type: "text", icon: "iconPlay" }
+        { name: "Auto", type: "text", icon: "iconPlay" },
+        { name: "related_av", type: "text", icon: "iconDatabase" }
     ]
 };
 

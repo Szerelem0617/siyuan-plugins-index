@@ -82,7 +82,7 @@
         </div>
     </div>
 
-    <!-- 双 Tab 导航栏 (基础属性在左，结构化属性在右) -->
+    <!-- 双 Tab 导航栏 (基础属性在左，标签属性在右) -->
     <div class="inspector-tabs">
         <button
             class="tab-item {activeTab === 'base' ? 'active' : ''}"
@@ -94,7 +94,7 @@
             class="tab-item {activeTab === 'governed' ? 'active' : ''}"
             on:click={() => { activeTab = 'governed'; }}
         >
-            🧩 结构化属性
+            🏷️ 标签属性
         </button>
     </div>
 
