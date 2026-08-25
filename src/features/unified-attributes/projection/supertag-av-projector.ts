@@ -267,11 +267,8 @@ export class SupertagAVProjector {
             
             // 如果 customAttrs 中有热表中尚未建立的专属新列，动态 ALTER TABLE ADD COLUMN
             for (const [k] of Object.entries(customAttrs)) {
-                if (k.startsWith(`custom-${rootTag}-`) || k.startsWith(`custom-${rootTag}.`) ||
-                    k.startsWith(`custom-${cleanTag}-`) || k.startsWith(`custom-${cleanTag}.`)) {
-                    const prefix = k.startsWith(`custom-${rootTag}-`) ? `custom-${rootTag}-` :
-                                   k.startsWith(`custom-${rootTag}.`) ? `custom-${rootTag}.` :
-                                   k.startsWith(`custom-${cleanTag}-`) ? `custom-${cleanTag}-` : `custom-${cleanTag}.`;
+                if (k.startsWith(`custom-${rootTag}-`) || k.startsWith(`custom-${cleanTag}-`)) {
+                    const prefix = k.startsWith(`custom-${rootTag}-`) ? `custom-${rootTag}-` : `custom-${cleanTag}-`;
                     const colName = k.slice(prefix.length);
                     if (!existingCols.includes(colName) && colName !== "id" && colName !== "title" && !colName.startsWith("_")) {
                         try {
@@ -294,11 +291,7 @@ export class SupertagAVProjector {
                 if (col !== "id" && col !== "title" && col !== "_root_id" && col !== "_updated" && col !== "_dirty") {
                     colNames.push(col);
                     const val = customAttrs[`custom-${rootTag}-${col}`] ??
-                                customAttrs[`custom-${rootTag}.${col}`] ??
-                                customAttrs[`custom-${rootTag}_${col}`] ??
                                 customAttrs[`custom-${cleanTag}-${col}`] ??
-                                customAttrs[`custom-${cleanTag}.${col}`] ??
-                                customAttrs[`custom-${cleanTag}_${col}`] ??
                                 "";
                     colValues.push(val);
                 }
@@ -328,77 +321,49 @@ export class SupertagAVProjector {
         try {
             const { db } = await getSqliteEngine();
             db.run(`DELETE FROM "${binding.tableName}" WHERE id = ?;`, [blockId]);
-            console.log(`[SupertagAVProjector] ✓ 已从热表 ${binding.tableName} 中移除块 ${blockId}`);
-        } catch (err) {
-            console.error(`[SupertagAVProjector] 从热表移除块失败:`, err);
-        }
+        } catch (_) {}
     }
 
     /**
-     * 触发对指定 AV 数据库的 Supertag 虚拟投影，并在 SQLite 中初始化热表
+     * 核心步骤 2: 从思源全库拉取打标块，初始化 SQLite 热表
      */
-    public async projectSupertagToAV(tagName: string, avId: string, blockId?: string): Promise<{ success: boolean; rowCount: number; message?: string }> {
+    public async projectSupertagToAV(tagName: string, avId: string): Promise<{ success: boolean; rowCount: number; attrNames: string[]; message?: string }> {
         const cleanTag = tagName.replace(/^#/, "").trim();
         const cleanAvId = avId.trim();
-        const tableName = "proj_" + cleanAvId.replace(/[^a-zA-Z0-9_]/g, "_");
+        const rootTag = cleanTag.split(/[\.\/]/)[0].toLowerCase();
 
-        const initRes = await this.initSQLiteTableForTag(cleanTag, tableName);
-        if (!initRes.success) {
-            return { success: false, rowCount: 0, message: initRes.message };
-        }
+        // 建立双向持久化映射
+        this.bindTagToAV(cleanTag, cleanAvId);
+        const binding = this.bindings.get(cleanAvId)!;
+        const tableName = binding.tableName;
 
-        // 记录绑定信息
-        const binding: VirtualAVBinding = {
-            tagName: cleanTag,
-            tableName,
-            attrNames: initRes.attrNames,
-            blockId,
-            createdAt: Date.now()
-        };
-        this.bindings.set(cleanAvId, binding);
-        this.tagToAvMap.set(cleanTag, cleanAvId);
-        this.persistBindings();
-
-        console.log(`🔗 虚拟投影已成功建立: AV(${cleanAvId}) ➔ #${cleanTag} (表 ${tableName}, ${initRes.rowCount} 行)`);
-
-        // 即刻通知前端编辑器重新拉取数据就地重绘
-        this.notifyFrontendToRerender(cleanAvId, blockId);
-
-        return { success: true, rowCount: initRes.rowCount };
-    }
-
-    /**
-     * 在内存 SQLite 引擎中动态构建并填充指定 Supertag 的热表
-     */
-    public async initSQLiteTableForTag(cleanTag: string, tableName: string): Promise<{ success: boolean; rowCount: number; attrNames: string[]; message?: string }> {
         try {
-            const rootTag = cleanTag.split(/[\.\/]/)[0].toLowerCase();
-
-            // 1. 从思源主 SQLite 查询挂载该 Supertag 或其子标签的所有块实体
-            const sqlRes = await post("/api/query/sql", {
+            // 1. 查询全库命中标签或带有该 tag custom 属性的物理块
+            const blocksRes = await post("/api/query/sql", {
                 stmt: `SELECT id, root_id, content, ial, tag, updated, created FROM blocks WHERE ial LIKE '%custom-supertags%' OR ial LIKE '%custom-${rootTag}%' OR ial LIKE '%custom-${cleanTag}%' OR tag LIKE '%#${rootTag}#%' OR tag = '${rootTag}' OR tag LIKE '%#${rootTag}.%' OR tag LIKE '%#${rootTag}/%' ORDER BY updated DESC LIMIT 500`
             });
-            const rows: any[] = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
 
-            // 2. 收集解析所有的属性名并进行严格的 Tag 归属过滤
+            const rows: any[] = Array.isArray(blocksRes) ? blocksRes : (blocksRes?.data || []);
+            const parsedRows: any[] = [];
             const attrKeysSet = new Set<string>();
-            const parsedRows: Array<{ id: string; content: string; root_id: string; updated: number; attrs: Record<string, string> }> = [];
 
             for (const row of rows) {
-                const attrs = this.parseIALString(row.ial || "");
-
-                // 严格校验该块是否真正挂载了该 Supertag (支持 rootTag 以及子标签)
+                const attrs = parseIAL(row.ial || "");
                 const blockTags = new Set<string>();
+
+                // 解析显式 Supertags
                 if (attrs["custom-supertags"]) {
                     parseSupertags(attrs["custom-supertags"]).forEach(t => blockTags.add(t.toLowerCase()));
                 }
                 if (attrs["custom-index-tags"]) {
                     parseSupertags(attrs["custom-index-tags"]).forEach(t => blockTags.add(t.toLowerCase()));
                 }
+
+                // 解析行内标签与块 tag 属性
                 if (row.tag) {
-                    String(row.tag).split(/[\s]+/).forEach((t: string) => {
-                        const clean = t.replace(/^#+|#+$/g, "").trim().toLowerCase();
-                        if (clean) blockTags.add(clean);
+                    row.tag.split(/[\s,]+/).forEach((t: string) => {
+                        const cl = t.replace(/#/g, "").trim().toLowerCase();
+                        if (cl) blockTags.add(cl);
                     });
                 }
 
@@ -411,8 +376,7 @@ export class SupertagAVProjector {
 
                 // 检查是否有任何当前 Tag 专属的 custom-<tag>-* 属性
                 const hasTagCustomAttr = Object.keys(attrs).some(k => 
-                    k.startsWith(`custom-${rootTag}-`) || k.startsWith(`custom-${rootTag}.`) || k.startsWith(`custom-${rootTag}_`) ||
-                    k.startsWith(`custom-${cleanTag}-`) || k.startsWith(`custom-${cleanTag}.`) || k.startsWith(`custom-${cleanTag}_`)
+                    k.startsWith(`custom-${rootTag}-`) || k.startsWith(`custom-${cleanTag}-`)
                 );
 
                 if (!isTagMatched && !hasTagCustomAttr) {
@@ -427,28 +391,19 @@ export class SupertagAVProjector {
                     attrs
                 });
 
-                // 严格只收集以当前 rootTag 或 cleanTag 开头的专属属性 (custom-<tag>-<attr> 等)
+                // 严格只收集以当前 rootTag 或 cleanTag 开头的专属属性 (custom-<tag>-<attr>)
                 for (const k of Object.keys(attrs)) {
                     if (k.startsWith("custom-")) {
                         const rawClean = k.replace(/^custom-/, "");
                         if (rawClean.startsWith(`${rootTag}-`) || rawClean.startsWith(`${cleanTag}-`)) {
                             const prefix = rawClean.startsWith(`${rootTag}-`) ? `${rootTag}-` : `${cleanTag}-`;
                             attrKeysSet.add(rawClean.slice(prefix.length));
-                        } else if (rawClean.startsWith(`${rootTag}.`) || rawClean.startsWith(`${cleanTag}.`)) {
-                            const prefix = rawClean.startsWith(`${rootTag}.`) ? `${rootTag}.` : `${cleanTag}.`;
-                            attrKeysSet.add(rawClean.slice(prefix.length));
-                        } else if (rawClean.startsWith(`${rootTag}_`) || rawClean.startsWith(`${cleanTag}_`)) {
-                            const prefix = rawClean.startsWith(`${rootTag}_`) ? `${rootTag}_` : `${cleanTag}_`;
-                            attrKeysSet.add(rawClean.slice(prefix.length));
                         }
                     }
                 }
             }
 
-            if (attrKeysSet.size === 0) {
-                attrKeysSet.add("status");
-            }
-
+            if (attrKeysSet.size === 0) attrKeysSet.add("status");
             const attrNames = Array.from(attrKeysSet);
             const { db } = await getSqliteEngine();
 
@@ -482,8 +437,7 @@ export class SupertagAVProjector {
                         0,
                         ...attrNames.map(a => {
                             return r.attrs[`custom-${cleanTag}-${a}`] ||
-                                   r.attrs[`custom-${cleanTag}.${a}`] ||
-                                   r.attrs[`custom-${cleanTag}_${a}`] ||
+                                   r.attrs[`custom-${rootTag}-${a}`] ||
                                    "";
                         })
                     ];

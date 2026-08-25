@@ -48,7 +48,7 @@ export interface RawCustomField {
 export interface SupertagField {
     key: string;            // e.g. "status"
     fullKey: string;        // e.g. "task.status"
-    rawKey: string;         // e.g. "custom-task.status" 或 "custom-status"
+    rawKey: string;         // e.g. "custom-task-status" 或 "custom-status"
     label: string;          // e.g. "状态"
     type: "select" | "mSelect" | "date" | "checkbox" | "number" | "text";
     value: string;
@@ -234,31 +234,15 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
         if (k.startsWith("custom-")) {
             const rawClean = k.replace(/^custom-/, "");
 
-            // 检查是否符合 custom-<tag>.<attr> 或 custom-<tag>_<attr> 命名空间格式
+            // 严格按规范格式 custom-<tag>-<attr> 解析命名空间属性
             let matchedTag: string | null = null;
             let subAttrKey = rawClean;
 
-            if (rawClean.includes(".")) {
-                const parts = rawClean.split(".");
-                const prefixTag = parts[0];
-                if (supertags.includes(prefixTag)) {
-                    matchedTag = prefixTag;
-                    subAttrKey = parts.slice(1).join(".");
-                }
-            } else if (rawClean.includes("_")) {
-                const parts = rawClean.split("_");
-                const prefixTag = parts[0];
-                if (supertags.includes(prefixTag)) {
-                    matchedTag = prefixTag;
-                    subAttrKey = parts.slice(1).join("_");
-                }
-            } else if (rawClean.includes("-")) {
-                for (const tag of supertags) {
-                    if (rawClean.startsWith(`${tag}-`)) {
-                        matchedTag = tag;
-                        subAttrKey = rawClean.slice(tag.length + 1);
-                        break;
-                    }
+            for (const tag of supertags) {
+                if (rawClean.startsWith(`${tag}-`)) {
+                    matchedTag = tag;
+                    subAttrKey = rawClean.slice(tag.length + 1);
+                    break;
                 }
             }
 

@@ -75,7 +75,7 @@ export class SupertagRenderer {
             const tags = parseSupertags(rawTags);
             globalSupertagsCache.set(docId, tags);
 
-            const taskStatus = attrs["custom-task.status"] || attrs["custom-task_status"] || attrs["custom-task-status"] || attrs["custom-index-task"];
+            const taskStatus = attrs["custom-task-status"] || attrs["custom-index-task"];
             const isTask = Boolean(taskStatus);
 
             // Find or create document tags container
@@ -133,9 +133,7 @@ export class SupertagRenderer {
         const editorEl = blockEl.closest(".protyle-wysiwyg") as HTMLElement || document.body;
         const rawTags = blockEl.getAttribute("custom-supertags") || "";
         const tags = parseSupertags(rawTags);
-        const taskStatus = blockEl.getAttribute("custom-task.status") ||
-                           blockEl.getAttribute("custom-task_status") ||
-                           blockEl.getAttribute("custom-task-status") ||
+        const taskStatus = blockEl.getAttribute("custom-task-status") ||
                            blockEl.getAttribute("custom-index-task");
         const isTask = Boolean(taskStatus);
 
