@@ -17,12 +17,15 @@
         const key = newCustomKey.trim();
         const val = newCustomVal.trim();
         if (!key) return;
-        await updateBlockAttributeValue(blockId, key, val);
+        const rawKey = ["bookmark", "name", "alias", "memo"].includes(key.toLowerCase())
+            ? key.toLowerCase()
+            : (key.startsWith("custom-") ? key : `custom-${key}`);
+        await updateBlockAttributeValue(blockId, rawKey, val);
         newCustomKey = "";
         newCustomVal = "";
         isAddingCustom = false;
         await onReload();
-        showMessage(`✓ 已新增自定义属性: custom-${key}`);
+        showMessage(`✓ 已新增属性: ${key}`);
     }
 
     async function handleRemoveCustomField(rawKey: string) {
@@ -43,8 +46,8 @@
 </script>
 
 <div class="base-tab-container">
-    <!-- A. 思源内置基础属性 -->
-    <div class="section-title">⚙️ 思源内置属性</div>
+    <!-- 统一基础属性列表 -->
+    <div class="section-title">⚙️ 属性列表</div>
     <div class="builtin-box">
         <div class="field-item">
             <span class="field-label-text">🔖 书签 (Bookmark)</span>
@@ -93,20 +96,14 @@
                 on:change={() => onFieldChange('memo', data.builtin.memo || '')}
             ></textarea>
         </div>
-    </div>
 
-    <!-- B. 自由自定义属性 -->
-    <div class="section-title" style="margin-top: 12px;">🧩 自由自定义属性 (custom-*)</div>
-    <div class="custom-box">
-        {#if data.rawCustomFields.length === 0}
-            <div class="sub-empty-tip">暂无自由 custom-* 属性</div>
-        {:else}
+        <!-- 自定义属性无缝融入属性列表 -->
+        {#if data.rawCustomFields && data.rawCustomFields.length > 0}
             {#each data.rawCustomFields as customItem}
-                <div class="custom-row">
+                <div class="custom-row" style="margin-top: 6px;">
                     <div class="custom-header">
-                        <span class="custom-key-title">{customItem.key}</span>
+                        <span class="custom-key-title">🔧 {customItem.key}</span>
                         <div style="display: flex; align-items: center; gap: 4px;">
-                            <span class="custom-raw-key">{customItem.rawKey}</span>
                             <button
                                 class="b3-button b3-button--text"
                                 style="font-size: 10px; padding: 0 4px; opacity: 0.5;"
@@ -129,7 +126,7 @@
             {/each}
         {/if}
 
-        <div class="add-custom-wrap">
+        <div class="add-custom-wrap" style="margin-top: 8px;">
             {#if isAddingCustom}
                 <div class="add-custom-card">
                     <div style="display: flex; gap: 6px;">
@@ -137,7 +134,7 @@
                             type="text"
                             class="b3-text-field"
                             style="font-size: 11px; flex: 1;"
-                            placeholder="键名 (如 weight)"
+                            placeholder="属性名 (如 weight, cost)"
                             bind:value={newCustomKey}
                         />
                         <input
@@ -156,17 +153,17 @@
                 </div>
             {:else}
                 <button class="add-custom-btn" on:click={() => { isAddingCustom = true; }}>
-                    + 新增自由 custom-* 属性
+                    + 新增属性
                 </button>
             {/if}
         </div>
     </div>
 
-    <!-- C. 只读系统元数据折叠抽屉 -->
+    <!-- 只读系统属性折叠抽屉 -->
     {#if data.systemMeta}
-        <div class="meta-drawer-wrap" style="margin-top: 8px;">
+        <div class="meta-drawer-wrap" style="margin-top: 10px;">
             <button class="meta-toggle-btn" on:click={() => { showSystemMeta = !showSystemMeta; }}>
-                <span>ℹ️ 查看系统底层元数据 (只读)</span>
+                <span>ℹ️ 查看只读属性</span>
                 <span class="toggle-arrow">{showSystemMeta ? '▲ 折叠' : '▼ 展开'}</span>
             </button>
 

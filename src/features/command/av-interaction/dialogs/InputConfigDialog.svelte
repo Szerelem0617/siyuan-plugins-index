@@ -105,6 +105,24 @@
                             placeholder={getCommandDbPlaceholder(param.key, param.type, param.default, param.description) || "status: pending\npriority: high"}
                             bind:value={values[param.key]} 
                         ></textarea>
+                        <!-- ⚡ Command-DB 专属快捷 Token 胶囊栏 -->
+                        {@const tokens = getCommandDbTokens(param.key, param.type)}
+                        {#if tokens.length > 0}
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
+                                {#each tokens as tok}
+                                    <button
+                                        type="button"
+                                        class="indexos-btn-bordered"
+                                        style="font-size: 10px; padding: 1px 6px; border-radius: 3px; cursor: pointer; color: var(--indexos-accent-primary); border-color: var(--indexos-border-light);"
+                                        title={tok.description}
+                                        on:click={() => {
+                                            const cur = values[param.key] || "";
+                                            values[param.key] = cur ? `${cur}\n${tok.token}` : tok.token;
+                                        }}
+                                    >{tok.label}</button>
+                                {/each}
+                            </div>
+                        {/if}
                     {:else}
                         <input 
                             type="text" 

@@ -2,7 +2,11 @@
  * active-block-tracker.ts
  *
  * 智能当前聚焦/选定块感知追踪器：
- * 实时精准捕获光标所在块、选区块、列表项提权与当前文档根块
+ * 实时精准捕获光标所在块、选区块、列表项提权与当前文档根块，
+ * 支持被选定块/页面的蓝色高亮边框提示，以及点击左侧文档树自动切换为整页检查。
+ * 
+ * 性能优化：仅在“属性管理”界面开启（Dock 面板处于打开/可见状态或弹窗处于激活状态）时生效，
+ * 面板未打开时完全休眠，不消耗任何计算资源。
  */
 
 export interface ActiveBlockContext {
@@ -21,6 +25,7 @@ export class ActiveBlockTracker {
     private pinnedBlockId: string | null = null;
     private debounceTimer: any = null;
     private isInitialized = false;
+    private highlightedEl: HTMLElement | null = null;
 
     public init() {
         if (this.isInitialized) return;
@@ -36,22 +41,53 @@ export class ActiveBlockTracker {
         document.removeEventListener("selectionchange", this.handleSelectionChange);
         document.removeEventListener("click", this.handleClick);
         document.removeEventListener("keyup", this.handleKeyup);
+        this.clearHighlight();
         this.listeners.clear();
+    }
+
+    /**
+     * 判断当前“属性管理”面板或对话框是否处于实际可见/打开状态
+     */
+    public isInspectorVisible(): boolean {
+        // 1. 检查属性对话框是否开启
+        if (document.querySelector(".indexos-dialog, #indexos-inspector-dialog-root")) {
+            return true;
+        }
+        // 2. 检查右侧 Dock 属性管理面板是否已挂载且处于可见状态（未折叠、未隐藏）
+        const dockRoot = document.querySelector("#indexos-dock-inspector-root") as HTMLElement | null;
+        if (dockRoot && dockRoot.offsetParent !== null && !dockRoot.closest(".fn__none")) {
+            return true;
+        }
+        return false;
+    }
+
+    public clearHighlight() {
+        if (this.highlightedEl) {
+            this.highlightedEl.classList.remove("indexos-inspected-highlight", "indexos-inspected-page-highlight");
+            this.highlightedEl = null;
+        }
     }
 
     public subscribe(cb: BlockChangeCallback): () => void {
         this.listeners.add(cb);
-        if (this.currentCtx) {
-            cb(this.currentCtx);
-        } else {
-            this.detectCurrentActiveBlock();
+        if (this.isInspectorVisible()) {
+            if (this.currentCtx) {
+                cb(this.currentCtx);
+            } else {
+                this.detectCurrentActiveBlock();
+            }
         }
-        return () => this.listeners.delete(cb);
+        return () => {
+            this.listeners.delete(cb);
+            if (this.listeners.size === 0) {
+                this.clearHighlight();
+            }
+        };
     }
 
     public setPin(blockId: string | null) {
         this.pinnedBlockId = blockId;
-        if (!blockId) {
+        if (!blockId && this.isInspectorVisible()) {
             this.detectCurrentActiveBlock();
         }
     }
@@ -68,12 +104,15 @@ export class ActiveBlockTracker {
         return this.currentCtx;
     }
 
-    public forceInspectDocRoot() {
+    public forceInspectDocRoot(customRootId?: string) {
         const activeProtyle = (window as any).activeProtyleInstance;
-        const rootId = activeProtyle?.block?.rootID || activeProtyle?.protyle?.block?.rootID;
+        const rootId = customRootId || activeProtyle?.block?.rootID || activeProtyle?.protyle?.block?.rootID;
         if (rootId) {
+            let textSnippet = "当前文档";
             const titleEl = activeProtyle?.element?.querySelector(".protyle-title") as HTMLElement;
-            const textSnippet = (titleEl?.innerText || "当前文档").trim().slice(0, 30);
+            if (titleEl && (!customRootId || customRootId === activeProtyle?.block?.rootID)) {
+                textSnippet = (titleEl?.innerText || "当前文档").trim().slice(0, 30);
+            }
             this.updateContext({
                 blockId: rootId,
                 rootId: rootId,
@@ -84,7 +123,56 @@ export class ActiveBlockTracker {
         }
     }
 
+    private applyHighlight(ctx: ActiveBlockContext | null) {
+        if (!this.isInspectorVisible()) {
+            this.clearHighlight();
+            return;
+        }
+
+        if (this.highlightedEl) {
+            this.highlightedEl.classList.remove("indexos-inspected-highlight", "indexos-inspected-page-highlight");
+            this.highlightedEl = null;
+        }
+        if (!ctx || !ctx.blockId) return;
+
+        const activeProtyle = (window as any).activeProtyleInstance;
+
+        // 1. 如果检查的是整篇页面根块 (NodeDocument / isDocRoot)：高亮整个页面编辑区
+        if (ctx.isDocRoot || ctx.blockType === "NodeDocument") {
+            const pageEditorEl = activeProtyle?.element?.querySelector(".protyle-content") as HTMLElement
+                || activeProtyle?.element?.querySelector(".protyle-wysiwyg") as HTMLElement
+                || (document.querySelector(".protyle:not(.fn__none) .protyle-content") as HTMLElement)
+                || (document.querySelector(".protyle:not(.fn__none) .protyle-wysiwyg") as HTMLElement);
+
+            if (pageEditorEl) {
+                pageEditorEl.classList.add("indexos-inspected-page-highlight");
+                this.highlightedEl = pageEditorEl;
+                return;
+            }
+        }
+
+        // 2. 如果检查的是具体的内容块：精准定位在 .protyle-wysiwyg 内部的内容块 (绝不框选到顶部的面包屑导航区)
+        let blockEl: HTMLElement | null = null;
+        if (activeProtyle?.element) {
+            blockEl = activeProtyle.element.querySelector(`.protyle-wysiwyg [data-node-id="${ctx.blockId}"]`) as HTMLElement;
+        }
+        if (!blockEl) {
+            blockEl = document.querySelector(`.protyle-wysiwyg [data-node-id="${ctx.blockId}"]`) as HTMLElement;
+        }
+
+        if (blockEl) {
+            blockEl.classList.add("indexos-inspected-highlight");
+            this.highlightedEl = blockEl;
+        }
+    }
+
     private handleSelectionChange = () => {
+        // 未打开属性管理界面时立即返回，不进行任何计算
+        if (!this.isInspectorVisible()) {
+            this.clearHighlight();
+            return;
+        }
+
         const active = document.activeElement as HTMLElement | null;
         if (
             active && (
@@ -101,10 +189,16 @@ export class ActiveBlockTracker {
     };
 
     private handleClick = (e: MouseEvent) => {
+        // 未打开属性管理界面时立即返回，不进行任何计算
+        if (!this.isInspectorVisible()) {
+            this.clearHighlight();
+            return;
+        }
+
         const target = e.target as HTMLElement;
         if (
             target.closest(".sy__indexos_inspector_dock") || 
-            target.closest(".indexos-dock-inspector") ||
+            target.closest(".indexos-dock-inspector") || 
             target.closest(".b3-dialog") ||
             target.closest(".b3-menu") ||
             target.closest(".indexos-dropdown") ||
@@ -113,14 +207,38 @@ export class ActiveBlockTracker {
             // 点击属性面板自身/菜单/弹窗，不触发块切走
             return;
         }
+
+        // 🌟 检查是否点击了左侧文档树/文件树区域
+        const fileTreeItem = target.closest('.sy__file, [data-type="sidebar-file"], .file-tree, .b3-list-item[data-node-id], .b3-list-item[data-id]') as HTMLElement;
+        if (fileTreeItem) {
+            const docId = fileTreeItem.getAttribute("data-node-id") || fileTreeItem.getAttribute("data-id") || fileTreeItem.getAttribute("data-doc-id");
+            if (docId) {
+                this.forceInspectDocRoot(docId);
+                return;
+            } else {
+                setTimeout(() => {
+                    if (this.isInspectorVisible()) {
+                        this.forceInspectDocRoot();
+                    }
+                }, 100);
+                return;
+            }
+        }
+
         this.triggerDetectionDebounced();
     };
 
     private handleKeyup = (e: KeyboardEvent) => {
+        // 未打开属性管理界面时立即返回，不进行任何计算
+        if (!this.isInspectorVisible()) {
+            this.clearHighlight();
+            return;
+        }
+
         const target = e.target as HTMLElement;
         if (
             target.closest(".sy__indexos_inspector_dock") || 
-            target.closest(".indexos-dock-inspector") ||
+            target.closest(".indexos-dock-inspector") || 
             target.closest(".b3-dialog")
         ) {
             return;
@@ -138,6 +256,11 @@ export class ActiveBlockTracker {
     }
 
     public detectCurrentActiveBlock() {
+        if (!this.isInspectorVisible()) {
+            this.clearHighlight();
+            return;
+        }
+
         if (this.pinnedBlockId) return;
 
         const active = document.activeElement as HTMLElement | null;
@@ -189,7 +312,7 @@ export class ActiveBlockTracker {
             while (node && node !== document.body) {
                 if (node.nodeType === 1) {
                     const el = node as HTMLElement;
-                    if (el.getAttribute("data-node-id") && el.getAttribute("data-type")) {
+                    if (el.getAttribute("data-node-id") && el.getAttribute("data-type") && el.closest(".protyle-wysiwyg")) {
                         targetEl = el;
                         break;
                     }
@@ -238,9 +361,11 @@ export class ActiveBlockTracker {
 
     private updateContext(ctx: ActiveBlockContext) {
         if (this.currentCtx && this.currentCtx.blockId === ctx.blockId && this.currentCtx.blockType === ctx.blockType) {
+            this.applyHighlight(ctx);
             return;
         }
         this.currentCtx = ctx;
+        this.applyHighlight(ctx);
         this.listeners.forEach(cb => {
             try {
                 cb(ctx);

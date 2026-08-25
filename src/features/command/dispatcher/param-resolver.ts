@@ -331,15 +331,36 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
             const optionsRaw = cycleMatch[1]?.trim();
 
             let options: string[] = [];
-            if (optionsRaw !== undefined && optionsRaw !== null) {
+            if (optionsRaw !== undefined && optionsRaw !== null && optionsRaw !== "") {
                 options = optionsRaw.split(",").map(s => s.trim().replace(/^["']|["']$/g, ""));
             }
-            if (options.length === 0 || (options.length === 1 && !options[0])) {
+
+            const currentAttrName = (context as any)?._currentAttrName || "";
+            const currentTag = (context?.supertag || "").replace(/#/g, "").trim().toLowerCase();
+
+            // 💡 智能感知数据库列 Schema：若未提供显式候选，自动从关联数据库 Select 列中提取 options
+            if (options.length === 0 && currentTag && currentAttrName) {
+                try {
+                    const { supertagAVProjector } = await import("../../unified-attributes/projection/supertag-av-projector");
+                    const { getColIDMap } = await import("../../../shared/utils/av-utils");
+                    const rootTag = currentTag.split(/[\.\/]/)[0].toLowerCase();
+                    const boundAvId = supertagAVProjector.getBoundAv(currentTag) || supertagAVProjector.getBoundAv(rootTag);
+                    if (boundAvId) {
+                        const { keyValues } = await getColIDMap(boundAvId);
+                        const cleanKey = currentAttrName.replace(new RegExp(`^custom-${currentTag}[.-]`), "").replace(/^custom-/, "").trim().toLowerCase();
+                        const matchedCol = keyValues.find((kv: any) => kv.key && (kv.key.name?.toLowerCase() === cleanKey || kv.key.id === cleanKey));
+                        if (matchedCol && matchedCol.key && Array.isArray(matchedCol.key.options) && matchedCol.key.options.length > 0) {
+                            options = matchedCol.key.options.map((o: any) => o.name || o.content || String(o)).filter(Boolean);
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            if (options.length === 0) {
                 options = ["pending", "done"];
             }
 
             let currentVal = "";
-            const currentAttrName = (context as any)?._currentAttrName || "";
             if (currentAttrName) {
                 const cleanKey = currentAttrName.replace(/^custom-/, "");
                 currentVal = variables[cleanKey] || variables[`custom-${cleanKey}`] || variables[currentAttrName] || "";

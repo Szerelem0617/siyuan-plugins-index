@@ -152,17 +152,21 @@ export class SupertagBinder {
 
                         const attrKey = `custom-${rootTag}-${colSlug}`;
 
-                        // 若是类型分类列且具有显式子标签/分类映射值，记录初始分类值；其余字段遵循惰性写入（不写入冗余空属性）
-                        const isTypeField = (config?.typeFieldId && colId === config.typeFieldId) ||
-                                            ["type", "分类", "类别", "subtype"].includes(colName.trim().toLowerCase());
+                        const subTagVal = config?.mappedValue !== undefined
+                            ? String(config.mappedValue).trim()
+                            : (cleanTag.includes(".") ? cleanTag.split(".")[1] : cleanTag.includes("/") ? cleanTag.split("/")[1] : "");
 
-                        if (isTypeField) {
-                            const subTagVal = config?.mappedValue !== undefined
-                                ? String(config.mappedValue).trim()
-                                : (cleanTag.includes(".") ? cleanTag.split(".")[1] : cleanTag.includes("/") ? cleanTag.split("/")[1] : "");
-                            if (subTagVal) {
-                                initAttrs[attrKey] = subTagVal;
-                            }
+                        const hasMatchingOption = subTagVal && Array.isArray(kv.key.options) && kv.key.options.some((opt: any) => {
+                            const optName = (opt.name || opt.content || String(opt)).trim().toLowerCase();
+                            return optName === subTagVal.toLowerCase();
+                        });
+
+                        const isTypeField = (config?.typeFieldId && colId === config.typeFieldId) ||
+                                            ["type", "分类", "类别", "subtype", "status", "状态"].includes(colName.trim().toLowerCase()) ||
+                                            hasMatchingOption;
+
+                        if (isTypeField && subTagVal) {
+                            initAttrs[attrKey] = subTagVal;
                         }
                     }
                 } catch (colErr) {

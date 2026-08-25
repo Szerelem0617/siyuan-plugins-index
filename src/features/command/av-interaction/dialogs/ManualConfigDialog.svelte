@@ -5,6 +5,7 @@
     import { PRESET_CONDITIONS } from "../../../unified-attributes/core/condition-evaluator";
 
     import { getLayer2Commands } from "../../registration";
+    import { onMount } from "svelte";
 
     export let dialog: Dialog;
     export let supertag: string = "";
@@ -16,6 +17,25 @@
     let searchQuery = "";
     let expandedCmdId: string | null = null;
     let saving = false;
+    let availableDbColumns: { name: string; type: string }[] = [];
+
+    onMount(async () => {
+        if (supertag) {
+            try {
+                const { supertagAVProjector } = await import("../../../unified-attributes/projection/supertag-av-projector");
+                const { getColIDMap } = await import("../../../../shared/utils/av-utils");
+                const cleanTag = supertag.replace(/#/g, "").trim().toLowerCase();
+                const rootTag = cleanTag.split(/[\.\/]/)[0].toLowerCase();
+                const boundAvId = supertagAVProjector.getBoundAv(cleanTag) || supertagAVProjector.getBoundAv(rootTag);
+                if (boundAvId) {
+                    const { keyValues } = await getColIDMap(boundAvId);
+                    availableDbColumns = keyValues
+                        .filter((kv: any) => kv.key && kv.key.type !== "block" && kv.key.name !== "主键" && kv.key.name !== "文档" && kv.key.name !== "Block" && kv.key.name !== "supertag")
+                        .map((kv: any) => ({ name: kv.key.name, type: kv.key.type }));
+                }
+            } catch (_) {}
+        }
+    });
 
     // 仅读取 Layer 2 (Command-DB / 种子数据) 注册命令
     $: allCommands = (availableCommands && availableCommands.length > 0)
@@ -407,6 +427,19 @@
                                                     >
                                                         + &#123;&#123;time&#125;&#125;
                                                     </button>
+                                                    {#if (schema.key === "attrs" || schema.type === "attributes") && availableDbColumns.length > 0}
+                                                        {#each availableDbColumns as col}
+                                                            <button
+                                                                type="button"
+                                                                class="indexos-btn-bordered"
+                                                                style="font-size: 9px; padding: 1px 6px; color: var(--indexos-accent-primary); border-radius: 3px; cursor: pointer;"
+                                                                title="插入数据库列 {col.name} ({col.type})"
+                                                                on:click={() => insertPlaceholder(cmd.id, schema.key, `${col.name}: `)}
+                                                            >
+                                                                + {col.name}
+                                                            </button>
+                                                        {/each}
+                                                    {/if}
                                                 </div>
                                             </div>
                                         {/each}

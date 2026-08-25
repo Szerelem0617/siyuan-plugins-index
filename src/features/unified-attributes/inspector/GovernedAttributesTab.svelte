@@ -91,7 +91,11 @@
                         <span class="group-tag-name">#{group.tag}</span>
                         <span class="group-count-badge">{group.fields.length} 属性</span>
                     </div>
-                    <span class="group-pill">Supertag 组件</span>
+                    {#if group.boundAvName}
+                        <span class="group-pill" style="background: rgba(16, 185, 129, 0.12); color: #059669; border-color: rgba(16, 185, 129, 0.3);" title="已关联数据库: {group.boundAvName}">⚡ 关联库: {group.boundAvName}</span>
+                    {:else}
+                        <span class="group-pill">Supertag 组件</span>
+                    {/if}
                 </div>
 
                 {#if !isCollapsed}
@@ -110,22 +114,42 @@
                                     </div>
 
                                     <div class="field-control-wrap">
-                                        {#if field.type === 'select'}
+                                        {#if field.type === 'select' || field.type === 'mSelect'}
                                             <div class="capsules-flow">
-                                                {#if field.options}
+                                                {#if field.options && field.options.length > 0}
                                                     {#each field.options as opt}
                                                         {@const c = COLOR_MAP[opt.color] || COLOR_MAP["1"]}
+                                                        {@const isSelected = field.type === 'mSelect'
+                                                            ? (field.value || "").split(/[,;\s]+/).includes(opt.name)
+                                                            : field.value === opt.name}
                                                         <button
-                                                            class="capsule-opt {field.value === opt.name ? 'selected' : ''}"
-                                                            style="background: {field.value === opt.name ? c.bg : 'var(--b3-theme-background)'}; color: {field.value === opt.name ? c.text : 'var(--b3-theme-on-background)'}; border-color: {field.value === opt.name ? c.border : 'var(--b3-border-color)'};"
+                                                            class="capsule-opt {isSelected ? 'selected' : ''}"
+                                                            style="background: {isSelected ? c.bg : 'var(--b3-theme-background)'}; color: {isSelected ? c.text : 'var(--b3-theme-on-background)'}; border-color: {isSelected ? c.border : 'var(--b3-border-color)'};"
                                                             on:click={() => {
-                                                                field.value = (field.value === opt.name ? "" : opt.name);
+                                                                if (field.type === 'mSelect') {
+                                                                    const currentList = (field.value || "").split(/[,;\s]+/).filter(Boolean);
+                                                                    const nextList = currentList.includes(opt.name)
+                                                                        ? currentList.filter(x => x !== opt.name)
+                                                                        : [...currentList, opt.name];
+                                                                    field.value = nextList.join(", ");
+                                                                } else {
+                                                                    field.value = (field.value === opt.name ? "" : opt.name);
+                                                                }
                                                                 onBlockFieldChange(field.rawKey, field.value);
                                                             }}
                                                         >
                                                             {opt.name}
                                                         </button>
                                                     {/each}
+                                                {:else}
+                                                    <input
+                                                        type="text"
+                                                        class="b3-text-field"
+                                                        style="font-size: 11px; height: 26px; width: 100%;"
+                                                        placeholder="输入选项值..."
+                                                        bind:value={field.value}
+                                                        on:change={() => onBlockFieldChange(field.rawKey, field.value)}
+                                                    />
                                                 {/if}
                                             </div>
                                         {:else if field.type === 'date'}

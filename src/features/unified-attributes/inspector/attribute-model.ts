@@ -207,6 +207,9 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
 
     // 5. 结构化 Supertag 命名空间分组解析 (custom-<tag>.<attr> 与全局共享回退)
     const supertagGroupsMap = new Map<string, SupertagField[]>();
+    const supertagBoundAvIds = new Set<string>();
+    const supertagBoundAvNames = new Map<string, string>();
+
     for (const tag of supertags) {
         supertagGroupsMap.set(tag, []);
     }
@@ -315,12 +318,79 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
         }
     }
 
+    // 🌟 深度结合数据库列 Schema：为每个 Supertag 补充预设空列占位并丰富 Select 选项
+    for (const tag of supertags) {
+        const cleanTag = tag.replace(/^#/, "").trim().toLowerCase();
+        const rootTag = cleanTag.split(/[\.\/]/)[0].toLowerCase();
+        let boundAvId = supertagAVProjector.getBoundAv(cleanTag) || supertagAVProjector.getBoundAv(rootTag);
+        if (!boundAvId) {
+            const pref = supertagBinder.getPref(cleanTag) || supertagBinder.getPref(rootTag);
+            if (pref && pref !== "disabled" && pref !== "enabled") {
+                boundAvId = pref;
+            }
+        }
+
+        if (boundAvId) {
+            supertagBoundAvIds.add(boundAvId);
+            try {
+                const dbNameRes = await post("/api/query/sql", {
+                    stmt: `SELECT content FROM blocks WHERE id = '${boundAvId}' LIMIT 1;`
+                });
+                const dbName = (Array.isArray(dbNameRes) && dbNameRes.length > 0) ? (dbNameRes[0].content || "专属数据库") : "专属数据库";
+                supertagBoundAvNames.set(tag, dbName);
+
+                const { keyValues } = await getColIDMap(boundAvId);
+                const tagFields = supertagGroupsMap.get(tag) || [];
+
+                for (const kv of keyValues) {
+                    if (!kv.key) continue;
+                    const colKey = kv.key.name;
+                    const colType = kv.key.type;
+                    if (colType === "block" || colKey === "主键" || colKey === "文档" || colKey === "Block" || colKey === "supertag") continue;
+
+                    const colOptions: TypedFieldOption[] = (kv.key.options || []).map((opt: any, idx: number) => ({
+                        id: opt.id || opt.name || `opt_${idx}`,
+                        name: opt.name || opt.content || String(opt),
+                        color: String(opt.color || (idx % 8) + 1)
+                    }));
+
+                    const existing = tagFields.find(f => f.key === colKey || f.label === colKey || f.rawKey.endsWith(`-${colKey}`));
+                    if (existing) {
+                        existing.label = colKey;
+                        existing.type = colType as any;
+                        if (colOptions.length > 0) {
+                            existing.options = colOptions;
+                        }
+                    } else {
+                        // 占位空字段（解决惰性写入后的可见性问题）
+                        tagFields.push({
+                            key: colKey,
+                            fullKey: `${tag}.${colKey}`,
+                            rawKey: `custom-${cleanTag}-${colKey}`,
+                            label: colKey,
+                            type: (colType as any) || "text",
+                            value: "",
+                            options: colOptions,
+                            isScoped: true,
+                            tag
+                        });
+                    }
+                }
+                supertagGroupsMap.set(tag, tagFields);
+            } catch (err) {
+                console.warn(`[AttributeModel] 拉取 Supertag #${tag} 关联数据库 Schema 失败:`, err);
+            }
+        }
+    }
+
     const supertagGroups: SupertagGroup[] = Array.from(supertagGroupsMap.entries()).map(([tag, fields]) => ({
         tag,
+        boundAvId: supertagAVProjector.getBoundAv(tag.replace(/^#/, "").trim().toLowerCase()) || undefined,
+        boundAvName: supertagBoundAvNames.get(tag) || undefined,
         fields
     }));
 
-    // 6. 所属原生 AV 数据库属性聚合 (<dbName>.<colName> 与重名预警)
+    // 6. 所属原生 AV 数据库属性聚合 (<dbName>.<colName> 与重名预警，排除已被 Supertag 完整接管的库)
     const avGroups: AVDatabaseGroup[] = [];
     const joinedAvIds = new Set<string>();
 
@@ -332,13 +402,13 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                 if (rawAvs.startsWith("[") && rawAvs.endsWith("]")) {
                     const parsed = JSON.parse(rawAvs);
                     if (Array.isArray(parsed)) {
-                        parsed.forEach((id: any) => id && joinedAvIds.add(String(id).trim()));
+                        parsed.forEach((id: any) => id && !supertagBoundAvIds.has(String(id).trim()) && joinedAvIds.add(String(id).trim()));
                     }
                 } else {
-                    rawAvs.split(/[,;\s]+/).forEach(id => id && joinedAvIds.add(id.trim()));
+                    rawAvs.split(/[,;\s]+/).forEach(id => id && !supertagBoundAvIds.has(id.trim()) && joinedAvIds.add(id.trim()));
                 }
             } catch (_) {
-                rawAvs.split(/[,;\s]+/).forEach(id => id && joinedAvIds.add(id.trim()));
+                rawAvs.split(/[,;\s]+/).forEach(id => id && !supertagBoundAvIds.has(id.trim()) && joinedAvIds.add(id.trim()));
             }
         }
 
@@ -346,7 +416,7 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
         for (const k of Object.keys(rawAttrs)) {
             if (k.startsWith("custom-av-") && k !== "custom-av-name" && k !== "custom-av-names" && k !== "custom-av-config") {
                 const avId = k.replace(/^custom-av-/, "").trim();
-                if (avId) joinedAvIds.add(avId);
+                if (avId && !supertagBoundAvIds.has(avId)) joinedAvIds.add(avId);
             }
         }
 
@@ -360,26 +430,13 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                     });
                     const rows = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
                     if (rows.length > 0) {
-                        joinedAvIds.add(rows[0].id);
+                        const targetAvId = rows[0].id;
+                        if (!supertagBoundAvIds.has(targetAvId)) {
+                            joinedAvIds.add(targetAvId);
+                        }
                     }
                 } catch (_) {}
             }
-        }
-
-        // ④ 从已绑定的 Supertag 关联的 AV 中感知
-        for (const tag of supertags) {
-            const cleanTag = tag.replace(/^#/, "").trim();
-            const rootTag = cleanTag.split(/[\.\/]/)[0].toLowerCase();
-            try {
-                const projAvId = supertagAVProjector.getBoundAv(cleanTag) || supertagAVProjector.getBoundAv(rootTag);
-                if (projAvId) joinedAvIds.add(projAvId);
-            } catch (_) {}
-            try {
-                const prefAvId = supertagBinder.getPref(cleanTag) || supertagBinder.getPref(rootTag);
-                if (prefAvId && prefAvId !== "disabled" && prefAvId !== "enabled") {
-                    joinedAvIds.add(prefAvId);
-                }
-            } catch (_) {}
         }
 
         // 辅助查询全局所有 AV 名称，用以判定重名

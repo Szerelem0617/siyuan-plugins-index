@@ -39,6 +39,7 @@
         if (unsubscribeTracker) {
             unsubscribeTracker();
         }
+        activeBlockTracker.clearHighlight();
     });
 
     async function reloadData() {

@@ -841,3 +841,20 @@ button.b3-button.av__button[data-type="av-add-bottom"].indexos-btn-bordered:hove
     border-color: var(--indexos-accent-primary, #28517F) !important;
     box-shadow: 0 0 10px rgba(40, 81, 127, 0.35) !important;
 }
+
+/* ─── 检查器当前聚焦块 IndexOS 茵蒂克丝浅蓝高亮边框提示 ─── */
+.indexos-inspected-highlight {
+    outline: 2px solid var(--indexos-index-blue, #A1C4E6) !important;
+    outline-offset: 2px !important;
+    border-radius: 4px !important;
+    box-shadow: 0 0 0 3px rgba(161, 196, 230, 0.35) !important;
+    transition: outline 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+
+/* ─── 检查器当前聚焦整篇页面 IndexOS 茵蒂克丝浅蓝编辑区高亮边框提示 ─── */
+.indexos-inspected-page-highlight {
+    outline: 2px solid var(--indexos-index-blue, #A1C4E6) !important;
+    outline-offset: -2px !important;
+    box-shadow: inset 0 0 0 2px rgba(161, 196, 230, 0.25) !important;
+    transition: outline 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
