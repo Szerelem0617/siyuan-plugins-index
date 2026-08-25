@@ -240,15 +240,15 @@
         </div>
 
         <div class="fn__flex" style="align-items: center; gap: 8px;">
-            <!-- 搜索框 -->
-            <div class="b3-form__icon" style="width: 200px;">
+            <!-- 搜索框：图标右置，输入体验更佳 -->
+            <div style="position: relative; display: flex; align-items: center; width: 200px;">
                 <input
                     class="b3-text-field b3-text-field--small fn__flex-1"
-                    style="padding-left: 26px; height: 26px; font-size: 12px;"
+                    style="width: 100%; box-sizing: border-box; padding-left: 10px; padding-right: 28px; height: 28px; font-size: 12px; border-radius: var(--indexos-radius-sm, 6px);"
                     placeholder="搜索超级标签..."
                     bind:value={searchQuery}
                 />
-                <svg class="b3-form__icon-icon" style="width: 12px; height: 12px; left: 8px;"><use xlink:href="#iconSearch"></use></svg>
+                <svg style="position: absolute; right: 8px; width: 13px; height: 13px; color: var(--indexos-text-muted); pointer-events: none;"><use xlink:href="#iconSearch"></use></svg>
             </div>
         </div>
     </div>
@@ -308,11 +308,11 @@
                     >
                         <button
                             class="indexos-btn-bordered"
-                            title="一键切换所有 Supertag 的推荐状态"
+                            title="批量切换所有 Supertag 的推荐状态"
                             on:click={handleToggleAllSmart}
                         >
                             <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconRefresh"></use></svg>
-                            <span>一键开关</span>
+                            <span>开关</span>
                         </button>
                     </div>
                 </div>
@@ -366,11 +366,11 @@
                             {#if group.isDuplicateName}
                                 <div class="fn__flex" style="align-items: center; gap: 8px;">
                                     <span
-                                        class="dup-danger-badge"
-                                        style="font-size: 11px; color: #DC2626; background: rgba(239, 68, 68, 0.12); padding: 3px 8px; border-radius: 4px; font-weight: 600; white-space: nowrap; border: 1px solid rgba(239, 68, 68, 0.3);"
+                                        class="indexos-tag-badge"
+                                        style="color: var(--indexos-danger, #EF4444) !important; font-size: 11px; flex-shrink: 0;"
                                         title="工作区内存在多个同名数据库，请在思源中重命名以消除歧义"
                                     >
-                                        ⚠️ 数据库有重名 ({group.matchedCount})
+                                        <span class="badge-dot" style="background-color: var(--indexos-danger, #EF4444) !important;"></span>重名 ({group.matchedCount})
                                     </span>
                                     {#if group.selectedAvId}
                                         <button
@@ -389,14 +389,16 @@
                                     class="fn__flex"
                                     style="align-items: center; gap: 8px;"
                                 >
-                                    <!-- 高亮绿色数据库图标，不显示冗余库名 -->
-                                    <div
-                                        class="fn__flex-center"
-                                        style="width: 22px; height: 22px; border-radius: 4px; background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.25); flex-shrink: 0;"
+                                    <!-- 已关联数据库标注 (无框小圆点风格 + 数据库图标) -->
+                                    <span
+                                        class="indexos-tag-badge"
+                                        style="color: #059669 !important; font-size: 11px; flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;"
                                         title="已关联同名数据库"
                                     >
-                                        <svg style="width: 13px; height: 13px; fill: currentColor;"><use xlink:href="#iconDatabase"></use></svg>
-                                    </div>
+                                        <span class="badge-dot" style="background-color: #10B981 !important;"></span>
+                                        <span>已关联</span>
+                                        <svg style="width: 12px; height: 12px; fill: currentColor; opacity: 0.85; flex-shrink: 0;"><use xlink:href="#iconDatabase"></use></svg>
+                                    </span>
 
                                     <!-- 定位按钮 -->
                                     <button

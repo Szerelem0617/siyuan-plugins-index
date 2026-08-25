@@ -28,11 +28,22 @@
 
     async function handleSave() {
         error = "";
+        const manualJsonStr = manualPanel ? manualPanel.getSerializedConfig() : (currentManualVal || "[]");
+        const autoScriptStr = autoPanel ? autoPanel.getSerializedScript() : (currentAutoVal || "");
+
+        // 检查是否有任何实际修改
+        const normalize = (val: string) => (val || "").trim();
+        const manualUnchanged = normalize(manualJsonStr) === normalize(currentManualVal) || (normalize(manualJsonStr) === "[]" && !normalize(currentManualVal));
+        const autoUnchanged = normalize(autoScriptStr) === normalize(currentAutoVal);
+
+        if (manualUnchanged && autoUnchanged) {
+            showMessage("无任何更新", 2000, "info");
+            dialog.destroy();
+            return;
+        }
+
         saving = true;
         try {
-            const manualJsonStr = manualPanel ? manualPanel.getSerializedConfig() : (currentManualVal || "[]");
-            const autoScriptStr = autoPanel ? autoPanel.getSerializedScript() : (currentAutoVal || "");
-
             await onSave({
                 manual: manualJsonStr,
                 auto: autoScriptStr
