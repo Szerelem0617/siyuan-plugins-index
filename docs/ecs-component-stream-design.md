@@ -83,18 +83,37 @@ const unsubscribe = window.IndexOS.subscribeComponents({
 
 ---
 
-### 2.3 高频写入内存缓冲池 (Batch Commit Gateway)
+### 2.3 双轨写回与批量缓冲池架构 (Dual-Track Writeback & Batch Buffer)
 
-* **痛点**：物理模拟（Matter.js）或动画系统可能以 60 FPS 频繁产生实体状态更新（如坐标 `x, y`、经验值累计）。如果直接调用思源 `/api/attr/setBlockAttrs`，会导致磁盘 I/O 爆炸、前端掉帧卡死。
-* **缓冲机制**：
-  1. 插件向内存缓冲池提交状态：`window.IndexOS.batchCommit(entityId, { pos_x: 120, pos_y: 350 });`
-  2. 缓冲池在内存中即时合并最新值；
-  3. 后台按预设节奏（如 1.5s 防抖或空闲时）执行单次批量持久化，将几十次修改聚合为一次原子写操作。
+为了在保证绝对数据一致性的同时支撑高频计算，IndexOS 采用内外分层的双轨写回架构：
+
+```mermaid
+graph TD
+    subgraph Track1 ["1️⃣ 用户交互轨 (User Track)"]
+        UIEdit["用户编辑 AV 单元格 / 属性面板"] --> HotTable["SQLite 内存热表 (0ms UI 响应)"]
+        HotTable --> ImmediateSync["即时物理落盘 (/api/attr/setBlockAttrs)"]
+        ImmediateSync --> BlockIAL["🧱 物理 Markdown 块 (时刻强一致)"]
+    end
+
+    subgraph Track2 ["2️⃣ 高频计算轨 (ECS System Track)"]
+        PluginSystem["第三方插件 (60 FPS 物理引擎 / 排版)"] --> BatchBuffer["BatchBuffer 内存合并池"]
+        BatchBuffer --> DebounceBatch["防抖聚合批量写盘 (原子提交)"]
+        DebounceBatch --> BlockIAL
+    end
+```
+
+1. **用户交互轨（即时强一致）**：
+   - 终端用户在虚拟 AV 数据库、属性面板中的离散编辑操作，遵循「内存热表即刻响应 + 块物理 IAL 即时落盘」原则；
+   - 彻底向终端用户屏蔽底层回写策略配置，做到真正的开箱即用与所见即所得，杜绝因未保存或延迟引发的数据断层。
+
+2. **高频计算轨（ECS 缓冲保护层）**：
+   - 面向第三方计算插件的高频状态流（如 60 FPS 坐标演算、经验值高频累加），由 IndexOS 底层的 `BatchBuffer` 充当硬件 I/O 减震器；
+   - 外部系统调用 `window.IndexOS.batchCommit(entityId, deltaProps)`，缓冲池在内存中合并最新状态并按节奏批量落地。
 
 ---
 
 ## 3. 规划路线图 (Roadmap)
 
 - [ ] **Phase 1 (只读网关)**：对外暴露标准的 `window.IndexOS.queryEntities` API，打通 SQLite 内存镜像读取；
-- [ ] **Phase 2 (批量缓冲)**：实现 `BatchBuffer` 内存队列，提供安全的防抖批量持久化机制；
+- [ ] **Phase 2 (批量缓冲)**：实现 `BatchBuffer` 内存队列，提供面向第三方系统的高性能防抖批量持久化保护层；
 - [ ] **Phase 3 (响应式流)**：打通 Supertag Diff 引擎与对外事件广播通道。

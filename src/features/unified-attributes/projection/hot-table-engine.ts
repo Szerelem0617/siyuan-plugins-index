@@ -7,8 +7,6 @@
 
 import { post } from "../../../shared/api-client/request";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
-import { settings } from "../../../core/settings";
-import { showMessage } from "siyuan";
 import { parseSupertags } from "../core/supertag-diff";
 import { type VirtualAVBinding } from "./types";
 import { notifyFrontendToRerender } from "./rerender-dispatcher";
@@ -250,7 +248,7 @@ export async function removeBlockFromSQLite(binding: VirtualAVBinding, blockId: 
 }
 
 /**
- * 单元格反向编辑：在 SQLite 中执行 UPDATE，并根据设置判断是否即时回写块属性
+ * 单元格反向编辑：在 SQLite 热表中更新并即时写回物理 Markdown 属性
  */
 export async function handleCellUpdateInSQLite(
     binding: VirtualAVBinding,
@@ -271,22 +269,19 @@ export async function handleCellUpdateInSQLite(
         const cleanValue = extractCleanValue(rawData);
         const { db } = await getSqliteEngine();
 
-        // 1. 在 SQLite 热表中执行 SQL UPDATE
-        const updateSql = `UPDATE "${binding.tableName}" SET "${cleanAttrName}" = ?, _dirty = 1, _updated = ? WHERE id = ?;`;
+        // 1. 在 SQLite 热表中执行 SQL UPDATE (0 延迟即刻呈现)
+        const updateSql = `UPDATE "${binding.tableName}" SET "${cleanAttrName}" = ?, _updated = ? WHERE id = ?;`;
         db.run(updateSql, [cleanValue, Date.now(), blockId]);
 
-        // 2. 根据设置判断是否即时写回物理 Markdown 属性
-        const syncMode = (settings.get("virtualAvSyncMode") as string) || "realtime";
-        if (syncMode === "realtime") {
-            const tag = binding.tagName;
-            const attrKey = `custom-${tag}-${cleanAttrName}`;
-            await post("/api/attr/setBlockAttrs", {
-                id: blockId,
-                attrs: {
-                    [attrKey]: cleanValue
-                }
-            });
-        }
+        // 2. 即时持久化写回物理 Markdown 块属性
+        const tag = binding.tagName;
+        const attrKey = `custom-${tag}-${cleanAttrName}`;
+        await post("/api/attr/setBlockAttrs", {
+            id: blockId,
+            attrs: {
+                [attrKey]: cleanValue
+            }
+        });
 
         // 3. 通知 Protyle 刷新表格显示
         setTimeout(() => {
@@ -295,51 +290,6 @@ export async function handleCellUpdateInSQLite(
     } catch (e) {
         console.error(`[HotTableEngine] handleCellUpdateInSQLite 异常:`, e);
     }
-}
-
-/**
- * 延迟模式下批量统一回写所有 _dirty 标记的行
- */
-export async function flushDirtyBlocks(binding: VirtualAVBinding): Promise<number> {
-    let flushCount = 0;
-    try {
-        const { db } = await getSqliteEngine();
-        const dirtyRes = db.exec(`SELECT * FROM "${binding.tableName}" WHERE _dirty = 1;`);
-        
-        if (dirtyRes && dirtyRes.length > 0 && dirtyRes[0].values.length > 0) {
-            const columns = dirtyRes[0].columns;
-            const rows = dirtyRes[0].values;
-            const idIdx = columns.indexOf("id");
-            const batchAttrs: Array<{ id: string; attrs: Record<string, string> }> = [];
-
-            for (const row of rows) {
-                const blockId = String(row[idIdx]);
-                const attrs: Record<string, string> = {};
-
-                for (let c = 0; c < columns.length; c++) {
-                    const col = columns[c];
-                    if (col !== "id" && col !== "title" && !col.startsWith("_")) {
-                        const val = row[c] !== null && row[c] !== undefined ? String(row[c]) : "";
-                        attrs[`custom-${binding.tagName}-${col}`] = val;
-                    }
-                }
-                batchAttrs.push({ id: blockId, attrs });
-            }
-
-            try {
-                await post("/api/attr/batchSetBlockAttrs", { blockAttrs: batchAttrs });
-            } catch (batchErr) {
-                for (const item of batchAttrs) {
-                    await post("/api/attr/setBlockAttrs", { id: item.id, attrs: item.attrs });
-                }
-            }
-
-            flushCount = rows.length;
-        }
-    } catch (flushErr) {
-        console.error(`[HotTableEngine] 统一回写异常:`, flushErr);
-    }
-    return flushCount;
 }
 
 /**

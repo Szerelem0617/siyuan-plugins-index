@@ -22,7 +22,6 @@ export class SettingsProperty {
     iconOutline: boolean;
     dbAddTemplateCols: boolean;
     devMode: boolean;
-    virtualAvSyncMode: "realtime" | "delayed";
 
     constructor() {
         this.depth = 0;
@@ -44,7 +43,6 @@ export class SettingsProperty {
         this.iconOutline = false;
         this.dbAddTemplateCols = true;
         this.devMode = false;
-        this.virtualAvSyncMode = "realtime";
     }
 
     getAll() {
@@ -67,7 +65,6 @@ export class SettingsProperty {
         this.iconOutline = settings.get("iconOutline") ?? false;
         this.dbAddTemplateCols = settings.get("dbAddTemplateCols") ?? true;
         this.devMode = settings.get("devMode") ?? false;
-        this.virtualAvSyncMode = settings.get("virtualAvSyncMode") ?? "realtime";
     }
 }
 

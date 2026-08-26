@@ -10,12 +10,6 @@
         content: i18n.settingsTab.items.dbAddTemplateCols.content,
     };
 
-    const virtualAvSyncModeContent = {
-        title: i18n.settingsTab.items.virtualAvSyncMode.title,
-        content: i18n.settingsTab.items.virtualAvSyncMode.content,
-        options: i18n.settingsTab.items.virtualAvSyncMode.options,
-    };
-
     const devModeContent = {
         title: i18n.settingsTab.items.devMode.title,
         content: i18n.settingsTab.items.devMode.content,
@@ -28,13 +22,6 @@
     >
         {i18n.dataMenu.warning}
     </div>
-
-    <SettingItem
-        content={virtualAvSyncModeContent}
-        type="select"
-        settingKey="virtualAvSyncMode"
-        bind:settingValue={settingsStrings.virtualAvSyncMode}
-    />
 
     <SettingItem
         content={addTemplateContent}

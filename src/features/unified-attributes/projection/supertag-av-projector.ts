@@ -12,7 +12,6 @@
  */
 
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
-import { settings } from "../../../core/settings";
 import { showMessage } from "siyuan";
 import { type VirtualAVBinding, type VirtualColumnMeta, registerColumnMeta, getColumnMeta } from "./types";
 import { buildVirtualIAVFromSQL, buildEmptyIAV } from "./iav-builder";
@@ -22,7 +21,6 @@ import {
     syncBlockToSQLite,
     removeBlockFromSQLite,
     handleCellUpdateInSQLite,
-    flushDirtyBlocks,
     dropHotTable
 } from "./hot-table-engine";
 import { installFetchInterceptor } from "./fetch-interceptor";
@@ -213,21 +211,12 @@ export class SupertagAVProjector {
     }
 
     /**
-     * 关闭/解绑虚拟投影 (支持延迟模式下自动统一回写)
+     * 关闭/解绑虚拟投影
      */
     public async unbindTagFromAV(avId: string): Promise<void> {
         const cleanAvId = avId.trim();
         const binding = this.bindings.get(cleanAvId);
         if (!binding) return;
-
-        const syncMode = (settings.get("virtualAvSyncMode") as string) || "realtime";
-
-        if (syncMode === "delayed") {
-            const flushedCount = await flushDirtyBlocks(binding);
-            if (flushedCount > 0) {
-                showMessage(`✓ 虚拟投影已关闭，已将 ${flushedCount} 个修改的属性统一回写到文档本体。`, 4000);
-            }
-        }
 
         await dropHotTable(binding.tableName);
 
@@ -236,9 +225,7 @@ export class SupertagAVProjector {
         this.persistBindings();
 
         this.notifyFrontendToRerender(cleanAvId, binding.blockId);
-        if (syncMode === "realtime") {
-            showMessage("✓ 已关闭虚拟投影，恢复为普通数据库视图");
-        }
+        showMessage("✓ 已关闭虚拟投影，恢复为普通数据库视图");
     }
 
     /**

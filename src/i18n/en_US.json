@@ -123,14 +123,6 @@
         "title": "Developer Mode",
         "content": "Enable command registry management and database diagnostic tools (not recommended for general users)"
       },
-      "virtualAvSyncMode": {
-        "title": "Virtual Projection Sync Mode",
-        "content": "Select writeback strategy for attribute changes in virtual AV databases",
-        "options": [
-          { "value": "realtime", "label": "Realtime In-Memory Sync (Debounced writeback to block attrs)" },
-          { "value": "delayed", "label": "SQLite Hot Table Delayed Flush (Flush and delete table on unbind)" }
-        ]
-      },
 
       "builderDesc": "📄 Open sub-page · ➖ Link to heading"
     }
