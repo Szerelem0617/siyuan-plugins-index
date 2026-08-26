@@ -27,7 +27,8 @@ import {
     initTagMenuInterceptor,
     supertagAVProjector,
     avProjectionToggle,
-    initDockInspector
+    initDockInspector,
+    activeBlockTracker
 } from "./features/unified-attributes";
 import { refreshEntryRegistrations, destroyEntryRegistrations } from "./features/command/global-registration/entry-registration";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
@@ -303,6 +304,7 @@ export default class IndexPlugin extends Plugin {
                     notebookId: detail.protyle.notebookId,
                     path: detail.protyle.path
                 };
+                activeBlockTracker.forceInspectDocRoot(detail.protyle.block.rootID);
             }
             SupertagRenderer.render(detail.protyle);
         }

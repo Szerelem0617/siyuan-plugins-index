@@ -6,6 +6,7 @@
 
 import { Dialog } from "siyuan";
 import UnifiedAttributeInspectorDialog from "./UnifiedAttributeInspectorDialog.svelte";
+import { activeBlockTracker } from "./active-block-tracker";
 
 export function openUnifiedAttributeInspector(blockId: string, protyle?: any) {
     if (!blockId) return;
@@ -16,11 +17,11 @@ export function openUnifiedAttributeInspector(blockId: string, protyle?: any) {
         width: "560px",
         height: "620px",
         destroyCallback: () => {
-            // 弹窗关闭后，若传入了 protyle 实例，可触发小幅度视口微调
+            activeBlockTracker.clearHighlight();
         }
     });
 
-    dialog.element.classList.add("indexos-dialog");
+    dialog.element.classList.add("indexos-dialog", "indexos-inspector-dialog");
 
     new UnifiedAttributeInspectorDialog({
         target: dialog.element.querySelector("#indexos-attribute-inspector-container") as HTMLElement,
