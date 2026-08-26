@@ -528,6 +528,7 @@
                             {#key selectedRuleId}
                                 <CommandSequenceEditor
                                     initialScript={ruleSequenceScript(activeRule)}
+                                    showName={false}
                                     onScriptChange={s => applyRuleScript(activeRule, s)}
                                 />
                             {/key}

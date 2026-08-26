@@ -15,6 +15,8 @@
 
     /** 可复用的命令序列编辑器：支持多步/重复命令（角标序号流）+ 多维元数据筛选 + 入参独立设置 + 茵蒂克丝金高亮 */
     export let initialScript: string | null = null;
+    export let showName = true;
+    export let namePlaceholder = "名称 (留空自动命名: 复合命令 N)";
     export let onScriptChange: ((script: string) => void) | undefined = undefined;
     /** 仅显示这些命令（如 Conditional 只显示绑定命令）；null = 全部 */
     export let allowedCommands: string[] | null = null;
@@ -32,6 +34,7 @@
         { key: "delayMs", label: "前置延时 (毫秒)", type: "number", default: "0", description: "本步骤执行前的延迟等待时间 (ms)" }
     ];
 
+    let name = "";
     let steps: SequenceStep[] = [];
     let editingStepUid: string | null = null;
     let activeParam = "";
@@ -158,11 +161,11 @@
 
     /** 供外部直接调取的白盒脚本提取器 */
     export function getScript(): string {
-        return generateRuleScript("", steps.map(s => ({ commandRef: s.commandRef, params: s.params || {} })));
+        return generateRuleScript(name, steps.map(s => ({ commandRef: s.commandRef, params: s.params || {} })));
     }
 
     $: {
-        const outScript = generateRuleScript("", steps.map(s => ({ commandRef: s.commandRef, params: s.params || {} })));
+        const outScript = generateRuleScript(name, steps.map(s => ({ commandRef: s.commandRef, params: s.params || {} })));
         if (onScriptChange && isInitialized) {
             onScriptChange(outScript);
         }
@@ -315,6 +318,15 @@
 <div style="display: flex; gap: 12px; flex: 1; min-height: 0; overflow: hidden;">
     <!-- 左侧：多维检索 + 命令序列列表 -->
     <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0;">
+        {#if showName}
+            <input
+                type="text"
+                class="b3-text-field fn__block"
+                style="font-size: 12px; padding: 5px 10px; flex-shrink: 0;"
+                placeholder={namePlaceholder}
+                bind:value={name}
+            />
+        {/if}
 
         <!-- 顶部核心视图切换 (All vs Selected) + 筛选漏斗 + 搜索框 (单行整合) -->
         <div style="display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 8px; position: relative;">

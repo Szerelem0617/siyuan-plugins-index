@@ -281,7 +281,7 @@ export function getInlineButtonSlashCommand() {
             if (typeof protyle.insert === "function") protyle.insert("");
 
             const href = encodeBtnHref({ command: "sys.configure" });
-            const inlineDOM = `<span data-type="a" data-href="${href}">⚙️ 配置命令按钮</span>&#8203;`;
+            const inlineDOM = `<span data-type="a" data-href="${href}">⚙️ 配置命令</span>&#8203;`;
 
             const selection = window.getSelection();
             let savedRange: Range | null = null;
@@ -459,10 +459,10 @@ export function handleBtnPaste(event: CustomEvent) {
 
 async function openButtonConfigurationDialog(targetRange: Range) {
     const dialog = new Dialog({
-        title: "配置命令按钮",
+        title: "配置命令",
         content: `<div id="inline-btn-config-container" style="height: 100%;"></div>`,
-        width: "740px",
-        height: "640px"
+        width: "580px",
+        height: "540px"
     });
     dialog.element.classList.add("indexos-dialog");
     dialog.element.querySelector('.b3-dialog__header')?.remove();
@@ -501,7 +501,7 @@ function handleInlineButtonHover(event: MouseEvent) {
 
     let label = payload.command; // 兜底显示 command 字段
     if (payload.command === "sys.configure") {
-        label = "配置命令按钮";
+        label = "配置命令";
     } else {
         const def = commandRegistry.findByNameOrId(payload.command);
         if (def) label = def.name;
