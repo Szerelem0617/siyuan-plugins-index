@@ -223,6 +223,6 @@ export function addEditorEntryMenuItems({ detail }: any) {
     addEntryMenuSection(detail, "编辑器菜单");
 }
 
-export function addCommandTestMenuItem({ detail }: any) {}
-export function addDoctreeMenuItems({ detail }: any) {}
-export function addEditorTitleIconMenuItems({ detail }: any) {}
+export function addCommandTestMenuItem(_?: any) {}
+export function addDoctreeMenuItems(_?: any) {}
+export function addEditorTitleIconMenuItems(_?: any) {}

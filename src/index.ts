@@ -187,7 +187,6 @@ export default class IndexPlugin extends Plugin {
         window.addEventListener("index-plugin-setting-changed", (e: CustomEvent) => {
             if (e.detail?.key === "devMode") {
                 supertagManager.updateState();
-                setTagSuggestionEnabled(!!e.detail.value);
             }
         });
         if (isDevInitSysEnabled()) {
@@ -270,7 +269,7 @@ export default class IndexPlugin extends Plugin {
             destroyHoverTooltipListener();
             destroyEntryRegistrations();
         }
-        destroyTagSuggestion();
+        destroySupertagPalette();
         backgroundScheduler.stop();
         this.eventBus.off("paste", handleBtnPaste);
         if (this.openUrlPluginHandler) {

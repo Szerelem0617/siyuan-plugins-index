@@ -27,9 +27,8 @@ export function evaluateCommandConstraints(
     mode: ExecutionMode = "foreground",
     targetNodeType?: string
 ): ConstraintCheckResult {
-    const constraints = def.constraints || {};
-    const envConstraint = constraints.environment || "universal";
-    const targetScope = constraints.targetScope || "any";
+    const envConstraint = def.constraints?.environment || "universal";
+    const targetScope = def.constraints?.targetScope || "any";
 
     // 1. 检查运行环境限制 (environment: "ui" | "universal")
     // "ui" 仅限前台 UI 环境运行，后台静默触发时自动跳过；

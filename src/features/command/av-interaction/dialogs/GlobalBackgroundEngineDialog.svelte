@@ -9,7 +9,7 @@
 
     export let dialog: any;
 
-    export interface AutomationRule {
+    interface AutomationRule {
         id: string;
         name: string;
         enabled: boolean;
@@ -330,8 +330,8 @@
         selectedRuleId = newId;
     }
 
-    function deleteRule(id: string, e: MouseEvent) {
-        e.stopPropagation();
+    function deleteRule(id: string, e?: Event) {
+        if (e) e.stopPropagation();
         rules = rules.filter(r => r.id !== id);
         if (selectedRuleId === id) {
             selectedRuleId = rules.length > 0 ? rules[0].id : null;
@@ -525,12 +525,13 @@
                             📦 触发时执行的命令序列 (勾选命令并在右侧配置参数):
                         </div>
                         <div style="flex: 1; min-height: 300px; display: flex; border: 1px solid var(--b3-border-color); border-radius: 6px; padding: 8px;">
-                            <CommandSequenceEditor
-                                key={selectedRuleId}
-                                initialScript={ruleSequenceScript(activeRule)}
-                                showName={false}
-                                onScriptChange={s => applyRuleScript(activeRule, s)}
-                            />
+                            {#key selectedRuleId}
+                                <CommandSequenceEditor
+                                    initialScript={ruleSequenceScript(activeRule)}
+                                    showName={false}
+                                    onScriptChange={s => applyRuleScript(activeRule, s)}
+                                />
+                            {/key}
                         </div>
                     </div>
                 {:else}

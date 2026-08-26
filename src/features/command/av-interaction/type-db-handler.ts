@@ -1,9 +1,7 @@
 import { Dialog, showMessage } from "siyuan";
-import { getCommandAvId, COMMAND_BINDINGS, getLayer2Commands, getTypeAvId } from "../registration";
-import { commandRegistry } from "../registry/command-registry";
+import { getTypeAvId } from "../registration";
 import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
-import { openConfigForCommand } from "./command-db-handler";
 import UnifiedSupertagConfigDialog from "./dialogs/UnifiedSupertagConfigDialog.svelte";
 import PresetSupertagImportDialog from "./dialogs/PresetSupertagImportDialog.svelte";
 import { getSupertagDbRecords } from "../../unified-attributes/core/supertag-entity";
@@ -36,7 +34,6 @@ export async function openSupertagUnifiedConfigByTag(
     const cleanTag = supertag.replace(/^#+/, "").trim().toLowerCase();
     let currentManualVal = "";
     let currentAutoVal = "";
-    let matchedRowId = "";
     let relatedAvId = "";
     let isAlreadyCustomized = false;
 
@@ -157,18 +154,14 @@ export async function handleTypeDbAltClick(
 
     // 检查点击的列类型与列名
     let isConditionalCol = false;
-    let isIconMenuCol = false;
     let isRelatedAvCol = false;
-    let clickedColName = "";
     try {
         const checkColRes = db.exec(`SELECT key_name, col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
         if (checkColRes.length > 0 && checkColRes[0].values.length > 0) {
             const keyName = checkColRes[0].values[0][0];
-            clickedColName = checkColRes[0].values[0][1];
+            const clickedColName = checkColRes[0].values[0][1];
             if (keyName === "Auto" || keyName === "Conditional") {
                 isConditionalCol = true;
-            } else if (keyName === "Manual" || keyName === "Icon Menu") {
-                isIconMenuCol = true;
             } else if (keyName === "related_av" || clickedColName.toLowerCase().includes("related") || clickedColName.toLowerCase().includes("database") || clickedColName.includes("数据库")) {
                 isRelatedAvCol = true;
             }

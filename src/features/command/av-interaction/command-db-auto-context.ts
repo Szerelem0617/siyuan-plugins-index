@@ -53,7 +53,7 @@ export function getCommandDbTokens(paramKey: string, paramType?: string): Comman
 }
 
 /** 为 Command-DB 参数生成显式的推荐 Placeholder 提示 */
-export function getCommandDbPlaceholder(paramKey: string, paramType?: string, paramDefault?: any, paramDesc?: string): string {
+export function getCommandDbPlaceholder(paramKey: string, paramType?: string, paramDefault?: any, _paramDesc?: string): string {
     const isBlockIdParam = paramKey === "id" || paramType === "blockid";
 
     if (isBlockIdParam) {

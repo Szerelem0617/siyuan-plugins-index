@@ -13,7 +13,6 @@
 
     export let blockId: string;
     export let dialog: any;
-    export let protyle: any = null;
 
     let loading = true;
     let data: BlockAttributeData | null = null;

@@ -34,7 +34,7 @@
                 const def = commandRegistry.getCommand(singleCmd.commandRef);
                 const finalLabel = customLabel.trim() || def?.name || singleCmd.commandRef;
                 const hasParams = singleCmd.params && Object.keys(singleCmd.params).length > 0;
-                const paramPayload = hasParams ? singleCmd.params : undefined;
+                const paramPayload = hasParams ? JSON.stringify(singleCmd.params) : undefined;
 
                 const href = encodeBtnHref({ command: singleCmd.commandRef, param: paramPayload });
                 insertButtonHtml(href, finalLabel);

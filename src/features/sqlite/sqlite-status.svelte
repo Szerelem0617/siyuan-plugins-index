@@ -4,10 +4,9 @@
     import { plugin } from "../../shared/utils";
     import { fetchAllAVBlocks } from "./sqlite-data-fetcher";
     import {
-        instantiateAV, runQuery, getInstantiatedIds, getSyncMetadata,
-        getAVSchema, saveQuery, getSavedQueries, deleteSavedQuery,
+        runQuery, saveQuery, getSavedQueries, deleteSavedQuery,
         exportToCSV, exportToJSON, downloadFile,
-        avIdToTableName, type AVColumnSchema, type SavedQuery
+        avIdToTableName, type SavedQuery
     } from "./sqlite-manager";
     import CommandsPanel from "./commands-db/CommandsPanel.svelte";
 
@@ -160,38 +159,6 @@
         sqlInput = sql;
         showSavedQueries = false;
         executeSQL();
-    }
-
-    function getTypeIcon(type: string): string {
-        const icons: Record<string, string> = {
-            text: "Aa", number: "#", select: "◉", mSelect: "☰",
-            date: "📅", checkbox: "☑", url: "🔗", email: "✉",
-            phone: "📞", relation: "↗", rollup: "Σ", block: "▣",
-            mAsset: "📎", template: "{ }", created: "⏰", updated: "⏰"
-        };
-        return icons[type] || "?";
-    }
-
-    function formatTimestamp(iso: string): string {
-        if (!iso) return "";
-        try {
-            const d = new Date(iso);
-            return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
-        } catch { return iso; }
-    }
-
-    function formatChangeTs(iso: string): string {
-        if (!iso) return "";
-        try {
-            const d = new Date(iso);
-            return `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
-        } catch { return iso; }
-    }
-
-    function truncate(s: any, len: number = 20): string {
-        if (s === null || s === undefined) return "NULL";
-        const str = String(s);
-        return str.length > len ? str.slice(0, len) + "…" : str;
     }
 
     function useSqlForAv(avId: string) {

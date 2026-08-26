@@ -1,12 +1,16 @@
 <script lang="ts">
+    import { onMount } from "svelte";
     import {
         saveDbConfig,
         syncInheritanceToDb,
     } from "./db-config";
     import type { DbConfig, IDBTypeMapping } from "./types";
-    import { showMessage } from "siyuan";
+    import { showMessage, Dialog } from "siyuan";
     import { i18n } from "../../../shared/utils";
     import { openIndexDropdown } from "../../../ui/components/index-dropdown";
+    import { executeWritableSql, runQuery } from "../../sqlite/sqlite-manager";
+    import { post } from "../../../shared/api-client/request";
+    import FieldsConfigDialog from "./FieldsConfigDialog.svelte";
 
     export let avId: string;
     export let blockId: string;
@@ -48,7 +52,6 @@
             };
         });
 
-    import { onMount } from "svelte";
     onMount(() => {
         if (typeFieldId) {
             console.log("[DbConfig] Initial Field:", typeFieldId);
@@ -136,8 +139,6 @@
         typeMappings = newMappings;
     }
 
-    import { supertagMonitor } from "../../unified-attributes/core/supertag-listener";
-
     const save = async () => {
         const activeMappings = typeMappings.filter((m) => m.name.trim() !== "");
 
@@ -156,11 +157,6 @@
 
         // Trigger Supertag Manager UI & Monitor Refresh Immediately
         window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
-        try {
-            supertagMonitor.scanSupertags();
-        } catch (e) {
-            console.error("[DbConfig] Failed to trigger supertag scan:", e);
-        }
 
         // Trigger Materialized Sync
         try {
@@ -224,10 +220,6 @@
         ...normalColumns.map(col => ({ value: col.id, label: `${col.name} (${i18n.dbConfig.columns || "自定义属性"})` }))
     ];
     $: typeFieldLabel = typeFieldOptions.find(o => o.value === typeFieldId)?.label || "-- 选择sub-tag的相关列 --";
-    import { executeWritableSql, runQuery } from "../../sqlite/sqlite-manager";
-    import { post } from "../../../shared/api-client/request";
-    import FieldsConfigDialog from "./FieldsConfigDialog.svelte";
-    import { Dialog } from "siyuan";
 
     let creatingViews = new Set();
 
@@ -364,6 +356,11 @@
         if (mode === "weak") return i18n.dbConfig.modeWeak || "弱继承";
         if (mode === "strong") return i18n.dbConfig.modeStrong || "强继承";
         return i18n.dbConfig.modeNone || "不继承";
+    }
+
+    function updateInheritanceMode(item: any, val: any) {
+        item.mode = val as "strong" | "none" | "weak";
+        inheritanceList = [...inheritanceList];
     }
 </script>
 
@@ -542,10 +539,7 @@
                                     event: e,
                                     options: modeOptions,
                                     selectedValue: item.mode,
-                                    onSelect: (val) => {
-                                        item.mode = val;
-                                        inheritanceList = [...inheritanceList];
-                                    }
+                                    onSelect: (val) => updateInheritanceMode(item, val)
                                 });
                             }}
                         >

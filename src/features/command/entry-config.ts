@@ -10,7 +10,6 @@
 import { post } from "../../shared/api-client/request";
 import { plugin } from "../../shared/utils";
 import { getCommandAvId } from "./registration";
-import type { ContextNeed } from "./registry/command-registry";
 
 /** 存 Command-DB 数据库块 custom attributes 的属性名 */
 export const ENTRY_CONFIG_KEY = "custom-indexos-entry-config";
@@ -211,17 +210,17 @@ export function suitableForPosition(targetScope: TargetScope | undefined, positi
 
     // 1. 顶栏/底栏/侧栏/快捷键：主要适合全局无需上下文的命令 (none)
     if (position.includes("顶栏") || position.includes("底栏") || position.includes("侧栏") || position === "快捷键") {
-        return scope === "none" || scope === "any";
+        return scope === "none";
     }
 
     // 2. 页面菜单/编辑器菜单：适合页面命令 (doc) 及全局无上下文命令 (none)
     if (position === "页面菜单" || position === "编辑器菜单") {
-        return scope === "doc" || scope === "none" || scope === "any";
+        return scope === "doc" || scope === "none";
     }
 
     // 3. 块菜单//菜单：适合内容块命令 (block) 及全局命令 (none)
     if (position === "块菜单" || position === "/菜单") {
-        return scope === "block" || scope === "none" || scope === "any";
+        return scope === "block" || scope === "none";
     }
 
     // 4. 命令按钮 / ;;菜单：允许任意匹配

@@ -24,10 +24,13 @@ export interface SeedCommandRow {
 export interface SeedSupertagRow {
     rowID: string;
     supertag: string;
-    /** 逗号分隔的命令 ID / 名称，写入 AV 的 Icon Menu 列 */
-    iconMenu: string;
-    /** 条件触发脚本（与 AV Conditional 列同格式） */
-    conditional: string;
+    /** 手动交互命令 JSON 数组字符串 */
+    manual?: string;
+    /** 自动条件触发脚本（TypeScript DSL） */
+    auto?: string;
+    /** 兼容旧字段 */
+    iconMenu?: string;
+    conditional?: string;
 }
 
 /** Layer 2 种子行：从 commands.json 的 seed/seeds 字段派生 */

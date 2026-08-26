@@ -8,8 +8,8 @@
 
     export let onSave = function () {};
 
-    let notebooks = [];
-    let toNotebookId: any;
+    let notebooks: any[] = [];
+    let toNotebookId: string = "";
     // let toNotebookName: any;
 
     // 用户指南不应该作为可以写入的笔记本
@@ -33,7 +33,7 @@
     //     );
     // };
 
-    $: dropdownOptions = notebooks.map(n => ({ value: n.id, label: n.name }));
+    $: dropdownOptions = notebooks.map((n: any) => ({ value: n.id, label: n.name }));
     $: selectedLabel = dropdownOptions.find(o => o.value === toNotebookId)?.label || (notebooks.length > 0 ? "" : i18n.loading + "...");
 
     onMount(async () => {
@@ -43,10 +43,10 @@
         notebooks = data.notebooks ?? [];
         // 没有必要把所有笔记本都列出来
         notebooks = notebooks.filter(
-            (notebook) =>
+            (notebook: any) =>
                 !notebook.closed && !hiddenNotebook.has(notebook.name),
         );
-        toNotebookId = notebooks[0].id;
+        toNotebookId = notebooks[0]?.id || "";
         // 选中，若是没保存，获取第一个
         // toNotebookId = importerConfig?.notebook ?? notebooks[0].id;
         // const currentNotebook = notebooks.find((n) => n.id === toNotebookId);

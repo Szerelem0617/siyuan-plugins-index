@@ -6,6 +6,7 @@
 
 import { globalCommand } from "siyuan";
 import { post } from "../../../shared/api-client/request";
+import { plugin } from "../../../shared/utils";
 import type { CommandDef } from "../registry/command-registry";
 import type { CommandContext, DispatchResult } from "./types";
 
@@ -13,7 +14,7 @@ export function dispatchKeyboard(def: CommandDef, _context: CommandContext): Dis
     const key = def.dispatch.keymapPath ? def.dispatch.keymapPath.join(":") : ((def.dispatch as any).key || "");
     if (!key) return { success: false, method: "keyboard", detail: "No key binding defined" };
     try {
-        globalCommand(key);
+        (globalCommand as any)(key, plugin?.app);
         return { success: true, method: "keyboard", detail: key };
     } catch (e: any) {
         return { success: false, method: "keyboard", detail: e.message };
@@ -24,7 +25,7 @@ export function dispatchGlobal(def: CommandDef): DispatchResult {
     const cmd = def.dispatch.target || (def.dispatch as any).command || "";
     if (!cmd) return { success: false, method: "global", detail: "No global command defined" };
     try {
-        globalCommand(cmd);
+        (globalCommand as any)(cmd, plugin?.app);
         return { success: true, method: "global", detail: cmd };
     } catch (e: any) {
         return { success: false, method: "global", detail: e.message };

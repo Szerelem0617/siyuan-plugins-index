@@ -66,7 +66,6 @@ export function parseManualConfig(raw: string): ManualConfig {
 
         // 兼容旧格式 { menu: [...], button: [...] }
         if (parsed && typeof parsed === "object") {
-            const result: ManualCommandEntry[] = [];
             const menuList = Array.isArray(parsed.menu) ? parsed.menu : [];
             const buttonList = Array.isArray(parsed.button) ? parsed.button : [];
 

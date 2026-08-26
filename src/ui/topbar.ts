@@ -1,10 +1,9 @@
 import {
-    Dialog, Menu, showMessage
+    Dialog, Menu
 } from "siyuan";
 import { insertAction } from "../features/insert-moc/index/action";
 import { insertOutlineAction } from "../features/insert-moc/outline/action";
 import { i18n, isMobile, plugin } from "../shared/utils";
-import { openUnifiedAttributeInspector } from "../features/unified-attributes/inspector/inspector-controller";
 import SettingsTab from "./components/setting.svelte";
 
 // //tab类型

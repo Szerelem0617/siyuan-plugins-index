@@ -78,7 +78,7 @@ async function openProjectSupertagPrompt(avId: string, blockId?: string) {
         const tagName = (input?.value || suggestedTag || "task").trim();
         dialog.destroy();
         showMessage(`⏳ 正在将 #${tagName} 块属性投影到数据库...`, 3000);
-        const res = await supertagAVProjector.projectSupertagToAV(tagName, avId, blockId);
+        const res = await supertagAVProjector.projectSupertagToAV(tagName, avId);
         if (res.success) {
             showMessage(`✅ 成功将 ${res.rowCount} 个 #${tagName} 块数据投影到此数据库！`, 4000);
         } else {

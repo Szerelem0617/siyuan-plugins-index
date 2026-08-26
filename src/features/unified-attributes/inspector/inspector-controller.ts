@@ -26,8 +26,7 @@ export function openUnifiedAttributeInspector(blockId: string, protyle?: any) {
         target: dialog.element.querySelector("#indexos-attribute-inspector-container") as HTMLElement,
         props: {
             blockId,
-            dialog,
-            protyle
+            dialog
         }
     });
 }

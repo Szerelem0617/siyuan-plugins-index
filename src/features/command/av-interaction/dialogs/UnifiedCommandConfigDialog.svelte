@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { openIndexDropdown } from "../../../../ui/components/index-dropdown";
-    import { commandRegistry } from "../../registry/command-registry";
 
     export let dialog: any;
     export let commandName: string;

@@ -33,7 +33,7 @@ export async function handleOpenTargetCommand(
     // 1. 系统全局视图分流
     if (target === "graph" || target === "graphView") {
         try {
-            globalCommand("graphView");
+            (globalCommand as any)("graphView", plugin?.app);
             console.log("✅ 成功唤起全局关系图");
             console.groupEnd();
             return { success: true, method: "custom", detail: "Opened graphView" };
@@ -45,7 +45,7 @@ export async function handleOpenTargetCommand(
 
     if (target === "inbox") {
         try {
-            globalCommand("inbox");
+            (globalCommand as any)("inbox", plugin?.app);
             console.log("✅ 成功唤起收集箱");
             console.groupEnd();
             return { success: true, method: "custom", detail: "Opened inbox" };

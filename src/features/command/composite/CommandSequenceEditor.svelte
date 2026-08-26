@@ -21,7 +21,7 @@
     /** 仅显示这些命令（如 Conditional 只显示绑定命令）；null = 全部 */
     export let allowedCommands: string[] | null = null;
 
-    export interface SequenceStep {
+    interface SequenceStep {
         uid: string;
         commandRef: string;
         params: Record<string, string>;
@@ -65,7 +65,7 @@
                         params: [],
                         outputs: [],
                         handler: async () => {}
-                    } as CommandDef),
+                    } as unknown as CommandDef),
                     source: def ? inferCommandSource(def) : ("composite" as CommandSourceType),
                     domain: def ? inferCommandDomain(def) : ("other" as CommandDomainType),
                     scope: def ? inferCommandScope(def) : ("focused_block" as CommandScopeType)
@@ -86,7 +86,7 @@
                     params: [],
                     outputs: [],
                     handler: async () => {}
-                } as CommandDef),
+                } as unknown as CommandDef),
                 source: def ? inferCommandSource(def) : ("builtin" as CommandSourceType),
                 domain: def ? inferCommandDomain(def) : ("other" as CommandDomainType),
                 scope: def ? inferCommandScope(def) : ("focused_block" as CommandScopeType)

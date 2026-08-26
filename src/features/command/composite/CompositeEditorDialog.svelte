@@ -3,7 +3,7 @@
     import { Dialog, showMessage } from "siyuan";
     import { createCompositeRow, registerCompositeCommand, compositeCommandId, updateCompositeRow, readCompositeRow, generateUniqueCompositeName } from "./manager";
     import { parseRuleScript } from "./script-dsl";
-    import { inspectCompositeSteps, type StepSchemaItem } from "./composite-step-schema";
+    import { inspectCompositeSteps } from "./composite-step-schema";
     import CommandSequenceEditor from "./CommandSequenceEditor.svelte";
     import { refreshSupertagRegistry } from "../utils/sync-service";
 
@@ -26,9 +26,6 @@
     // 导出变量状态表：是否导出勾选（默认 true）+ 出参别名
     let exportedOutputs: Record<string, boolean> = {};
     let outputAliases: Record<string, string> = {};
-
-    // 是否已从已存行数据中初始化过配置
-    let hasLoadedExistingConfig = false;
 
     // 步骤结构分析
     $: currentRule = parseRuleScript(script);
@@ -53,7 +50,6 @@
     });
 
     function loadExistingIO(inputStr: string, outputStr: string) {
-        hasLoadedExistingConfig = true;
         if (inputStr) {
             try {
                 const parsedIn = JSON.parse(inputStr);

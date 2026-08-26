@@ -358,9 +358,9 @@
                                             {@const curVal = entry.params?.[schema.key] || ""}
                                             <div style="display: flex; flex-direction: column; gap: 3px; background: var(--indexos-bg-card); border: 1px solid var(--indexos-border-light); border-radius: 4px; padding: 6px 8px;">
                                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                    <label style="font-size: 11px; font-weight: 600; color: var(--indexos-text-main);">
+                                                    <span style="font-size: 11px; font-weight: 600; color: var(--indexos-text-main);">
                                                         {schema.label || schema.key}
-                                                    </label>
+                                                    </span>
                                                     {#if schema.description}
                                                         <span style="font-size: 10px; color: var(--indexos-text-muted);">
                                                             {schema.description}

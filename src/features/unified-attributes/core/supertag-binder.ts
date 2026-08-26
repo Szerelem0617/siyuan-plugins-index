@@ -124,7 +124,7 @@ export class SupertagBinder {
 
             // 1. 确保该 Tag 与 AV 数据库的虚拟投影处于激活状态
             if (avId && !supertagAVProjector.isVirtualProjection(avId)) {
-                await supertagAVProjector.projectSupertagToAV(rootTag, avId, blockId);
+                await supertagAVProjector.projectSupertagToAV(rootTag, avId);
             }
 
             // 2. 读取该 AV 数据库的所有列结构

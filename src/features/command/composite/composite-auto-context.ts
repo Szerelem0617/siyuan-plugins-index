@@ -30,7 +30,7 @@ export function formatVarToken(raw: string): string {
  * 从 Command-DB 最新配置或注册表中获取命令出参的真实 Token
  */
 export function getCompositeOutputToken(commandRefOrId: string, outputKey: string, schemaDefault?: string): string {
-    const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === commandRefOrId || b.label === commandRefOrId);
+    const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === commandRefOrId || b.methodName === commandRefOrId);
     if (binding && binding.outputMapping) {
         try {
             const raw = binding.outputMapping.trim();

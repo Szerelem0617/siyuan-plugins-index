@@ -287,7 +287,7 @@
         margin-bottom: 4px;
     }
 
-    .builtin-box, .custom-box {
+    .builtin-box {
         background: var(--b3-theme-surface);
         border: 1px solid var(--b3-border-color);
         border-radius: 6px;
@@ -307,14 +307,6 @@
         font-size: 11px;
         font-weight: 600;
         color: var(--b3-theme-on-surface);
-    }
-
-    .sub-empty-tip {
-        font-size: 11px;
-        color: var(--b3-theme-on-surface-light);
-        opacity: 0.6;
-        text-align: center;
-        padding: 8px 0;
     }
 
     .custom-row {
@@ -337,13 +329,6 @@
         font-size: 11px;
         font-weight: 700;
         color: var(--b3-theme-on-background);
-    }
-
-    .custom-raw-key {
-        font-size: 9px;
-        font-family: monospace;
-        color: var(--b3-theme-on-surface-light);
-        opacity: 0.6;
     }
 
     .add-custom-wrap {

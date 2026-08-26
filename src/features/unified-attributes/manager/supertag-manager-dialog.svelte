@@ -1,12 +1,16 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { openDbConfigDialog } from "../../av/av-setting/db-config";
-    import { i18n, plugin, confirmDialog } from "../../../shared/utils";
+    import { i18n, plugin } from "../../../shared/utils";
     import { supertagBinder } from "../core/supertag-binder";
-    import { showMessage, openTab, Dialog } from "siyuan";
+    import { supertagAVProjector } from "../projection/supertag-av-projector";
+    import { getSqliteEngine } from "../../sqlite/sqlite-manager";
+    import { showMessage, openTab } from "siyuan";
     import { getUnifiedSupertagList, type UnifiedSupertagDefinition } from "../core/supertag-entity";
     import { post } from "../../../shared/api-client/request";
     import { openSupertagUnifiedConfigByTag } from "../../command/av-interaction/type-db-handler";
+    import { NOTEBOOK_NAME, DATA_DBS_CONFIG } from "../../command/indexos/seed-data";
+    import { getOrCreateDataDbsParentDoc } from "../../command/data-db-management";
 
     export let dialog: any;
 
@@ -122,10 +126,6 @@
             showMessage(`一键开关切换失败: ${e.message || e}`, 5000, "error");
         }
     }
-
-    import { NOTEBOOK_NAME, DATA_DBS_CONFIG } from "../../command/indexos/seed-data";
-    import { getOrCreateDataDbsParentDoc } from "../../command/data-db-management";
-    import { supertagAVProjector } from "../projection/supertag-av-projector";
 
     async function handleCreateDatabase(group: UnifiedSupertagDefinition) {
         try {

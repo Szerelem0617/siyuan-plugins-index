@@ -59,6 +59,8 @@ export interface SupertagField {
 
 export interface SupertagGroup {
     tag: string;
+    boundAvId?: string;
+    boundAvName?: string;
     fields: SupertagField[];
 }
 

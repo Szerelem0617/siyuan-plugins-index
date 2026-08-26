@@ -47,7 +47,6 @@
     export let eventConfigsMap: Record<string, EventScopeFilter> = {};
     let showScopeFilterPanel = false;
     let showAddEventPicker = false;
-    let savingAsCommand = false;
 
     function extractCommandsFromScript(text: string): RuleCommand[] {
         return parseDispatchCallsFromText(text);
@@ -140,8 +139,8 @@
         showAddEventPicker = false;
     }
 
-    function removeEventTab(eventId: string, e: MouseEvent) {
-        e.stopPropagation();
+    function removeEventTab(eventId: string, e?: Event) {
+        if (e) e.stopPropagation();
         if (selectedEvents.length <= 1) {
             showMessage("请至少保留一个触发事件", 3000, "info");
             return;

@@ -56,7 +56,6 @@ export function configureDetachedCommand(linkEl: HTMLElement) {
             commandId: cmdDef.id,
             paramsSchema,
             currentInputParams,
-            contextSource: "entry",
             onSave: async (updatedInput: Record<string, any>) => {
                 // 生成携带最新独立参数的脱钩 url
                 const newHref = encodeBtnHref({

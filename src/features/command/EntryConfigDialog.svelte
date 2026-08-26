@@ -2,7 +2,7 @@
     import { onMount } from "svelte";
     import { Dialog, showMessage } from "siyuan";
     import { commandRegistry } from "./registry/command-registry";
-    import type { ContextNeed } from "./registry/command-registry";
+    import type { ContextNeed, TargetScope } from "./registry/command-registry";
     import {
         loadEntryConfig, saveEntryConfig, resolveEntryConfigBlockId, suitableForPosition, ENTRY_POSITIONS, BLOCK_TYPES, POSITION_HINTS,
         type EntryConfig, type BlockMenuEntry
@@ -29,10 +29,11 @@
 
     $: commands = commandRegistry
         .getAllCommands()
-        .map((c): { id: string; name: string; contextNeed: ContextNeed } => ({
+        .map((c) => ({
             id: c.id,
             name: c.name,
-            contextNeed: c.meta?.contextNeed || "none"
+            contextNeed: (c.meta?.contextNeed || "none") as ContextNeed,
+            constraints: c.constraints
         }))
         .sort((a, b) => a.name.localeCompare(b.name, "zh"));
 
@@ -149,8 +150,11 @@
                     {@const sel = !!selectedMap[cmd.id]}
                     {@const suitable = suitableForPosition(cmd.constraints?.targetScope, activePos)}
                     <div
+                        role="button"
+                        tabindex="0"
                         style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 5px; cursor: pointer; border-left: 3px solid {sel ? 'var(--indexos-accent-primary)' : 'transparent'}; background: {sel ? 'rgba(40, 81, 127, 0.06)' : 'transparent'}; opacity: {suitable ? 1 : 0.45};"
                         on:click={() => toggle(cmd.id)}
+                        on:keydown={e => (e.key === 'Enter' || e.key === ' ') && toggle(cmd.id)}
                     >
                         <span
                             style="width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; background: {sel ? 'var(--indexos-accent-primary)' : 'var(--indexos-border-light)'}; color: #fff;"

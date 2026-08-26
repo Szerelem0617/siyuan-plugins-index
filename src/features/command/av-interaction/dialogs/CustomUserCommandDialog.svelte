@@ -79,19 +79,19 @@
 
     <div style="display: flex; gap: 10px;">
         <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-            <label style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">命令 ID (必须以 user. 开头)</label>
+            <span style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">命令 ID (必须以 user. 开头)</span>
             <input type="text" class="b3-text-field" style="font-family: monospace; font-size: 12px;" bind:value={rawId} placeholder="如 my_custom_action" />
             <div style="font-size: 10px; color: var(--indexos-accent-primary); font-family: monospace;">预览: {fullId}</div>
         </div>
 
         <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-            <label style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">命令名称</label>
+            <span style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">命令名称</span>
             <input type="text" class="b3-text-field" style="font-size: 12px;" bind:value={name} placeholder="例如: 🤖 AI 智能摘要提炼" />
         </div>
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 4px;">
-        <label style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">逻辑代码 (JavaScript / TS 执行脚本)</label>
+        <span style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">逻辑代码 (JavaScript / TS 执行脚本)</span>
         <textarea
             class="b3-text-field"
             style="height: 100px; font-family: var(--b3-font-family-code, monospace); font-size: 11px; padding: 8px; white-space: pre;"
@@ -101,7 +101,7 @@
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 4px;">
-        <label style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">描述/备注 (可选)</label>
+        <span style="font-size: 11px; font-weight: bold; color: var(--b3-theme-on-surface-light);">描述/备注 (可选)</span>
         <input type="text" class="b3-text-field" style="font-size: 11px;" bind:value={description} placeholder="描述该命令的作用" />
     </div>
 

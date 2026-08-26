@@ -184,7 +184,6 @@ async function triggerRegistryCommandSelectorForInsert(avId: string) {
         new RegistryCommandSelectorDialog({
             target: document.getElementById("registry-command-selector-dialog")!,
             props: {
-                dialog,
                 commands,
                 onSelect: async (cmd: any) => {
                     dialog.destroy();
