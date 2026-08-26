@@ -465,6 +465,7 @@ async function openButtonConfigurationDialog(targetRange: Range) {
         height: "640px"
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
     const InlineButtonConfigDialog = (await import("./InlineButtonConfigDialog.svelte")).default;
     new InlineButtonConfigDialog({

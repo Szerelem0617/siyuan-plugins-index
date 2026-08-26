@@ -14,6 +14,7 @@ export function openPresetSupertagImportDialog() {
         destroyCallback: () => {}
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
     new PresetSupertagImportDialog({
         target: dialog.element.querySelector("#preset-supertag-import-container")!,
@@ -68,6 +69,7 @@ export async function openSupertagUnifiedConfigByTag(
         height: "720px"
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
     new UnifiedSupertagConfigDialog({
         target: dialog.element.querySelector("#unified-supertag-config-container")!,
@@ -247,6 +249,7 @@ async function openSupertagUnifiedConfigForAvRow(
             height: "720px"
         });
         dialog.element.classList.add("indexos-dialog");
+        dialog.element.querySelector('.b3-dialog__header')?.remove();
 
         new UnifiedSupertagConfigDialog({
             target: dialog.element.querySelector("#unified-supertag-config-container")!,

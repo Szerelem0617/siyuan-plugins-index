@@ -15,8 +15,6 @@
 
     /** 可复用的命令序列编辑器：支持多步/重复命令（角标序号流）+ 多维元数据筛选 + 入参独立设置 + 茵蒂克丝金高亮 */
     export let initialScript: string | null = null;
-    export let showName = true;
-    export let namePlaceholder = "名称 (留空自动命名: 复合命令 N)";
     export let onScriptChange: ((script: string) => void) | undefined = undefined;
     /** 仅显示这些命令（如 Conditional 只显示绑定命令）；null = 全部 */
     export let allowedCommands: string[] | null = null;
@@ -34,7 +32,6 @@
         { key: "delayMs", label: "前置延时 (毫秒)", type: "number", default: "0", description: "本步骤执行前的延迟等待时间 (ms)" }
     ];
 
-    let name = "";
     let steps: SequenceStep[] = [];
     let editingStepUid: string | null = null;
     let activeParam = "";
@@ -46,6 +43,9 @@
     let filterSource: "all" | CommandSourceType = "all";
     let filterDomain: "all" | CommandDomainType = "all";
     let filterScope: "all" | CommandScopeType = "all";
+    let showFilterPopover = false;
+
+    $: activeFilterCount = (filterSource !== "all" ? 1 : 0) + (filterDomain !== "all" ? 1 : 0) + (filterScope !== "all" ? 1 : 0);
 
     import { COMMAND_BINDINGS } from "../registration";
     import { getSeedCommandRows } from "../indexos/seed-data";
@@ -158,11 +158,11 @@
 
     /** 供外部直接调取的白盒脚本提取器 */
     export function getScript(): string {
-        return generateRuleScript(name, steps.map(s => ({ commandRef: s.commandRef, params: s.params || {} })));
+        return generateRuleScript("", steps.map(s => ({ commandRef: s.commandRef, params: s.params || {} })));
     }
 
     $: {
-        const outScript = generateRuleScript(name, steps.map(s => ({ commandRef: s.commandRef, params: s.params || {} })));
+        const outScript = generateRuleScript("", steps.map(s => ({ commandRef: s.commandRef, params: s.params || {} })));
         if (onScriptChange && isInitialized) {
             onScriptChange(outScript);
         }
@@ -315,23 +315,15 @@
 <div style="display: flex; gap: 12px; flex: 1; min-height: 0; overflow: hidden;">
     <!-- 左侧：多维检索 + 命令序列列表 -->
     <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0;">
-        {#if showName}
-            <input
-                type="text"
-                class="b3-text-field fn__block"
-                style="font-size: 12px; padding: 5px 10px; flex-shrink: 0;"
-                placeholder={namePlaceholder}
-                bind:value={name}
-            />
-        {/if}
 
-        <!-- 顶部核心视图切换 (All vs Selected) -->
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 8px;">
-            <div class="indexos-tabbar" style="margin: 0; padding: 2px;">
+        <!-- 顶部核心视图切换 (All vs Selected) + 筛选漏斗 + 搜索框 (单行整合) -->
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 8px; position: relative;">
+            <!-- 左侧：全量 vs 已选 TabBar -->
+            <div class="indexos-tabbar" style="margin: 0; padding: 2px; flex-shrink: 0;">
                 <button
                     type="button"
                     class="indexos-tab-item {activeViewTab === 'all' ? 'active' : ''}"
-                    style="font-size: 11px; padding: 3px 10px;"
+                    style="font-size: 11px; padding: 3px 8px;"
                     on:click={() => activeViewTab = 'all'}
                 >
                     🌐 全量命令 ({availableCommands.length})
@@ -339,74 +331,117 @@
                 <button
                     type="button"
                     class="indexos-tab-item {activeViewTab === 'selected' ? 'active' : ''}"
-                    style="font-size: 11px; padding: 3px 10px;"
+                    style="font-size: 11px; padding: 3px 8px;"
                     on:click={() => activeViewTab = 'selected'}
                 >
                     🌟 已选生效 ({steps.length})
                 </button>
             </div>
-            {#if steps.length > 0}
-                <span class="indexos-tag-badge" style="font-size: 11px;">
-                    已编排 {steps.length} 个步骤
-                </span>
-            {/if}
-        </div>
 
-        <!-- 搜索与多维分类下拉过滤栏 -->
-        <div style="display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; background: var(--indexos-bg-card, rgba(0,0,0,0.02)); padding: 8px; border-radius: 6px; border: 1px solid var(--indexos-border-light);">
-            <!-- 搜索框 -->
-            <div style="position: relative;">
-                <input
-                    type="text"
-                    class="b3-text-field fn__block"
-                    style="font-size: 11px; padding: 5px 8px 5px 26px; box-sizing: border-box;"
-                    placeholder="搜索全量命令名称、ID 或领域 (如 烟花 / 更新 / 属性)..."
-                    bind:value={searchQuery}
-                />
-                <svg style="position: absolute; left: 8px; top: 7px; width: 13px; height: 13px; opacity: 0.5; pointer-events: none;"><use xlink:href="#iconSearch"></use></svg>
-            </div>
-
-            <!-- 3 大正交维度平铺下拉框 -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
-                <!-- 维度 1: 来源 -->
-                <select 
-                    class="b3-select" 
-                    style="font-size: 11px; height: 30px; line-height: normal; padding: 4px 18px 4px 6px; width: 100%; box-sizing: border-box;" 
-                    bind:value={filterSource}
+            <!-- 右侧：Filter 漏斗按钮 + 搜索框 -->
+            <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; justify-content: flex-end; position: relative;">
+                <!-- 漏斗筛选按钮 (类似思源数据库 filter) -->
+                <button
+                    type="button"
+                    class="b3-button {activeFilterCount > 0 ? 'b3-button--text' : 'b3-button--outline'}"
+                    style="height: 26px; padding: 0 7px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; border-radius: 4px; flex-shrink: 0; cursor: pointer; {activeFilterCount > 0 ? 'background: var(--indexos-accent-primary); color: #fff;' : ''}"
+                    title="筛选命令来源、领域与范围"
+                    on:click={() => showFilterPopover = !showFilterPopover}
                 >
-                    <option value="all">全部来源</option>
-                    <option value="builtin">🧩 内置</option>
-                    <option value="composite">⚡ 复合</option>
-                    <option value="user">👤 自建</option>
-                    <option value="plugin">🔌 插件</option>
-                </select>
+                    <svg style="width: 12px; height: 12px;"><use xlink:href="#iconFilter"></use></svg>
+                    {#if activeFilterCount > 0}
+                        <span style="font-weight: bold; font-size: 10px;">{activeFilterCount}</span>
+                    {/if}
+                </button>
 
-                <!-- 维度 2: 功能领域 -->
-                <select 
-                    class="b3-select" 
-                    style="font-size: 11px; height: 30px; line-height: normal; padding: 4px 18px 4px 6px; width: 100%; box-sizing: border-box;" 
-                    bind:value={filterDomain}
-                >
-                    <option value="all">全部领域</option>
-                    <option value="block">🧱 块操作</option>
-                    <option value="attribute">🏷️ 属性标签</option>
-                    <option value="interaction">✨ 视效交互</option>
-                    <option value="document">📄 文档大纲</option>
-                    <option value="data_flow">🔄 数据流</option>
-                    <option value="composite">⚡ 复合编排</option>
-                </select>
+                <!-- 搜索框 (搜索图标移至右侧，不与文字重叠) -->
+                <div style="position: relative; flex: 1; max-width: 260px; min-width: 120px;">
+                    <input
+                        type="text"
+                        class="b3-text-field fn__block"
+                        style="font-size: 11px; height: 26px; padding: 2px 24px 2px 8px; box-sizing: border-box; width: 100%; border-radius: 4px;"
+                        placeholder="搜索命令名称 / ID / 领域..."
+                        bind:value={searchQuery}
+                    />
+                    <svg style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; opacity: 0.45; pointer-events: none;"><use xlink:href="#iconSearch"></use></svg>
+                </div>
 
-                <!-- 维度 3: 作用范围 -->
-                <select 
-                    class="b3-select" 
-                    style="font-size: 11px; height: 30px; line-height: normal; padding: 4px 18px 4px 6px; width: 100%; box-sizing: border-box;" 
-                    bind:value={filterScope}
-                >
-                    <option value="all">全部范围</option>
-                    <option value="focused_block">🎯 聚焦块</option>
-                    <option value="document">📄 文档级</option>
-                    <option value="global">🌐 全局</option>
-                </select>
+                <!-- 筛选浮动气泡面板 (Popover) -->
+                {#if showFilterPopover}
+                    <!-- svelte-ignore a11y-click-events-have-key-events -->
+                    <!-- svelte-ignore a11y-no-static-element-interactions -->
+                    <div 
+                        style="position: fixed; inset: 0; z-index: 100;" 
+                        on:click={() => showFilterPopover = false}
+                    ></div>
+                    
+                    <div 
+                        class="b3-menu"
+                        style="position: absolute; top: calc(100% + 4px); right: 0; z-index: 101; width: 240px; padding: 10px; background: var(--b3-theme-surface); border: 1px solid var(--b3-border-color); border-radius: 6px; box-shadow: var(--b3-dialog-shadow); display: flex; flex-direction: column; gap: 8px;"
+                    >
+                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--indexos-text-muted); border-bottom: 1px solid var(--indexos-border-divider); padding-bottom: 4px;">
+                            <span>🎯 维度筛选</span>
+                            {#if activeFilterCount > 0}
+                                <button 
+                                    class="b3-button b3-button--cancel" 
+                                    style="font-size: 10px; padding: 1px 6px; height: 20px; line-height: 18px;" 
+                                    on:click={() => { filterSource = 'all'; filterDomain = 'all'; filterScope = 'all'; }}
+                                >
+                                    重置
+                                </button>
+                            {/if}
+                        </div>
+
+                        <!-- 维度 1: 来源 -->
+                        <div style="display: flex; flex-direction: column; gap: 3px;">
+                            <span style="font-size: 11px; color: var(--indexos-text-muted);">来源 (Source):</span>
+                            <select 
+                                class="b3-select" 
+                                style="font-size: 11px; height: 26px; padding: 2px 6px;" 
+                                bind:value={filterSource}
+                            >
+                                <option value="all">全部来源</option>
+                                <option value="builtin">🧩 内置</option>
+                                <option value="composite">⚡ 复合</option>
+                                <option value="user">👤 自建</option>
+                                <option value="plugin">🔌 插件</option>
+                            </select>
+                        </div>
+
+                        <!-- 维度 2: 功能领域 -->
+                        <div style="display: flex; flex-direction: column; gap: 3px;">
+                            <span style="font-size: 11px; color: var(--indexos-text-muted);">功能领域 (Domain):</span>
+                            <select 
+                                class="b3-select" 
+                                style="font-size: 11px; height: 26px; padding: 2px 6px;" 
+                                bind:value={filterDomain}
+                            >
+                                <option value="all">全部领域</option>
+                                <option value="block">🧱 块操作</option>
+                                <option value="attribute">🏷️ 属性标签</option>
+                                <option value="interaction">✨ 视效交互</option>
+                                <option value="document">📄 文档大纲</option>
+                                <option value="data_flow">🔄 数据流</option>
+                                <option value="composite">⚡ 复合编排</option>
+                            </select>
+                        </div>
+
+                        <!-- 维度 3: 作用范围 -->
+                        <div style="display: flex; flex-direction: column; gap: 3px;">
+                            <span style="font-size: 11px; color: var(--indexos-text-muted);">作用范围 (Scope):</span>
+                            <select 
+                                class="b3-select" 
+                                style="font-size: 11px; height: 26px; padding: 2px 6px;" 
+                                bind:value={filterScope}
+                            >
+                                <option value="all">全部范围</option>
+                                <option value="focused_block">🎯 聚焦块</option>
+                                <option value="document">📄 文档级</option>
+                                <option value="global">🌐 全局</option>
+                            </select>
+                        </div>
+                    </div>
+                {/if}
             </div>
         </div>
 

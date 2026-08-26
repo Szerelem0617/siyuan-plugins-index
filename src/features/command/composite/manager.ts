@@ -335,6 +335,7 @@ export function openCompositeEditor(
         height: "720px"
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
     import("./CompositeEditorDialog.svelte").then(m => {
         new m.default({
@@ -363,6 +364,7 @@ export function openCompositeEditorForRow(
         height: "720px"
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
     import("./CompositeEditorDialog.svelte").then(m => {
         new m.default({

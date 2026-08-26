@@ -450,11 +450,12 @@ export async function openDbConfigDialog(avId: string, blockId?: string) {
 
     const dialog = new Dialog({
         title: i18n.dbConfig.dialogTitle,
-        content: `<div class="b3-dialog__content" id="db-config-container"></div>`,
+        content: `<div id="db-config-container" style="height: 100%;"></div>`,
         width: "600px",
         height: "600px",
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
     new DbConfigDialog({
         target: dialog.element.querySelector("#db-config-container"),

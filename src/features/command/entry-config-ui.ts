@@ -9,6 +9,7 @@ export function openEntryConfigDialog(): void {
         height: "600px"
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
     new EntryConfigDialog({
         target: dialog.element.querySelector("#entry-config-container")!,
         props: { dialog }

@@ -22,6 +22,7 @@ export function openUnifiedAttributeInspector(blockId: string, protyle?: any) {
     });
 
     dialog.element.classList.add("indexos-dialog", "indexos-inspector-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
     new UnifiedAttributeInspectorDialog({
         target: dialog.element.querySelector("#indexos-attribute-inspector-container") as HTMLElement,

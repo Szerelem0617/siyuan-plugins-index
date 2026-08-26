@@ -15,6 +15,7 @@
 
     let activeTab: "steps" | "input" | "output" = initialTab;
     let script = "";
+    let existingName = "";
     let error = "";
     let saving = false;
     let sequenceEditorRef: any;
@@ -41,6 +42,7 @@
                 const row = await readCompositeRow(editRowId);
                 if (row) {
                     initialScript = row.script;
+                    existingName = row.name || "";
                     loadExistingIO(row.inputStr, row.outputStr);
                 }
             } catch (e) {
@@ -90,15 +92,12 @@
             return;
         }
 
-        // 自动命名：若未填写名称，则自动生成唯一命名（复合命令 1, 复合命令 2...）
-        let finalName = (rule.name || "").trim();
-        if (!finalName) {
-            finalName = generateUniqueCompositeName();
-            if (targetScript.includes("// 名称:")) {
-                targetScript = targetScript.replace(/\/\/\s*名称\s*:[^\n]*/, `// 名称: ${finalName}`);
-            } else {
-                targetScript = `// 名称: ${finalName}\n${targetScript}`;
-            }
+        // 自动命名：编辑时保留原名；新建时自动生成唯一命名（复合命令 1, 复合命令 2...）
+        let finalName = existingName.trim() || (rule.name || "").trim() || generateUniqueCompositeName();
+        if (targetScript.includes("// 名称:")) {
+            targetScript = targetScript.replace(/\/\/\s*名称\s*:[^\n]*/, `// 名称: ${finalName}`);
+        } else {
+            targetScript = `// 名称: ${finalName}\n${targetScript}`;
         }
 
         // 1. 组装勾选暴露的外部入参
@@ -218,7 +217,6 @@
             <CommandSequenceEditor
                 bind:this={sequenceEditorRef}
                 {initialScript}
-                showName={true}
                 onScriptChange={s => { script = s; }}
             />
         </div>

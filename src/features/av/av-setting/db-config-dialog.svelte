@@ -368,6 +368,14 @@
     class="fn__flex-column"
     style="height: 100%; padding: 16px; box-sizing: border-box; background: var(--indexos-bg-base); color: var(--indexos-text-main);"
 >
+    <!-- 顶部标题 -->
+    <div style="font-size: 14px; font-weight: 600; color: var(--indexos-text-main); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
+        <span>⚙️ {i18n.dbConfig.dialogTitle || "数据库设置"}</span>
+        {#if dbName}
+            <span style="font-size: 11px; font-weight: normal; opacity: 0.6; font-family: monospace;">#{dbName}</span>
+        {/if}
+    </div>
+
     <!-- Tabs (只有绑定了 index-linked-list 时才渲染 Tabs 选择栏) -->
     {#if hasLinkedList}
         <div

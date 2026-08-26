@@ -47,6 +47,7 @@ export function configureDetachedCommand(linkEl: HTMLElement) {
         height: "520px"
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
     new InputConfigDialog({
         target: dialog.element.querySelector("#detached-param-config-container")!,

@@ -55,6 +55,7 @@ export function openGlobalAutomationDialog() {
         height: "560px"
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
     new GlobalBackgroundEngineDialog({
         target: dialog.element.querySelector("#global-bg-config-container")!,
@@ -180,6 +181,7 @@ async function triggerRegistryCommandSelectorForInsert(avId: string) {
         height: "400px"
     });
     dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
 
         new RegistryCommandSelectorDialog({
             target: document.getElementById("registry-command-selector-dialog")!,
@@ -451,6 +453,7 @@ export async function handleCommandDbAltClick(
                 height: "540px"
             });
             dialog.element.classList.add("indexos-dialog");
+            dialog.element.querySelector('.b3-dialog__header')?.remove();
 
             const { default: UnifiedCommandConfigDialog } = await import("./dialogs/UnifiedCommandConfigDialog.svelte");
 
@@ -577,6 +580,7 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
             height: "540px"
         });
         dialog.element.classList.add("indexos-dialog");
+        dialog.element.querySelector('.b3-dialog__header')?.remove();
 
         const { default: UnifiedCommandConfigDialog } = await import("./dialogs/UnifiedCommandConfigDialog.svelte");
         const outputsSchema = (cmdDef && cmdDef.outputs && Array.isArray(cmdDef.outputs)) ? cmdDef.outputs : [];

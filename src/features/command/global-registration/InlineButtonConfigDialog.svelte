@@ -10,10 +10,8 @@
     export let dialog: Dialog;
     export let targetRange: Range | null = null;
     export let initialCommandId: string = "";
-    export let initialLabel: string = "";
     export let initialParams: Record<string, string> = {};
 
-    let customLabel = initialLabel || "";
     let buttonScript = initialCommandId
         ? generateRuleScript("", [{ commandRef: initialCommandId, params: initialParams }])
         : "";
@@ -32,7 +30,7 @@
                 // 单命令绑定模式：直接写入标准按钮链接
                 const singleCmd = cmds[0];
                 const def = commandRegistry.getCommand(singleCmd.commandRef);
-                const finalLabel = customLabel.trim() || def?.name || singleCmd.commandRef;
+                const finalLabel = def?.name || singleCmd.commandRef;
                 const hasParams = singleCmd.params && Object.keys(singleCmd.params).length > 0;
                 const paramPayload = hasParams ? JSON.stringify(singleCmd.params) : undefined;
 
@@ -42,13 +40,13 @@
                 dialog.destroy();
             } else {
                 // 多命令复合执行模式：自动注册为复合命令并写入按钮链接
-                const autoName = customLabel.trim() || generateUniqueCompositeName();
+                const autoName = generateUniqueCompositeName();
                 const rowId = await createCompositeRow(autoName, buttonScript, "", "");
                 const commandId = compositeCommandId(rowId);
                 registerCompositeCommand(commandId, autoName, buttonScript, "{}");
                 await refreshSupertagRegistry();
 
-                const finalLabel = customLabel.trim() || autoName;
+                const finalLabel = autoName;
                 const href = encodeBtnHref({ command: commandId });
                 insertButtonHtml(href, finalLabel);
                 showMessage(`✓ 已创建复合命令按钮：${finalLabel}`);
@@ -84,28 +82,13 @@
     <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
         <CommandSequenceEditor
             initialScript={buttonScript}
-            showName={false}
             allowedCommands={null}
             onScriptChange={s => { buttonScript = s; }}
         />
     </div>
 
-    <!-- 定制按钮显示名称 -->
-    <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--indexos-border-divider); flex-shrink: 0;">
-        <span style="font-size: 12px; font-weight: 600; color: var(--indexos-text-main); flex-shrink: 0;">
-            定制按钮显示名称（选填）:
-        </span>
-        <input
-            type="text"
-            class="b3-text-field fn__flex-1"
-            style="font-size: 12px; padding: 4px 8px;"
-            placeholder="默认使用命令名"
-            bind:value={customLabel}
-        />
-    </div>
-
     <!-- 底部操作按钮 -->
-    <div class="fn__flex" style="justify-content: flex-end; gap: 8px; flex-shrink: 0; padding-top: 4px;">
+    <div class="fn__flex" style="justify-content: flex-end; gap: 8px; flex-shrink: 0; padding-top: 8px; border-top: 1px solid var(--indexos-border-divider);">
         <button class="b3-button b3-button--cancel" on:click={() => dialog.destroy()}>取消</button>
         <button class="b3-button b3-button--text" on:click={handleConfirm} disabled={saving}>
             {saving ? "处理中..." : "确认绑定并插入"}
