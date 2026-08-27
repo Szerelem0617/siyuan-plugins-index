@@ -133,12 +133,18 @@ export async function constructCommandStorage() {
             });
         }
 
-        // 3. Init Type-DB
+        // 3. Init Type-DB (supertag-db)
         const typeDb = await initDbDoc(
             targetNotebookId,
             TYPE_DB_CONFIG,
             async (avId) => {
                 const keyMap = await createAvColumns(avId, TYPE_DB_CONFIG.columns);
+
+                // 确保 /data-dbs 父页面已就绪
+                await getOrCreateDataDbsParentDoc(targetNotebookId);
+                const { ensureSupertagDatabase } = await import("../unified-attributes/core/supertag-schema");
+                const { supertagBinder } = await import("../unified-attributes/core/supertag-binder");
+                const { supertagAVProjector } = await import("../unified-attributes/projection/supertag-av-projector");
 
                 // 从种子常量读取 Layer 3 默认行（不再依赖 SQLite 种子表）
                 const seedRows = getSeedSupertagRows();
@@ -177,12 +183,27 @@ export async function constructCommandStorage() {
 
                     const manualKey = keyMap["Manual"];
                     const autoKey = keyMap["Auto"];
+                    const relatedAvKey = keyMap["Related av"];
 
                     if (manualKey) {
                         populateOps.push({ keyID: manualKey, itemID: row.rowID, value: { type: "text", text: { content: cleanManualVal } } });
                     }
                     if (autoKey) {
                         populateOps.push({ keyID: autoKey, itemID: row.rowID, value: { type: "text", text: { content: cleanAutoVal } } });
+                    }
+
+                    // 🌟 为内置 Supertag 自动建库并填充 Related av 列
+                    if (relatedAvKey && cleanSupertag) {
+                        try {
+                            const subAvId = await ensureSupertagDatabase(cleanSupertag);
+                            if (subAvId) {
+                                populateOps.push({ keyID: relatedAvKey, itemID: row.rowID, value: { type: "text", text: { content: subAvId } } });
+                                await supertagBinder.setPref(cleanSupertag, subAvId);
+                                supertagAVProjector.bindTagToAV(cleanSupertag, subAvId);
+                            }
+                        } catch (subErr) {
+                            console.warn(`[IndexOS] 为内置 Supertag #${cleanSupertag} 自动建库异常:`, subErr);
+                        }
                     }
                 }
 

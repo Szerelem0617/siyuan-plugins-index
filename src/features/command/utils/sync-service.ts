@@ -23,6 +23,8 @@ import {
     type CommandBinding,
     type SupertagCommand
 } from "../registration";
+import { commandRegistry } from "../registry/command-registry";
+import { supertagBinder } from "../../unified-attributes/core/supertag-binder";
 
 /**
  * Preload supertags mapping into cache.
@@ -385,6 +387,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             querySql = `SELECT "${typeSupertagCol}", "${manualCol}", "${autoCol}" FROM ${typesTable}`;
             typeRes = await runQuery(querySql);
         }
+
         if (!typeRes || !typeRes.values) return false;
 
         const newRegistry: SupertagCommand[] = [];
@@ -396,40 +399,58 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
 
             if (typeTagRaw) {
                 const cleanTag = String(typeTagRaw).replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
+                const avId = relatedAvText ? String(relatedAvText).trim() : "";
 
-                // 0. 同步 Related av 关联数据库与 Schema
-                if (relatedAvText) {
-                    const { parseRelatedAvConfig } = await import("../../unified-attributes/core/supertag-schema");
-                    const config = parseRelatedAvConfig(String(relatedAvText));
-                    if (config.avId) {
-                        supertagBinder.setPref(cleanTag, config.avId);
+                // 0. 同步 Related av 关联数据库（若未绑定则自动建库并强绑定；若已绑定则检查重命名联动）
+                if (avId) {
+                    supertagBinder.setPref(cleanTag, avId);
+                    // 检查并联动更新 AV 数据库名称
+                    (async () => {
+                        try {
+                            const { syncSupertagDatabaseName } = await import("../../unified-attributes/core/supertag-schema");
+                            await syncSupertagDatabaseName(cleanTag, avId);
+                        } catch (_) {}
+                    })();
+                } else if (cleanTag) {
+                    try {
+                        const { isIdLike, SYSTEM_EXCLUDED_SUPERTAGS } = await import("../../unified-attributes/core/supertag-entity");
+                        if (!isIdLike(cleanTag) && !SYSTEM_EXCLUDED_SUPERTAGS.has(cleanTag)) {
+                            const { ensureSupertagDatabase } = await import("../../unified-attributes/core/supertag-schema");
+                            ensureSupertagDatabase(cleanTag).catch(err => {
+                                console.error(`[Supertag Sync] 自动为 #${cleanTag} 建库绑定异常:`, err);
+                            });
+                        }
+                    } catch (err) {
+                        console.error(`[Supertag Sync] 自动为 #${cleanTag} 建库绑定异常:`, err);
                     }
                 }
 
                 // 1. Manual 列：4 态分流分发 (;; 面板 / Icon Menu / 块下方实体按钮 / 虚拟悬浮按钮)
                 const manualEntries = parseManualConfig(manualText);
                 const resolveCmd = (token: string) => {
-                    const lower = token.toLowerCase();
-                    const exact = Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower);
+                    const lower = (token || "").toLowerCase();
+                    const exact = Object.values(newCommandBindings).find(b => (b.commandRef || "").toLowerCase() === lower);
                     if (exact) return exact;
-                    const byLabel = Object.values(newCommandBindings).find(b => b.methodName.toLowerCase() === lower);
+                    const byLabel = Object.values(newCommandBindings).find(b => (b.methodName || "").toLowerCase() === lower);
                     if (byLabel) return byLabel;
                     const foundKey = Object.keys(newCommandBindings).find(k =>
-                        k.toLowerCase().includes(lower) || newCommandBindings[k].commandRef.toLowerCase().includes(lower)
+                        k.toLowerCase().includes(lower) || (newCommandBindings[k]?.commandRef || "").toLowerCase().includes(lower)
                     );
                     if (foundKey) return newCommandBindings[foundKey];
 
                     // 兜底：直接从内置 commandRegistry 获取，防止思源 AV 未同步新命令导致抛弃
-                    const sysCmd = commandRegistry.getCommand(token);
-                    if (sysCmd) {
-                        const hasOutputs = sysCmd.outputs && sysCmd.outputs.length > 0;
-                        return {
-                            methodName: sysCmd.name,
-                            commandRef: sysCmd.id,
-                            inputMapping: "",
-                            outputMapping: hasOutputs ? "{}" : ""
-                        };
-                    }
+                    try {
+                        const sysCmd = commandRegistry.getCommand(token);
+                        if (sysCmd) {
+                            const hasOutputs = sysCmd.outputs && sysCmd.outputs.length > 0;
+                            return {
+                                methodName: sysCmd.name,
+                                commandRef: sysCmd.id,
+                                inputMapping: "",
+                                outputMapping: hasOutputs ? "{}" : ""
+                            };
+                        }
+                    } catch (_) {}
                     return undefined;
                 };
 
@@ -515,6 +536,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         await syncCompositesFromCommandDb();
         return true;
     } catch (e) {
+        console.error("[Supertag Sync] refreshRegistryFromSqlite critical error:", e);
         return false;
     }
 }
@@ -698,3 +720,8 @@ async function refreshRegistryFromApi() {
         console.error("[Supertag Sync] API sync failed:", e);
     }
 }
+
+export const syncService = {
+    refreshSupertagRegistry,
+    syncGlobalSupertagsCache
+};

@@ -82,10 +82,16 @@ export const isIdLike = (str: string): boolean => {
            /^\d{14}/.test(s) || 
            /^[a-z0-9]{14,}[_\-][a-z0-9]+$/i.test(s) ||
            /^unnamed/i.test(s) ||
-           /^未命名/.test(s);
+           /^untitled/i.test(s) ||
+           /^未命名/.test(s) ||
+           /^新条目/.test(s) ||
+           s === "新条目" ||
+           s === "未命名" ||
+           s === "untitled" ||
+           s === "unnamed";
 };
 
-export const SYSTEM_EXCLUDED_SUPERTAGS = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag", "datadbs", "data-dbs"]);
+export const SYSTEM_EXCLUDED_SUPERTAGS = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag", "datadbs", "data-dbs", "新条目", "未命名", "untitled", "unnamed"]);
 
 /**
  * 结构化获取 supertag-db 系统表中的所有 Supertag 记录 (单一真理源)

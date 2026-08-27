@@ -13,6 +13,19 @@ import {
     unregisterFriendlyTableName
 } from "../sqlite-manager";
 import { cleanIdentifier } from "./tokenizer";
+import { getTypeAvId, getCommandAvId } from "../../command/registration";
+
+function assertNotSystemTable(tableName: string, avID?: string) {
+    const typeAvId = getTypeAvId();
+    const commandAvId = getCommandAvId();
+    const cleanLower = tableName.toLowerCase().replace(/_/g, "-");
+    const isSys = cleanLower === "command-db" || cleanLower === "supertag-db" ||
+                  cleanLower === "commanddb" || cleanLower === "supertagdb" ||
+                  (typeAvId && avID === typeAvId) || (commandAvId && avID === commandAvId);
+    if (isSys) {
+        throw new Error(`系统表 "${tableName}" 为受保护的核心系统表，禁止执行 DDL 操作。`);
+    }
+}
 
 export async function triggerAvBlockRender(avID: string) {
     try {
@@ -33,6 +46,7 @@ export async function executeDDL(processedSql: string, db: any, options?: DDLOpt
     if (dropMatch) {
         const tableName = cleanIdentifier(dropMatch[1]);
         const avID = resolveTableAvId(tableName);
+        assertNotSystemTable(tableName, avID || undefined);
         if (!avID) {
             if (/IF\s+EXISTS/i.test(processedSql)) {
                 return { success: true, message: `Table '${tableName}' does not exist, skipped.` };
@@ -443,6 +457,7 @@ export async function executeDDL(processedSql: string, db: any, options?: DDLOpt
         
         const avID = resolveTableAvId(tableName);
         if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+        assertNotSystemTable(tableName, avID);
         
         const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID });
         const checkKeys = Array.isArray(keysRes) ? keysRes : (keysRes.keys || []);

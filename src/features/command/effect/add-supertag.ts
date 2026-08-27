@@ -108,7 +108,15 @@ export async function triggerAddSupertag(
                 } catch (_) {}
             }
 
-            // 3. 核心：仅在真正新增了标签时，才联动广播触发 Supertag tag_created 事件
+            // 3. 确保该 Supertag 的 AV 数据库已自动就绪 (Zero-Config 自动建库)，并同步虚拟热表
+            try {
+                const { ensureSupertagDatabase } = await import("../../unified-attributes/core/supertag-schema");
+                await ensureSupertagDatabase(cleanTag);
+                const { syncBlockToSQLite } = await import("../../unified-attributes/projection/hot-table-engine");
+                await syncBlockToSQLite(targetBlockId);
+            } catch (_) {}
+
+            // 4. 核心：仅在真正新增了标签时，才联动广播触发 Supertag tag_created 事件
             console.log(`[AddSupertag] ⚡ 联动广播 triggerConditionalCommands(#${cleanTag}, tag_created)...`);
             await triggerConditionalCommands(targetBlockId, cleanTag, "tag_created");
             if (siblingId && siblingId !== targetBlockId) {

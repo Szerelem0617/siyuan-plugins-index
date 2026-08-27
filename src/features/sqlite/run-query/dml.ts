@@ -12,6 +12,19 @@ import {
     parseValuesTuples, 
     cleanIdentifier 
 } from "./tokenizer";
+import { getTypeAvId, getCommandAvId } from "../../command/registration";
+
+function assertNotSystemTable(tableName: string, avID: string) {
+    const typeAvId = getTypeAvId();
+    const commandAvId = getCommandAvId();
+    const cleanLower = tableName.toLowerCase().replace(/_/g, "-");
+    const isSys = cleanLower === "command-db" || cleanLower === "supertag-db" ||
+                  cleanLower === "commanddb" || cleanLower === "supertagdb" ||
+                  (typeAvId && avID === typeAvId) || (commandAvId && avID === commandAvId);
+    if (isSys) {
+        throw new Error(`系统表 "${tableName}" 为受保护的只读系统表，禁止通过 SQL DML 直接写入或修改。请通过命令面板、触发器配置或超级标签管理进行维护。`);
+    }
+}
 
 function packCellValue(kt: string, val: any): any {
     if (kt === "checkbox") {
@@ -84,6 +97,8 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
 
         const avID = resolveTableAvId(tableName);
         if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+
+        assertNotSystemTable(tableName, avID);
 
         const colNames = parseColumnList(colsClause);
         const tuples = parseValuesTuples(valsClause);
@@ -260,6 +275,7 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
         
         const avID = resolveTableAvId(tableName);
         if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+        assertNotSystemTable(tableName, avID);
         
         const rowIDs: string[] = [];
         const singleIdMatch = whereClause.match(/^\s*(?:rowID|id|_itemID)\s*=\s*['"`]([a-zA-Z0-9_\-]+)['"`]\s*$/i);
@@ -344,6 +360,7 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
         
         const avID = resolveTableAvId(tableName);
         if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+        assertNotSystemTable(tableName, avID);
         
         const colNames = parseColumnList(colsClause);
         const tuples = parseValuesTuples(valsClause);
@@ -439,6 +456,7 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
         
         const avID = resolveTableAvId(tableName);
         if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
+        assertNotSystemTable(tableName, avID);
         
         await instantiateAV(avID, true);
         

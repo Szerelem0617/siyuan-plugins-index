@@ -14,6 +14,7 @@
 import { post } from "../../../shared/api-client/request";
 import { getColIDMap } from "../../../shared/utils/av-utils";
 import { sanitizeBlockAttrName } from "../../command/utils/attribute-sanitizer";
+import { slugify, getPhysicalAttrKey } from "./supertag-schema";
 import { supertagAVProjector, registerColumnMeta } from "../projection/supertag-av-projector";
 import { showMessage } from "siyuan";
 import { plugin } from "../../../shared/utils";
@@ -142,14 +143,7 @@ export class SupertagBinder {
                             continue;
                         }
 
-                        let colSlug = "";
-                        if (/^[a-zA-Z0-9_-]+$/.test(colName.trim())) {
-                            colSlug = colName.trim().toLowerCase().replace(/_/g, "-");
-                        } else {
-                            // 中文或特殊字符列名：使用安全的 Key ID 映射 custom-<tag>-k-<keyId>
-                            const cleanColId = colId.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-");
-                            colSlug = `k-${cleanColId}`;
-                        }
+                        const colSlug = slugify(colName);
 
                         // 注册列元数据供 Inspector 与虚拟表渲染中文 label
                         registerColumnMeta(rootTag, colSlug, {
@@ -163,7 +157,7 @@ export class SupertagBinder {
                             type: colType
                         });
 
-                        const attrKey = `custom-${rootTag}-${colSlug}`;
+                        const attrKey = getPhysicalAttrKey(rootTag, colSlug);
 
                         const subTagVal = config?.mappedValue !== undefined
                             ? String(config.mappedValue).trim()

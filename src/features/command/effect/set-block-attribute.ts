@@ -140,12 +140,37 @@ export async function setBlockAttribute(
         throw new Error("[SetBlockAttribute] 缺少要设置的属性 (attrs)");
     }
 
-    const cleanTag = (context?.supertag || "").replace(/#/g, "").trim().toLowerCase();
+    let cleanTag = (context?.supertag || params?.supertag || "").replace(/#/g, "").trim().toLowerCase();
+    if (!cleanTag) {
+        try {
+            const { globalSupertagsCache } = await import("../registration");
+            const cachedTags = globalSupertagsCache.get(rawId);
+            if (cachedTags && cachedTags.length > 0) {
+                cleanTag = cachedTags[0].toLowerCase();
+            }
+        } catch (_) {}
+    }
+
     const finalAttrs: Record<string, string> = {};
+    const { preflightSupertagProperty } = await import("../../unified-attributes/core/supertag-schema");
 
     for (const [rawK, rawV] of Object.entries(rawAttrsMap)) {
-        const cleanAttrName = resolveNamespacedAttrName(rawK, context);
-        finalAttrs[cleanAttrName] = rawV !== undefined && rawV !== null ? String(rawV) : "";
+        const rawKTrimmed = rawK.trim();
+        const isNative = ["bookmark", "name", "alias", "memo"].includes(rawKTrimmed.toLowerCase());
+        const isGlobal = rawKTrimmed.toLowerCase().startsWith("global.") || rawKTrimmed.toLowerCase().startsWith("global-");
+
+        if (cleanTag && !isNative && !isGlobal) {
+            // 🌟 预判断网关：JIT 自动建库、自动扩列、Slug 转写
+            let propName = rawKTrimmed.replace(/^custom-/, "");
+            if (propName.toLowerCase().startsWith(`${cleanTag}.`) || propName.toLowerCase().startsWith(`${cleanTag}_`) || propName.toLowerCase().startsWith(`${cleanTag}-`)) {
+                propName = propName.slice(cleanTag.length + 1);
+            }
+            const preflight = await preflightSupertagProperty(cleanTag, propName, rawV);
+            finalAttrs[preflight.physicalKey] = rawV !== undefined && rawV !== null ? String(rawV) : "";
+        } else {
+            const cleanAttrName = resolveNamespacedAttrName(rawK, context);
+            finalAttrs[cleanAttrName] = rawV !== undefined && rawV !== null ? String(rawV) : "";
+        }
     }
 
     console.log(`[SetBlockAttribute] 🏷️ 正在批量设置块 ${rawId} 属性:`, finalAttrs, `(Supertag: ${cleanTag || 'none'})`);
@@ -185,21 +210,12 @@ export async function setBlockAttribute(
     // 内存虚拟投影联动：若该 Supertag 已建立虚拟投影，同步更新内存 SQLite 热表
     if (cleanTag) {
         try {
+            const { syncBlockToSQLite } = await import("../../unified-attributes/projection/hot-table-engine");
+            await syncBlockToSQLite(rawId);
             const { supertagAVProjector } = await import("../../unified-attributes/projection/supertag-av-projector");
-            const { getSqliteEngine } = await import("../../sqlite/sqlite-manager");
             const boundAvId = supertagAVProjector.getBoundAVId(cleanTag);
             if (boundAvId) {
-                const binding = supertagAVProjector.getBinding(boundAvId);
-                if (binding) {
-                    const { db } = await getSqliteEngine();
-                    for (const [cleanAttrName, rawVal] of Object.entries(finalAttrs)) {
-                        const cleanCol = cleanAttrName.replace(new RegExp(`^custom-${cleanTag}[.-]`), "").replace(/^custom-/, "");
-                        try {
-                            db.run(`UPDATE "${binding.tableName}" SET "${cleanCol}" = ?, _updated = ? WHERE id = ?;`, [rawVal, Date.now(), rawId]);
-                        } catch (_) {}
-                    }
-                    supertagAVProjector.notifyFrontendToRerender(boundAvId, rawId);
-                }
+                supertagAVProjector.notifyFrontendToRerender(boundAvId, rawId);
             }
         } catch (_) {}
     }

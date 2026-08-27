@@ -133,9 +133,8 @@ export async function openSupertagUnifiedConfigByTag(
 
                 // 3. 立即刷新注册表并通知 UI 重新加载
                 try {
-                    const { syncService } = await import("../utils/sync-service");
-                    await syncService.syncSupertagsFromSqlite();
-                    await syncService.refreshSupertagRegistry();
+                    const { refreshSupertagRegistry } = await import("../utils/sync-service");
+                    await refreshSupertagRegistry();
                     window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
                     showMessage(`✓ 已保存 #${cleanTag} 命令配置`);
                 } catch (rErr) {

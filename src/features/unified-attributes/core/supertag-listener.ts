@@ -5,7 +5,7 @@
  */
 
 import { post } from "../../../shared/api-client/request";
-import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../../command/registration";
+import { SUPERTAG_REGISTRY, globalSupertagsCache, getTypeAvId } from "../../command/registration";
 import { getGlobalTypeConfigs } from "../../av/av-setting/db-config";
 import { type TypeConfig } from "../../av/av-setting/types";
 import { parseSupertags, diffSupertags, cleanTagString, tagCache } from "./supertag-diff";
@@ -15,6 +15,7 @@ import { SupertagRenderer } from "../renderer/SupertagRenderer";
 import { commandRegistry } from "../../command/registry/command-registry";
 import { encodeBtnHref } from "../../command/global-registration/inline-button";
 import { supertagAVProjector } from "../projection/supertag-av-projector";
+import { SYSTEM_EXCLUDED_SUPERTAGS, isIdLike } from "./supertag-entity";
 
 export class SupertagMonitor {
     private dataRegistry: TypeConfig[] = [];
@@ -22,13 +23,18 @@ export class SupertagMonitor {
     private queueTimer: any = null;
     private plugin: any = null;
     private wsHandler: any = null;
+    private dbSyncDebounceTimer: any = null;
 
     public init(plugin: any) {
         this.plugin = plugin;
         this.wsHandler = (event: any) => {
             const detail = event?.detail || event;
             const cmd = detail?.cmd;
-            if (cmd === "transactions" || cmd === "updateBlock" || cmd === "doOperations" || cmd === "setBlockAttrs" || cmd === "insertBlock") {
+
+            if (cmd === "databaseIndexCommit" || cmd === "transactions" || cmd === "updateBlock" || cmd === "doOperations" || cmd === "setBlockAttrs" || cmd === "insertBlock") {
+                // 监听思源数据库与块数据变化广播，防抖触发 supertag-db 状态同步与自愈
+                this.triggerSupertagDbSync();
+
                 const txList = Array.isArray(detail?.data) ? detail.data : [detail?.data];
                 for (const tx of txList) {
                     const ops = tx?.doOperations || (Array.isArray(tx) ? tx : []);
@@ -57,7 +63,25 @@ export class SupertagMonitor {
         }
     }
 
+    private triggerSupertagDbSync() {
+        if (this.dbSyncDebounceTimer) {
+            clearTimeout(this.dbSyncDebounceTimer);
+        }
+        this.dbSyncDebounceTimer = setTimeout(async () => {
+            try {
+                const { refreshSupertagRegistry } = await import("../../command/utils/sync-service");
+                await refreshSupertagRegistry();
+            } catch (err) {
+                console.error("[SupertagListener] refreshSupertagRegistry 异常:", err);
+            }
+        }, 400);
+    }
+
     public destroy() {
+        if (this.dbSyncDebounceTimer) {
+            clearTimeout(this.dbSyncDebounceTimer);
+            this.dbSyncDebounceTimer = null;
+        }
         if (this.plugin?.eventBus && this.wsHandler) {
             this.plugin.eventBus.off("ws-main", this.wsHandler);
             this.wsHandler = null;
@@ -340,9 +364,16 @@ export class SupertagMonitor {
             );
 
             let targetConfig: TypeConfig | null = null;
-            const prefAvId = supertagBinder.getPref(cleanTag);
+            let prefAvId = supertagBinder.getPref(cleanTag);
 
-            if (prefAvId && prefAvId !== "disabled" && prefAvId !== "enabled") {
+            if (!prefAvId || prefAvId === "disabled" || prefAvId === "enabled") {
+                try {
+                    const { ensureSupertagDatabase } = await import("./supertag-schema");
+                    prefAvId = await ensureSupertagDatabase(cleanTag);
+                } catch (_) {}
+            }
+
+            if (prefAvId) {
                 targetConfig = this.dataRegistry.find(c => c.avId === prefAvId) || {
                     typeName: cleanTag,
                     avId: prefAvId,

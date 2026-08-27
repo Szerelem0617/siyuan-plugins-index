@@ -132,73 +132,18 @@
             const tagName = group.typeName;
             showMessage(`正在为 #${tagName} 在 data-dbs 中创建同名数据库...`, 3000, "info");
             
-            // 1. 获取目标笔记本 (优先 IndexOS 笔记本，否则首个打开的笔记本)
-            const nbRes = await post("/api/notebook/lsNotebooks", {});
-            const notebooks = nbRes?.notebooks || [];
-            const targetNotebook = notebooks.find((n: any) => n.name === NOTEBOOK_NAME && !n.closed) || notebooks.find((n: any) => !n.closed) || notebooks[0];
-            if (!targetNotebook) {
-                showMessage("未找到可用笔记本", 4000, "error");
+            const { ensureSupertagDatabase } = await import("../core/supertag-schema");
+            const avId = await ensureSupertagDatabase(tagName);
+            if (!avId) {
+                showMessage("创建数据库失败", 4000, "error");
                 return;
             }
-
-            // 2. 确保 /data-dbs 页面存在并获取其文档 ID (直接在 data-dbs 页面内追加数据库块，不新建子页面)
-            const dataDbsDocId = await getOrCreateDataDbsParentDoc(targetNotebook.id);
-            if (!dataDbsDocId) {
-                showMessage("获取 data-dbs 页面失败", 4000, "error");
-                return;
-            }
-
-            // 3. 使用 DDL 引擎直接在 data-dbs 页面内追加创建 Attribute View 数据库 (设置表名、主键与预设列)
-            const { executeWritableSql, runQuery, avIdToTableName } = await import("../../sqlite/sqlite-manager");
-            const ddlSql = `CREATE TABLE "${tagName}" ( "主键" BLOCK, "状态" SELECT('待办', '进行中', '已完成'), "截止日期" DATE );`;
-            const ddlRes = await executeWritableSql(ddlSql, { targetDocId: dataDbsDocId });
-
-            const avId = ddlRes?.avId || "";
-            const avBlockId = ddlRes?.blockId || "";
-
-            // 5. 设置 AV 块自定义属性与 supertag-db 关联
-            if (avBlockId) {
-                try {
-                    await post("/api/attr/setBlockAttrs", {
-                        id: avBlockId,
-                        attrs: {
-                            "custom-supertag-tag": tagName,
-                            "custom-supertag-id": tagName,
-                            name: tagName,
-                            "custom-av-name": tagName
-                        }
-                    });
-                } catch (_) {}
-            }
-
-            // 6. 同步更新 supertag-db 系统表 (实例化表与本地内存表)
-            const { getTypeAvId } = await import("../../command/registration");
-            const typeAvId = getTypeAvId();
-            if (typeAvId) {
-                try {
-                    const exactTableName = avIdToTableName(typeAvId);
-                    const escapeSql = (str: string) => (str || "").replace(/'/g, "''");
-                    const dmlSql = `INSERT INTO "${exactTableName}" ("主键", "Related av") VALUES ('${escapeSql(tagName)}', '${escapeSql(avId)}') ON CONFLICT("主键") DO UPDATE SET "Related av" = EXCLUDED."Related av"`;
-                    await runQuery(dmlSql);
-                } catch (dmlErr) {
-                    console.error("[CreateDatabase] DML update supertag-db error:", dmlErr);
-                }
-            }
-            
-            // 7. 自动双向绑定 Supertag 与即时响应 UI
-            await supertagBinder.setPref(tagName, avId);
-            supertagAVProjector.bindTagToAV(tagName, avId);
 
             group.selectedAvId = avId;
             group.selectedAvName = tagName;
             group.hasDataSchema = true;
             group.isReady = true;
             supertagList = [...supertagList];
-
-            // 8. 实时刷新注册表并分发事件
-            const { refreshSupertagRegistry } = await import("../../command/utils/sync-service");
-            await refreshSupertagRegistry();
-            window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
 
             await loadData();
             showMessage(`✓ 成功为 #${tagName} 在 data-dbs 中创建并关联同名数据库！`, 3000);
