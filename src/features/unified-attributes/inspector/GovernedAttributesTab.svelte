@@ -39,9 +39,17 @@
             newTagFieldKey = "";
             return;
         }
-        const cleanKey = newTagFieldKey.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+        const cleanKey = newTagFieldKey.trim().replace(/^custom-/, "");
+        if (!cleanKey || !/^[a-z][a-z0-9-]*$/.test(cleanKey)) {
+            showMessage("属性名只能包含小写英文字母、数字和连字符，并且以小写英文字母开头", 4000, "error");
+            return;
+        }
         const attrKey = `custom-${tag}-${cleanKey}`;
-        await updateBlockAttributeValue(blockId, attrKey, "");
+        const ok = await updateBlockAttributeValue(blockId, attrKey, "");
+        if (!ok) {
+            showMessage("属性名只能包含小写英文字母、数字和连字符，并且以小写英文字母开头", 4000, "error");
+            return;
+        }
         addingTagFieldFor = null;
         newTagFieldKey = "";
         await onReload();
@@ -199,7 +207,7 @@
                                         type="text"
                                         class="b3-text-field"
                                         style="font-size: 11px; height: 22px; flex: 1;"
-                                        placeholder="属性名 (如 cost, due)"
+                                        placeholder="属性名，如 item-1"
                                         bind:value={newTagFieldKey}
                                         on:keydown={e => e.key === 'Enter' && handleAddNewTagField(group.tag)}
                                     />

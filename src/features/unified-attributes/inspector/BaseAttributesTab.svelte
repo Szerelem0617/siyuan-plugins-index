@@ -16,16 +16,35 @@
         if (!blockId) return;
         const key = newCustomKey.trim();
         const val = newCustomVal.trim();
-        if (!key) return;
-        const rawKey = ["bookmark", "name", "alias", "memo"].includes(key.toLowerCase())
-            ? key.toLowerCase()
-            : (key.startsWith("custom-") ? key : `custom-${key}`);
-        await updateBlockAttributeValue(blockId, rawKey, val);
+        if (!key) {
+            showMessage("请输入属性名", 3000, "info");
+            return;
+        }
+
+        const isBuiltin = ["bookmark", "name", "alias", "memo"].includes(key.toLowerCase());
+        let suffix = key;
+        if (suffix.startsWith("custom-")) {
+            suffix = suffix.slice(7);
+        }
+
+        // 思源块自定义属性命名规范校验：只能包含小写英文字母、数字和连字符，并且以小写英文字母开头
+        if (!isBuiltin && !/^[a-z][a-z0-9-]*$/.test(suffix)) {
+            showMessage("属性名只能包含小写英文字母、数字和连字符，并且以小写英文字母开头", 4000, "error");
+            return;
+        }
+
+        const rawKey = isBuiltin ? key.toLowerCase() : (key.startsWith("custom-") ? key : `custom-${suffix}`);
+        const ok = await updateBlockAttributeValue(blockId, rawKey, val);
+        if (!ok) {
+            showMessage("属性名只能包含小写英文字母、数字和连字符，并且以小写英文字母开头", 4000, "error");
+            return;
+        }
+
         newCustomKey = "";
         newCustomVal = "";
         isAddingCustom = false;
         await onReload();
-        showMessage(`✓ 已新增属性: ${key}`);
+        showMessage(`✓ 已新增属性: ${rawKey.replace(/^custom-/, "")}`);
     }
 
     async function handleRemoveCustomField(rawKey: string) {
@@ -134,7 +153,7 @@
                             type="text"
                             class="b3-text-field"
                             style="font-size: 11px; flex: 1;"
-                            placeholder="属性名 (如 weight, cost)"
+                            placeholder="属性名，如 item-1"
                             bind:value={newCustomKey}
                         />
                         <input
