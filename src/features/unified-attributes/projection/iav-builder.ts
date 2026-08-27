@@ -1,5 +1,5 @@
 import { getColumnMeta } from "./types";
-import { getSupertagSchema, type SupertagFieldSchema } from "../core/supertag-schema";
+import { getSupertagSchema, decodeAttrSlug, type SupertagFieldSchema } from "../core/supertag-schema";
 
 /**
  * 从 SQLite 热表结果集组装标准的 IAV 视图对象
@@ -71,7 +71,7 @@ export function buildVirtualIAVFromSQL(
         }
 
         const meta = getColumnMeta(tagName, attr);
-        let displayName = schemaField?.label || meta?.name || attr;
+        let displayName = schemaField?.label || meta?.name || decodeAttrSlug(attr);
         if (attr === "status" || attr === "index-task") displayName = "状态";
         else if (attr === "priority") displayName = "优先级";
         else if (attr === "due" || attr === "due_date") displayName = "截止时间";

@@ -122,12 +122,7 @@ export async function persistOutputVariablesToLayer4(
             const binding = supertagAVProjector.getBinding(boundAvId);
             if (binding) {
                 try {
-                    const { db } = await getSqliteEngine();
-                    for (const [varName, valStr] of activeEntries) {
-                        try {
-                            db.run(`UPDATE "${binding.tableName}" SET "${varName}" = ?, _updated = ? WHERE id = ?;`, [valStr, Date.now(), blockId]);
-                        } catch (_) {}
-                    }
+                    await supertagAVProjector.syncBlockToVirtualTable(blockId, cleanTag, customAttrs);
                     supertagAVProjector.notifyFrontendToRerender(boundAvId, blockId);
                 } catch (_) {}
             }

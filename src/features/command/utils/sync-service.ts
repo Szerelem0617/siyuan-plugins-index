@@ -402,7 +402,6 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             if (typeTagRaw) {
                 const cleanTag = String(typeTagRaw).replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
                 const avId = relatedAvText ? String(relatedAvText).trim() : "";
-                console.log(`[SupertagSync] Row processed: #${cleanTag}, manualLen=${manualText.length}, autoLen=${autoText.length}, relatedAv=${avId}`);
 
                 // 0. 同步 Related av 关联数据库（若未绑定则自动建库并强绑定；若已绑定则检查重命名联动）
                 if (avId) {

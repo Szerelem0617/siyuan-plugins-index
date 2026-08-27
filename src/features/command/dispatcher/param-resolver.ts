@@ -70,7 +70,6 @@ export async function resolveCommandParams(
     const result: Record<string, unknown> = {};
     const vars = context.vars || {};
     const autoContextInfo = context.supertag ? getSupertagAutoContextInfo(context.supertag, def.id) : {};
-    console.log(`[ParamResolver-Debug] cmd='${def.id}', supertag='${context.supertag}', autoContextInfo=`, autoContextInfo, "vars=", vars);
 
     for (const schema of def.params) {
         const layer3Val = layer3Params[schema.key];
@@ -88,7 +87,6 @@ export async function resolveCommandParams(
             let autoVal: any = undefined;
             if (autoMatch && autoMatch.matched && autoMatch.token) {
                 autoVal = await resolveTemplate(autoMatch.token, context);
-                console.log(`[ParamResolver-Debug] param '${schema.key}' matched token '${autoMatch.token}', resolved to: '${autoVal}'`);
             }
 
             // 防守双重保障：若 autoVal 尚未获取且当前参数是 ID 参数，实时白盒感应物理属性与 vars 中的 Block ID 出参
@@ -96,7 +94,6 @@ export async function resolveCommandParams(
                 for (const [vKey, vVal] of Object.entries(vars)) {
                     if ((vKey.startsWith("var.") || vKey.startsWith("custom-") || vKey === "createdblock" || vKey === "id" || vKey === "last_id") && typeof vVal === "string" && /^\d{14}-[a-z0-9]{7}$/.test(vVal.trim())) {
                         autoVal = vVal.trim();
-                        console.log(`[ParamResolver-Debug] fallback resolved param '${schema.key}' from vars['${vKey}'] -> '${autoVal}'`);
                         break;
                     }
                 }
@@ -104,7 +101,6 @@ export async function resolveCommandParams(
                     for (const attr of Array.from(context.blockEl.attributes)) {
                         if (attr.name.startsWith("custom-") && attr.name !== "custom-supertags" && typeof attr.value === "string" && /^\d{14}-[a-z0-9]{7}$/.test(attr.value.trim())) {
                             autoVal = attr.value.trim();
-                            console.log(`[ParamResolver-Debug] fallback resolved param '${schema.key}' from blockEl attr '${attr.name}' -> '${autoVal}'`);
                             break;
                         }
                     }

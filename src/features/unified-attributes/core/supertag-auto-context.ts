@@ -67,7 +67,6 @@ export function getSupertagConditionalScript(supertagLabel: string, explicitCond
  */
 export function getSupertagOutputPool(conditionalStr: string): { key: string; token: string; type: string }[] {
     const pool: { key: string; token: string; type: string }[] = [];
-    console.log(`[AutoContext-Debug] getSupertagOutputPool input conditionalStr:`, conditionalStr ? (conditionalStr.slice(0, 80) + "...") : "<empty>");
     if (!conditionalStr) return pool;
 
     const commandRefs: string[] = [];
@@ -94,12 +93,10 @@ export function getSupertagOutputPool(conditionalStr: string): { key: string; to
             commandRefs.push(extractedCmdId);
         }
     }
-    console.log(`[AutoContext-Debug] getSupertagOutputPool parsed commandRefs from script:`, commandRefs);
 
     // 3. 提取所有被调用命令在 Command-DB 中映射的真实 token
     for (const ref of commandRefs) {
         const cmdDef = commandRegistry.findByNameOrId(ref) || commandRegistry.getCommand(ref);
-        console.log(`[AutoContext-Debug] Looking up command '${ref}': found=${Boolean(cmdDef)}, outputs=${JSON.stringify(cmdDef?.outputs || [])}`);
         if (cmdDef && cmdDef.outputs && Array.isArray(cmdDef.outputs)) {
             for (const out of cmdDef.outputs) {
                 const token = getCommandOutputToken(cmdDef.id, out.key, out.default);
@@ -127,7 +124,6 @@ export function getSupertagOutputPool(conditionalStr: string): { key: string; to
         }
     }
 
-    console.log(`[AutoContext-Debug] Final pool computed:`, pool);
     return pool;
 }
 
@@ -143,13 +139,10 @@ export function getSupertagAutoContextInfo(
     const result: Record<string, AutoContextMatch> = {};
     const cmdDef = commandRegistry.getCommand(commandId);
     if (!cmdDef || !cmdDef.params) {
-        console.log(`[AutoContext-Debug] getSupertagAutoContextInfo cmdDef not found or has no params for: ${commandId}`);
         return result;
     }
 
     const pool = getSupertagOutputPool(conditionalStr);
-    console.log(`[AutoContext-Debug] Tag #${supertagLabel} for cmd ${commandId} pool size=${pool.length}:`, pool);
-
     if (pool.length === 0) return result;
 
     for (const param of cmdDef.params) {

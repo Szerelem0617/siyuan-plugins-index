@@ -73,11 +73,10 @@ const COMMON_LABEL_SLUGS: Record<string, string> = {
 };
 
 /**
- * 确定性生成合规的 ASCII Slug
- * 规则：首字符必须是小写字母，后续仅支持小写字母、数字和连字符 -
+ * 1. 任意字符串 -> 100% 合规且无损可逆的 ASCII 属性 Slug (满足以小写字母开头，仅含 a-z, 0-9, -)
  */
-export function slugify(label: string): string {
-    const raw = (label || "").trim();
+export function encodeAttrSlug(rawName: string): string {
+    const raw = (rawName || "").trim();
     if (!raw) return "field";
 
     // 1. 检查常用预设词典
@@ -85,30 +84,54 @@ export function slugify(label: string): string {
         return COMMON_LABEL_SLUGS[raw];
     }
 
-    // 2. 尝试提取英文与数字
-    let cleaned = raw
-        .toLowerCase()
-        .replace(/[\s_\/\.]+/g, "-")
-        .replace(/[^a-z0-9\-]/g, "")
-        .replace(/\-+/g, "-")
-        .replace(/^\-+|\-+$/g, "");
+    // 2. 若原本就是合规的 ASCII 小写字母/数字/连字符（如 "createdblock", "status", "due-date"）
+    // 且以小写字母开头，直接保留（人类高可读）
+    if (/^[a-z][a-z0-9\-]*$/.test(raw)) {
+        return raw;
+    }
 
-    // 3. 如果提取到了有效英文字符串
-    if (cleaned.length > 0) {
-        if (/^[a-z]/.test(cleaned)) {
-            return cleaned;
+    // 3. 含有中文、Emoji、空格、大写字母或特殊符号 -> 转换为 UTF-8 字节十六进制，前缀 u-
+    const bytes = new TextEncoder().encode(raw);
+    const hex = Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+
+    return `u-${hex}`;
+}
+
+/**
+ * 2. ASCII 属性 Slug -> 100% 无损还原原始中英文/Emoji 字段名 (解码)
+ */
+export function decodeAttrSlug(slug: string): string {
+    if (!slug) return "";
+    
+    // 如果是 Unicode Hex 编码前缀 u-
+    if (slug.startsWith("u-")) {
+        const hex = slug.slice(2);
+        try {
+            const bytes = new Uint8Array(
+                (hex.match(/.{1,2}/g) || []).map(byte => parseInt(byte, 16))
+            );
+            return new TextDecoder().decode(bytes);
+        } catch {
+            return slug;
         }
-        return `f-${cleaned}`;
     }
 
-    // 4. 若全为中文或特殊符号，计算确定性短 Hash Slug
-    let hash = 0;
-    for (let i = 0; i < raw.length; i++) {
-        hash = (hash << 5) - hash + raw.charCodeAt(i);
-        hash |= 0;
+    // 检查反向预设词典
+    for (const [zh, en] of Object.entries(COMMON_LABEL_SLUGS)) {
+        if (en === slug) return zh;
     }
-    const hex = Math.abs(hash).toString(36);
-    return `f-${hex}`;
+
+    // 否则直接就是原生的 ASCII 字段名
+    return slug;
+}
+
+/**
+ * 兼容别名：slugify 统一采用 encodeAttrSlug
+ */
+export function slugify(label: string): string {
+    return encodeAttrSlug(label);
 }
 
 /**
@@ -116,23 +139,23 @@ export function slugify(label: string): string {
  */
 export function getPhysicalAttrKey(tagName: string, slug: string): string {
     const cleanTag = tagName.replace(/^#+/, "").trim().toLowerCase();
-    const cleanSlug = slugify(slug);
+    const cleanSlug = encodeAttrSlug(slug);
     return `custom-${cleanTag}-${cleanSlug}`;
 }
 
 /**
- * 物理属性 Key 解析: custom-task-status -> { tag: "task", slug: "status" }
+ * 物理属性 Key 解析: custom-task-status -> { tag: "task", slug: "status", originalName: "状态" }
  */
-export function parsePhysicalAttrKey(rawKey: string): { tag: string; slug: string } | null {
+export function parsePhysicalAttrKey(rawKey: string): { tag: string; slug: string; originalName: string } | null {
     if (!rawKey || !rawKey.startsWith("custom-")) return null;
     const body = rawKey.slice(7); // 去掉 custom-
     const firstDash = body.indexOf("-");
     if (firstDash === -1) {
-        return { tag: "", slug: body };
+        return { tag: "", slug: body, originalName: decodeAttrSlug(body) };
     }
     const tag = body.slice(0, firstDash);
     const slug = body.slice(firstDash + 1);
-    return { tag, slug };
+    return { tag, slug, originalName: decodeAttrSlug(slug) };
 }
 
 const inFlightCreations = new Map<string, Promise<string>>();

@@ -39,9 +39,7 @@ class AVEventHandler {
         // 若点击的是系统表（Command-DB / Type-DB），则不在这里拦截，交由 av-interaction 专有监听器处理
         const commandAvId = getCommandAvId();
         const typeAvId = getTypeAvId();
-        console.log("[AV-Debug] ctx.avId:", ctx.avId, "commandAvId:", commandAvId, "typeAvId:", typeAvId);
         if (ctx.avId === commandAvId || ctx.avId === typeAvId) {
-            console.log("[AV-Debug] Bypassing events.ts for system table");
             return null;
         }
 

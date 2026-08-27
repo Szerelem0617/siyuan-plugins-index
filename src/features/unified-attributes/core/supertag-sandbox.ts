@@ -21,10 +21,8 @@ export async function executeTsScript(scriptText: string, context: CommandContex
         };
 
         const dispatch = async (commandId: string, params?: any) => {
-            console.log(`[Supertag-Sandbox-Debug] 🚀 dispatch called: commandId='${commandId}', params=`, params, "context.vars before=", context.vars);
             // TS 脚本参数 = #1 Pipeline 人为规划（最高优先级）
             const res = await dispatchCommand(commandId, null, context, { manual: params || {} });
-            console.log(`[Supertag-Sandbox-Debug] 🏁 dispatch result for '${commandId}':`, res);
 
             if (!context.vars) context.vars = {};
             if (res && typeof res === "object") {
@@ -47,7 +45,6 @@ export async function executeTsScript(scriptText: string, context: CommandContex
 
             // 自动把命令产出的变量（出参）写回/建列落盘到 Layer 4 数据库
             const targetBlockId = context.blockEl?.getAttribute("data-node-id") || getBlockId(context);
-            console.log(`[Supertag-Sandbox-Debug] 💾 Preparing to persist vars: targetBlockId='${targetBlockId}', supertag='${context.supertag}', vars=`, context.vars);
             if (targetBlockId && context.supertag && context.vars) {
                 await persistOutputVariablesToLayer4(targetBlockId, context.supertag, context.vars);
             }
