@@ -74,46 +74,88 @@ export interface SupertagDbRecord {
     relatedAv: string;
 }
 
+export const isIdLike = (str: string): boolean => {
+    if (!str) return true;
+    const s = str.trim().toLowerCase().replace(/^#+/, "");
+    if (!s) return true;
+    return /^av[_\-]/i.test(s) || 
+           /^\d{14}/.test(s) || 
+           /^[a-z0-9]{14,}[_\-][a-z0-9]+$/i.test(s) ||
+           /^unnamed/i.test(s) ||
+           /^未命名/.test(s);
+};
+
+export const SYSTEM_EXCLUDED_SUPERTAGS = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag", "datadbs", "data-dbs"]);
+
 /**
  * 结构化获取 supertag-db 系统表中的所有 Supertag 记录 (单一真理源)
  */
 export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
     const records: SupertagDbRecord[] = [];
-    const isIdLike = (str: string) => !str || /^av_\d{14}/i.test(str) || /^\d{14}-[a-z0-9]{7}$/i.test(str);
-    const SYSTEM_EXCLUDED = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag"]);
+    const SYSTEM_EXCLUDED = SYSTEM_EXCLUDED_SUPERTAGS;
     
-    // 1. 优先尝试从内存 SQLite 引擎查询 "supertag-db" (已实例化状态)
+    // 1. 优先尝试从内存 SQLite 引擎查询活跃的 "supertag-db" (支持 av_${typeAvId} 或系统表 supertag-db)
     try {
+        const { getTypeAvId } = await import("../../command/registration");
+        const typeAvId = getTypeAvId();
         const { db } = await getSqliteEngine();
-        const check = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='supertag-db';`);
-        if (check.length > 0 && check[0].values.length > 0) {
-            const pragma = db.exec(`PRAGMA table_info("supertag-db");`);
-            const colNames = pragma[0].values.map((v: any) => String(v[1]).toLowerCase());
-            const primaryKeyCol = colNames.includes("主键") ? "主键" : (colNames.includes("supertag") ? "supertag" : colNames[0]);
-            const manualCol = colNames.includes("manual") ? "manual" : (colNames.includes("icon menu") ? "icon menu" : null);
-            const autoCol = colNames.includes("auto") ? "auto" : (colNames.includes("conditional") ? "conditional" : null);
-            const relatedAvCol = colNames.includes("related_av") ? "related_av" : (colNames.includes("relatedav") ? "relatedav" : null);
 
-            let sql = `SELECT rowid, "${primaryKeyCol}"`;
-            sql += manualCol ? `, "${manualCol}"` : `, ''`;
-            sql += autoCol ? `, "${autoCol}"` : `, ''`;
-            sql += relatedAvCol ? `, "${relatedAvCol}"` : `, ''`;
-            sql += ` FROM "supertag-db";`;
+        if (typeAvId) {
+            const typeTableName = `av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+            const check = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${typeTableName}';`);
+            if (check.length > 0 && check[0].values.length > 0) {
+                const schemaRows = db.exec(`SELECT col_name, key_name, key_type FROM _av_schema WHERE av_id = ?;`, [typeAvId]);
+                let primaryKeyCol = "supertag";
+                let manualCol: string | null = null;
+                let autoCol: string | null = null;
+                let relatedAvCol: string | null = null;
 
-            const rows = db.exec(sql);
-            if (rows.length > 0 && rows[0].values.length > 0) {
-                for (const r of rows[0].values) {
-                    const rowId = String(r[0] || "");
-                    const typeTag = String(r[1] || "").replace(/^#+/, "").trim().toLowerCase();
-                    const manual = String(r[2] || "").trim();
-                    const auto = String(r[3] || "").trim();
-                    const relatedAv = String(r[4] || "").trim();
-                    if (typeTag && !isIdLike(typeTag) && !SYSTEM_EXCLUDED.has(typeTag)) {
-                        records.push({ rowId, typeTag, manual, auto, relatedAv });
+                if (schemaRows.length > 0 && schemaRows[0].values.length > 0) {
+                    for (const s of schemaRows[0].values) {
+                        const colName = String(s[0]);
+                        const keyName = String(s[1] || "").toLowerCase();
+                        const keyType = String(s[2] || "").toLowerCase();
+
+                        if (keyType === "block") {
+                            primaryKeyCol = colName;
+                        } else if (keyName === "manual" || keyName.includes("manual") || keyName.includes("icon menu")) {
+                            manualCol = colName;
+                        } else if (keyName === "auto" || keyName.includes("auto") || keyName.includes("conditional")) {
+                            autoCol = colName;
+                        } else if (keyName === "related av" || keyName === "related_av" || keyName.includes("related")) {
+                            relatedAvCol = colName;
+                        }
                     }
+                } else {
+                    const pragma = db.exec(`PRAGMA table_info("${typeTableName}");`);
+                    const cols = pragma[0].values.map((v: any) => String(v[1]));
+                    primaryKeyCol = cols.find(c => c.toLowerCase() === "主键" || c.toLowerCase() === "supertag") || (cols[2] || cols[0]);
+                    manualCol = cols.find(c => c.toLowerCase().includes("manual")) || null;
+                    autoCol = cols.find(c => c.toLowerCase().includes("auto") || c.toLowerCase().includes("conditional")) || null;
+                    relatedAvCol = cols.find(c => c.toLowerCase().includes("related")) || null;
                 }
-                if (records.length > 0) {
-                    return records;
+
+                let sql = `SELECT rowID, "${primaryKeyCol}"`;
+                sql += manualCol ? `, "${manualCol}"` : `, ''`;
+                sql += autoCol ? `, "${autoCol}"` : `, ''`;
+                sql += relatedAvCol ? `, "${relatedAvCol}"` : `, ''`;
+                sql += ` FROM "${typeTableName}";`;
+
+                const rows = db.exec(sql);
+                if (rows.length > 0 && rows[0].values.length > 0) {
+                    for (const r of rows[0].values) {
+                        const rowId = String(r[0] || "");
+                        const typeTag = String(r[1] || "").replace(/^#+/, "").trim().toLowerCase();
+                        const manual = String(r[2] || "").trim();
+                        const auto = String(r[3] || "").trim();
+                        const relatedAv = String(r[4] || "").trim();
+                        if (typeTag && !isIdLike(typeTag) && !SYSTEM_EXCLUDED.has(typeTag)) {
+                            records.push({ rowId, typeTag, manual, auto, relatedAv });
+                        }
+                    }
+                    if (records.length > 0) {
+                        return records;
+                    }
                 }
             }
         }
@@ -139,7 +181,7 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
                     const columns: any[] = view?.columns || [];
                     const manualIdx = columns.findIndex((c: any) => c.name?.toLowerCase() === "manual");
                     const autoIdx = columns.findIndex((c: any) => c.name?.toLowerCase() === "auto" || c.name?.toLowerCase() === "conditional");
-                    const relAvIdx = columns.findIndex((c: any) => c.name?.toLowerCase() === "related_av");
+                    const relAvIdx = columns.findIndex((c: any) => c.name?.toLowerCase() === "related av" || c.name?.toLowerCase() === "related_av");
                     for (const row of rows) {
                         const rowId = row.id || "";
                         const typeTagRaw = row.cells?.[0]?.value?.text?.content || row.cells?.[0]?.value?.block?.content || "";
@@ -189,8 +231,7 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
  * 双核心真理源：1. supertag-db 系统表  2. 工作区中建立的所有 AV 数据库
  */
 export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinition[]> {
-    const isIdLike = (str: string) => !str || /^av_\d{14}/i.test(str) || /^\d{14}-[a-z0-9]{7}$/i.test(str);
-    const SYSTEM_EXCLUDED = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag"]);
+    const SYSTEM_EXCLUDED = SYSTEM_EXCLUDED_SUPERTAGS;
 
     // 1. 读取第一源：supertag-db 系统表 (未实例化时读取 seed-data.ts 常量)
     const supertagDbRecords = await getSupertagDbRecords();
@@ -229,16 +270,6 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
             }
             if (!matchedTag && dbNameTag && !isIdLike(dbNameTag) && dbNameTag !== "unnamed database" && dbNameTag !== "unnamed") {
                 matchedTag = dbNameTag;
-                // 自愈持久化自定义属性
-                if (b.blockId) {
-                    post("/api/attr/setBlockAttrs", {
-                        id: b.blockId,
-                        attrs: {
-                            "custom-supertag-tag": matchedTag,
-                            "custom-supertag-id": matchedTag
-                        }
-                    }).catch(() => {});
-                }
             }
 
             if (matchedTag && !isIdLike(matchedTag) && !SYSTEM_EXCLUDED.has(matchedTag)) {

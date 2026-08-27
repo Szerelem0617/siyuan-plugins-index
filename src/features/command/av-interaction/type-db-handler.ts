@@ -94,13 +94,14 @@ export async function openSupertagUnifiedConfigByTag(
                 // 1. 如果存在思源 AV 实例化表 (typeAvId)，通过统一 DML UPSERT 写入思源 AV 实体行与单元格属性
                 if (typeAvId) {
                     try {
-                        const { runQuery } = await import("../../sqlite/sqlite-manager");
+                        const { runQuery, avIdToTableName } = await import("../../sqlite/sqlite-manager");
+                        const exactTableName = avIdToTableName(typeAvId);
                         const escapeSql = (str: string) => (str || "").replace(/'/g, "''");
                         let dmlSql = "";
                         if (relatedAvId) {
-                            dmlSql = `INSERT INTO "supertag-db" ("主键", "Manual", "Auto", "related_av") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(manual)}', '${escapeSql(auto)}', '${escapeSql(relatedAvId)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto", "related_av" = EXCLUDED."related_av"`;
+                            dmlSql = `INSERT INTO "${exactTableName}" ("主键", "Manual", "Auto", "Related av") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(manual)}', '${escapeSql(auto)}', '${escapeSql(relatedAvId)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto", "Related av" = EXCLUDED."Related av"`;
                         } else {
-                            dmlSql = `INSERT INTO "supertag-db" ("主键", "Manual", "Auto") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(manual)}', '${escapeSql(auto)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto"`;
+                            dmlSql = `INSERT INTO "${exactTableName}" ("主键", "Manual", "Auto") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(manual)}', '${escapeSql(auto)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto"`;
                         }
                         await runQuery(dmlSql);
                     } catch (dmlErr) {
@@ -116,18 +117,29 @@ export async function openSupertagUnifiedConfigByTag(
                         const rowCheck = db.exec(`SELECT rowid FROM "supertag-db" WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`, [cleanTag, cleanTag]);
                         if (rowCheck.length > 0 && rowCheck[0].values.length > 0) {
                             db.run(
-                                `UPDATE "supertag-db" SET "Manual" = ?, "Auto" = ?, "related_av" = COALESCE(NULLIF(?, ''), "related_av"), _updated = ? WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`,
+                                `UPDATE "supertag-db" SET "Manual" = ?, "Auto" = ?, "Related av" = COALESCE(NULLIF(?, ''), "Related av"), _updated = ? WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`,
                                 [manual, auto, relatedAvId, Date.now(), cleanTag, cleanTag]
                             );
                         } else {
                             db.run(
-                                `INSERT INTO "supertag-db" ("主键", "Manual", "Auto", "related_av", _updated) VALUES (?, ?, ?, ?, ?);`,
+                                `INSERT INTO "supertag-db" ("主键", "Manual", "Auto", "Related av", _updated) VALUES (?, ?, ?, ?, ?);`,
                                 [cleanTag, manual, auto, relatedAvId, Date.now()]
                             );
                         }
                     }
                 } catch (sqlErr) {
                     console.error("[Supertag-UnifiedConfig] SQLite memory update error:", sqlErr);
+                }
+
+                // 3. 立即刷新注册表并通知 UI 重新加载
+                try {
+                    const { syncService } = await import("../utils/sync-service");
+                    await syncService.syncSupertagsFromSqlite();
+                    await syncService.refreshSupertagRegistry();
+                    window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
+                    showMessage(`✓ 已保存 #${cleanTag} 命令配置`);
+                } catch (rErr) {
+                    console.warn("[Supertag-UnifiedConfig] 刷新注册表异常:", rErr);
                 }
             }
         }
@@ -164,7 +176,7 @@ export async function handleTypeDbAltClick(
             const clickedColName = checkColRes[0].values[0][1];
             if (keyName === "Auto" || keyName === "Conditional") {
                 isConditionalCol = true;
-            } else if (keyName === "related_av" || clickedColName.toLowerCase().includes("related") || clickedColName.toLowerCase().includes("database") || clickedColName.includes("数据库")) {
+            } else if (keyName === "Related av" || keyName === "related_av" || clickedColName.toLowerCase().includes("related") || clickedColName.toLowerCase().includes("database") || clickedColName.includes("数据库")) {
                 isRelatedAvCol = true;
             }
         }
@@ -305,7 +317,7 @@ async function handleRelatedAvAltClick(
         }
 
         const colNameRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_id = ?`, [avId, colId]);
-        let colName = "related_av";
+        let colName = "Related av";
         if (colNameRes.length > 0 && colNameRes[0].values.length > 0) {
             colName = colNameRes[0].values[0][0];
         }

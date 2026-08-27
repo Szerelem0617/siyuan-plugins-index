@@ -249,13 +249,17 @@ export class SupertagAVProjector {
                 return buildEmptyIAV(avId, binding.tagName, binding.attrNames);
             }
 
+            const { getSupertagSchema } = await import("../core/supertag-schema");
+            const schema = await getSupertagSchema(binding.tagName);
+
             return buildVirtualIAVFromSQL(
                 avId,
                 binding.tagName,
                 binding.tableName,
                 res[0].columns,
                 res[0].values,
-                db
+                db,
+                schema
             );
         } catch (err) {
             console.error(`[SupertagAVProjector] generateVirtualIAVFromSQLite 异常:`, err);

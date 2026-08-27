@@ -9,71 +9,15 @@ import {
     avIdToBlockIdMap, 
     tableSyncTimes, 
     instantiatedAvIdsCache,
-    friendlyTableNameMap
+    friendlyTableNameMap,
+    unregisterFriendlyTableName
 } from "../sqlite-manager";
+import { cleanIdentifier } from "./tokenizer";
 
 export async function triggerAvBlockRender(avID: string) {
-    const blockIds = new Set<string>();
-    
-    // Find all blocks referencing this avID
-    const sqlFind = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%')`;
-    const res = await post("/api/query/sql", { stmt: sqlFind });
-    if (res && res.length > 0) {
-        for (const row of res) {
-            blockIds.add(row.id);
-        }
-    }
-    
-    // Include cached block ID if present
-    const cachedBlockId = avIdToBlockIdMap.get(avID);
-    if (cachedBlockId) {
-        blockIds.add(cachedBlockId);
-    }
-    
-    if (blockIds.size > 0) {
-        console.log(`[SQLiteManager] Found ${blockIds.size} AV blocks to trigger re-render for avID ${avID}:`, Array.from(blockIds));
-        
-        const formatDateStr = (date: Date) => {
-            const pad = (n: number) => n.toString().padStart(2, '0');
-            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-        };
-        
-        for (const avBlockId of blockIds) {
-            // Toggle the block type to a paragraph first to force Siyuan editor to unmount the AV widget
-            console.log(`[SQLiteManager] Force reloading columns by toggling block ${avBlockId}`);
-            await post("/api/block/updateBlock", {
-                id: avBlockId,
-                dataType: "markdown",
-                data: `<p>Refreshing Database UI...</p>`
-            });
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 150));
-        
-        for (const avBlockId of blockIds) {
-            // Then set it back to the Attribute View block
-            await post("/api/block/updateBlock", {
-                id: avBlockId,
-                dataType: "markdown",
-                data: `<div data-type="NodeAttributeView" data-av-type="table" data-av-id="${avID}"></div>`
-            });
-            
-            await post("/api/transactions", {
-                app: "plugin-index",
-                reqId: Date.now(),
-                transactions: [{
-                    doOperations: [{
-                        action: "doUpdateUpdated",
-                        id: avBlockId,
-                        data: formatDateStr(new Date())
-                    }]
-                }]
-            });
-            console.log(`[SQLiteManager] Triggered unmount/remount re-render of block ${avBlockId} for avID ${avID}`);
-        }
-    } else {
-        console.warn(`[SQLiteManager] Failed to find any block ID for avID ${avID} to trigger re-render`);
-    }
+    try {
+        await post("/api/av/renderAttributeView", { id: avID });
+    } catch (_) {}
 }
 
 export interface DDLOptions {
@@ -84,6 +28,32 @@ export interface DDLOptions {
 }
 
 export async function executeDDL(processedSql: string, db: any, options?: DDLOptions): Promise<any> {
+    // ─── 0. DROP TABLE Statement ───
+    const dropMatch = processedSql.match(/^\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*;?\s*$/is);
+    if (dropMatch) {
+        const tableName = cleanIdentifier(dropMatch[1]);
+        const avID = resolveTableAvId(tableName);
+        if (!avID) {
+            if (/IF\s+EXISTS/i.test(processedSql)) {
+                return { success: true, message: `Table '${tableName}' does not exist, skipped.` };
+            }
+            throw new Error(`Table '${tableName}' not found.`);
+        }
+
+        const blockId = avIdToBlockIdMap.get(avID) || avID;
+        await post("/api/block/deleteBlock", { id: blockId });
+        
+        unregisterFriendlyTableName(tableName);
+        avIdToBlockIdMap.delete(avID);
+        tableSyncTimes.delete(avID);
+
+        const tblName = avIdToTableName(avID);
+        try { db.run(`DROP TABLE IF EXISTS "${tblName}";`); } catch (_) {}
+        try { db.run(`DELETE FROM _av_schema WHERE av_id = ?;`, [avID]); } catch (_) {}
+
+        return { success: true, message: `Table '${tableName}' (${avID}) dropped successfully.` };
+    }
+
     // ─── 0. CREATE/ALTER VIEW Statement ───
     const viewRes = await executeCreateView(processedSql, db, options);
     if (viewRes !== null) {
@@ -100,9 +70,14 @@ export async function executeDDL(processedSql: string, db: any, options?: DDLOpt
         const tableName = createMatch[1];
         const columnsDef = createMatch[2];
         
-        // 1. Check if table already exists
+        // 1. Check if table already exists (only block if not targeting a specific doc)
         const existingAvID = resolveTableAvId(tableName);
-        if (existingAvID) throw new Error(`Table '${tableName}' already exists.`);
+        if (existingAvID && !options?.targetDocId) {
+            const check = await post("/api/query/sql", { stmt: `SELECT id FROM blocks WHERE id = '${existingAvID}' LIMIT 1` });
+            if (check && check.length > 0) {
+                throw new Error(`Table '${tableName}' already exists.`);
+            }
+        }
         
         // 2. Determine insertion target
         let appendRes: any;
@@ -569,66 +544,6 @@ export async function executeDDL(processedSql: string, db: any, options?: DDLOpt
             await triggerAvBlockRender(avID);
             return { success: true, message: `Column '${colName}' dropped successfully from table '${tableName}'.` };
         }
-    }
-
-    // ─── 3. DROP TABLE Statement ───
-    const dropMatch = processedSql.match(/^\s*DROP\s+TABLE\s+["`']?([a-zA-Z0-9_\-\u4e00-\u9fa5]+)["`']?\s*;?\s*$/is);
-    if (dropMatch) {
-        const tableName = dropMatch[1];
-        const avID = resolveTableAvId(tableName);
-        if (!avID) throw new Error(`Table '${tableName}' not found or cannot be resolved to an Attribute View.`);
-        
-        console.log(`[SQLiteManager] Dropping table ${tableName} (avID: ${avID})`);
-        
-        // 1. Locate Siyuan AV Block ID
-        let avBlockId = avIdToBlockIdMap.get(avID) || "";
-        
-        if (!avBlockId) {
-            const sqlFindBlock = `SELECT id FROM blocks WHERE type = 'av' AND (markdown LIKE '%${avID}%' OR ial LIKE '%${avID}%') LIMIT 1`;
-            const resFind = await post("/api/query/sql", { stmt: sqlFindBlock });
-            if (resFind && resFind.length > 0) {
-                avBlockId = resFind[0].id;
-            }
-        }
-        
-        // 2. Delete the AV block from Siyuan
-        const blockToDelete = avBlockId || avID;
-        console.log(`[SQLiteManager] Deleting AV block ${blockToDelete} from Siyuan`);
-        try {
-            await post("/api/block/deleteBlock", { id: blockToDelete });
-        } catch (e) {
-            console.warn(`[SQLiteManager] Failed to delete AV block ${blockToDelete} in Siyuan:`, e);
-        }
-        
-        // 3. Clear friendlyName registry and cache
-        const cleanNames = [
-            tableName,
-            tableName.replace(/\s+/g, "_"),
-            tableName.replace(/[^a-zA-Z0-9]/g, "_")
-        ];
-        for (const name of cleanNames) {
-            const avIds = friendlyTableNameMap.get(name);
-            if (avIds) {
-                const updated = avIds.filter(id => id !== avID);
-                if (updated.length > 0) {
-                    friendlyTableNameMap.set(name, updated);
-                } else {
-                    friendlyTableNameMap.delete(name);
-                }
-            }
-        }
-        avIdToBlockIdMap.delete(avID);
-        
-        tableSyncTimes.delete(avID);
-        instantiatedAvIdsCache.delete(avID);
-        
-        // 4. Drop from Wasm SQLite memory DB
-        const dbTable = avIdToTableName(avID);
-        db.run(`DROP TABLE IF EXISTS "${dbTable}";`);
-        db.run(`DELETE FROM _meta WHERE id = ?;`, [avID]);
-        db.run(`DELETE FROM _av_schema WHERE av_id = ?;`, [avID]);
-        
-        return { success: true, message: `Table '${tableName}' dropped successfully.` };
     }
     
     return null;

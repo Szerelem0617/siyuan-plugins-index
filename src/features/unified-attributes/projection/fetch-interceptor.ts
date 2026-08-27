@@ -1,9 +1,4 @@
-/**
- * fetch-interceptor.ts
- *
- * 网络与事务拦截网关
- * 负责 Hook window.fetch，拦截 /api/av/renderAttributeView (从热 SQLite 表合成虚拟 IAV) 与 /api/transactions (拦截虚拟表操作防后端报错)
- */
+import { showMessage } from "siyuan";
 
 export interface FetchInterceptorHandler {
     isVirtualProjection: (avId: string) => boolean;
@@ -66,7 +61,7 @@ export function installFetchInterceptor(handler: FetchInterceptorHandler) {
                 }
             }
 
-            // 2. 拦截虚拟 AV 的单元格编辑事务 -> 在 SQLite 中执行 UPDATE 并阻止 Go 后端报错
+            // 2. 拦截虚拟 AV 的操作事务 (单元格编辑写回 + 实体强绑定防穿透保护)
             if (url.includes("/api/transactions")) {
                 let reqBody: any = null;
                 if (typeof init?.body === "string") {
@@ -81,9 +76,13 @@ export function installFetchInterceptor(handler: FetchInterceptorHandler) {
                 for (const tx of txs) {
                     const ops = tx?.doOperations || [];
                     for (const op of ops) {
-                        if ((op.action === "updateAttrViewCell" || op.action === "updateAttrViewCells" || op.action === "setAttrViewCell") && handler.isVirtualProjection(op.avID)) {
+                        if (op.avID && handler.isVirtualProjection(op.avID)) {
                             hasVirtualAvOp = true;
-                            await handler.handleAVCellUpdate(op);
+                            if (op.action === "updateAttrViewCell" || op.action === "updateAttrViewCells" || op.action === "setAttrViewCell") {
+                                await handler.handleAVCellUpdate(op);
+                            } else if (op.action?.includes("Item") || op.action?.includes("Block") || op.action?.includes("Row") || op.action?.includes("Col")) {
+                                showMessage("🏷️ 当前为 Supertag 虚拟投影视图，为笔记块打上标签即可自动呈现在此；如需管理物理结构，请切换至原生物理数据视图", 4000, "info");
+                            }
                         }
                     }
                 }

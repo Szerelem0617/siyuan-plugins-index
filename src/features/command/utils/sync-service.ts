@@ -360,7 +360,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
         // 2. Load Type Bindings (Layer 3 - Manual & Auto)
         let manualCol = "Manual";
         let autoCol = "Auto";
-        let relatedAvCol = "related_av";
+        let relatedAvCol = "Related av";
         try {
             const schemaCols = db.exec(`SELECT key_name, col_name FROM _av_schema WHERE av_id = ?`, [tAvId]);
             if (schemaCols.length > 0 && schemaCols[0].values.length > 0) {
@@ -371,19 +371,14 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                         manualCol = cName;
                     } else if (kName === "Auto") {
                         autoCol = cName;
-                    } else if (kName === "related_av") {
+                    } else if (kName === "Related av" || kName === "related_av") {
                         relatedAvCol = cName;
                     }
                 }
             }
         } catch { /* ignore */ }
 
-        let querySql = `SELECT "${typeSupertagCol}", "${manualCol}", "${autoCol}" FROM ${typesTable}`;
-        try {
-            // 尝试读取包含 related_av 的全量列
-            querySql = `SELECT "${typeSupertagCol}", "${manualCol}", "${autoCol}", "${relatedAvCol}" FROM ${typesTable}`;
-        } catch (_) {}
-
+        let querySql = `SELECT "${typeSupertagCol}", "${manualCol}", "${autoCol}", "${relatedAvCol}" FROM ${typesTable}`;
         let typeRes = await runQuery(querySql);
         if (!typeRes || !typeRes.values) {
             // 降级只查 3 列
@@ -402,11 +397,12 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             if (typeTagRaw) {
                 const cleanTag = String(typeTagRaw).replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
 
-                // 0. 同步 related_av 关联数据库
+                // 0. 同步 Related av 关联数据库与 Schema
                 if (relatedAvText) {
-                    const cleanAv = String(relatedAvText).trim();
-                    if (cleanAv) {
-                        supertagBinder.setPref(cleanTag, cleanAv);
+                    const { parseRelatedAvConfig } = await import("../../unified-attributes/core/supertag-schema");
+                    const config = parseRelatedAvConfig(String(relatedAvText));
+                    if (config.avId) {
+                        supertagBinder.setPref(cleanTag, config.avId);
                     }
                 }
 

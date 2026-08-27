@@ -117,6 +117,12 @@ export async function projectSupertagToSQLite(
             }
         }
 
+        try {
+            const { getSupertagSchema } = await import("../core/supertag-schema");
+            const schema = await getSupertagSchema(cleanTag);
+            schema.forEach(f => attrKeysSet.add(f.slug.toLowerCase()));
+        } catch (_) {}
+
         if (attrKeysSet.size === 0) attrKeysSet.add("status");
         const attrNames = Array.from(attrKeysSet);
         binding.attrNames = attrNames;
@@ -269,24 +275,13 @@ export async function handleCellUpdateInSQLite(
         const cleanValue = extractCleanValue(rawData);
         const { db } = await getSqliteEngine();
 
-        // 1. 在 SQLite 热表中执行 SQL UPDATE (0 延迟即刻呈现)
-        const updateSql = `UPDATE "${binding.tableName}" SET "${cleanAttrName}" = ?, _updated = ? WHERE id = ?;`;
+        // 1. 在 SQLite 热表中执行 SQL UPDATE (0 延迟即刻呈现，置 _dirty = 1)
+        const updateSql = `UPDATE "${binding.tableName}" SET "${cleanAttrName}" = ?, _updated = ?, _dirty = 1 WHERE id = ?;`;
         db.run(updateSql, [cleanValue, Date.now(), blockId]);
 
-        // 2. 即时持久化写回物理 Markdown 块属性
-        const tag = binding.tagName;
-        const attrKey = `custom-${tag}-${cleanAttrName}`;
-        await post("/api/attr/setBlockAttrs", {
-            id: blockId,
-            attrs: {
-                [attrKey]: cleanValue
-            }
-        });
-
-        // 3. 通知 Protyle 刷新表格显示
-        setTimeout(() => {
-            notifyFrontendToRerender(avId);
-        }, 100);
+        // 2. 提交到批量写回协调器 (Debounced Batch Pipeline)
+        const { writebackCoordinator } = await import("./writeback-coordinator");
+        writebackCoordinator.enqueue(blockId, binding.tagName, cleanAttrName, cleanValue, avId);
     } catch (e) {
         console.error(`[HotTableEngine] handleCellUpdateInSQLite 异常:`, e);
     }

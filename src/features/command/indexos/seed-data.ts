@@ -197,7 +197,7 @@ export const TYPE_DB_CONFIG: DbPageConfig = {
     columns: [
         { name: "Manual", type: "text", icon: "iconMenu" },
         { name: "Auto", type: "text", icon: "iconPlay" },
-        { name: "related_av", type: "text", icon: "iconDatabase" }
+        { name: "Related av", type: "text", icon: "iconDatabase" }
     ]
 };
 

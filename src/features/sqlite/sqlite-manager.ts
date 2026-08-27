@@ -2,6 +2,7 @@ import { post } from "../../shared/api-client/request";
 import { plugin } from "../../shared/utils";
 import { executeDML } from "./run-query/dml";
 import { executeDDL, type DDLOptions } from "./run-query/ddl";
+import { getTypeAvId, getCommandAvId } from "../command/registration";
 
 let dbInstance: any = null;
 let SQL_ENGINE: any = null;
@@ -31,17 +32,51 @@ export function registerFriendlyTableName(friendlyName: string, avId: string) {
     }
 }
 
+export function unregisterFriendlyTableName(tableName: string, avId?: string): void {
+    const cleanName = tableName.replace(/["'`]/g, "").trim();
+    const namesToUnregister = [
+        cleanName,
+        cleanName.replace(/\s+/g, "_"),
+        cleanName.replace(/[^a-zA-Z0-9]/g, "_")
+    ];
+    for (const name of namesToUnregister) {
+        if (avId) {
+            const list = friendlyTableNameMap.get(name);
+            if (list) {
+                const updated = list.filter(id => id !== avId);
+                if (updated.length > 0) {
+                    friendlyTableNameMap.set(name, updated);
+                } else {
+                    friendlyTableNameMap.delete(name);
+                }
+            }
+        } else {
+            friendlyTableNameMap.delete(name);
+        }
+    }
+}
+
 export function resolveTableAvId(tableName: string): string | null {
-    const cleanName = tableName.replace(/["'\`]/g, "").trim();
-    if (friendlyTableNameMap.has(cleanName)) {
-        const list = friendlyTableNameMap.get(cleanName)!;
+    const cleanName = tableName.replace(/["'\`]/g, "").trim().toLowerCase();
+    if (cleanName === "supertag-db" || cleanName === "supertagdb" || cleanName === "supertag_db") {
+        const tId = getTypeAvId();
+        if (tId) return tId;
+    }
+    if (cleanName === "command-db" || cleanName === "commanddb" || cleanName === "command_db") {
+        const cId = getCommandAvId();
+        if (cId) return cId;
+    }
+
+    const rawName = tableName.replace(/["'\`]/g, "").trim();
+    if (friendlyTableNameMap.has(rawName)) {
+        const list = friendlyTableNameMap.get(rawName)!;
         if (list.length > 1) {
-            throw new Error(`Table name '${cleanName}' is ambiguous because multiple databases share this name: ${list.join(", ")}. Please use the exact SQLite table name (e.g. av_xxxx_xxxx) instead.`);
+            throw new Error(`Table name '${rawName}' is ambiguous because multiple databases share this name: ${list.join(", ")}. Please use the exact SQLite table name (e.g. av_xxxx_xxxx) instead.`);
         }
         return list[0];
     }
-    if (cleanName.startsWith("av_")) {
-        return tableNameToAvId(cleanName);
+    if (rawName.startsWith("av_")) {
+        return tableNameToAvId(rawName);
     }
     return null;
 }
@@ -506,32 +541,66 @@ export async function instantiateAV(avID: string, force: boolean = false): Promi
 // ═══════════════════════════════════════════
 
 export function preprocessSql(sql: string): string {
-    let processed = sql;
-    
-    // Sort friendly names by length descending
+    if (!sql) return sql;
+
+    // 1. 提取并保护所有单引号包裹的字符串字面量（支持 '' 转义，绝不被表别名重写）
+    const stringLiterals: string[] = [];
+    let processed = sql.replace(/'(?:''|[^'])*'/g, (match) => {
+        const placeholder = `___SQL_STR_LITERAL_${stringLiterals.length}___`;
+        stringLiterals.push(match);
+        return placeholder;
+    });
+
+    // 2. 如果是 CREATE TABLE 语句，提取并保护新建的目标表名（新建表名绝不可被已有表别名替换）
+    let createTablePrefix = "";
+    const createMatch = processed.match(/^(\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)(["`']?)([a-zA-Z0-9_\-\u4e00-\u9fa5]+)\2/i);
+    if (createMatch) {
+        createTablePrefix = createMatch[0];
+        processed = processed.slice(createTablePrefix.length);
+    }
+
+    // 3. 排序别名表（按长度倒序，优先匹配长名称）
     const friendlyNames = Array.from(friendlyTableNameMap.keys()).sort((a, b) => b.length - a.length);
-    
+
     for (const friendlyName of friendlyNames) {
         const avIds = friendlyTableNameMap.get(friendlyName);
         if (!avIds || avIds.length === 0) continue;
-        
+
         // Escape special regex characters in friendlyName
         const escapedName = friendlyName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        // Use lookbehind and lookahead to ensure we only match standalone identifiers
-        const regex = new RegExp(`(?<![a-zA-Z0-9_])(["'\`]?)${escapedName}\\1(?![a-zA-Z0-9_])`, 'g');
-        
-        // Check if the query actually contains this friendlyName
+        // 仅匹配双引号、反引号或独立标识符包裹的表名（排除已被提取为字面量的内容）
+        const regex = new RegExp(`(?<![a-zA-Z0-9_])(["\`]?)${escapedName}\\1(?![a-zA-Z0-9_])`, 'g');
+
         if (regex.test(processed)) {
-            if (avIds.length > 1) {
-                throw new Error(`Table name '${friendlyName}' is ambiguous because multiple databases share this name: ${avIds.join(", ")}. Please use the exact SQLite table name (e.g. av_xxxx_xxxx) instead.`);
+            let targetAvId = "";
+            const lowerName = friendlyName.toLowerCase();
+            if (lowerName === "supertag-db" || lowerName === "supertagdb" || lowerName === "supertag_db") {
+                targetAvId = getTypeAvId() || "";
+            } else if (lowerName === "command-db" || lowerName === "commanddb" || lowerName === "command_db") {
+                targetAvId = getCommandAvId() || "";
             }
-            const targetTableName = avIdToTableName(avIds[0]);
-            // Reset regex search index since we did regex.test
+            if (!targetAvId) {
+                if (avIds.length > 1) {
+                    throw new Error(`Table name '${friendlyName}' is ambiguous because multiple databases share this name: ${avIds.join(", ")}. Please use the exact SQLite table name (e.g. av_xxxx_xxxx) instead.`);
+                }
+                targetAvId = avIds[0];
+            }
+            const targetTableName = avIdToTableName(targetAvId);
             regex.lastIndex = 0;
             processed = processed.replace(regex, `"${targetTableName}"`);
         }
     }
-    
+
+    // 4. 如果是 CREATE TABLE，将保护的头部拼回
+    if (createTablePrefix) {
+        processed = createTablePrefix + processed;
+    }
+
+    // 5. 还原所有单引号字符串字面量
+    for (let i = 0; i < stringLiterals.length; i++) {
+        processed = processed.replace(`___SQL_STR_LITERAL_${i}___`, stringLiterals[i]);
+    }
+
     return processed;
 }
 

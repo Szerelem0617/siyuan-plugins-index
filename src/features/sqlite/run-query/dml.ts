@@ -113,29 +113,30 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
             let existingItemID: string | null = null;
             if (idColIndex !== -1) {
                 // 有指定 id/rowID 列
-                const targetId = String(tuple[idColIndex]);
-                try {
-                    const res = db.exec(`SELECT "_itemID" FROM "${dbTable}" WHERE rowID = ? OR "_itemID" = ?`, [targetId, targetId]);
+                const targetId = String(tuple[idColIndex]).trim();
+                const res = db.exec(`SELECT "_itemID" FROM "${dbTable}" WHERE rowID = ? OR "_itemID" = ?;`, [targetId, targetId]);
+                if (res.length > 0 && res[0].values.length > 0) {
+                    existingItemID = String(res[0].values[0][0]);
+                }
+            } else {
+                // 没有指定 id/rowID 列，使用第一列作为主键列进行匹配
+                const firstColName = colNames[0];
+                const firstColVal = String(tuple[0] || "").trim();
+                const cleanFirstVal = firstColVal.replace(/^#+/, "").toLowerCase();
+
+                const colSchema = schema.find(c => 
+                    c.colName.toLowerCase() === firstColName.toLowerCase() || 
+                    c.keyName.toLowerCase() === firstColName.toLowerCase() ||
+                    c.keyType === "block"
+                );
+
+                if (colSchema) {
+                    const res = db.exec(
+                        `SELECT "_itemID" FROM "${dbTable}" WHERE "${colSchema.colName}" = ? OR LOWER("${colSchema.colName}") = ? OR LOWER("${colSchema.colName}") = ?;`,
+                        [firstColVal, cleanFirstVal, `#${cleanFirstVal}`]
+                    );
                     if (res.length > 0 && res[0].values.length > 0) {
                         existingItemID = String(res[0].values[0][0]);
-                    }
-                } catch {}
-            } else {
-                // 没有指定 id/rowID 列，使用传入的第一列（通常是主键列，例如 "主键"）作为匹配依据
-                const firstColName = colNames[0];
-                const firstColVal = tuple[0];
-                const colSchema = schema.find(c => c.colName === firstColName || c.keyName === firstColName);
-                if (colSchema) {
-                    try {
-                        const res = db.exec(`SELECT "_itemID" FROM "${dbTable}" WHERE "${colSchema.colName}" = ?`, [firstColVal]);
-                        if (res.length > 0 && res[0].values.length > 0) {
-                            if (res[0].values.length > 1) {
-                                throw new Error(`UPSERT 无法确定更新目标：在列 "${firstColName}" 中找到了 ${res[0].values.length} 条值为 "${firstColVal}" 的重复行。在存在重名行时，请显式指定 id 或 rowID 列进行精确更新。`);
-                            }
-                            existingItemID = String(res[0].values[0][0]);
-                        }
-                    } catch (e: any) {
-                        if (e.message?.includes("UPSERT 无法确定更新目标")) throw e;
                     }
                 }
             }
@@ -147,9 +148,13 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                     const colName = colNames[i];
                     if (i === idColIndex) continue; // Skip ID key update
                     const val = tuple[i];
-                    const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
+                    const colSchema = schema.find(c => 
+                        c.colName.toLowerCase() === colName.toLowerCase() || 
+                        c.keyName.toLowerCase() === colName.toLowerCase() ||
+                        (String(c.keyType).toLowerCase() === "block" && (colName === "主键" || colName.toLowerCase() === "supertag" || colName === "Command ID"))
+                    );
                     if (!colSchema) continue;
-                    if (colSchema.keyType === "block") {
+                    if (String(colSchema.keyType).toLowerCase() === "block") {
                         allUpdates.push({
                             keyID: colSchema.keyId,
                             itemID: existingItemID,
@@ -199,7 +204,11 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
                     if (i === idColIndex) continue; // 跳过 id/rowID 伪列
                     const colName = colNames[i];
                     const val = tuple[i];
-                    const colSchema = schema.find(c => c.colName === colName || c.keyName === colName);
+                    const colSchema = schema.find(c => 
+                        c.colName.toLowerCase() === colName.toLowerCase() || 
+                        c.keyName.toLowerCase() === colName.toLowerCase() ||
+                        (c.keyType === "block" && (colName === "主键" || colName.toLowerCase() === "supertag" || colName === "Command ID"))
+                    );
                     if (!colSchema) {
                         console.warn(`[DML-UPSERT] Column "${colName}" not found in AV schema. Available columns: [${schema.map(c => `${c.colName}(${c.keyType})`).join(", ")}]`);
                         continue;
@@ -230,6 +239,9 @@ export async function executeDML(processedSql: string, db: any): Promise<any> {
             console.log(`[SQLiteManager] Executing Siyuan UPSERT batch on AV ${avID}: ${insertedCount} inserted, ${updatedCount} updated.`);
             await post("/api/av/batchSetAttributeViewBlockAttrs", { avID, values: allUpdates });
         }
+
+        // 立即重新同步内存 SQLite 表以保证即时一致性
+        await instantiateAV(avID, true);
 
         return {
             success: true,

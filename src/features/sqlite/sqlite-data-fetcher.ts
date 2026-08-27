@@ -38,6 +38,7 @@ export async function fetchAllAVBlocks() {
             }
 
             const isIdLike = (str: string) => !str || /^av_\d{14}/i.test(str) || /^\d{14}-[a-z0-9]{7}$/i.test(str);
+            let realName = "";
 
             // 1. 优先从 /api/av/getAttributeView 获取原生数据库名称
             if (avId) {
