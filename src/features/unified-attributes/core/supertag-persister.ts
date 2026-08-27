@@ -53,7 +53,8 @@ function isOutputUsedByDownstream(supertagLabel: string, varName: string): boole
 export async function persistOutputVariablesToLayer4(
     blockId: string,
     tag: string,
-    outputVars: Record<string, any>
+    outputVars: Record<string, any>,
+    blockContent?: string
 ): Promise<void> {
     const cleanTag = tag.replace(/#/g, "").replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase();
     if (!blockId || !cleanTag || !outputVars || Object.keys(outputVars).length === 0) return;
@@ -122,7 +123,7 @@ export async function persistOutputVariablesToLayer4(
             const binding = supertagAVProjector.getBinding(boundAvId);
             if (binding) {
                 try {
-                    await supertagAVProjector.syncBlockToVirtualTable(blockId, cleanTag, customAttrs);
+                    await supertagAVProjector.syncBlockToVirtualTable(blockId, cleanTag, customAttrs, blockContent);
                     supertagAVProjector.notifyFrontendToRerender(boundAvId, blockId);
                 } catch (_) {}
             }

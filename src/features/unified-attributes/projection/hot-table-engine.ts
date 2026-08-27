@@ -221,7 +221,35 @@ export async function syncBlockToSQLite(
         }
 
         // 构造 INSERT OR REPLACE
-        const content = String(blockContent || "未命名项").replace(/#([^#\s]+)#?/g, "").trim() || "未命名项";
+        let content = (blockContent || "").replace(/#([^#\s]+)#?/g, "").trim();
+        if (!content) {
+            // 1. 保留内存热表中已有的 title
+            try {
+                const existingRow = db.exec(`SELECT title FROM "${binding.tableName}" WHERE id = '${blockId}';`);
+                if (existingRow && existingRow.length > 0 && existingRow[0].values.length > 0) {
+                    const existingTitle = String(existingRow[0].values[0][0] || "").trim();
+                    if (existingTitle && existingTitle !== "未命名项") {
+                        content = existingTitle;
+                    }
+                }
+            } catch (_) {}
+        }
+        if (!content) {
+            // 2. 从思源 SQL 查询真实块内容
+            try {
+                const sqlRes = await post("/api/query/sql", {
+                    stmt: `SELECT content FROM blocks WHERE id = '${blockId}' LIMIT 1`
+                });
+                const rows = Array.isArray(sqlRes) ? sqlRes : (sqlRes?.data || []);
+                if (rows && rows.length > 0 && rows[0].content) {
+                    content = String(rows[0].content).replace(/#([^#\s]+)#?/g, "").trim();
+                }
+            } catch (_) {}
+        }
+        if (!content) {
+            content = "未命名项";
+        }
+
         const colNames = ["id", "title", "_updated", "_dirty"];
         const colValues: any[] = [blockId, content, Date.now(), 0];
 

@@ -45,8 +45,9 @@ export async function executeTsScript(scriptText: string, context: CommandContex
 
             // 自动把命令产出的变量（出参）写回/建列落盘到 Layer 4 数据库
             const targetBlockId = context.blockEl?.getAttribute("data-node-id") || getBlockId(context);
+            const blockContent = context.blockEl?.textContent || context.nodeElement?.textContent || "";
             if (targetBlockId && context.supertag && context.vars) {
-                await persistOutputVariablesToLayer4(targetBlockId, context.supertag, context.vars);
+                await persistOutputVariablesToLayer4(targetBlockId, context.supertag, context.vars, blockContent);
             }
 
             return res;

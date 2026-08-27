@@ -190,14 +190,16 @@ export class SupertagBinder {
                 console.log(`[Supertag-Binder] ✓ 成功为块 ${blockId} 挂载分类属性:`, initAttrs);
             }
 
-            // 4. 获取块标题内容
+            // 4. 获取块自身文本内容
             let blockContent = "";
             try {
-                const blockRes = await post("/api/block/getBlockInfo", { id: blockId });
-                blockContent = blockRes?.rootTitle || blockRes?.title || "";
+                const sqlRes = await post("/api/query/sql", { stmt: `SELECT content FROM blocks WHERE id = '${blockId}' LIMIT 1` });
+                if (Array.isArray(sqlRes) && sqlRes.length > 0 && sqlRes[0].content) {
+                    blockContent = sqlRes[0].content;
+                }
                 if (!blockContent) {
-                    const sqlRes = await post("/api/query/sql", { stmt: `SELECT content FROM blocks WHERE id = '${blockId}'` });
-                    if (Array.isArray(sqlRes) && sqlRes.length > 0) blockContent = sqlRes[0].content || "";
+                    const blockRes = await post("/api/block/getBlockInfo", { id: blockId });
+                    blockContent = blockRes?.content || blockRes?.title || "";
                 }
             } catch (_) {}
 
