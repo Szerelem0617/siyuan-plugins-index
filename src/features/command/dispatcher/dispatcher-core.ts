@@ -74,35 +74,20 @@ export async function dispatchCommand(
         // 5. 出参捕获与变量池同步
         if (result.success) {
             if (!result.outputs) result.outputs = {};
-            if (result.id && !result.outputs.createdblock) result.outputs.createdblock = result.id;
-            if (result.value && typeof result.value === "object" && (result.value as any).id && !result.outputs.createdblock) {
-                result.outputs.createdblock = (result.value as any).id;
-            }
+            const resultId = result.id || (result.value && typeof result.value === "object" ? (result.value as any).id : undefined);
 
             for (const schemaOut of (def.outputs || [])) {
-                const rawVal = result.outputs[schemaOut.key];
+                const rawVal = result.outputs[schemaOut.key] ?? (schemaOut.key === "id" || schemaOut.type === "blockid" ? resultId : undefined);
                 if (rawVal !== undefined && rawVal !== null) {
                     const token = getCommandOutputToken(def.id, schemaOut.key, schemaOut.default);
-                    const cleanVarName = token.replace(/^\{\{\s*/, "").replace(/\s*\}\}$/, "").trim();
+                    const bareVarName = token.replace(/^\{\{\s*var\./, "").replace(/^\{\{\s*/, "").replace(/\s*\}\}$/, "").replace(/^var\./, "").trim() || schemaOut.key;
                     
                     if (!context.vars) context.vars = {};
-                    context.vars[cleanVarName] = String(rawVal);
+                    context.vars[bareVarName] = String(rawVal);
+                    context.vars[`var.${bareVarName}`] = String(rawVal);
                     context.vars[token] = String(rawVal);
-                    console.log(`[Dispatcher] ⚡ 依照 Command-DB 配置存入出参: ${cleanVarName} (${token}) = "${rawVal}"`);
-
-                    const attrKey = sanitizeBlockAttrName(token);
-                    if (context.blockEl) {
-                        context.blockEl.setAttribute(attrKey, String(rawVal));
-                    }
-                    try {
-                        const targetBlockId = getBlockId(context);
-                        if (targetBlockId) {
-                            post("/api/attr/setBlockAttrs", {
-                                id: targetBlockId,
-                                attrs: { [attrKey]: String(rawVal) }
-                            }).catch(() => {});
-                        }
-                    } catch (_) {}
+                    result.outputs[bareVarName] = String(rawVal);
+                    console.log(`[Dispatcher] ⚡ 依照 Command-DB 配置存入出参: ${bareVarName} (${token}) = "${rawVal}"`);
                 }
             }
         }

@@ -174,7 +174,6 @@ export async function syncSupertagDatabaseName(cleanTag: string, avId: string): 
                         attrs: {
                             "custom-supertag-tag": cleanTag,
                             "custom-supertag-id": cleanTag,
-                            name: cleanTag,
                             "custom-av-name": cleanTag
                         }
                     });
@@ -203,7 +202,8 @@ export async function ensureSupertagDatabase(tagName: string): Promise<string> {
     const checkAvExists = async (id: string): Promise<boolean> => {
         if (!id) return false;
         try {
-            const sql = `SELECT id FROM blocks WHERE id = '${id}' OR ial LIKE '%${id}%' LIMIT 1`;
+            // 真实物理存在性校验：确保在活跃的 blocks 表中能查到该 AV 块，避免死链/幽灵ID
+            const sql = `SELECT id FROM blocks WHERE (type = 'av' AND (markdown LIKE '%${id}%' OR ial LIKE '%${id}%' OR content LIKE '%${id}%')) OR id = '${id}' LIMIT 1`;
             const res = await post("/api/query/sql", { stmt: sql });
             return Boolean(res && res.length > 0);
         } catch {
@@ -226,6 +226,16 @@ export async function ensureSupertagDatabase(tagName: string): Promise<string> {
                 supertagAVProjector.bindTagToAV(cleanTag, existingRec.relatedAv);
                 return existingRec.relatedAv;
             }
+
+            // 检查友好表名映射中是否已有可用的 AV ID
+            try {
+                const mappedId = resolveTableAvId(cleanTag);
+                if (mappedId && await checkAvExists(mappedId)) {
+                    await supertagBinder.setPref(cleanTag, mappedId);
+                    supertagAVProjector.bindTagToAV(cleanTag, mappedId);
+                    return mappedId;
+                }
+            } catch (_) {}
 
             // 2. 自动在 /data-dbs 中追加创建同名 AV 数据库
             console.log(`[SupertagSchema] 🚀 为 #${cleanTag} 在 /data-dbs 中创建同名 AV 数据库...`);
@@ -262,7 +272,6 @@ export async function ensureSupertagDatabase(tagName: string): Promise<string> {
                             attrs: {
                                 "custom-supertag-tag": cleanTag,
                                 "custom-supertag-id": cleanTag,
-                                name: cleanTag,
                                 "custom-av-name": cleanTag
                             }
                         });

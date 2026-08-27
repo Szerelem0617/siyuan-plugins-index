@@ -71,7 +71,14 @@ export function resolveTableAvId(tableName: string): string | null {
     if (friendlyTableNameMap.has(rawName)) {
         const list = friendlyTableNameMap.get(rawName)!;
         if (list.length > 1) {
-            throw new Error(`Table name '${rawName}' is ambiguous because multiple databases share this name: ${list.join(", ")}. Please use the exact SQLite table name (e.g. av_xxxx_xxxx) instead.`);
+            try {
+                const { supertagBinder } = require("../unified-attributes/core/supertag-binder");
+                const bound = supertagBinder.getPref(rawName.toLowerCase());
+                if (bound && list.includes(bound)) {
+                    return bound;
+                }
+            } catch (_) {}
+            return list[list.length - 1];
         }
         return list[0];
     }

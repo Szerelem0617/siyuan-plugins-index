@@ -341,9 +341,13 @@ async function handleRelatedAvAltClick(
             const { plugin } = await import("../../../shared/utils");
 
             post("/api/query/sql", {
-                stmt: `SELECT id FROM blocks WHERE type = 'av' AND (content = '${currentRelatedAv}' OR ial LIKE '%${currentRelatedAv}%' OR markdown LIKE '%${currentRelatedAv}%') LIMIT 1`
+                stmt: `SELECT id FROM blocks WHERE (type = 'av' AND (content = '${currentRelatedAv}' OR ial LIKE '%${currentRelatedAv}%' OR markdown LIKE '%${currentRelatedAv}%')) OR id = '${currentRelatedAv}' LIMIT 1`
             }).then((res) => {
-                const targetBlockId = (res && res.length > 0) ? res[0].id : currentRelatedAv;
+                const targetBlockId = (res && res.length > 0) ? res[0].id : "";
+                if (!targetBlockId) {
+                    showMessage(`未在当前文档树中找到数据库 ${currentRelatedAv}，可能已被删除`, 4000, "error");
+                    return;
+                }
                 openTab({
                     app: plugin.app,
                     doc: {
@@ -353,7 +357,7 @@ async function handleRelatedAvAltClick(
                 });
                 showMessage(`✓ 已定位到数据库: ${currentRelatedAv}`);
             }).catch(() => {
-                showMessage(`正在定位数据库: ${currentRelatedAv}`);
+                showMessage(`定位数据库失败: ${currentRelatedAv}`, 3000, "error");
             });
         }
     } catch (e: any) {

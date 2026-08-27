@@ -21,21 +21,33 @@ export async function executeTsScript(scriptText: string, context: CommandContex
         };
 
         const dispatch = async (commandId: string, params?: any) => {
+            console.log(`[Supertag-Sandbox-Debug] 🚀 dispatch called: commandId='${commandId}', params=`, params, "context.vars before=", context.vars);
             // TS 脚本参数 = #1 Pipeline 人为规划（最高优先级）
             const res = await dispatchCommand(commandId, null, context, { manual: params || {} });
-            if (res && res.id) {
-                if (!context.vars) context.vars = {};
-                context.vars.createdblock = res.id;
-                context.vars.last_id = res.id;
-                context.vars.id = res.id;
+            console.log(`[Supertag-Sandbox-Debug] 🏁 dispatch result for '${commandId}':`, res);
+
+            if (!context.vars) context.vars = {};
+            if (res && typeof res === "object") {
+                // 仅提取显式的业务出参 outputs，严禁将 DispatchResult 内部元数据 (success, method, detail, value) 写入 vars
+                if (res.outputs && typeof res.outputs === "object") {
+                    for (const [k, v] of Object.entries(res.outputs)) {
+                        if (v !== undefined && v !== null && typeof v !== "object") {
+                            const bare = k.replace(/^var\./, "").replace(/^\{\{\s*var\./, "").replace(/\s*\}\}$/, "").trim();
+                            if (bare) {
+                                context.vars[bare] = v;
+                                context.vars[`var.${bare}`] = v;
+                            }
+                        }
+                    }
+                }
             }
             if (params && params._outputMapping) {
-                if (!context.vars) context.vars = {};
                 context.vars._outputMapping = params._outputMapping;
             }
 
             // 自动把命令产出的变量（出参）写回/建列落盘到 Layer 4 数据库
             const targetBlockId = context.blockEl?.getAttribute("data-node-id") || getBlockId(context);
+            console.log(`[Supertag-Sandbox-Debug] 💾 Preparing to persist vars: targetBlockId='${targetBlockId}', supertag='${context.supertag}', vars=`, context.vars);
             if (targetBlockId && context.supertag && context.vars) {
                 await persistOutputVariablesToLayer4(targetBlockId, context.supertag, context.vars);
             }

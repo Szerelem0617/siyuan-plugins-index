@@ -36,19 +36,19 @@ function isOutputUsedByDownstream(supertagLabel: string, varName: string): boole
     }
 
     // 2. 检查 Conditional 脚本后续步骤中是否有显式引用
-    const regMatch = SUPERTAG_REGISTRY.find(item => item.typeTag.replace(/#/g, "").trim().toLowerCase() === cleanTag);
-    if (regMatch?.conditionalScript) {
-        const script = regMatch.conditionalScript;
-        if (script.includes(cleanVar) || script.includes(`var.${cleanVar}`)) {
+    const regMatch = SUPERTAG_REGISTRY.find(item => item.typeTag.replace(/#/g, "").trim().toLowerCase() === cleanTag && item.conditionalScript);
+    const script = regMatch?.conditionalScript || "";
+    if (script) {
+        if (script.includes(cleanVar) || script.includes(`var.${cleanVar}`) || script.includes("safeUpdateBlock") || script.includes("updateBlock")) {
             return true;
         }
     }
 
-    return false;
+    return true;
 }
 
 /**
- * 将出参变量统一持久化到物理块 IAL (custom-<tag>.<varName>)
+ * 将出参变量统一持久化到物理块 IAL (custom-<tag>-<varName>) 并 JIT 自动建列
  */
 export async function persistOutputVariablesToLayer4(
     blockId: string,
@@ -60,34 +60,39 @@ export async function persistOutputVariablesToLayer4(
 
     try {
         const targetOutputEntries: [string, string][] = [];
-        const SYSTEM_ENV_KEYS = new Set(["date", "time", "block_id", "root_id", "parent_id", "id", "last_id"]);
+        const SYSTEM_ENV_KEYS = new Set([
+            "date", "time", "block_id", "root_id", "parent_id", "target_id", "host_id", "project_id",
+            "custom-supertags", "supertags", "updated", "completed", "task_status", "task-status", "index-task",
+            "id", "last_id", "var.id", "var.last_id"
+        ]);
 
-        // 1. 收集所有以 var. 开头或自定义的有效出参变量
+        // 1. 收集所有有效业务出参变量 (排除带点、带双大括号等模板 token 及系统变量)
         for (const [k, v] of Object.entries(outputVars)) {
-            if (k.startsWith("_")) continue;
+            if (k.startsWith("_") || k.startsWith("{{") || k.includes("}}") || k.includes(".")) continue;
             if (SYSTEM_ENV_KEYS.has(k)) continue;
-            if (!k.startsWith("var.")) continue;
-            if (v !== undefined && v !== null && String(v).trim() !== "") {
-                const varName = k.replace(/^var\./, "").trim();
-                targetOutputEntries.push([varName, String(v).trim()]);
+            if (v !== undefined && v !== null && typeof v !== "object" && String(v).trim() !== "") {
+                const varName = k.trim();
+                if (varName && !targetOutputEntries.some(([name]) => name === varName)) {
+                    targetOutputEntries.push([varName, String(v).trim()]);
+                }
             }
         }
 
         if (targetOutputEntries.length === 0) return;
 
-        // 2. 检查是否有下游消费需求
+        // 2. 检查下游消费需求
         const activeEntries = targetOutputEntries.filter(([varName]) => isOutputUsedByDownstream(cleanTag, varName));
         if (activeEntries.length === 0) {
-            console.log(`[Supertag-Output] 🍃 Supertag #${cleanTag} 出参无下游消费依赖，不进行无谓的物理属性持久化。`);
             return;
         }
 
-        // 3. 构造带命名空间的物理属性键名: custom-<tag>-<varName>
+        // 3. JIT 预判断与自动建列：通过 preflightSupertagProperty 检查并自动在 AV 数据库中动态建列，获取合规 physicalKey
+        const { preflightSupertagProperty } = await import("./supertag-schema");
         const customAttrs: Record<string, string> = {};
         for (const [varName, valStr] of activeEntries) {
-            const cleanVar = sanitizeBlockAttrName(varName).replace(/^custom-/, "");
-            const namespacedKey = `custom-${cleanTag}-${cleanVar}`;
-            customAttrs[namespacedKey] = valStr;
+            const preflight = await preflightSupertagProperty(cleanTag, varName, valStr);
+            const physicalKey = preflight.physicalKey || `custom-${cleanTag}-${sanitizeBlockAttrName(varName).replace(/^custom-/, "")}`;
+            customAttrs[physicalKey] = valStr;
         }
 
         // 4. 统一写入物理 Markdown 块自身 (单一物理真理源)

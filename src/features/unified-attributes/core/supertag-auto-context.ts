@@ -19,9 +19,16 @@ export function getCommandOutputToken(commandRefOrId: string, outputKey: string,
             const raw = binding.outputMapping.trim();
             if (raw.startsWith("{")) {
                 const parsed = JSON.parse(raw);
-                if (parsed[outputKey]) return String(parsed[outputKey]).trim();
+                if (parsed[outputKey]) {
+                    const val = String(parsed[outputKey]).trim();
+                    if (val.startsWith("{{")) return val;
+                    const bare = val.replace(/^var\./, "").trim();
+                    return `{{var.${bare}}}`;
+                }
             } else if (raw) {
-                return raw;
+                if (raw.startsWith("{{")) return raw;
+                const bare = raw.replace(/^var\./, "").trim();
+                return `{{var.${bare}}}`;
             }
         } catch (_) {}
     }
@@ -41,9 +48,18 @@ export function getSupertagConditionalScript(supertagLabel: string, explicitCond
 
     const regMatch = SUPERTAG_REGISTRY.find(item => {
         const tag = (item.typeTag || "").replace(/#/g, "").trim().toLowerCase();
-        return tag === cleanTag || tag.includes(cleanTag) || cleanTag.includes(tag);
+        return (tag === cleanTag || tag.includes(cleanTag) || cleanTag.includes(tag)) && Boolean(item.conditionalScript);
     });
-    return regMatch?.conditionalScript || "";
+    if (regMatch?.conditionalScript) {
+        return regMatch.conditionalScript;
+    }
+
+    try {
+        const { getSeedConditionalScript } = require("../../command/indexos/seed-data");
+        return getSeedConditionalScript(cleanTag);
+    } catch (_) {
+        return "";
+    }
 }
 
 /**
@@ -51,6 +67,7 @@ export function getSupertagConditionalScript(supertagLabel: string, explicitCond
  */
 export function getSupertagOutputPool(conditionalStr: string): { key: string; token: string; type: string }[] {
     const pool: { key: string; token: string; type: string }[] = [];
+    console.log(`[AutoContext-Debug] getSupertagOutputPool input conditionalStr:`, conditionalStr ? (conditionalStr.slice(0, 80) + "...") : "<empty>");
     if (!conditionalStr) return pool;
 
     const commandRefs: string[] = [];
@@ -77,10 +94,12 @@ export function getSupertagOutputPool(conditionalStr: string): { key: string; to
             commandRefs.push(extractedCmdId);
         }
     }
+    console.log(`[AutoContext-Debug] getSupertagOutputPool parsed commandRefs from script:`, commandRefs);
 
     // 3. 提取所有被调用命令在 Command-DB 中映射的真实 token
     for (const ref of commandRefs) {
         const cmdDef = commandRegistry.findByNameOrId(ref) || commandRegistry.getCommand(ref);
+        console.log(`[AutoContext-Debug] Looking up command '${ref}': found=${Boolean(cmdDef)}, outputs=${JSON.stringify(cmdDef?.outputs || [])}`);
         if (cmdDef && cmdDef.outputs && Array.isArray(cmdDef.outputs)) {
             for (const out of cmdDef.outputs) {
                 const token = getCommandOutputToken(cmdDef.id, out.key, out.default);
@@ -91,10 +110,24 @@ export function getSupertagOutputPool(conditionalStr: string): { key: string; to
                         type: out.type || "string"
                     });
                 }
+                // 补充 blockid 别名 token (如 var.createdblock)，确保不同语法引用的统一解析
+                if (out.key === "id" || out.type === "blockid") {
+                    const aliases = ["{{var.createdblock}}", "{{var.id}}", "{{var.last_id}}"];
+                    for (const alias of aliases) {
+                        if (!pool.some(p => p.token === alias)) {
+                            pool.push({
+                                key: out.key,
+                                token: alias,
+                                type: "blockid"
+                            });
+                        }
+                    }
+                }
             }
         }
     }
 
+    console.log(`[AutoContext-Debug] Final pool computed:`, pool);
     return pool;
 }
 
@@ -109,10 +142,13 @@ export function getSupertagAutoContextInfo(
     const conditionalStr = getSupertagConditionalScript(supertagLabel, explicitConditionalVal);
     const result: Record<string, AutoContextMatch> = {};
     const cmdDef = commandRegistry.getCommand(commandId);
-    if (!cmdDef || !cmdDef.params) return result;
+    if (!cmdDef || !cmdDef.params) {
+        console.log(`[AutoContext-Debug] getSupertagAutoContextInfo cmdDef not found or has no params for: ${commandId}`);
+        return result;
+    }
 
     const pool = getSupertagOutputPool(conditionalStr);
-    console.log(`[AutoContext-Debug] Tag #${supertagLabel} 前置出参池:`, pool);
+    console.log(`[AutoContext-Debug] Tag #${supertagLabel} for cmd ${commandId} pool size=${pool.length}:`, pool);
 
     if (pool.length === 0) return result;
 

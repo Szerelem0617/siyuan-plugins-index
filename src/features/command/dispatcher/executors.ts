@@ -43,12 +43,6 @@ export async function dispatchApi(
     try {
         const response = await post(endpoint, resolvedParams);
         const resultId = extractCreatedBlockId(response);
-        if (resultId) {
-            if (!context.vars) context.vars = {};
-            context.vars.createdblock = resultId;
-            context.vars.id = resultId;
-            context.vars.last_id = resultId;
-        }
 
         return {
             success: true,

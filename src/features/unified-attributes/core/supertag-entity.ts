@@ -302,7 +302,10 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
 
         // 解析绑定的数据库
         let selectedAvId = rec?.relatedAv || "";
-        if (!selectedAvId && tagMatchedDbs.length > 0) {
+        if (selectedAvId && !avBlockMap.has(selectedAvId)) {
+            // 如果记录中的 relatedAv 在当前全库扫描中已不存在（幽灵ID），重置并尝试从活跃库中匹配
+            selectedAvId = tagMatchedDbs.length > 0 ? tagMatchedDbs[0].id : "";
+        } else if (!selectedAvId && tagMatchedDbs.length > 0) {
             selectedAvId = tagMatchedDbs[0].id;
         }
 

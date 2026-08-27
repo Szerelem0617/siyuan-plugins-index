@@ -45,9 +45,13 @@
         locateIndices[group.typeName] = (currentIdx + 1) % blockList.length;
 
         post("/api/query/sql", {
-            stmt: `SELECT id FROM blocks WHERE id = '${targetId}' OR (type = 'av' AND (markdown LIKE '%${targetId}%' OR ial LIKE '%${targetId}%')) LIMIT 1`
+            stmt: `SELECT id FROM blocks WHERE id = '${targetId}' OR (type = 'av' AND (markdown LIKE '%${targetId}%' OR ial LIKE '%${targetId}%' OR content LIKE '%${targetId}%')) LIMIT 1`
         }).then((res) => {
-            const targetBlockId = (res && res.length > 0) ? res[0].id : targetId;
+            const targetBlockId = (res && res.length > 0) ? res[0].id : "";
+            if (!targetBlockId) {
+                showMessage(`未在当前文档树中找到该数据库块，可能已被删除`, 4000, "error");
+                return;
+            }
             openTab({
                 app: plugin.app,
                 doc: {
@@ -62,13 +66,7 @@
             }
         }).catch((e) => {
             console.error("Locate AV failed:", e);
-            openTab({
-                app: plugin.app,
-                doc: {
-                    id: targetId,
-                    action: ["cb-get-hl", "cb-get-focus"]
-                }
-            });
+            showMessage("定位数据库失败", 3000, "error");
         });
     }
 

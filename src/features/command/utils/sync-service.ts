@@ -242,6 +242,7 @@ function refreshRegistryFromSeed() {
 
         // 1. Manual 列：4 态分流分发
         const manualEntries = parseManualConfig(row.manual || row.iconMenu || "");
+        const autoScript = row.auto || row.conditional || "";
         const pushEntry = (entry: ManualCommandEntry, uiLocation: "IconMenu" | "Slash" | "Button" | "VirtualButton") => {
             const cmdInfo = findBinding(entry.id);
             if (!cmdInfo) return;
@@ -257,7 +258,8 @@ function refreshRegistryFromSeed() {
                     uiLocation,
                     condition: entry.condition || entry.blockFilter,
                     blockFilter: entry.condition || entry.blockFilter,
-                    buttonLabel: entry.buttonLabel
+                    buttonLabel: entry.buttonLabel,
+                    conditionalScript: autoScript
                 });
             }
         };
@@ -269,22 +271,22 @@ function refreshRegistryFromSeed() {
         }
 
         // 2. Auto 规则脚本中的 dispatch 引用：标记为 BoundOnly
-        if (row.auto) {
-            const matches = String(row.auto).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
+        if (autoScript) {
+            const matches = String(autoScript).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
             for (const m of matches) {
                 const cmdRef = m[1];
                 const foundCmd = Object.values(newCommandBindings).find(c => c.commandRef === cmdRef);
                 if (foundCmd
                     && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef && r.uiLocation === "IconMenu")
                     && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef)) {
-                    newRegistry.push({ typeTag: cleanTag, methodName: foundCmd.methodName, commandRef: foundCmd.commandRef, inputMapping: foundCmd.inputMapping, outputMapping: foundCmd.outputMapping, uiLocation: "BoundOnly" });
+                    newRegistry.push({ typeTag: cleanTag, methodName: foundCmd.methodName, commandRef: foundCmd.commandRef, inputMapping: foundCmd.inputMapping, outputMapping: foundCmd.outputMapping, uiLocation: "BoundOnly", conditionalScript: autoScript });
                 }
             }
         }
 
         // 3. 确保标签本身已注册（即使没有绑定任何命令）
         if (!newRegistry.some(r => r.typeTag === cleanTag)) {
-            newRegistry.push({ typeTag: cleanTag, methodName: "", commandRef: "", inputMapping: "", outputMapping: "", uiLocation: "IconMenu" });
+            newRegistry.push({ typeTag: cleanTag, methodName: "", commandRef: "", inputMapping: "", outputMapping: "", uiLocation: "IconMenu", conditionalScript: autoScript });
         }
     }
     setSupertagRegistry(newRegistry);
@@ -400,6 +402,7 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             if (typeTagRaw) {
                 const cleanTag = String(typeTagRaw).replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
                 const avId = relatedAvText ? String(relatedAvText).trim() : "";
+                console.log(`[SupertagSync] Row processed: #${cleanTag}, manualLen=${manualText.length}, autoLen=${autoText.length}, relatedAv=${avId}`);
 
                 // 0. 同步 Related av 关联数据库（若未绑定则自动建库并强绑定；若已绑定则检查重命名联动）
                 if (avId) {
@@ -469,7 +472,8 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                             uiLocation,
                             condition: entry.condition || entry.blockFilter,
                             blockFilter: entry.condition || entry.blockFilter,
-                            buttonLabel: entry.buttonLabel
+                            buttonLabel: entry.buttonLabel,
+                            conditionalScript: autoText
                         });
                     }
                 };
@@ -498,7 +502,8 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                                         commandRef: foundCmd.commandRef,
                                         inputMapping: foundCmd.inputMapping,
                                         outputMapping: foundCmd.outputMapping,
-                                        uiLocation: "BoundOnly"
+                                        uiLocation: "BoundOnly",
+                                        conditionalScript: autoText
                                     });
                                 }
                             }
@@ -514,7 +519,8 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
                         commandRef: "",
                         inputMapping: "",
                         outputMapping: "",
-                        uiLocation: "IconMenu"
+                        uiLocation: "IconMenu",
+                        conditionalScript: autoText
                     });
                 }
             }
@@ -671,7 +677,8 @@ async function refreshRegistryFromApi() {
                             uiLocation,
                             condition: entry.condition || entry.blockFilter,
                             blockFilter: entry.condition || entry.blockFilter,
-                            buttonLabel: entry.buttonLabel
+                            buttonLabel: entry.buttonLabel,
+                            conditionalScript: autoRaw
                         });
                     }
                 };
@@ -695,7 +702,8 @@ async function refreshRegistryFromApi() {
                                 commandRef: foundCmd.commandRef,
                                 inputMapping: foundCmd.inputMapping,
                                 outputMapping: foundCmd.outputMapping,
-                                uiLocation: "BoundOnly"
+                                uiLocation: "BoundOnly",
+                                conditionalScript: autoRaw
                             });
                         }
                     }
@@ -709,7 +717,8 @@ async function refreshRegistryFromApi() {
                         commandRef: "",
                         inputMapping: "",
                         outputMapping: "",
-                        uiLocation: "IconMenu"
+                        uiLocation: "IconMenu",
+                        conditionalScript: autoRaw
                     });
                 }
             }

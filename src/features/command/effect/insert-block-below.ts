@@ -179,10 +179,6 @@ export async function triggerInsertBlockBelow(
         }
 
         if (createdId) {
-            if (!context.vars) context.vars = {};
-            context.vars.createdblock = createdId;
-            context.vars.id = createdId;
-            context.vars.last_id = createdId;
             console.log(`🎉 [InsertBlockBelow] 写入成功，新建 Block ID: "${createdId}"`);
         }
 
