@@ -12,6 +12,7 @@
 
 import { post } from "../../../shared/api-client/request";
 import { sanitizeBlockAttrName } from "../utils/attribute-sanitizer";
+import { getPhysicalAttrKey } from "../../unified-attributes/core/supertag-schema";
 import type { CommandContext, DispatchResult } from "../command-dispatcher";
 
 /**
@@ -33,7 +34,7 @@ function resolveNamespacedAttrName(rawName: string, context?: CommandContext): s
 
     const cleanTag = (context?.supertag || "").replace(/#/g, "").trim().toLowerCase();
 
-    // 3. 在 Supertag 触发上下文中：自动赋予该 Tag 的命名空间 (物理存储格式: custom-<tag>-<attr>)
+    // 3. 在 Supertag 触发上下文中：自动赋予该 Tag 的命名空间 (物理存储格式: custom-<tag>-<attr> 或 custom-b32-...)
     if (cleanTag) {
         let pure = trimmed.replace(/^custom-/, "");
 
@@ -46,8 +47,7 @@ function resolveNamespacedAttrName(rawName: string, context?: CommandContext): s
             pure = pure.slice(cleanTag.length + 1);
         }
 
-        const cleanSub = sanitizeBlockAttrName(pure).replace(/^custom-/, "");
-        return `custom-${cleanTag}-${cleanSub}`;
+        return getPhysicalAttrKey(cleanTag, pure);
     }
 
     // 4. 无 Supertag 上下文时作为普通自定义属性

@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { BlockAttributeData, SupertagField, AVDatabaseField } from "./attribute-model";
     import { updateBlockAttributeValue } from "./attribute-model";
+    import { getPhysicalAttrKey } from "../core/supertag-schema";
     import { showMessage } from "siyuan";
 
     export let blockId: string;
@@ -44,7 +45,7 @@
             showMessage("属性名只能包含小写英文字母、数字和连字符，并且以小写英文字母开头", 4000, "error");
             return;
         }
-        const attrKey = `custom-${tag}-${cleanKey}`;
+        const attrKey = getPhysicalAttrKey(tag, cleanKey);
         const ok = await updateBlockAttributeValue(blockId, attrKey, "");
         if (!ok) {
             showMessage("属性名只能包含小写英文字母、数字和连字符，并且以小写英文字母开头", 4000, "error");

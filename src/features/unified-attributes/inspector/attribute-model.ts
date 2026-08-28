@@ -14,7 +14,7 @@ import { supertagAVProjector, getColumnMeta } from "../projection/supertag-av-pr
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { getColIDMap } from "../../../shared/utils/av-utils";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
-import { decodeAttrSlug } from "../core/supertag-schema";
+import { parsePhysicalAttrKey, getPhysicalAttrKey } from "../core/supertag-schema";
 
 export interface TypedFieldOption {
     id: string;
@@ -232,24 +232,22 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
         ) continue;
 
         if (k.startsWith("custom-")) {
-            const rawClean = k.replace(/^custom-/, "");
-
-            // 严格按规范格式 custom-<tag>-<attr> 解析命名空间属性
+            const parsed = parsePhysicalAttrKey(k);
             let matchedTag: string | null = null;
-            let subAttrKey = rawClean;
+            let subAttrKey = "";
 
-            for (const tag of supertags) {
-                if (rawClean.startsWith(`${tag}-`)) {
-                    matchedTag = tag;
-                    subAttrKey = rawClean.slice(tag.length + 1);
-                    break;
+            if (parsed && parsed.tag) {
+                const found = supertags.find(t => t.toLowerCase() === parsed.tag.toLowerCase());
+                if (found) {
+                    matchedTag = found;
+                    subAttrKey = parsed.slug;
                 }
             }
 
             if (matchedTag) {
-                // 独占命名空间属性 (支持通过 getColumnMeta 与 decodeAttrSlug 还原中文 Label 与列类型)
+                // 独占命名空间属性 (支持通过 getColumnMeta 与 Base32 还原中文 Label 与列类型)
                 const meta = getColumnMeta(matchedTag, subAttrKey);
-                const decodedLabel = decodeAttrSlug(subAttrKey);
+                const decodedLabel = parsed?.originalName || subAttrKey;
                 const schema = KNOWN_SCHEMA_DEFS[subAttrKey] || {
                     label: meta?.name || decodedLabel,
                     type: meta?.type || "text"
@@ -269,6 +267,7 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                 supertagGroupsMap.get(matchedTag)?.push(field);
                 processedKeys.add(k);
             } else {
+                const rawClean = k.replace(/^custom-/, "");
                 // 检查是否为全局通用 schema 字段 (如 custom-status, custom-priority)
                 const schema = KNOWN_SCHEMA_DEFS[rawClean];
                 if (schema && supertags.length > 0) {
@@ -351,7 +350,7 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                         tagFields.push({
                             key: colKey,
                             fullKey: `${tag}.${colKey}`,
-                            rawKey: `custom-${cleanTag}-${colKey}`,
+                            rawKey: getPhysicalAttrKey(cleanTag, colKey),
                             label: colKey,
                             type: (colType as any) || "text",
                             value: "",

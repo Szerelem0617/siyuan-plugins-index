@@ -525,7 +525,6 @@ async function refreshRegistryFromSqlite(): Promise<boolean> {
             }
         }
         setSupertagRegistry(newRegistry);
-        console.log("[Supertag Sync] Registry loaded from SQLite:", { count: newRegistry.length, tags: newRegistry.map(r => r.typeTag) });
 
         // 触发前端编辑器重新渲染 Supertag 与 Virtual Buttons
         try {

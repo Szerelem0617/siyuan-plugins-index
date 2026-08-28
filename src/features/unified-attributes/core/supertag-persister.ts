@@ -8,7 +8,6 @@
  */
 
 import { post } from "../../../shared/api-client/request";
-import { sanitizeBlockAttrName } from "../../command/utils/attribute-sanitizer";
 import { SUPERTAG_REGISTRY } from "../../command/registration";
 import { supertagAVProjector } from "../projection/supertag-av-projector";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
@@ -92,7 +91,7 @@ export async function persistOutputVariablesToLayer4(
         const customAttrs: Record<string, string> = {};
         for (const [varName, valStr] of activeEntries) {
             const preflight = await preflightSupertagProperty(cleanTag, varName, valStr);
-            const physicalKey = preflight.physicalKey || `custom-${cleanTag}-${sanitizeBlockAttrName(varName).replace(/^custom-/, "")}`;
+            const physicalKey = preflight.physicalKey;
             customAttrs[physicalKey] = valStr;
         }
 

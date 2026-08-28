@@ -8,6 +8,7 @@
 import { post } from "../../../shared/api-client/request";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { parseSupertags } from "../core/supertag-diff";
+import { parsePhysicalAttrKey, getPhysicalAttrKey } from "../core/supertag-schema";
 import { type VirtualAVBinding } from "./types";
 import { notifyFrontendToRerender } from "./rerender-dispatcher";
 
@@ -85,10 +86,15 @@ export async function projectSupertagToSQLite(
                 t.startsWith(`${rootTag}/`)
             );
 
-            // 检查是否有任何当前 Tag 专属的 custom-<tag>-* 属性
-            const hasTagCustomAttr = Object.keys(attrs).some(k => 
-                k.startsWith(`custom-${rootTag}-`) || k.startsWith(`custom-${cleanTag}-`)
-            );
+            // 检查是否有任何当前 Tag 专属属性 (包含 custom-tag-* 与 custom-b32-*)
+            const hasTagCustomAttr = Object.keys(attrs).some(k => {
+                const parsed = parsePhysicalAttrKey(k);
+                if (parsed && parsed.tag) {
+                    const pTag = parsed.tag.toLowerCase();
+                    return pTag === rootTag || pTag === cleanTag;
+                }
+                return false;
+            });
 
             if (!isTagMatched && !hasTagCustomAttr) {
                 continue; // 严格过滤：非此 Tag 的块绝不投影！
@@ -102,13 +108,13 @@ export async function projectSupertagToSQLite(
                 attrs
             });
 
-            // 严格只收集以当前 rootTag 或 cleanTag 开头的专属属性 (custom-<tag>-<attr>)
+            // 严格只收集属于当前 Supertag 的专属属性
             for (const k of Object.keys(attrs)) {
-                if (k.startsWith("custom-")) {
-                    const rawClean = k.replace(/^custom-/, "");
-                    if (rawClean.startsWith(`${rootTag}-`) || rawClean.startsWith(`${cleanTag}-`)) {
-                        const prefix = rawClean.startsWith(`${rootTag}-`) ? `${rootTag}-` : `${cleanTag}-`;
-                        attrKeysSet.add(rawClean.slice(prefix.length));
+                const parsed = parsePhysicalAttrKey(k);
+                if (parsed && parsed.tag) {
+                    const pTag = parsed.tag.toLowerCase();
+                    if (pTag === rootTag || pTag === cleanTag) {
+                        attrKeysSet.add(parsed.slug);
                     }
                 }
             }
@@ -154,9 +160,9 @@ export async function projectSupertagToSQLite(
                     r.updated,
                     0,
                     ...attrNames.map(a => {
-                        return r.attrs[`custom-${cleanTag}-${a}`] ||
-                               r.attrs[`custom-${rootTag}-${a}`] ||
-                               "";
+                        const directKey = getPhysicalAttrKey(cleanTag, a);
+                        const rootKey = getPhysicalAttrKey(rootTag, a);
+                        return r.attrs[directKey] ?? r.attrs[rootKey] ?? "";
                     })
                 ];
                 stmt.run(rowValues);
@@ -202,17 +208,20 @@ export async function syncBlockToSQLite(
         
         // 如果 customAttrs 中有热表中尚未建立的专属新列，动态 ALTER TABLE ADD COLUMN
         for (const [k] of Object.entries(customAttrs)) {
-            if (k.startsWith(`custom-${rootTag}-`) || k.startsWith(`custom-${cleanTag}-`)) {
-                const prefix = k.startsWith(`custom-${rootTag}-`) ? `custom-${rootTag}-` : `custom-${cleanTag}-`;
-                const colName = k.slice(prefix.length);
-                if (!existingCols.includes(colName) && colName !== "id" && colName !== "title" && !colName.startsWith("_")) {
-                    try {
-                        db.exec(`ALTER TABLE "${binding.tableName}" ADD COLUMN "${colName}" TEXT;`);
-                        existingCols.push(colName);
-                        if (!binding.attrNames.includes(colName)) {
-                            binding.attrNames.push(colName);
-                        }
-                    } catch (_) {}
+            const parsed = parsePhysicalAttrKey(k);
+            if (parsed && parsed.tag) {
+                const pTag = parsed.tag.toLowerCase();
+                if (pTag === rootTag || pTag === cleanTag) {
+                    const colName = parsed.slug;
+                    if (!existingCols.includes(colName) && colName !== "id" && colName !== "title" && !colName.startsWith("_")) {
+                        try {
+                            db.exec(`ALTER TABLE "${binding.tableName}" ADD COLUMN "${colName}" TEXT;`);
+                            existingCols.push(colName);
+                            if (!binding.attrNames.includes(colName)) {
+                                binding.attrNames.push(colName);
+                            }
+                        } catch (_) {}
+                    }
                 }
             }
         }
@@ -253,9 +262,9 @@ export async function syncBlockToSQLite(
         for (const col of existingCols) {
             if (col !== "id" && col !== "title" && col !== "_root_id" && col !== "_updated" && col !== "_dirty") {
                 colNames.push(col);
-                const val = customAttrs[`custom-${rootTag}-${col}`] ??
-                            customAttrs[`custom-${cleanTag}-${col}`] ??
-                            "";
+                const directKey = getPhysicalAttrKey(cleanTag, col);
+                const rootKey = getPhysicalAttrKey(rootTag, col);
+                const val = customAttrs[directKey] ?? customAttrs[rootKey] ?? "";
                 colValues.push(val);
             }
         }

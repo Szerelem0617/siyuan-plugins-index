@@ -31,10 +31,12 @@ export class SupertagMonitor {
             const detail = event?.detail || event;
             const cmd = detail?.cmd;
 
-            if (cmd === "databaseIndexCommit" || cmd === "transactions" || cmd === "updateBlock" || cmd === "doOperations" || cmd === "setBlockAttrs" || cmd === "insertBlock") {
-                // 监听思源数据库与块数据变化广播，防抖触发 supertag-db 状态同步与自愈
+            if (cmd === "databaseIndexCommit") {
+                // 仅在思源数据库索引提交广播时，防抖触发 supertag-db 状态同步与自愈
                 this.triggerSupertagDbSync();
+            }
 
+            if (cmd === "databaseIndexCommit" || cmd === "transactions" || cmd === "updateBlock" || cmd === "doOperations" || cmd === "setBlockAttrs" || cmd === "insertBlock") {
                 const txList = Array.isArray(detail?.data) ? detail.data : [detail?.data];
                 for (const tx of txList) {
                     const ops = tx?.doOperations || (Array.isArray(tx) ? tx : []);

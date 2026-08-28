@@ -1,5 +1,5 @@
 import { getColumnMeta } from "./types";
-import { getSupertagSchema, decodeAttrSlug, type SupertagFieldSchema } from "../core/supertag-schema";
+import { getSupertagSchema, type SupertagFieldSchema } from "../core/supertag-schema";
 
 /**
  * 从 SQLite 热表结果集组装标准的 IAV 视图对象
@@ -71,7 +71,7 @@ export function buildVirtualIAVFromSQL(
         }
 
         const meta = getColumnMeta(tagName, attr);
-        const displayName = schemaField?.label || meta?.name || decodeAttrSlug(attr);
+        const displayName = schemaField?.label || meta?.name || attr;
         const colType = schemaField?.type || meta?.type || "select";
 
         avColumns.push({

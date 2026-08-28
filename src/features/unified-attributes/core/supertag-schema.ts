@@ -72,90 +72,129 @@ const COMMON_LABEL_SLUGS: Record<string, string> = {
     "链接": "url"
 };
 
-/**
- * 1. 任意字符串 -> 100% 合规且无损可逆的 ASCII 属性 Slug (满足以小写字母开头，仅含 a-z, 0-9, -)
- */
-export function encodeAttrSlug(rawName: string): string {
-    const raw = (rawName || "").trim();
-    if (!raw) return "field";
-
-    // 1. 检查常用预设词典
-    if (COMMON_LABEL_SLUGS[raw]) {
-        return COMMON_LABEL_SLUGS[raw];
-    }
-
-    // 2. 若原本就是合规的 ASCII 小写字母/数字/连字符（如 "createdblock", "status", "due-date"）
-    // 且以小写字母开头，直接保留（人类高可读）
-    if (/^[a-z][a-z0-9\-]*$/.test(raw)) {
-        return raw;
-    }
-
-    // 3. 含有中文、Emoji、空格、大写字母或特殊符号 -> 转换为 UTF-8 字节十六进制，前缀 u-
-    const bytes = new TextEncoder().encode(raw);
-    const hex = Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join("");
-
-    return `u-${hex}`;
-}
+const B32_CHARS = "abcdefghijklmnopqrstuvwxyz234567";
 
 /**
- * 2. ASCII 属性 Slug -> 100% 无损还原原始中英文/Emoji 字段名 (解码)
+ * 微型 Base32 编码器 (RFC 4648 Unpadded, 仅输出 a-z, 2-7)
  */
-export function decodeAttrSlug(slug: string): string {
-    if (!slug) return "";
-    
-    // 如果是 Unicode Hex 编码前缀 u-
-    if (slug.startsWith("u-")) {
-        const hex = slug.slice(2);
-        try {
-            const bytes = new Uint8Array(
-                (hex.match(/.{1,2}/g) || []).map(byte => parseInt(byte, 16))
-            );
-            return new TextDecoder().decode(bytes);
-        } catch {
-            return slug;
+export function base32Encode(bytes: Uint8Array): string {
+    let bits = 0;
+    let value = 0;
+    let output = "";
+
+    for (let i = 0; i < bytes.length; i++) {
+        value = (value << 8) | bytes[i];
+        bits += 8;
+        while (bits >= 5) {
+            output += B32_CHARS[(value >>> (bits - 5)) & 31];
+            bits -= 5;
         }
     }
 
-    // 检查反向预设词典
-    for (const [zh, en] of Object.entries(COMMON_LABEL_SLUGS)) {
-        if (en === slug) return zh;
+    if (bits > 0) {
+        output += B32_CHARS[(value << (5 - bits)) & 31];
     }
 
-    // 否则直接就是原生的 ASCII 字段名
-    return slug;
+    return output;
 }
 
 /**
- * 兼容别名：slugify 统一采用 encodeAttrSlug
+ * 微型 Base32 解码器 (RFC 4648 Unpadded)
  */
-export function slugify(label: string): string {
-    return encodeAttrSlug(label);
+export function base32Decode(input: string): Uint8Array {
+    let bits = 0;
+    let value = 0;
+    const output: number[] = [];
+
+    for (let i = 0; i < input.length; i++) {
+        const char = input[i].toLowerCase();
+        const index = B32_CHARS.indexOf(char);
+        if (index === -1) continue;
+
+        value = (value << 5) | index;
+        bits += 5;
+
+        if (bits >= 8) {
+            output.push((value >>> (bits - 8)) & 255);
+            bits -= 8;
+        }
+    }
+
+    return new Uint8Array(output);
 }
 
 /**
- * 物理属性 Key 生成网关: custom-${tag}-${slug}
+ * 校验标识符是否为纯合法字符（仅限小写英文字母 a-z、数字 0-9 与连字符 -）
  */
-export function getPhysicalAttrKey(tagName: string, slug: string): string {
+export function isLegalAttrIdentifier(str: string): boolean {
+    if (!str) return false;
+    return /^[a-z0-9][a-z0-9\-]*$/.test(str);
+}
+
+/**
+ * 物理属性 Key 生成网关:
+ * 1. 若 Supertag 与属性名均为合规字符，保持原生直读: custom-${tag}-${field}
+ * 2. 若二者其一包含非法内容（中文、Emoji、空格、下划线、大写等），对整段进行统一 Base32 编码: custom-b32-${base32}
+ */
+export function getPhysicalAttrKey(tagName: string, propertyName: string): string {
     const cleanTag = tagName.replace(/^#+/, "").trim().toLowerCase();
-    const cleanSlug = encodeAttrSlug(slug);
-    return `custom-${cleanTag}-${cleanSlug}`;
+    const cleanProp = propertyName.trim();
+
+    if (isLegalAttrIdentifier(cleanTag) && isLegalAttrIdentifier(cleanProp)) {
+        return `custom-${cleanTag}-${cleanProp}`;
+    }
+
+    // 只要包含非合法内容，统一进行整段 Base32 转码
+    const payload = `${cleanTag}\x1f${cleanProp}`;
+    const bytes = new TextEncoder().encode(payload);
+    const b32 = base32Encode(bytes);
+    return `custom-b32-${b32}`;
 }
 
 /**
- * 物理属性 Key 解析: custom-task-status -> { tag: "task", slug: "status", originalName: "状态" }
+ * 物理属性 Key 解析网关:
+ * 支持从 custom-b32-* 或普通 custom-${tag}-${field} 瞬间无损还原原始 tag 与 field
  */
-export function parsePhysicalAttrKey(rawKey: string): { tag: string; slug: string; originalName: string } | null {
+export function parsePhysicalAttrKey(rawKey: string): { tag: string; slug: string; originalName: string; isEncoded: boolean } | null {
     if (!rawKey || !rawKey.startsWith("custom-")) return null;
+
+    // 1. 整段 Base32 转码属性解析
+    if (rawKey.startsWith("custom-b32-")) {
+        const b32Payload = rawKey.slice(11);
+        try {
+            const bytes = base32Decode(b32Payload);
+            const decoded = new TextDecoder().decode(bytes);
+            const sepIdx = decoded.indexOf("\x1f");
+            if (sepIdx !== -1) {
+                const tag = decoded.slice(0, sepIdx);
+                const field = decoded.slice(sepIdx + 1);
+                return { tag, slug: field, originalName: field, isEncoded: true };
+            }
+        } catch (_) {}
+        return null;
+    }
+
+    // 2. 原生合规命名解析
     const body = rawKey.slice(7); // 去掉 custom-
     const firstDash = body.indexOf("-");
     if (firstDash === -1) {
-        return { tag: "", slug: body, originalName: decodeAttrSlug(body) };
+        return { tag: "", slug: body, originalName: body, isEncoded: false };
     }
     const tag = body.slice(0, firstDash);
-    const slug = body.slice(firstDash + 1);
-    return { tag, slug, originalName: decodeAttrSlug(slug) };
+    const field = body.slice(firstDash + 1);
+    return { tag, slug: field, originalName: field, isEncoded: false };
+}
+
+export function encodeAttrSlug(rawName: string): string {
+    return rawName;
+}
+
+export function decodeAttrSlug(slug: string): string {
+    return slug;
+}
+
+export function slugify(label: string): string {
+    return (label || "").trim();
 }
 
 const inFlightCreations = new Map<string, Promise<string>>();

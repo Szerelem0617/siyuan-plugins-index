@@ -13,7 +13,6 @@
 
 import { post } from "../../../shared/api-client/request";
 import { getColIDMap } from "../../../shared/utils/av-utils";
-import { sanitizeBlockAttrName } from "../../command/utils/attribute-sanitizer";
 import { slugify, getPhysicalAttrKey } from "./supertag-schema";
 import { supertagAVProjector, registerColumnMeta } from "../projection/supertag-av-projector";
 import { showMessage } from "siyuan";
