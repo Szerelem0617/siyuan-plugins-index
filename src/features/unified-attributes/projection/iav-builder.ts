@@ -71,12 +71,7 @@ export function buildVirtualIAVFromSQL(
         }
 
         const meta = getColumnMeta(tagName, attr);
-        let displayName = schemaField?.label || meta?.name || decodeAttrSlug(attr);
-        if (attr === "status" || attr === "index-task") displayName = "状态";
-        else if (attr === "priority") displayName = "优先级";
-        else if (attr === "due" || attr === "due_date") displayName = "截止时间";
-        else if (attr === "memo") displayName = "备注";
-
+        const displayName = schemaField?.label || meta?.name || decodeAttrSlug(attr);
         const colType = schemaField?.type || meta?.type || "select";
 
         avColumns.push({

@@ -68,21 +68,6 @@ export class SupertagBinder {
         return undefined;
     }
 
-    public getTemplatePref(tag: string): string | undefined {
-        const cleanTag = tag.replace(/^#/, "").trim().toLowerCase();
-        return this.prefs[`template:${cleanTag}`];
-    }
-
-    public async setTemplatePref(tag: string, templateAvId: string) {
-        const cleanTag = tag.replace(/^#/, "").trim().toLowerCase();
-        if (templateAvId) {
-            this.prefs[`template:${cleanTag}`] = templateAvId;
-        } else {
-            delete this.prefs[`template:${cleanTag}`];
-        }
-        await this.savePrefs();
-    }
-
     /**
      * 设置 Supertag 绑定的数据库偏好，并默认自动开启虚拟投影
      */

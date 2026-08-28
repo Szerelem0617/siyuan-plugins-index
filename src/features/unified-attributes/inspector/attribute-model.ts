@@ -14,6 +14,7 @@ import { supertagAVProjector, getColumnMeta } from "../projection/supertag-av-pr
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { getColIDMap } from "../../../shared/utils/av-utils";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
+import { decodeAttrSlug } from "../core/supertag-schema";
 
 export interface TypedFieldOption {
     id: string;
@@ -190,9 +191,6 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
     if (rawAttrs["custom-supertags"]) {
         parseSupertags(rawAttrs["custom-supertags"]).forEach(t => tagSet.add(t));
     }
-    if (rawAttrs["custom-index-tags"]) {
-        parseSupertags(rawAttrs["custom-index-tags"]).forEach(t => tagSet.add(t));
-    }
     const tagMatches = content.match(/#([^#\s]+)#?/g);
     if (tagMatches) {
         tagMatches.forEach(t => tagSet.add(t.replace(/#/g, "").trim()));
@@ -218,7 +216,7 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
 
     const processedKeys = new Set<string>([
         "id", "updated", "created", "bookmark", "name", "alias", "memo", "style",
-        "custom-supertags", "custom-index-tags", "custom-avs", "av-names", "custom-av-name",
+        "custom-supertags", "custom-avs", "av-names", "custom-av-name",
         "custom-av-names", "custom-index-buttons", "custom-index-db-config"
     ]);
     const rawCustomFields: RawCustomField[] = [];
@@ -249,18 +247,19 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
             }
 
             if (matchedTag) {
-                // 独占命名空间属性 (支持通过 getColumnMeta 还原中文 Label 与列类型)
+                // 独占命名空间属性 (支持通过 getColumnMeta 与 decodeAttrSlug 还原中文 Label 与列类型)
                 const meta = getColumnMeta(matchedTag, subAttrKey);
+                const decodedLabel = decodeAttrSlug(subAttrKey);
                 const schema = KNOWN_SCHEMA_DEFS[subAttrKey] || {
-                    label: meta?.name || subAttrKey,
+                    label: meta?.name || decodedLabel,
                     type: meta?.type || "text"
                 };
                 const options = buildFieldOptions(subAttrKey, schema, v);
                 const field: SupertagField = {
                     key: subAttrKey,
-                    fullKey: `${matchedTag}.${meta?.name || subAttrKey}`,
+                    fullKey: `${matchedTag}.${meta?.name || decodedLabel}`,
                     rawKey: k,
-                    label: meta?.name || schema.label || subAttrKey,
+                    label: meta?.name || schema.label || decodedLabel,
                     type: meta?.type || schema.type,
                     value: v,
                     options,

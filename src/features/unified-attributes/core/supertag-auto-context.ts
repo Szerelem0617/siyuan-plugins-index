@@ -107,19 +107,6 @@ export function getSupertagOutputPool(conditionalStr: string): { key: string; to
                         type: out.type || "string"
                     });
                 }
-                // 补充 blockid 别名 token (如 var.createdblock)，确保不同语法引用的统一解析
-                if (out.key === "id" || out.type === "blockid") {
-                    const aliases = ["{{var.createdblock}}", "{{var.id}}", "{{var.last_id}}"];
-                    for (const alias of aliases) {
-                        if (!pool.some(p => p.token === alias)) {
-                            pool.push({
-                                key: out.key,
-                                token: alias,
-                                type: "blockid"
-                            });
-                        }
-                    }
-                }
             }
         }
     }

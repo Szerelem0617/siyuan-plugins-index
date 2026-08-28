@@ -69,9 +69,6 @@ export async function projectSupertagToSQLite(
             if (attrs["custom-supertags"]) {
                 parseSupertags(attrs["custom-supertags"]).forEach(t => blockTags.add(t.toLowerCase()));
             }
-            if (attrs["custom-index-tags"]) {
-                parseSupertags(attrs["custom-index-tags"]).forEach(t => blockTags.add(t.toLowerCase()));
-            }
 
             // 解析行内标签与块 tag 属性
             if (row.tag) {
