@@ -1,8 +1,10 @@
 <script lang="ts">
     import type { BlockAttributeData, SupertagField, AVDatabaseField } from "./attribute-model";
-    import { updateBlockAttributeValue } from "./attribute-model";
+    import { updateBlockAttributeValue, toggleSupertagOnBlock } from "./attribute-model";
     import { getPhysicalAttrKey } from "../core/supertag-schema";
-    import { showMessage } from "siyuan";
+    import { getUnifiedSupertagList } from "../core/supertag-entity";
+    import { post } from "../../../shared/api-client/request";
+    import { Menu, showMessage } from "siyuan";
 
     export let blockId: string;
     export let data: BlockAttributeData;
@@ -32,6 +34,123 @@
             collapsedAvGroups.add(avId);
         }
         collapsedAvGroups = new Set(collapsedAvGroups);
+    }
+
+    async function handleOpenAddTagMenu(e: MouseEvent) {
+        e.stopPropagation();
+        e.preventDefault();
+        const targetBtn = (e.currentTarget || e.target) as HTMLElement;
+        const rect = targetBtn.getBoundingClientRect();
+
+        const allTags = await getUnifiedSupertagList();
+        const curTags = (data?.supertags || []).map(t => t.toLowerCase());
+
+        const menu = new Menu("governed-add-tag-menu");
+
+        if (allTags.length === 0) {
+            menu.addItem({
+                label: "暂无预设超级标签",
+                disabled: true
+            });
+        } else {
+            allTags.forEach(item => {
+                const isAdded = curTags.includes(item.typeName.toLowerCase());
+                menu.addItem({
+                    icon: "iconTags",
+                    label: (isAdded ? "✓ #" : "#") + item.typeName,
+                    disabled: isAdded,
+                    click: async () => {
+                        await toggleSupertagOnBlock(blockId, item.typeName, "add");
+                        try {
+                            const { supertagMonitor } = await import("../core/supertag-listener");
+                            await supertagMonitor.processNewTag(blockId, item.typeName);
+                            const { SupertagRenderer } = await import("../renderer/SupertagRenderer");
+                            const protyle = (window as any).activeProtyleInstance;
+                            if (protyle) SupertagRenderer.render(protyle);
+                        } catch (_) {}
+                        showMessage(`✓ 已为当前块挂载标签 #${item.typeName}`);
+                        await onReload();
+                    }
+                });
+            });
+        }
+
+        menu.open({
+            x: rect.right,
+            y: rect.bottom,
+            isLeft: true
+        });
+    }
+
+    async function handleOpenAddAvMenu(e: MouseEvent) {
+        e.stopPropagation();
+        e.preventDefault();
+        const targetBtn = (e.currentTarget || e.target) as HTMLElement;
+        const rect = targetBtn.getBoundingClientRect();
+
+        const menu = new Menu("governed-add-av-menu");
+
+        try {
+            const { fetchAllAVBlocks } = await import("../../sqlite/sqlite-data-fetcher");
+            const avBlocks = await fetchAllAVBlocks();
+            const curAvIds = (data?.avGroups || []).map(g => g.avId);
+
+            const EXCLUDED_AV_NAMES = new Set([
+                "supertag-db", "command-db", "supertagdb", "commanddb", 
+                "data-dbs", "datadbs", "Unnamed Database", "Unnamed", "未命名", "新条目"
+            ]);
+
+            const seenAvIds = new Set<string>();
+            const uniqueList: typeof avBlocks = [];
+            for (const b of avBlocks) {
+                if (!b.avId || seenAvIds.has(b.avId)) continue;
+                if (EXCLUDED_AV_NAMES.has(b.name)) continue;
+                seenAvIds.add(b.avId);
+                uniqueList.push(b);
+            }
+
+            if (uniqueList.length === 0) {
+                menu.addItem({
+                    label: "暂无可用数据库",
+                    disabled: true
+                });
+            } else {
+                uniqueList.forEach((av) => {
+                    const isJoined = curAvIds.includes(av.avId);
+                    const displayTitle = av.name.length > 24 ? av.name.slice(0, 24) + "..." : av.name;
+
+                    menu.addItem({
+                        icon: "iconDatabase",
+                        label: (isJoined ? "✓ " : "") + displayTitle,
+                        disabled: isJoined,
+                        click: async () => {
+                            try {
+                                await post("/api/av/addAttributeViewBlocks", {
+                                    avID: av.avId,
+                                    srcIDs: [blockId],
+                                    isDetached: false
+                                });
+                                showMessage(`✓ 已将当前块加入数据库 "${av.name}"`);
+                                await onReload();
+                            } catch (err) {
+                                showMessage(`加入数据库失败: ${err}`, 4000, "error");
+                            }
+                        }
+                    });
+                });
+            }
+        } catch (err) {
+            menu.addItem({
+                label: "读取数据库列表失败",
+                disabled: true
+            });
+        }
+
+        menu.open({
+            x: rect.right,
+            y: rect.bottom,
+            isLeft: true
+        });
     }
 
     async function handleAddNewTagField(tag: string) {
@@ -82,9 +201,29 @@
 </script>
 
 <div class="governed-tab-container">
+    <!-- 顶栏操作区：标题 + 右上角 + 标签与数据库图标动作按钮 -->
+    <div class="governed-top-bar">
+        <span class="governed-top-title">🏷️ 标签属性</span>
+        <div class="header-action-group">
+            <button
+                class="header-icon-action-btn"
+                title="添加超级标签"
+                on:click={(e) => handleOpenAddTagMenu(e)}
+            >
+                <span class="btn-plus-char">+</span><svg class="btn-svg-icon"><use xlink:href="#iconTags"></use></svg>
+            </button>
+            <button
+                class="header-icon-action-btn"
+                title="加入数据库"
+                on:click={(e) => handleOpenAddAvMenu(e)}
+            >
+                <span class="btn-plus-char">+</span><svg class="btn-svg-icon"><use xlink:href="#iconDatabase"></use></svg>
+            </button>
+        </div>
+    </div>
+
     <!-- A. Supertag 独占命名空间组件卡片 -->
     {#if data.supertagGroups.length > 0}
-        <div class="section-title">🏷️ Supertag 属性组件</div>
         {#each data.supertagGroups as group}
             {@const isCollapsed = collapsedTagGroups.has(group.tag)}
             <div class="group-card">
@@ -97,13 +236,16 @@
                 >
                     <div class="group-header-left">
                         <svg class="collapse-icon {isCollapsed ? 'collapsed' : ''}" style="width: 10px; height: 10px; fill: currentColor;"><use xlink:href="#iconDown"></use></svg>
+                        <svg class="tag-svg-icon"><use xlink:href="#iconTags"></use></svg>
                         <span class="group-tag-name">#{group.tag}</span>
                         <span class="group-count-badge">{group.fields.length} 属性</span>
                     </div>
                     {#if group.boundAvName}
-                        <span class="group-pill" style="background: rgba(16, 185, 129, 0.12); color: #059669; border-color: rgba(16, 185, 129, 0.3);" title="已关联数据库: {group.boundAvName}">⚡ 关联库: {group.boundAvName}</span>
+                        <span class="group-pill bound-av-pill" title="已关联数据库: {group.boundAvName}">
+                            <span class="status-dot">●</span> 已关联 <svg class="inline-av-icon"><use xlink:href="#iconDatabase"></use></svg>
+                        </span>
                     {:else}
-                        <span class="group-pill">Supertag 组件</span>
+                        <span class="group-pill">Supertag</span>
                     {/if}
                 </div>
 
@@ -242,15 +384,16 @@
                 >
                     <div class="group-header-left">
                         <svg class="collapse-icon {isCollapsed ? 'collapsed' : ''}" style="width: 10px; height: 10px; fill: currentColor;"><use xlink:href="#iconDown"></use></svg>
+                        <svg class="db-svg-icon"><use xlink:href="#iconDatabase"></use></svg>
                         <div class="av-title-wrap">
-                            <span class="group-av-name">⚡ {avGroup.avName}</span>
+                            <span class="group-av-name">{avGroup.avName}</span>
                             {#if avGroup.isDuplicateName}
                                 <span class="dup-warning-badge" title="存在同名数据库，已附加 ID 标识区分">⚠️ 同名库 ({avGroup.avId.slice(0, 4)})</span>
                             {/if}
                         </div>
                         <span class="group-count-badge">{avGroup.fields.length} 字段</span>
                     </div>
-                    <span class="group-pill" style="color: #059669; border-color: rgba(16,185,129,0.3);">原生 AV</span>
+                    <span class="group-pill bound-av-pill"><span class="status-dot">●</span> 数据库</span>
                 </div>
 
                 {#if !isCollapsed}
@@ -298,7 +441,7 @@
                                             <input
                                                 type="date"
                                                 class="b3-text-field"
-                                                style="font-size: 11px; height: 26px; width: 100%;"
+                                                style="font-size: 11px; width: 100%;"
                                                 bind:value={avField.displayValue}
                                                 on:change={() => onAVCellChange(avGroup.avId, avField.keyId, avGroup.itemId, avField.displayValue, avField.colType)}
                                             />
@@ -310,7 +453,7 @@
                                                     checked={avField.displayValue === 'true' || avField.displayValue === '1'}
                                                     on:change={(e) => handleAVCheckboxToggle(avGroup.avId, avField, avGroup.itemId, e)}
                                                 />
-                                                <span style="font-size: 11px;">{avField.displayValue === 'true' ? 'True (开启)' : 'False (关闭)'}</span>
+                                                <span style="font-size: 11px;">{avField.displayValue === 'true' ? '已勾选 (true)' : '未勾选 (false)'}</span>
                                             </label>
                                         {:else if avField.colType === 'number'}
                                             <input
@@ -342,8 +485,11 @@
 
     {#if data.supertagGroups.length === 0 && data.avGroups.length === 0}
         <div class="empty-state">
-            <span>当前块未挂载 Supertag，且未加入任何 AV 数据库</span>
-            <span style="font-size: 11px; opacity: 0.6;">可在编辑器中添加 <b>#task</b> 等标签快速启用结构化组件</span>
+            <div class="empty-icon-banner">
+                <svg style="width: 28px; height: 28px; fill: currentColor; opacity: 0.35;"><use xlink:href="#iconTags"></use></svg>
+            </div>
+            <div class="empty-main-text">当前块未挂载 Supertag，且未加入任何 AV 数据库</div>
+            <div class="empty-sub-tip">可点击右上角 +，添加超级标签或数据库</div>
         </div>
     {/if}
 </div>
@@ -353,13 +499,125 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow-x: hidden;
     }
 
-    .section-title {
+    .governed-top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 6px;
+        border-bottom: 1px dashed var(--b3-border-color);
+        margin-bottom: 4px;
+    }
+
+    .governed-top-title {
         font-size: 11px;
         font-weight: 700;
         color: var(--b3-theme-on-surface-light);
-        margin-bottom: 4px;
+    }
+
+    .header-action-group {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .header-icon-action-btn {
+        background: var(--b3-theme-surface);
+        border: 1px solid var(--b3-border-color);
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s ease;
+        line-height: 1.4;
+        color: var(--b3-theme-on-surface);
+    }
+
+    .header-icon-action-btn:hover {
+        background: var(--indexos-ice-highlight, rgba(59, 130, 246, 0.1));
+        border-color: var(--indexos-index-blue, #A1C4E6);
+        transform: translateY(-1px);
+    }
+
+    .btn-plus-char {
+        font-weight: 700;
+        font-size: 11px;
+        margin-right: 2px;
+        line-height: 1;
+        opacity: 0.85;
+    }
+
+    .btn-svg-icon {
+        width: 12px;
+        height: 12px;
+        fill: currentColor;
+        vertical-align: -1px;
+    }
+
+    .tag-svg-icon {
+        width: 12px;
+        height: 12px;
+        fill: currentColor;
+        color: var(--indexos-accent-primary, #3B82F6);
+        flex-shrink: 0;
+    }
+
+    .db-svg-icon {
+        width: 12px;
+        height: 12px;
+        fill: currentColor;
+        color: #059669;
+        flex-shrink: 0;
+    }
+
+    .inline-av-icon {
+        width: 11px;
+        height: 11px;
+        fill: currentColor;
+        vertical-align: -1px;
+        display: inline-block;
+        margin-left: 2px;
+    }
+
+    .bound-av-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        background: rgba(16, 185, 129, 0.10);
+        color: #059669;
+        border-color: rgba(16, 185, 129, 0.30);
+    }
+
+    .status-dot {
+        font-size: 8px;
+        color: #10B981;
+    }
+
+    .empty-icon-banner {
+        font-size: 20px;
+        margin-bottom: 2px;
+        opacity: 0.85;
+    }
+
+    .empty-main-text {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--b3-theme-on-surface);
+    }
+
+    .empty-sub-tip {
+        font-size: 11px;
+        opacity: 0.7;
+        line-height: 1.5;
+        max-width: 260px;
     }
 
     .group-card {
@@ -371,6 +629,9 @@
         flex-direction: column;
         gap: 6px;
         margin-bottom: 6px;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
     }
 
     .av-card {
@@ -403,6 +664,8 @@
         align-items: center;
         gap: 6px;
         overflow: hidden;
+        min-width: 0;
+        flex: 1;
     }
 
     .collapse-icon {
@@ -430,18 +693,26 @@
         font-size: 11px;
         font-weight: 700;
         color: var(--indexos-accent-primary, #3B82F6);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .group-av-name {
         font-size: 11px;
         font-weight: 700;
         color: #059669;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .av-title-wrap {
         display: flex;
         align-items: center;
         gap: 4px;
+        overflow: hidden;
+        min-width: 0;
     }
 
     .dup-warning-badge {

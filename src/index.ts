@@ -28,6 +28,7 @@ import {
     supertagAVProjector,
     avProjectionToggle,
     initDockInspector,
+    updateDockDom,
     activeBlockTracker
 } from "./features/unified-attributes";
 import { refreshEntryRegistrations, destroyEntryRegistrations } from "./features/command/global-registration/entry-registration";
@@ -188,6 +189,7 @@ export default class IndexPlugin extends Plugin {
         window.addEventListener("index-plugin-setting-changed", (e: CustomEvent) => {
             if (e.detail?.key === "devMode") {
                 supertagManager.updateState();
+                updateDockDom(this);
             }
         });
         if (isDevInitSysEnabled()) {

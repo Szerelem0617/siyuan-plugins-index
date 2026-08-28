@@ -140,12 +140,23 @@ export function getPhysicalAttrKey(tagName: string, propertyName: string): strin
     const cleanTag = tagName.replace(/^#+/, "").trim().toLowerCase();
     const cleanProp = propertyName.trim();
 
-    if (isLegalAttrIdentifier(cleanTag) && isLegalAttrIdentifier(cleanProp)) {
-        return `custom-${cleanTag}-${cleanProp}`;
+    if (cleanTag) {
+        if (isLegalAttrIdentifier(cleanTag) && isLegalAttrIdentifier(cleanProp)) {
+            return `custom-${cleanTag}-${cleanProp}`;
+        }
+        // 只要包含非合法内容，统一进行整段 Base32 转码
+        const payload = `${cleanTag}\x1f${cleanProp}`;
+        const bytes = new TextEncoder().encode(payload);
+        const b32 = base32Encode(bytes);
+        return `custom-b32-${b32}`;
     }
 
-    // 只要包含非合法内容，统一进行整段 Base32 转码
-    const payload = `${cleanTag}\x1f${cleanProp}`;
+    // 独立属性 (无 Supertag 命名空间)
+    if (isLegalAttrIdentifier(cleanProp)) {
+        return `custom-${cleanProp}`;
+    }
+
+    const payload = `\x1f${cleanProp}`;
     const bytes = new TextEncoder().encode(payload);
     const b32 = base32Encode(bytes);
     return `custom-b32-${b32}`;

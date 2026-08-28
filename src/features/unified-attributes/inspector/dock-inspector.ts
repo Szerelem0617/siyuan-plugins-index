@@ -7,6 +7,7 @@
 import type { Plugin } from "siyuan";
 import DockAttributeInspector from "./DockAttributeInspector.svelte";
 import { activeBlockTracker } from "./active-block-tracker";
+import { settings } from "../../../core/settings";
 
 export const DOCK_TYPE = "indexos_inspector_dock";
 
@@ -14,9 +15,15 @@ let inspectorSvelteInstance: any = null;
 
 export function updateDockDom(plugin: Plugin) {
     try {
+        const isDev = !!settings.get("devMode");
         const dockType = plugin.name + DOCK_TYPE;
         const dockButtons = document.querySelectorAll(`[data-type="${dockType}"], [data-type="${DOCK_TYPE}"], [data-type*="indexos_inspector_dock"]`);
         dockButtons.forEach((btn: any) => {
+            if (!isDev) {
+                btn.style.display = "none";
+                return;
+            }
+            btn.style.display = "";
             btn.setAttribute("aria-label", "属性管理");
             btn.setAttribute("title", "属性管理");
             btn.setAttribute("data-title", "属性管理");
@@ -29,10 +36,17 @@ export function updateDockDom(plugin: Plugin) {
 
         const dockHeaderTitles = document.querySelectorAll(`.layout-tab-bar .item[data-type="${dockType}"] .item__text, .layout-tab-bar .item[data-type*="indexos_inspector_dock"] .item__text`);
         dockHeaderTitles.forEach((titleEl: any) => {
+            const item = titleEl.closest(".item");
+            if (!isDev) {
+                if (item) item.style.display = "none";
+                return;
+            }
+            if (item) item.style.display = "";
             titleEl.textContent = "属性管理";
         });
         const dockHeaderIcons = document.querySelectorAll(`.layout-tab-bar .item[data-type="${dockType}"] use, .layout-tab-bar .item[data-type*="indexos_inspector_dock"] use`);
         dockHeaderIcons.forEach((useEl: any) => {
+            if (!isDev) return;
             useEl.setAttribute("xlink:href", "#iconAttr");
             useEl.setAttribute("href", "#iconAttr");
         });
@@ -40,7 +54,9 @@ export function updateDockDom(plugin: Plugin) {
 }
 
 export function initDockInspector(plugin: Plugin) {
-    activeBlockTracker.init();
+    if (settings.get("devMode")) {
+        activeBlockTracker.init();
+    }
 
     plugin.addDock({
         config: {

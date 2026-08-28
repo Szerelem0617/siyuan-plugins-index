@@ -267,7 +267,8 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
                 supertagGroupsMap.get(matchedTag)?.push(field);
                 processedKeys.add(k);
             } else {
-                const rawClean = k.replace(/^custom-/, "");
+                const parsedStandalone = parsePhysicalAttrKey(k);
+                const rawClean = parsedStandalone?.originalName || parsedStandalone?.slug || k.replace(/^custom-/, "");
                 // 检查是否为全局通用 schema 字段 (如 custom-status, custom-priority)
                 const schema = KNOWN_SCHEMA_DEFS[rawClean];
                 if (schema && supertags.length > 0) {

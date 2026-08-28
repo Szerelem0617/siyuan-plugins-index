@@ -95,6 +95,7 @@ export {
 
 export {
     initDockInspector,
+    updateDockDom,
     DOCK_TYPE
 } from "./inspector/dock-inspector";
 

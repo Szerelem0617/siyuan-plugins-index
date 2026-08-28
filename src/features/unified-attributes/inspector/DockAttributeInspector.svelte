@@ -14,7 +14,7 @@
 
     let currentContext: ActiveBlockContext | null = null;
     let blockId: string = "";
-    let loading = true;
+    let loading = false;
     let data: BlockAttributeData | null = null;
     let activeTab: "base" | "governed" = "base";
     let isPinned = false;
@@ -191,15 +191,15 @@
 
     <!-- 内容滚动区 -->
     <div class="dock-body">
-        {#if loading}
+        {#if loading && blockId}
             <div class="loading-wrap">
                 <div class="spinner"></div>
-                <span>正在感知并读取属性...</span>
+                <span>正在读取属性...</span>
             </div>
         {:else if !blockId}
             <div class="empty-state">
                 <span style="font-size: 20px; opacity: 0.3;">🎯</span>
-                <span>请在编辑器中点击或选择一个块</span>
+                <span>请选中块或页面来查看属性</span>
             </div>
         {:else if data}
             {#if activeTab === 'base'}

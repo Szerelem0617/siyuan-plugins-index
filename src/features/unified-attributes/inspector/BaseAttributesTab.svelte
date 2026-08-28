@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { BlockAttributeData } from "./attribute-model";
     import { updateBlockAttributeValue } from "./attribute-model";
+    import { getPhysicalAttrKey } from "../core/supertag-schema";
     import { showMessage } from "siyuan";
 
     export let blockId: string;
@@ -22,21 +23,20 @@
         }
 
         const isBuiltin = ["bookmark", "name", "alias", "memo"].includes(key.toLowerCase());
-        let suffix = key;
-        if (suffix.startsWith("custom-")) {
-            suffix = suffix.slice(7);
+        let rawKey = "";
+        if (isBuiltin) {
+            rawKey = key.toLowerCase();
+        } else {
+            let suffix = key;
+            if (suffix.startsWith("custom-")) {
+                suffix = suffix.slice(7);
+            }
+            rawKey = getPhysicalAttrKey("", suffix);
         }
 
-        // 思源块自定义属性命名规范校验：只能包含小写英文字母、数字和连字符，并且以小写英文字母开头
-        if (!isBuiltin && !/^[a-z][a-z0-9-]*$/.test(suffix)) {
-            showMessage("属性名只能包含小写英文字母、数字和连字符，并且以小写英文字母开头", 4000, "error");
-            return;
-        }
-
-        const rawKey = isBuiltin ? key.toLowerCase() : (key.startsWith("custom-") ? key : `custom-${suffix}`);
         const ok = await updateBlockAttributeValue(blockId, rawKey, val);
         if (!ok) {
-            showMessage("属性名只能包含小写英文字母、数字和连字符，并且以小写英文字母开头", 4000, "error");
+            showMessage("保存属性失败", 4000, "error");
             return;
         }
 
@@ -44,7 +44,7 @@
         newCustomVal = "";
         isAddingCustom = false;
         await onReload();
-        showMessage(`✓ 已新增属性: ${rawKey.replace(/^custom-/, "")}`);
+        showMessage(`✓ 已新增属性: ${key}`);
     }
 
     async function handleRemoveCustomField(rawKey: string) {
