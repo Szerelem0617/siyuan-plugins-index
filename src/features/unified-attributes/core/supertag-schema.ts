@@ -411,7 +411,24 @@ export async function preflightSupertagProperty(
     sampleValue?: any
 ): Promise<{ slug: string; physicalKey: string; keyId: string; keyType: string }> {
     const cleanTag = tagName.replace(/^#+/, "").trim().toLowerCase();
-    const rawProp = propertyName.trim();
+    let rawProp = propertyName.trim();
+
+    // 递归剥离任何已有的 custom- 或 <tag>- 前缀，坚决杜绝命名空间套娃 (如 task-custom-task-...)
+    while (
+        rawProp.startsWith("custom-") ||
+        (cleanTag && (
+            rawProp.toLowerCase().startsWith(`${cleanTag}-`) ||
+            rawProp.toLowerCase().startsWith(`${cleanTag}.`) ||
+            rawProp.toLowerCase().startsWith(`${cleanTag}_`)
+        ))
+    ) {
+        if (rawProp.startsWith("custom-")) {
+            rawProp = rawProp.slice(7);
+        } else if (cleanTag) {
+            rawProp = rawProp.slice(cleanTag.length + 1);
+        }
+    }
+
     const slug = slugify(rawProp);
     const physicalKey = getPhysicalAttrKey(cleanTag, slug);
 

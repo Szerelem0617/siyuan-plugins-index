@@ -43,7 +43,7 @@ function isOutputUsedByDownstream(supertagLabel: string, varName: string): boole
         }
     }
 
-    return true;
+    return false;
 }
 
 /**
@@ -66,10 +66,11 @@ export async function persistOutputVariablesToLayer4(
             "id", "last_id", "var.id", "var.last_id"
         ]);
 
-        // 1. 收集所有有效业务出参变量 (排除带点、带双大括号等模板 token 及系统变量)
+        // 1. 收集所有有效业务出参变量 (排除带点、带双大括号、custom- 属性等现有块属性及系统变量)
         for (const [k, v] of Object.entries(outputVars)) {
             if (k.startsWith("_") || k.startsWith("{{") || k.includes("}}") || k.includes(".")) continue;
-            if (SYSTEM_ENV_KEYS.has(k)) continue;
+            if (k.startsWith("custom-") || k.startsWith("var.")) continue;
+            if (SYSTEM_ENV_KEYS.has(k) || SYSTEM_ENV_KEYS.has(k.toLowerCase())) continue;
             if (v !== undefined && v !== null && typeof v !== "object" && String(v).trim() !== "") {
                 const varName = k.trim();
                 if (varName && !targetOutputEntries.some(([name]) => name === varName)) {

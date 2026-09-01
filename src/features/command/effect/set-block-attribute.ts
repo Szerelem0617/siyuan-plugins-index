@@ -161,9 +161,20 @@ export async function setBlockAttribute(
 
         if (cleanTag && !isNative && !isGlobal) {
             // 🌟 预判断网关：JIT 自动建库、自动扩列、Slug 转写
-            let propName = rawKTrimmed.replace(/^custom-/, "");
-            if (propName.toLowerCase().startsWith(`${cleanTag}.`) || propName.toLowerCase().startsWith(`${cleanTag}_`) || propName.toLowerCase().startsWith(`${cleanTag}-`)) {
-                propName = propName.slice(cleanTag.length + 1);
+            let propName = rawKTrimmed;
+            while (
+                propName.startsWith("custom-") ||
+                (cleanTag && (
+                    propName.toLowerCase().startsWith(`${cleanTag}-`) ||
+                    propName.toLowerCase().startsWith(`${cleanTag}.`) ||
+                    propName.toLowerCase().startsWith(`${cleanTag}_`)
+                ))
+            ) {
+                if (propName.startsWith("custom-")) {
+                    propName = propName.slice(7);
+                } else if (cleanTag) {
+                    propName = propName.slice(cleanTag.length + 1);
+                }
             }
             const preflight = await preflightSupertagProperty(cleanTag, propName, rawV);
             finalAttrs[preflight.physicalKey] = rawV !== undefined && rawV !== null ? String(rawV) : "";
