@@ -36,10 +36,20 @@ function resolveNamespacedAttrName(rawName: string, context?: CommandContext): s
 
     // 3. 在 Supertag 触发上下文中：自动赋予该 Tag 的命名空间 (物理存储格式: custom-<tag>-<attr> 或 custom-b32-...)
     if (cleanTag) {
-        let pure = trimmed.replace(/^custom-/, "");
+        let pure = trimmed;
+        if (pure.startsWith("custom-tag--")) {
+            pure = pure.slice(12);
+            const idx = pure.indexOf("--");
+            if (idx !== -1) pure = pure.slice(idx + 2);
+        } else if (pure.startsWith("custom-")) {
+            pure = pure.slice(7);
+        }
 
-        // 已经带有当前 Tag 前缀 (如 task.status 或 task_status 或 task-status)
-        if (pure.toLowerCase().startsWith(`${cleanTag}.`)) {
+        if (pure.toLowerCase().startsWith(`tag--${cleanTag}--`)) {
+            pure = pure.slice(`tag--${cleanTag}--`.length);
+        } else if (pure.toLowerCase().startsWith(`${cleanTag}--`)) {
+            pure = pure.slice(`${cleanTag}--`.length);
+        } else if (pure.toLowerCase().startsWith(`${cleanTag}.`)) {
             pure = pure.slice(cleanTag.length + 1);
         } else if (pure.toLowerCase().startsWith(`${cleanTag}_`)) {
             pure = pure.slice(cleanTag.length + 1);
@@ -163,15 +173,26 @@ export async function setBlockAttribute(
             // 🌟 预判断网关：JIT 自动建库、自动扩列、Slug 转写
             let propName = rawKTrimmed;
             while (
+                propName.startsWith("custom-tag--") ||
                 propName.startsWith("custom-") ||
                 (cleanTag && (
+                    propName.toLowerCase().startsWith(`tag--${cleanTag}--`) ||
+                    propName.toLowerCase().startsWith(`${cleanTag}--`) ||
                     propName.toLowerCase().startsWith(`${cleanTag}-`) ||
                     propName.toLowerCase().startsWith(`${cleanTag}.`) ||
                     propName.toLowerCase().startsWith(`${cleanTag}_`)
                 ))
             ) {
-                if (propName.startsWith("custom-")) {
+                if (propName.startsWith("custom-tag--")) {
+                    propName = propName.slice(12);
+                    const idx = propName.indexOf("--");
+                    if (idx !== -1) propName = propName.slice(idx + 2);
+                } else if (propName.startsWith("custom-")) {
                     propName = propName.slice(7);
+                } else if (cleanTag && propName.toLowerCase().startsWith(`tag--${cleanTag}--`)) {
+                    propName = propName.slice(`tag--${cleanTag}--`.length);
+                } else if (cleanTag && propName.toLowerCase().startsWith(`${cleanTag}--`)) {
+                    propName = propName.slice(`${cleanTag}--`.length);
                 } else if (cleanTag) {
                     propName = propName.slice(cleanTag.length + 1);
                 }

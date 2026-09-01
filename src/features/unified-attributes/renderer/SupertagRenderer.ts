@@ -75,7 +75,7 @@ export class SupertagRenderer {
             const tags = parseSupertags(rawTags);
             globalSupertagsCache.set(docId, tags);
 
-            const taskStatus = attrs["custom-task-status"];
+            const taskStatus = attrs["custom-task"] || attrs["custom-index-task"] || attrs["custom-task-status"];
             const isTask = Boolean(taskStatus);
 
             // Find or create document tags container
@@ -133,7 +133,7 @@ export class SupertagRenderer {
         const editorEl = blockEl.closest(".protyle-wysiwyg") as HTMLElement || document.body;
         const rawTags = blockEl.getAttribute("custom-supertags") || "";
         const tags = parseSupertags(rawTags);
-        const taskStatus = blockEl.getAttribute("custom-task-status");
+        const taskStatus = blockEl.getAttribute("custom-task") || blockEl.getAttribute("custom-index-task") || blockEl.getAttribute("custom-task-status");
         const isTask = Boolean(taskStatus);
 
         let attrEl = blockEl.querySelector(".protyle-attr") as HTMLElement;
@@ -282,10 +282,10 @@ export class SupertagRenderer {
     }
 
     /**
-     * Scan the DOM for blocks carrying `custom-supertags` or `custom-index-task` and render inline pills.
+     * Scan the DOM for blocks carrying `custom-supertags`, `custom-task` or `custom-index-task` and render inline pills.
      */
     public static renderBlockTags(editorEl: HTMLElement) {
-        const blocks = editorEl.querySelectorAll("[custom-supertags], [custom-index-task]");
+        const blocks = editorEl.querySelectorAll("[custom-supertags], [custom-task], [custom-index-task]");
         blocks.forEach((block: any) => {
             this.renderSingleBlockElement(block);
         });
@@ -330,17 +330,17 @@ export class SupertagRenderer {
                 // Update DOM immediately for instant UI feedback with safe null-checks
                 const titleNode = editorEl?.querySelector?.(".protyle-title");
                 if (titleNode && titleNode.getAttribute("data-node-id") === blockId) {
-                    titleNode.setAttribute("custom-index-task", newStatus);
+                    titleNode.setAttribute("custom-task", newStatus);
                 } else {
                     const node = editorEl?.querySelector?.(`[data-node-id="${blockId}"]`) || document.querySelector(`[data-node-id="${blockId}"]`);
-                    if (node) node.setAttribute("custom-index-task", newStatus);
+                    if (node) node.setAttribute("custom-task", newStatus);
                 }
 
                 // Update backend attribute
                 await post("/api/attr/setBlockAttrs", {
                     id: blockId,
                     attrs: {
-                        "custom-index-task": newStatus
+                        "custom-task": newStatus
                     }
                 });
 

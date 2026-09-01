@@ -52,9 +52,9 @@ export function registerSupertagSchemaSuite() {
             expect(isLegalAttrIdentifier("")).toBe(false); // 空
         });
 
-        test("3. 纯英文合法属性生成保持原生直读 (custom-<tag>-<field>)", () => {
+        test("3. 纯英文专属属性使用双连字符锁定规范 (custom-tag--<tag>--<field>)", () => {
             const key = getPhysicalAttrKey("task", "status");
-            expect(key).toBe("custom-task-status");
+            expect(key).toBe("custom-tag--task--status");
 
             const parsed = parsePhysicalAttrKey(key);
             expect(parsed).toBeTruthy();
@@ -64,7 +64,21 @@ export function registerSupertagSchemaSuite() {
             expect(parsed?.isEncoded).toBe(false);
         });
 
-        test("4. 中文 Supertag 自动整段 Base32 编码与无损还原", () => {
+        test("4. 独立/全局属性存原名，包含连字符不产生歧义 (custom-my-name, custom-user-id)", () => {
+            const key1 = getPhysicalAttrKey("", "my-name");
+            expect(key1).toBe("custom-my-name");
+            const parsed1 = parsePhysicalAttrKey(key1);
+            expect(parsed1?.tag).toBe("");
+            expect(parsed1?.originalName).toBe("my-name");
+
+            const key2 = getPhysicalAttrKey("", "user-id");
+            expect(key2).toBe("custom-user-id");
+            const parsed2 = parsePhysicalAttrKey(key2);
+            expect(parsed2?.tag).toBe("");
+            expect(parsed2?.originalName).toBe("user-id");
+        });
+
+        test("5. 中文 Supertag 自动整段 Base32 编码与无损还原", () => {
             const key = getPhysicalAttrKey("测试标签", "status");
             // 必须满足思源属性只包含小写字母、数字和连字符的硬约束
             expect(key.startsWith("custom-b32-")).toBe(true);
@@ -78,7 +92,7 @@ export function registerSupertagSchemaSuite() {
             expect(parsed?.isEncoded).toBe(true);
         });
 
-        test("5. 中文字段名与 Emoji 标签组合编码与无损还原", () => {
+        test("6. 中文字段名与 Emoji 标签组合编码与无损还原", () => {
             const key = getPhysicalAttrKey("🔥项目", "当前进度");
             expect(key.startsWith("custom-b32-")).toBe(true);
             expect(/^[a-z0-9-]+$/.test(key)).toBe(true);
@@ -91,7 +105,7 @@ export function registerSupertagSchemaSuite() {
             expect(parsed?.isEncoded).toBe(true);
         });
 
-        test("6. 独立自定义属性（无 Supertag 命名空间）编解码", () => {
+        test("7. 独立自定义属性（无 Supertag 命名空间）编解码", () => {
             // 纯英文字段
             const key1 = getPhysicalAttrKey("", "author");
             expect(key1).toBe("custom-author");

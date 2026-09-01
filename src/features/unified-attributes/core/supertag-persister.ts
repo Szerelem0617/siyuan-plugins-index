@@ -63,6 +63,7 @@ export async function persistOutputVariablesToLayer4(
         const SYSTEM_ENV_KEYS = new Set([
             "date", "time", "block_id", "root_id", "parent_id", "target_id", "host_id", "project_id",
             "custom-supertags", "supertags", "updated", "completed", "task_status", "task-status", "index-task",
+            "task", "custom-task",
             "id", "last_id", "var.id", "var.last_id"
         ]);
 

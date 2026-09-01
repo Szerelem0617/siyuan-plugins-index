@@ -133,8 +133,9 @@ export function isLegalAttrIdentifier(str: string): boolean {
 
 /**
  * 物理属性 Key 生成网关:
- * 1. 若 Supertag 与属性名均为合规字符，保持原生直读: custom-${tag}-${field}
- * 2. 若二者其一包含非法内容（中文、Emoji、空格、下划线、大写等），对整段进行统一 Base32 编码: custom-b32-${base32}
+ * 1. 超级标签专属命名空间（纯合规字符）：采用双连字符锁定 custom-tag--${tag}--${field}，彻底消除与普通带连字符属性（如 my-name）的二义性
+ * 2. 独立/全局属性（纯合规字符）：直接存原名 custom-${field}
+ * 3. 若二者其一包含非法内容（中文、Emoji、空格、下划线、大写等），对整段进行统一 Base32 编码: custom-b32-${base32}
  */
 export function getPhysicalAttrKey(tagName: string, propertyName: string): string {
     const cleanTag = tagName.replace(/^#+/, "").trim().toLowerCase();
@@ -142,7 +143,7 @@ export function getPhysicalAttrKey(tagName: string, propertyName: string): strin
 
     if (cleanTag) {
         if (isLegalAttrIdentifier(cleanTag) && isLegalAttrIdentifier(cleanProp)) {
-            return `custom-${cleanTag}-${cleanProp}`;
+            return `custom-tag--${cleanTag}--${cleanProp}`;
         }
         // 只要包含非合法内容，统一进行整段 Base32 转码
         const payload = `${cleanTag}\x1f${cleanProp}`;
@@ -151,7 +152,7 @@ export function getPhysicalAttrKey(tagName: string, propertyName: string): strin
         return `custom-b32-${b32}`;
     }
 
-    // 独立属性 (无 Supertag 命名空间)
+    // 独立/全局属性 (无 Supertag 命名空间，存原名)
     if (isLegalAttrIdentifier(cleanProp)) {
         return `custom-${cleanProp}`;
     }
@@ -164,7 +165,9 @@ export function getPhysicalAttrKey(tagName: string, propertyName: string): strin
 
 /**
  * 物理属性 Key 解析网关:
- * 支持从 custom-b32-* 或普通 custom-${tag}-${field} 瞬间无损还原原始 tag 与 field
+ * 1. custom-b32-* -> Base32 解码还原
+ * 2. custom-tag--<tag>--<field> -> 确定性解析出 tag 与 field
+ * 3. custom-<field> -> 全局独立属性，直接返回原名（如 custom-my-name 解析为 tag="", originalName="my-name"）
  */
 export function parsePhysicalAttrKey(rawKey: string): { tag: string; slug: string; originalName: string; isEncoded: boolean } | null {
     if (!rawKey || !rawKey.startsWith("custom-")) return null;
@@ -185,15 +188,20 @@ export function parsePhysicalAttrKey(rawKey: string): { tag: string; slug: strin
         return null;
     }
 
-    // 2. 原生合规命名解析
-    const body = rawKey.slice(7); // 去掉 custom-
-    const firstDash = body.indexOf("-");
-    if (firstDash === -1) {
-        return { tag: "", slug: body, originalName: body, isEncoded: false };
+    // 2. 超级标签专属命名空间 (使用双连字符 custom-tag--<tag>--<field> 精确匹配)
+    if (rawKey.startsWith("custom-tag--")) {
+        const body = rawKey.slice(12); // 去掉 "custom-tag--"
+        const sepIdx = body.indexOf("--");
+        if (sepIdx !== -1) {
+            const tag = body.slice(0, sepIdx);
+            const field = body.slice(sepIdx + 2);
+            return { tag, slug: field, originalName: field, isEncoded: false };
+        }
     }
-    const tag = body.slice(0, firstDash);
-    const field = body.slice(firstDash + 1);
-    return { tag, slug: field, originalName: field, isEncoded: false };
+
+    // 3. 全局 / 独立属性: custom-<propName> 直接存原名 (包括含有连字符的 my-name, user-id 等)
+    const originalName = rawKey.slice(7);
+    return { tag: "", slug: originalName, originalName, isEncoded: false };
 }
 
 export function encodeAttrSlug(rawName: string): string {
@@ -413,17 +421,28 @@ export async function preflightSupertagProperty(
     const cleanTag = tagName.replace(/^#+/, "").trim().toLowerCase();
     let rawProp = propertyName.trim();
 
-    // 递归剥离任何已有的 custom- 或 <tag>- 前缀，坚决杜绝命名空间套娃 (如 task-custom-task-...)
+    // 递归剥离任何已有的 custom- 或 custom-tag-- 或 <tag>-- 前缀，坚决杜绝命名空间套娃
     while (
+        rawProp.startsWith("custom-tag--") ||
         rawProp.startsWith("custom-") ||
         (cleanTag && (
+            rawProp.toLowerCase().startsWith(`tag--${cleanTag}--`) ||
+            rawProp.toLowerCase().startsWith(`${cleanTag}--`) ||
             rawProp.toLowerCase().startsWith(`${cleanTag}-`) ||
             rawProp.toLowerCase().startsWith(`${cleanTag}.`) ||
             rawProp.toLowerCase().startsWith(`${cleanTag}_`)
         ))
     ) {
-        if (rawProp.startsWith("custom-")) {
+        if (rawProp.startsWith("custom-tag--")) {
+            rawProp = rawProp.slice(12);
+            const idx = rawProp.indexOf("--");
+            if (idx !== -1) rawProp = rawProp.slice(idx + 2);
+        } else if (rawProp.startsWith("custom-")) {
             rawProp = rawProp.slice(7);
+        } else if (cleanTag && rawProp.toLowerCase().startsWith(`tag--${cleanTag}--`)) {
+            rawProp = rawProp.slice(`tag--${cleanTag}--`.length);
+        } else if (cleanTag && rawProp.toLowerCase().startsWith(`${cleanTag}--`)) {
+            rawProp = rawProp.slice(`${cleanTag}--`.length);
         } else if (cleanTag) {
             rawProp = rawProp.slice(cleanTag.length + 1);
         }

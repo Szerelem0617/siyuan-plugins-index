@@ -42,13 +42,13 @@
             "rowID": "20260526204558-cvttsk9",
             "label": "🔘 转换为任务",
             "commandID": "index.setBlockAttribute-1",
-            "paramMapping": "{\"attrs\":\"status: {{cycle:pending,}}\"}"
+            "paramMapping": "{\"attrs\":\"global.task: {{cycle:pending,}}\"}"
         },
         {
             "rowID": "20260526204558-sw91kl2",
             "label": "☑️ 切换任务状态",
             "commandID": "index.setBlockAttribute-2",
-            "paramMapping": "{\"attrs\":\"status: {{cycle:pending,completed}}\"}"
+            "paramMapping": "{\"attrs\":\"global.task: {{cycle:pending,completed}}\"}"
         }
     ]
 }

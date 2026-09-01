@@ -91,12 +91,15 @@ async ({ dispatch, state, eventName }) => {
 }`;
 
 const defaultTaskConditional = `// [打上标签时] -> ☑ 转换为任务
-// [移除标签时] -> ☑ 转换为任务
+// [移除标签时] -> ☑ 清空任务状态
 // [任务完成时] -> 🎆 视觉特效 (烟花)
 
 async ({ dispatch, state, eventName }) => {
-    if (eventName === "tag_created" || eventName === "tag_removed") {
-        await dispatch("index.setBlockAttribute-1");
+    if (eventName === "tag_created") {
+        await dispatch("index.setBlockAttribute", { attrs: "global.task: pending" });
+    }
+    if (eventName === "tag_removed") {
+        await dispatch("index.setBlockAttribute", { attrs: "global.task: " });
     }
     if (eventName === "task_completed") {
         await dispatch("index.visualEffect", { type: "fireworks" });

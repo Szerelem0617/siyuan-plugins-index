@@ -227,7 +227,9 @@ export async function triggerConditionalCommands(
                         }
                     }
                 }
-                const taskVal = pipelineVars["index-task"] || pipelineVars["task-status"] || pipelineVars["task_status"] || (eventName === "task_completed" ? "completed" : "pending");
+                const taskVal = pipelineVars["custom-task"] || pipelineVars["task"] || pipelineVars["index-task"] || pipelineVars["task-status"] || (eventName === "task_completed" ? "completed" : "pending");
+                pipelineVars["task"] = taskVal;
+                pipelineVars["custom-task"] = taskVal;
                 pipelineVars["completed"] = taskVal;
                 pipelineVars["task_status"] = taskVal;
                 pipelineVars["task-status"] = taskVal;

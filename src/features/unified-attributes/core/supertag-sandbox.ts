@@ -67,13 +67,13 @@ export async function executeTsScript(scriptText: string, context: CommandContex
             codeText = lines.slice(firstCodeLineIndex).join("\n").trim();
         }
 
-        let body = codeText;
+        let body = codeText.trim().replace(/;+$/, "").trim();
         if (body.startsWith("async ({") || body.startsWith("async (") || body.startsWith("({")) {
             body = `return (${body})(arguments[0]);`;
         } else if (body.startsWith("async function") || body.startsWith("function")) {
             body = `return (${body})(arguments[0]);`;
         } else {
-            body = `return (async ({ dispatch, state, delay, context, eventName, showMessage, updateVar }) => {\n${body}\n})(arguments[0]);`;
+            body = `return (async ({ dispatch, state, delay, context, eventName, showMessage, updateVar }) => {\n${codeText}\n})(arguments[0]);`;
         }
 
         const fn = new AsyncFunction("env", body);
