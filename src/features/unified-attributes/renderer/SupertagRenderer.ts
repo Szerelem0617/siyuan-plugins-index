@@ -324,7 +324,6 @@ export class SupertagRenderer {
             e.preventDefault();
             e.stopPropagation();
             const newStatus = isCompleted ? "pending" : "completed";
-            console.log(`[Supertag-Pill-Debug] Clicked task checkbox pill on block "${blockId}". Toggling status: ${status} -> ${newStatus}`);
 
             try {
                 // Update DOM immediately for instant UI feedback with safe null-checks

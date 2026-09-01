@@ -41,6 +41,7 @@ export function initCommandPalette() {
     ensurePaletteEl();
     if (!inputListenerAttached) {
         document.addEventListener("input", onEditorInput, true);
+        document.addEventListener("compositionend", onEditorInput, true);
         inputListenerAttached = true;
     }
     if (!keyListenerAttached) {
@@ -54,6 +55,7 @@ export function initCommandPalette() {
 
 export function destroyCommandPalette() {
     document.removeEventListener("input", onEditorInput, true);
+    document.removeEventListener("compositionend", onEditorInput, true);
     document.removeEventListener("keydown", onEditorKeydown, true);
     document.removeEventListener("mousedown", onOutsideClick, true);
     if (paletteEl) {
@@ -101,12 +103,23 @@ function onEditorInput(e: Event) {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
-    if (range.startContainer.nodeType !== Node.TEXT_NODE) return;
 
-    const textNode = range.startContainer as Text;
-    const text = textNode.textContent || "";
-    const offset = range.startOffset;
-    const textBefore = text.substring(0, offset);
+    let textBefore = "";
+    let textNode: Text | null = null;
+    if (range.startContainer.nodeType === Node.TEXT_NODE) {
+        textNode = range.startContainer as Text;
+        textBefore = (textNode.textContent || "").substring(0, range.startOffset);
+    } else {
+        const container = range.startContainer as HTMLElement;
+        const offset = range.startOffset;
+        const child = (container.childNodes[offset > 0 ? offset - 1 : 0] || container.childNodes[0]) as Text | null;
+        if (child && child.nodeType === Node.TEXT_NODE) {
+            textNode = child;
+            textBefore = (child.textContent || "").substring(0, offset);
+        } else {
+            textBefore = container.textContent || "";
+        }
+    }
 
     // Detect trigger: ";;" or "；；" at end of typed text
     const TRIGGER_ASCII = ";;";
@@ -142,6 +155,11 @@ function onEditorInput(e: Event) {
 
 function onEditorKeydown(e: KeyboardEvent) {
     if (!isOpen || !paletteEl) return;
+
+    // 🌟 输入法保护：处于 IME 状态时（拼音输入、空格上屏中文、回车上屏英文）严禁拦截按键！
+    if (e.isComposing || e.keyCode === 229 || e.key === "Process") {
+        return;
+    }
 
     if (e.key === "Escape") {
         e.preventDefault();

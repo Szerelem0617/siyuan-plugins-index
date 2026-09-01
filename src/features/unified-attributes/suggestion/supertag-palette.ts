@@ -27,6 +27,7 @@ export function initSupertagPalette(_plugin: Plugin) {
     ensurePaletteEl();
     if (!inputListenerAttached) {
         document.addEventListener("input", onEditorInput, true);
+        document.addEventListener("compositionend", onEditorInput, true);
         inputListenerAttached = true;
     }
     if (!keyListenerAttached) {
@@ -39,6 +40,7 @@ export function initSupertagPalette(_plugin: Plugin) {
 
 export function destroySupertagPalette() {
     document.removeEventListener("input", onEditorInput, true);
+    document.removeEventListener("compositionend", onEditorInput, true);
     document.removeEventListener("keydown", onEditorKeydown, true);
     document.removeEventListener("mousedown", onOutsideClick, true);
     closePalette();
@@ -75,25 +77,65 @@ function ensurePaletteEl() {
     return paletteEl;
 }
 
-function onEditorInput(e: Event) {
+function getEditorTextBeforeCursor(range: Range): string {
+    const startNode = range.startContainer;
+    const startOffset = range.startOffset;
+
+    // 1. 如果光标所在直接就是文本节点
+    if (startNode.nodeType === Node.TEXT_NODE) {
+        let text = (startNode.textContent || "").substring(0, startOffset);
+        // 如果当前文本节点里已经能找到 @ 或 ＠，直接返回
+        if (text.includes(TRIGGER_ASCII) || text.includes(TRIGGER_FULL)) {
+            return text;
+        }
+        // 如果当前文本节点没有 @，可能是被思源拆分到了前一个兄弟节点中，向左回溯兄弟节点
+        let prev = startNode.previousSibling;
+        while (prev) {
+            const prevText = prev.textContent || "";
+            text = prevText + text;
+            if (prevText.includes(TRIGGER_ASCII) || prevText.includes(TRIGGER_FULL)) {
+                break;
+            }
+            prev = prev.previousSibling;
+        }
+        return text;
+    }
+
+    // 2. 如果光标所在是 Element 容器节点 (例如 span 或 div)
+    const elem = startNode as HTMLElement;
+    let text = "";
+    for (let i = 0; i < startOffset; i++) {
+        text += elem.childNodes[i]?.textContent || "";
+    }
+    // 如果当前容器内未找到 @，向左回溯容器的前一个兄弟
+    if (!text.includes(TRIGGER_ASCII) && !text.includes(TRIGGER_FULL)) {
+        let prev = elem.previousSibling;
+        while (prev) {
+            const prevText = prev.textContent || "";
+            text = prevText + text;
+            if (prevText.includes(TRIGGER_ASCII) || prevText.includes(TRIGGER_FULL)) {
+                break;
+            }
+            prev = prev.previousSibling;
+        }
+    }
+    return text;
+}
+
+async function onEditorInput(e: Event) {
     if (!settings.get("devMode")) {
-        if (isOpen) closePalette();
+        if (isOpen) closePalette("devMode disabled");
         return;
     }
 
     const target = e.target as HTMLElement;
-    if (!target.getAttribute || !target.getAttribute("contenteditable")) return;
-    if (!target.closest(".protyle-wysiwyg")) return;
+    if (!target.closest || !target.closest(".protyle-wysiwyg")) return;
 
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
-    if (range.startContainer.nodeType !== Node.TEXT_NODE) return;
 
-    const textNode = range.startContainer as Text;
-    const text = textNode.textContent || "";
-    const offset = range.startOffset;
-    const textBefore = text.substring(0, offset);
+    const textBefore = getEditorTextBeforeCursor(range);
 
     let queryText = "";
     if (textBefore.endsWith(TRIGGER_ASCII) || textBefore.endsWith(TRIGGER_FULL)) {
@@ -105,7 +147,12 @@ function onEditorInput(e: Event) {
         );
         if (triggerPos !== -1) {
             queryText = textBefore.substring(triggerPos + 1);
-            renderList(queryText);
+            // 若包含明确换行或连续多个空格，表明用户已跳出当前标签词
+            if (queryText.includes("\n") || queryText.endsWith("  ")) {
+                closePalette();
+                return;
+            }
+            await renderList(queryText);
             repositionPalette(range);
             return;
         } else {
@@ -117,20 +164,20 @@ function onEditorInput(e: Event) {
     }
 
     activeProtyle = (window as any).activeProtyleInstance;
-    openPalette(queryText, range);
+    await openPalette(queryText, range);
 }
 
 function onEditorKeydown(e: KeyboardEvent) {
     if (!isOpen || !paletteEl) return;
 
-    if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        closePalette();
+    // 🌟 核心输入法保护：当处于中文/日文等 IME 输入法合成状态时，严禁拦截任何键盘事件！
+    if (e.isComposing || e.keyCode === 229 || e.key === "Process") {
         return;
     }
 
-    if (e.key === " " || e.key === "Spacebar" || e.code === "Space") {
+    if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
         closePalette();
         return;
     }
@@ -170,6 +217,11 @@ function onEditorKeydown(e: KeyboardEvent) {
 function onOutsideClick(e: MouseEvent) {
     if (!isOpen || !paletteEl) return;
     if (paletteEl.contains(e.target as Node)) return;
+    const target = e.target as HTMLElement;
+    if (target?.closest && target.closest(".protyle-wysiwyg")) {
+        // 点击编辑器内部由 onEditorInput 处理光标偏移，不直接粗暴销毁
+        return;
+    }
     closePalette();
 }
 
