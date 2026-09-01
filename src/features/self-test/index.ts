@@ -12,6 +12,7 @@ import { registerSupertagDiffSuite } from "./suites/supertag-diff.suite";
 import { registerConditionEvaluatorSuite } from "./suites/condition-evaluator.suite";
 import { registerParamResolverSuite } from "./suites/param-resolver.suite";
 import { registerApiSandboxSuite } from "./suites/api-sandbox.suite";
+import { registerAttributePipelineSuite } from "./suites/attribute-pipeline.suite";
 
 export { expect, AssertionError } from "./core/assertion";
 export { describe, test, it, runAllTests } from "./core/test-runner";
@@ -24,6 +25,7 @@ export function ensureAllSuitesRegistered() {
         registerSupertagDiffSuite();
         registerConditionEvaluatorSuite();
         registerParamResolverSuite();
+        registerAttributePipelineSuite();
         registerApiSandboxSuite();
         isSuitesRegistered = true;
     }

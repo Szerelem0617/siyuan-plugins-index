@@ -16,52 +16,66 @@ import { getPhysicalAttrKey } from "../../unified-attributes/core/supertag-schem
 import type { CommandContext, DispatchResult } from "../command-dispatcher";
 
 /**
- * 智能解析属性名称与命名空间
+ * 4-Stage 属性键解析流水线 (Resolution Pipeline)
+ * 1. 原生内置特权字段 (name, alias, memo, bookmark) -> 原生直存
+ * 2. 显式全局逃逸 (global.prop 或 global-prop) -> custom-<prop>
+ * 3. 显式指定所属标签 (如 project.deadline) -> custom-tag--project--deadline (并 JIT 扩列)
+ * 4. 缺省裸字段多态决议 -> Supertag 上下文中打专属标签，全局独立上下文中存原名
  */
-function resolveNamespacedAttrName(rawName: string, context?: CommandContext): string {
-    const trimmed = rawName.trim();
+export async function resolveTargetAttributeKey(
+    rawKey: string,
+    rawValue: any,
+    contextTag?: string
+): Promise<{ physicalKey: string; isNative: boolean; isScoped: boolean; targetTag?: string }> {
+    const trimmed = rawKey.trim();
 
-    // 1. 显式全局共享逃逸标记: global.status 或 global-status -> custom-status
-    if (trimmed.toLowerCase().startsWith("global.") || trimmed.toLowerCase().startsWith("global-")) {
-        const sub = trimmed.replace(/^global[.-]/i, "");
-        return sanitizeBlockAttrName(sub);
+    // ── Stage 0: 物理原键直通 (杜绝二次套娃) ──
+    if (trimmed.startsWith("custom-tag--") || trimmed.startsWith("custom-b32-")) {
+        const { parsePhysicalAttrKey } = await import("../../unified-attributes/core/supertag-schema");
+        const parsed = parsePhysicalAttrKey(trimmed);
+        return { physicalKey: trimmed, isNative: false, isScoped: Boolean(parsed?.tag), targetTag: parsed?.tag };
+    }
+    if (trimmed.startsWith("custom-")) {
+        return { physicalKey: trimmed, isNative: false, isScoped: false };
     }
 
-    // 2. 原生内置属性: bookmark, name, alias, memo
-    if (["bookmark", "name", "alias", "memo"].includes(trimmed.toLowerCase())) {
-        return trimmed.toLowerCase();
+    // ── Stage 1: 原生内置特权字段 ──
+    const NATIVE_FIELDS = new Set(["bookmark", "name", "alias", "memo"]);
+    if (NATIVE_FIELDS.has(trimmed.toLowerCase())) {
+        return { physicalKey: trimmed.toLowerCase(), isNative: true, isScoped: false };
     }
 
-    const cleanTag = (context?.supertag || "").replace(/#/g, "").trim().toLowerCase();
+    // ── Stage 2: 显式全局逃逸 (global.prop 或 global-prop) ──
+    if (/^global[.-]/i.test(trimmed)) {
+        const bareProp = trimmed.replace(/^global[.-]/i, "").trim();
+        const physicalKey = getPhysicalAttrKey("", bareProp);
+        return { physicalKey, isNative: false, isScoped: false };
+    }
 
-    // 3. 在 Supertag 触发上下文中：自动赋予该 Tag 的命名空间 (物理存储格式: custom-<tag>-<attr> 或 custom-b32-...)
-    if (cleanTag) {
-        let pure = trimmed;
-        if (pure.startsWith("custom-tag--")) {
-            pure = pure.slice(12);
-            const idx = pure.indexOf("--");
-            if (idx !== -1) pure = pure.slice(idx + 2);
-        } else if (pure.startsWith("custom-")) {
-            pure = pure.slice(7);
+    // ── Stage 3: 显式跨标签指定 (如 project.deadline) ──
+    const dotIndex = trimmed.indexOf(".");
+    if (dotIndex > 0) {
+        const explicitTag = trimmed.slice(0, dotIndex).replace(/^#+/, "").trim().toLowerCase();
+        const explicitProp = trimmed.slice(dotIndex + 1).trim();
+        if (explicitTag && explicitProp && explicitTag !== "global") {
+            const { preflightSupertagProperty } = await import("../../unified-attributes/core/supertag-schema");
+            const preflight = await preflightSupertagProperty(explicitTag, explicitProp, rawValue);
+            return { physicalKey: preflight.physicalKey, isNative: false, isScoped: true, targetTag: explicitTag };
         }
-
-        if (pure.toLowerCase().startsWith(`tag--${cleanTag}--`)) {
-            pure = pure.slice(`tag--${cleanTag}--`.length);
-        } else if (pure.toLowerCase().startsWith(`${cleanTag}--`)) {
-            pure = pure.slice(`${cleanTag}--`.length);
-        } else if (pure.toLowerCase().startsWith(`${cleanTag}.`)) {
-            pure = pure.slice(cleanTag.length + 1);
-        } else if (pure.toLowerCase().startsWith(`${cleanTag}_`)) {
-            pure = pure.slice(cleanTag.length + 1);
-        } else if (pure.toLowerCase().startsWith(`${cleanTag}-`)) {
-            pure = pure.slice(cleanTag.length + 1);
-        }
-
-        return getPhysicalAttrKey(cleanTag, pure);
     }
 
-    // 4. 无 Supertag 上下文时作为普通自定义属性
-    return sanitizeBlockAttrName(trimmed);
+    // ── Stage 4: 缺省裸字段多态决议 ──
+    const cleanContextTag = (contextTag || "").replace(/^#+/, "").trim().toLowerCase();
+    if (cleanContextTag) {
+        // 4A: 处于 Supertag 上下文中 -> 自动吸附为该标签的私有专属属性，并 JIT 扩列
+        const { preflightSupertagProperty } = await import("../../unified-attributes/core/supertag-schema");
+        const preflight = await preflightSupertagProperty(cleanContextTag, trimmed, rawValue);
+        return { physicalKey: preflight.physicalKey, isNative: false, isScoped: true, targetTag: cleanContextTag };
+    }
+
+    // 4B: 全局独立上下文中 -> 直接作为全局属性存原名
+    const physicalKey = getPhysicalAttrKey("", trimmed);
+    return { physicalKey, isNative: false, isScoped: false };
 }
 
 /**
@@ -150,62 +164,21 @@ export async function setBlockAttribute(
         throw new Error("[SetBlockAttribute] 缺少要设置的属性 (attrs)");
     }
 
-    let cleanTag = (context?.supertag || params?.supertag || "").replace(/#/g, "").trim().toLowerCase();
-    if (!cleanTag) {
-        try {
-            const { globalSupertagsCache } = await import("../registration");
-            const cachedTags = globalSupertagsCache.get(rawId);
-            if (cachedTags && cachedTags.length > 0) {
-                cleanTag = cachedTags[0].toLowerCase();
-            }
-        } catch (_) {}
-    }
+    // 确定当前的显式 Supertag 上下文 (仅当命令从 Supertag 相关入口派发时才存在)
+    const contextTag = (context?.supertag || params?.supertag || "").replace(/^#+/, "").trim().toLowerCase();
 
     const finalAttrs: Record<string, string> = {};
-    const { preflightSupertagProperty } = await import("../../unified-attributes/core/supertag-schema");
+    const affectedTags = new Set<string>();
 
     for (const [rawK, rawV] of Object.entries(rawAttrsMap)) {
-        const rawKTrimmed = rawK.trim();
-        const isNative = ["bookmark", "name", "alias", "memo"].includes(rawKTrimmed.toLowerCase());
-        const isGlobal = rawKTrimmed.toLowerCase().startsWith("global.") || rawKTrimmed.toLowerCase().startsWith("global-");
-
-        if (cleanTag && !isNative && !isGlobal) {
-            // 🌟 预判断网关：JIT 自动建库、自动扩列、Slug 转写
-            let propName = rawKTrimmed;
-            while (
-                propName.startsWith("custom-tag--") ||
-                propName.startsWith("custom-") ||
-                (cleanTag && (
-                    propName.toLowerCase().startsWith(`tag--${cleanTag}--`) ||
-                    propName.toLowerCase().startsWith(`${cleanTag}--`) ||
-                    propName.toLowerCase().startsWith(`${cleanTag}-`) ||
-                    propName.toLowerCase().startsWith(`${cleanTag}.`) ||
-                    propName.toLowerCase().startsWith(`${cleanTag}_`)
-                ))
-            ) {
-                if (propName.startsWith("custom-tag--")) {
-                    propName = propName.slice(12);
-                    const idx = propName.indexOf("--");
-                    if (idx !== -1) propName = propName.slice(idx + 2);
-                } else if (propName.startsWith("custom-")) {
-                    propName = propName.slice(7);
-                } else if (cleanTag && propName.toLowerCase().startsWith(`tag--${cleanTag}--`)) {
-                    propName = propName.slice(`tag--${cleanTag}--`.length);
-                } else if (cleanTag && propName.toLowerCase().startsWith(`${cleanTag}--`)) {
-                    propName = propName.slice(`${cleanTag}--`.length);
-                } else if (cleanTag) {
-                    propName = propName.slice(cleanTag.length + 1);
-                }
-            }
-            const preflight = await preflightSupertagProperty(cleanTag, propName, rawV);
-            finalAttrs[preflight.physicalKey] = rawV !== undefined && rawV !== null ? String(rawV) : "";
-        } else {
-            const cleanAttrName = resolveNamespacedAttrName(rawK, context);
-            finalAttrs[cleanAttrName] = rawV !== undefined && rawV !== null ? String(rawV) : "";
+        const resolution = await resolveTargetAttributeKey(rawK, rawV, contextTag);
+        finalAttrs[resolution.physicalKey] = rawV !== undefined && rawV !== null ? String(rawV) : "";
+        if (resolution.targetTag) {
+            affectedTags.add(resolution.targetTag);
         }
     }
 
-    console.log(`[SetBlockAttribute] 🏷️ 正在批量设置块 ${rawId} 属性:`, finalAttrs, `(Supertag: ${cleanTag || 'none'})`);
+    console.log(`[SetBlockAttribute] 🏷️ 正在批量设置块 ${rawId} 属性:`, finalAttrs, `(Context Supertag: ${contextTag || 'none'})`);
 
     await post("/api/attr/setBlockAttrs", {
         id: rawId,
@@ -239,13 +212,13 @@ export async function setBlockAttribute(
         }
     }
 
-    // 内存虚拟投影联动：若该 Supertag 已建立虚拟投影，同步更新内存 SQLite 热表
-    if (cleanTag) {
+    // 内存虚拟投影联动：若相关 Supertag 已建立虚拟投影，同步更新内存 SQLite 热表
+    for (const tag of affectedTags) {
         try {
             const { syncBlockToSQLite } = await import("../../unified-attributes/projection/hot-table-engine");
             await syncBlockToSQLite(rawId);
             const { supertagAVProjector } = await import("../../unified-attributes/projection/supertag-av-projector");
-            const boundAvId = supertagAVProjector.getBoundAVId(cleanTag);
+            const boundAvId = supertagAVProjector.getBoundAVId(tag);
             if (boundAvId) {
                 supertagAVProjector.notifyFrontendToRerender(boundAvId, rawId);
             }
