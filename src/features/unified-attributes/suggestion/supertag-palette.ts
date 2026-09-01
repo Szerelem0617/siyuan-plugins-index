@@ -19,6 +19,10 @@ let keyListenerAttached = false;
 let selectedIndex = 0;
 let currentTagList: string[] = [];
 let activeProtyle: any = null;
+let renderSeq = 0;
+
+let isComposing = false;
+let lastCompositionEndTime = 0;
 
 const TRIGGER_ASCII = "@";
 const TRIGGER_FULL = "＠";
@@ -26,8 +30,10 @@ const TRIGGER_FULL = "＠";
 export function initSupertagPalette(_plugin: Plugin) {
     ensurePaletteEl();
     if (!inputListenerAttached) {
+        document.addEventListener("compositionstart", onCompositionStart, true);
+        document.addEventListener("compositionupdate", onCompositionUpdate, true);
+        document.addEventListener("compositionend", onCompositionEnd, true);
         document.addEventListener("input", onEditorInput, true);
-        document.addEventListener("compositionend", onEditorInput, true);
         inputListenerAttached = true;
     }
     if (!keyListenerAttached) {
@@ -39,8 +45,10 @@ export function initSupertagPalette(_plugin: Plugin) {
 }
 
 export function destroySupertagPalette() {
+    document.removeEventListener("compositionstart", onCompositionStart, true);
+    document.removeEventListener("compositionupdate", onCompositionUpdate, true);
+    document.removeEventListener("compositionend", onCompositionEnd, true);
     document.removeEventListener("input", onEditorInput, true);
-    document.removeEventListener("compositionend", onEditorInput, true);
     document.removeEventListener("keydown", onEditorKeydown, true);
     document.removeEventListener("mousedown", onOutsideClick, true);
     closePalette();
@@ -50,7 +58,23 @@ export function destroySupertagPalette() {
     }
     inputListenerAttached = false;
     keyListenerAttached = false;
+    isComposing = false;
     console.log("[SupertagPalette] Destroyed.");
+}
+
+function onCompositionStart() {
+    isComposing = true;
+}
+
+function onCompositionUpdate() {
+    isComposing = true;
+}
+
+function onCompositionEnd(e: CompositionEvent) {
+    isComposing = false;
+    lastCompositionEndTime = Date.now();
+    // 输入法选词定稿后，立即触发一次编辑器输入解析，更新面板搜索结果
+    onEditorInput(e);
 }
 
 function ensurePaletteEl() {
@@ -124,7 +148,12 @@ function getEditorTextBeforeCursor(range: Range): string {
 
 async function onEditorInput(e: Event) {
     if (!settings.get("devMode")) {
-        if (isOpen) closePalette("devMode disabled");
+        if (isOpen) closePalette();
+        return;
+    }
+
+    // 🌟 中文输入法合成期保护：输入拼音过程中不触发标签解析（避免拼音空格导致误关）
+    if (isComposing || (e as any).isComposing) {
         return;
     }
 
@@ -147,8 +176,8 @@ async function onEditorInput(e: Event) {
         );
         if (triggerPos !== -1) {
             queryText = textBefore.substring(triggerPos + 1);
-            // 若包含明确换行或连续多个空格，表明用户已跳出当前标签词
-            if (queryText.includes("\n") || queryText.endsWith("  ")) {
+            // 遵循思源官方规则：非输入法状态下，一旦在 @ 后紧接着输入换行或以空格开头，退出选择
+            if (queryText.includes("\n") || queryText.startsWith(" ") || queryText.startsWith("　")) {
                 closePalette();
                 return;
             }
@@ -170,8 +199,14 @@ async function onEditorInput(e: Event) {
 function onEditorKeydown(e: KeyboardEvent) {
     if (!isOpen || !paletteEl) return;
 
-    // 🌟 核心输入法保护：当处于中文/日文等 IME 输入法合成状态时，严禁拦截任何键盘事件！
-    if (e.isComposing || e.keyCode === 229 || e.key === "Process") {
+    // 🌟 核心输入法保护：
+    // 1. 正在 IME 合成中，放行所有按键（供输入法选字）
+    if (isComposing || e.isComposing || e.keyCode === 229 || e.key === "Process") {
+        return;
+    }
+
+    // 2. 刚刚完成 IME 选词上屏（120ms 内）的 Enter / Space 是输入法自身按键，严禁拦截并误触发面板回车确认！
+    if (Date.now() - lastCompositionEndTime < 120) {
         return;
     }
 
@@ -248,16 +283,24 @@ import { getUnifiedSupertagList, type UnifiedSupertagDefinition } from "../core/
 
 async function renderList(query: string) {
     if (!paletteEl) return;
+    const currentSeq = ++renderSeq;
+
+    const allSupertags = await getUnifiedSupertagList();
+    if (currentSeq !== renderSeq || !isOpen || !paletteEl) return;
+
     paletteEl.innerHTML = "";
     currentTagList = [];
 
-    const allSupertags = await getUnifiedSupertagList();
-    const queryLower = query.toLowerCase().trim();
+    const queryClean = query.trim().replace(/^[@＠#]+/, "");
+    const queryLower = queryClean.toLowerCase();
 
+    const seen = new Set<string>();
     const matched = allSupertags.filter(t => {
         if (!t.enabled) return false;
+        if (seen.has(t.typeName)) return false;
+        seen.add(t.typeName);
         if (!queryLower) return true;
-        return t.typeName.includes(queryLower);
+        return t.typeName.toLowerCase().includes(queryLower) || t.displayName.toLowerCase().includes(queryLower);
     });
 
     let activeBlock = activeProtyle ? findActiveBlock(activeProtyle) : null;
@@ -291,6 +334,10 @@ async function renderList(query: string) {
         return;
     }
 
+    if (selectedIndex >= currentTagList.length) {
+        selectedIndex = 0;
+    }
+
     const container = document.createElement("div");
     container.style.cssText = "display: flex; flex-direction: column; gap: 3px;";
 
@@ -301,7 +348,7 @@ async function renderList(query: string) {
         el.className = `b3-list-item b3-list-item--narrow ${index === selectedIndex ? "b3-list-item--focus" : ""}`;
         el.setAttribute("data-tag-name", item.typeName);
         el.setAttribute("data-index", String(index));
-        
+
         const opacityStyle = isIncompat ? "opacity: 0.35;" : (isReady ? "" : "opacity: 0.62;");
         el.style.cssText = `display: flex; align-items: center; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; transition: all 0.15s ease; ${opacityStyle}`;
 
@@ -373,18 +420,15 @@ function repositionPalette(range: Range) {
     paletteEl.style.top = `${top}px`;
 }
 
-async function applySupertag(tag: string) {
+function removeTriggerAndQuery(range: Range) {
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) {
-        closePalette();
-        return;
-    }
-    const range = sel.getRangeAt(0);
-    const textNode = range.startContainer as Text;
+    if (!sel || !range) return;
 
-    if (textNode && textNode.nodeType === Node.TEXT_NODE) {
-        const text = textNode.textContent || "";
-        const offset = range.startOffset;
+    const startNode = range.startContainer;
+    const offset = range.startOffset;
+
+    if (startNode.nodeType === Node.TEXT_NODE) {
+        const text = startNode.textContent || "";
         const textBefore = text.substring(0, offset);
         const textAfter = text.substring(offset);
 
@@ -393,14 +437,48 @@ async function applySupertag(tag: string) {
         const lastPos = Math.max(lastAscii, lastFull);
 
         if (lastPos !== -1) {
-            textNode.textContent = textBefore.substring(0, lastPos) + textAfter;
-            const newOffset = lastPos;
+            startNode.textContent = textBefore.substring(0, lastPos) + textAfter;
             const newRange = document.createRange();
-            newRange.setStart(textNode, Math.min(newOffset, textNode.textContent.length));
+            newRange.setStart(startNode, Math.min(lastPos, startNode.textContent.length));
             newRange.collapse(true);
             sel.removeAllRanges();
             sel.addRange(newRange);
+            return;
         }
+
+        // 如果当前节点没有 @，说明 @ 在前面的兄弟节点中 (IME 合成节点分拆)
+        startNode.textContent = textAfter;
+        let prev = startNode.previousSibling;
+        while (prev) {
+            const pText = prev.textContent || "";
+            const pAscii = pText.lastIndexOf(TRIGGER_ASCII);
+            const pFull = pText.lastIndexOf(TRIGGER_FULL);
+            const pPos = Math.max(pAscii, pFull);
+            if (pPos !== -1) {
+                prev.textContent = pText.substring(0, pPos);
+                const newRange = document.createRange();
+                if (prev.nodeType === Node.TEXT_NODE) {
+                    newRange.setStart(prev, pPos);
+                } else {
+                    newRange.setStartAfter(prev);
+                }
+                newRange.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(newRange);
+                break;
+            } else {
+                const toRemove = prev;
+                prev = prev.previousSibling;
+                toRemove.parentNode?.removeChild(toRemove);
+            }
+        }
+    }
+}
+
+async function applySupertag(tag: string) {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+        removeTriggerAndQuery(sel.getRangeAt(0));
     }
 
     closePalette();
