@@ -185,6 +185,113 @@ export async function resolveCommandParams(
     return result;
 }
 
+/**
+ * 智能变量与属性解析核心（支持 var. 统一前缀、多态局部优先与显式全局/跨标签逃逸）：
+ * 1. 显式全局逃逸：var.global.prop / var.global-prop / global.prop / global-prop -> 读取 custom-<prop> 或原生内置属性 (name, memo, alias, bookmark)
+ * 2. 显式跨标签路由：var.<tag>.<prop> / <tag>.<prop> -> 读取 custom-tag--<tag>--<prop>
+ * 3. 裸变量/属性智能多态解析：var.<prop> 或 <prop>
+ *    - Priority 1: context.vars (内存中运行时出参，如 step 产出的 createdblock, last_id)
+ *    - Priority 2: 当前 Supertag 局部属性 custom-tag--<currentTag>--<prop>
+ *    - Priority 3: 全局属性 custom-<prop> 或原生属性 (name, memo, alias, bookmark)
+ *    - Priority 4: 块上挂载的其他 Supertag 局部属性 custom-tag--*--<prop>
+ *    - Priority 5: 物理原键匹配 (如 custom-xxx)
+ */
+export function resolveVarExpression(
+    rawToken: string,
+    context: CommandContext,
+    blockAttrs: Record<string, string> = {}
+): string | undefined {
+    let token = (rawToken || "").trim();
+    if (!token) return undefined;
+
+    // 剥离 var. 前缀（统一归一化，既支持 {{var.status}} 也支持 {{status}}）
+    const isVarPrefixed = token.startsWith("var.");
+    const bareToken = isVarPrefixed ? token.slice(4).trim() : token;
+
+    // 1. 优先检查 context.vars 中是否存在完全匹配的显式出参（例如复合命令/触发器 Step 产出的 createdblock, last_id）
+    if (context.vars) {
+        if (token in context.vars && context.vars[token] !== undefined && context.vars[token] !== null) {
+            return String(context.vars[token]);
+        }
+        if (bareToken in context.vars && context.vars[bareToken] !== undefined && context.vars[bareToken] !== null) {
+            return String(context.vars[bareToken]);
+        }
+        const varDotKey = `var.${bareToken}`;
+        if (varDotKey in context.vars && context.vars[varDotKey] !== undefined && context.vars[varDotKey] !== null) {
+            return String(context.vars[varDotKey]);
+        }
+    }
+
+    const currentTag = (context.supertag || "").replace(/#/g, "").trim().toLowerCase();
+
+    // 2. 显式全局逃逸：var.global.prop / var.global-prop / global.prop / global-prop
+    const globalMatch = bareToken.match(/^global[.-](.+)$/i);
+    if (globalMatch) {
+        const prop = globalMatch[1].trim();
+        const lowerProp = prop.toLowerCase();
+        // 原生内置属性 (name, memo, alias, bookmark)
+        if (["name", "memo", "alias", "bookmark"].includes(lowerProp)) {
+            if (lowerProp in blockAttrs && blockAttrs[lowerProp] !== undefined) return String(blockAttrs[lowerProp]);
+            if (prop in blockAttrs && blockAttrs[prop] !== undefined) return String(blockAttrs[prop]);
+        }
+        // 全局自定义属性 custom-<prop>
+        const customKey = `custom-${prop}`;
+        if (customKey in blockAttrs && blockAttrs[customKey] !== undefined) {
+            return String(blockAttrs[customKey]);
+        }
+        return undefined;
+    }
+
+    // 3. 显式跨标签路由：var.<tag>.<prop> 或 <tag>.<prop> (如 var.article.word_count 或 article.word_count)
+    const tagMatch = bareToken.match(/^([a-zA-Z0-9_-]+)\.(.+)$/);
+    if (tagMatch) {
+        const targetTag = tagMatch[1].trim().toLowerCase();
+        const prop = tagMatch[2].trim();
+        const customTagKey = `custom-tag--${targetTag}--${prop}`;
+        if (customTagKey in blockAttrs && blockAttrs[customTagKey] !== undefined) {
+            return String(blockAttrs[customTagKey]);
+        }
+    }
+
+    // 4. 缺省裸字段多态决议 (如 bareToken 为 "card-id", "status", "word_count")
+    const prop = bareToken;
+
+    // 4.1 优先级 1: 当前 Supertag 局部属性 (custom-tag--<currentTag>--<prop>)
+    if (currentTag) {
+        const localKey = `custom-tag--${currentTag}--${prop}`;
+        if (localKey in blockAttrs && blockAttrs[localKey] !== undefined && blockAttrs[localKey] !== "") {
+            return String(blockAttrs[localKey]);
+        }
+    }
+
+    // 4.2 优先级 2: 全局属性 (custom-<prop>) 或原生内置属性
+    const lowerProp = prop.toLowerCase();
+    if (["name", "memo", "alias", "bookmark"].includes(lowerProp)) {
+        if (lowerProp in blockAttrs && blockAttrs[lowerProp] !== undefined) return String(blockAttrs[lowerProp]);
+        if (prop in blockAttrs && blockAttrs[prop] !== undefined) return String(blockAttrs[prop]);
+    }
+    const globalCustomKey = `custom-${prop}`;
+    if (globalCustomKey in blockAttrs && blockAttrs[globalCustomKey] !== undefined && blockAttrs[globalCustomKey] !== "") {
+        return String(blockAttrs[globalCustomKey]);
+    }
+
+    // 4.3 优先级 3: 块上挂载的其他 Supertag 局部属性 (custom-tag--*--<prop>)
+    for (const [attrKey, attrVal] of Object.entries(blockAttrs)) {
+        if (attrKey.startsWith("custom-tag--") && attrKey.endsWith(`--${prop}`)) {
+            if (attrVal !== undefined && attrVal !== "") {
+                return String(attrVal);
+            }
+        }
+    }
+
+    // 4.4 优先级 4: 物理原键直配 (例如传入 custom-tag--task--status 或 custom-xxx)
+    if (prop in blockAttrs && blockAttrs[prop] !== undefined) {
+        return String(blockAttrs[prop]);
+    }
+
+    return undefined;
+}
+
 export async function resolveTemplate(text: string, context: CommandContext): Promise<string> {
     if (!text || typeof text !== "string" || (!text.includes("{{") && !text.includes("${"))) return text;
 
@@ -252,6 +359,7 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
                 const strVal = String(v);
                 const varKey = k.startsWith("var.") ? k : `var.${k}`;
                 variables[varKey] = strVal;
+                variables[k] = strVal;
             }
         }
     }
@@ -266,25 +374,26 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
         } catch (_) {}
     }
 
+    let blockAttrs: Record<string, string> = {};
     if (blockId) {
         try {
-            const layer4Params = await resolveLayer4Params(blockId, context.supertag);
-            for (const [k, v] of Object.entries(layer4Params)) {
-                if (v !== undefined && v !== null && (!(k in variables) || !variables[k])) {
-                    variables[k] = String(v);
-                }
-            }
-            const attrs = await getBlockAttrs(blockId);
-            for (const [k, v] of Object.entries(attrs)) {
-                const cleanKey = k.replace(/^custom-/, "");
-                if (v !== undefined && v !== null) {
-                    const strVal = String(v);
-                    variables[cleanKey] = strVal;
-                    variables[`attr.${cleanKey}`] = strVal;
-                    variables[k] = strVal;
-                }
-            }
+            blockAttrs = await getBlockAttrs(blockId) || {};
         } catch (_) {}
+    }
+
+    // 🌟 核心智能变量解析：扫描模板中所有 {{xxx}}，通过 resolveVarExpression 进行多态优先级决议
+    const tokenMatches = normalizedText.match(/\{\{([a-zA-Z0-9_.:-]+)\}\}/g);
+    if (tokenMatches) {
+        for (const fullMatch of tokenMatches) {
+            const token = fullMatch.slice(2, -2).trim();
+            if (token in variables) continue;
+            if (token.startsWith("cycle") || token.startsWith("prompt") || token.startsWith("interactive") || token.startsWith("input")) continue;
+
+            const resolvedVar = resolveVarExpression(token, context, blockAttrs);
+            if (resolvedVar !== undefined) {
+                variables[token] = resolvedVar;
+            }
+        }
     }
 
     // 🔄 状态轮转指令解析：{{cycle:v1,v2,v3}} 或 {{cycle}}

@@ -155,7 +155,7 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
             rowID: "20260721140000-permanent",
             supertag: "permanent",
             manual: JSON.stringify([
-                { id: "index.safeUpdateBlock", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false, params: { id: "{{permanent.card-id}}" } }
+                { id: "index.safeUpdateBlock", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false, params: { id: "{{var.card-id}}" } }
             ]),
             auto: defaultPermanentConditional
         }

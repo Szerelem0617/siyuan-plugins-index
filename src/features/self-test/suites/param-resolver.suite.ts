@@ -1,13 +1,7 @@
-/**
- * features/self-test/suites/param-resolver.suite.ts
- *
- * 参数解析与命令变量插值测试套件 (Param Resolver & Template Engine)
- */
-
 import { describe, test } from "../core/test-runner";
 import { expect } from "../core/assertion";
 import { renderTemplate } from "../../command/utils/template-engine";
-import { parseParam, mergeParamSources } from "../../command/dispatcher/param-resolver";
+import { parseParam, mergeParamSources, resolveVarExpression } from "../../command/dispatcher/param-resolver";
 
 export function registerParamResolverSuite() {
     describe("命令参数解析与模板插值 (Param Resolver & Template Engine)", () => {
@@ -70,6 +64,84 @@ export function registerParamResolverSuite() {
             expect(merged.manualVal).toBe("user_custom");
             // manual 覆盖优先级最高
             expect(merged.shared).toBe("from_manual");
+        });
+
+        test("6. 内存运行时出参优先读取 (context.vars)", () => {
+            const context: any = {
+                vars: {
+                    createdblock: "20260901123456-stepout",
+                    last_id: "20260901123456-lastid"
+                }
+            };
+
+            expect(resolveVarExpression("var.createdblock", context, {})).toBe("20260901123456-stepout");
+            expect(resolveVarExpression("createdblock", context, {})).toBe("20260901123456-stepout");
+            expect(resolveVarExpression("var.last_id", context, {})).toBe("20260901123456-lastid");
+        });
+
+        test("7. Supertag 上下文局部属性优先于全局同名属性", () => {
+            const context: any = {
+                supertag: "task"
+            };
+            const blockAttrs = {
+                "custom-status": "global_status_val",
+                "custom-tag--task--status": "local_task_status_val"
+            };
+
+            // 在 #task 上下文下，裸 var.status 优先命中 local
+            expect(resolveVarExpression("var.status", context, blockAttrs)).toBe("local_task_status_val");
+            expect(resolveVarExpression("status", context, blockAttrs)).toBe("local_task_status_val");
+        });
+
+        test("8. 显式全局逃逸 (var.global.prop / var.global-prop)", () => {
+            const context: any = {
+                supertag: "task"
+            };
+            const blockAttrs = {
+                "custom-status": "global_status_val",
+                "custom-tag--task--status": "local_task_status_val",
+                "name": "My Block Title",
+                "memo": "My Memo"
+            };
+
+            // 显式逃逸读取全局属性
+            expect(resolveVarExpression("var.global.status", context, blockAttrs)).toBe("global_status_val");
+            expect(resolveVarExpression("var.global-status", context, blockAttrs)).toBe("global_status_val");
+            expect(resolveVarExpression("global.status", context, blockAttrs)).toBe("global_status_val");
+
+            // 显式逃逸读取原生特权属性
+            expect(resolveVarExpression("var.global.name", context, blockAttrs)).toBe("My Block Title");
+            expect(resolveVarExpression("var.global.memo", context, blockAttrs)).toBe("My Memo");
+        });
+
+        test("9. 显式跨标签路由 (var.<tag>.<prop>)", () => {
+            const context: any = {
+                supertag: "task"
+            };
+            const blockAttrs = {
+                "custom-tag--task--status": "task_status_val",
+                "custom-tag--article--word_count": "1500",
+                "custom-tag--permanent--card-id": "20260901120000-cardid"
+            };
+
+            expect(resolveVarExpression("var.article.word_count", context, blockAttrs)).toBe("1500");
+            expect(resolveVarExpression("var.permanent.card-id", context, blockAttrs)).toBe("20260901120000-cardid");
+            expect(resolveVarExpression("article.word_count", context, blockAttrs)).toBe("1500");
+        });
+
+        test("10. 缺省裸属性在无局部属性时自动降级命中全局属性或其他 Tag 属性", () => {
+            const context: any = {
+                supertag: "project"
+            };
+            const blockAttrs = {
+                "custom-task": "completed",
+                "custom-tag--permanent--card-id": "20260901120000-cardid"
+            };
+
+            // project 下没有 task，自动命中 custom-task
+            expect(resolveVarExpression("var.task", context, blockAttrs)).toBe("completed");
+            // project 下没有 card-id，自动命中挂载的 permanent card-id
+            expect(resolveVarExpression("var.card-id", context, blockAttrs)).toBe("20260901120000-cardid");
         });
     }, "unit");
 }
