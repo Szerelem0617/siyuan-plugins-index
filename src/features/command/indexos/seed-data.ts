@@ -82,15 +82,16 @@ async ({ dispatch, state, eventName }) => {
     }
 }`;
 
-const defaultPermanentConditional = `// [打上标签时] -> ➕ 在下方新建内容, 🏷️ 设置块属性
+const defaultPermanentConditional = `// [打上标签时] -> ➕ 在下方新建内容
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        const step1 = await dispatch("index.insertContentBelow", { insertType: "p", data: "[Permanent Init] Inserted at {{time}}", id: "{{block_id}}" });
-        const createdId = step1?.id || state.vars?.createdblock || state.vars?.last_id;
-        if (createdId) {
-            await dispatch("index.setBlockAttribute", { id: "{{block_id}}", attrs: { "card-id": createdId } });
-        }
+        await dispatch("index.insertContentBelow", {
+            insertType: "p",
+            data: "[Permanent Init] Inserted at {{time}}",
+            id: "{{block_id}}",
+            _saveOutputs: ["createdblock"]
+        });
     }
 }`;
 
@@ -155,7 +156,7 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
             rowID: "20260721140000-permanent",
             supertag: "permanent",
             manual: JSON.stringify([
-                { id: "index.safeUpdateBlock", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false, params: { id: "{{var.card-id}}" } }
+                { id: "index.safeUpdateBlock", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
             ]),
             auto: defaultPermanentConditional
         }

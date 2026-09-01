@@ -60,6 +60,12 @@ export async function resolveCommandParams(
     }
     const layer2Params = parseParam(liveDbParam || sources.commandDb);
 
+    const effectiveSources: ParamSources = {
+        commandDb: liveDbParam || undefined,
+        ...sources
+    };
+    const raw = mergeParamSources(effectiveSources);
+
     const result: Record<string, unknown> = {};
 
     for (const schema of def.params) {
@@ -76,8 +82,20 @@ export async function resolveCommandParams(
             // 2. Layer 2 (Command-DB) 配置值
             value = layer2Val;
         } else {
-            // 3. Schema 注册默认值
-            value = schema.default;
+            // 3. Supertag tag_created 专属 Auto-Context 智能推导 (仅在非 tag_created 生产时序且非自身命令时推导)
+            let tagCreatedToken: string | undefined = undefined;
+            const isTagCreatedEvent = context.eventName === "tag_created" || (context as any).event === "tag_created";
+            if (context.supertag && !isTagCreatedEvent) {
+                const { suggestTagCreatedBinding } = await import("../utils/tag-created-auto-context");
+                const suggested = suggestTagCreatedBinding(context.supertag, schema.key, schema.type, def.id);
+                if (suggested.matched && suggested.token) {
+                    tagCreatedToken = suggested.token;
+                    console.log(`  [ParamResolver Tag-Created-Auto-Context] ⚡ 为参数 "${schema.key}" 自动推导 tag_created 变量: "${tagCreatedToken}"`);
+                }
+            }
+
+            // 4. Schema 注册默认值 或 tag_created 推导值
+            value = tagCreatedToken || schema.default;
         }
         if (schema.key === "attrs" || schema.type === "attributes") {
             try {

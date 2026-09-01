@@ -10,6 +10,7 @@
     } from "../../utils/manual-config";
     import { PRESET_CONDITIONS } from "../../../unified-attributes/core/condition-evaluator";
     import { getLayer2Commands } from "../../registration";
+    import { getAllCompatibleTokens, suggestTagCreatedBinding } from "../../utils/tag-created-auto-context";
 
     export let supertag: string = "";
     export let currentVal: string = "";
@@ -163,8 +164,9 @@
                 {@const isCustomized = isEntryCustomized(entry)}
                 {@const fullDef = commandRegistry.getCommand(cmd.id)}
                 {@const paramSchemas = fullDef?.params || cmd.params || []}
+                {@const hasAutoContext = paramSchemas.some(p => suggestTagCreatedBinding(supertag, p.key, p.type, cmd.id).matched)}
 
-                <div style="flex-shrink: 0; border: 1px solid {checked ? 'var(--indexos-accent-primary)' : 'var(--indexos-border-light)'}; border-radius: 6px; background: {checked ? 'rgba(40, 81, 127, 0.03)' : 'var(--indexos-bg-card)'}; transition: all 0.15s ease; overflow: hidden;">
+                <div style="flex-shrink: 0; border: 1px solid {checked ? (hasAutoContext || isCustomized ? 'var(--indexos-detached-gold, #D9A74A)' : 'var(--indexos-accent-primary)') : 'var(--indexos-border-light)'}; border-radius: 6px; background: {checked ? (hasAutoContext || isCustomized ? 'var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.03))' : 'rgba(40, 81, 127, 0.03)') : 'var(--indexos-bg-card)'}; transition: all 0.15s ease; overflow: hidden;">
                     <!-- 顶层简要行 -->
                     <div
                         role="button"
@@ -188,6 +190,9 @@
 
                                     {#if checked && entry}
                                         <div style="display: flex; gap: 4px; align-items: center;">
+                                            {#if hasAutoContext && !isCustomized}
+                                                <span class="indexos-tag-badge" style="font-size: 9px; padding: 0 4px; color: var(--indexos-detached-gold, #D9A74A); background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.14)); border: 1px solid var(--indexos-detached-gold, #D9A74A); font-weight: 600;" title="包含已自动激活的 tag_created 智能推荐出参">⚡ 智能推导</span>
+                                            {/if}
                                             {#if entry.showInSlash}
                                                 <span class="indexos-tag-badge" style="font-size: 9px; padding: 0 4px;" title=";;快捷面板生效">⌨️ ;;</span>
                                             {/if}
@@ -214,7 +219,7 @@
                                 <button
                                     type="button"
                                     class="b3-button"
-                                    style="font-size: 11px; padding: 2px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; {isCustomized ? 'color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.08)) !important; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; font-weight: 600;' : isExpanded ? 'color: var(--indexos-accent-primary) !important; background: rgba(40, 81, 127, 0.08) !important; border: 1px solid var(--indexos-accent-primary) !important;' : 'color: var(--indexos-text-muted); background: transparent; border: 1px solid var(--indexos-border-subtle, rgba(161,196,230,0.3));'}"
+                                    style="font-size: 11px; padding: 2px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; {(isCustomized || hasAutoContext) ? 'color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.08)) !important; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; font-weight: 600;' : isExpanded ? 'color: var(--indexos-accent-primary) !important; background: rgba(40, 81, 127, 0.08) !important; border: 1px solid var(--indexos-accent-primary) !important;' : 'color: var(--indexos-text-muted); background: transparent; border: 1px solid var(--indexos-border-subtle, rgba(161,196,230,0.3));'}"
                                     on:click|stopPropagation={() => toggleExpand(cmd.id)}
                                 >
                                     <span>⚙️ {isExpanded ? '收起配置' : '配置'}</span>
@@ -356,12 +361,28 @@
                                     <div style="display: flex; flex-direction: column; gap: 6px;">
                                         {#each paramSchemas as schema}
                                             {@const curVal = entry.params?.[schema.key] || ""}
+                                            {@const suggested = suggestTagCreatedBinding(supertag, schema.key, schema.type)}
+                                            {@const tokens = getAllCompatibleTokens(schema.key, schema.type, supertag)}
                                             <div style="display: flex; flex-direction: column; gap: 3px; background: var(--indexos-bg-card); border: 1px solid var(--indexos-border-light); border-radius: 4px; padding: 6px 8px;">
                                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                    <span style="font-size: 11px; font-weight: 600; color: var(--indexos-text-main);">
+                                                    <span style="font-size: 11px; font-weight: 600; color: var(--indexos-text-main); display: flex; align-items: center; gap: 4px;">
                                                         {schema.label || schema.key}
+                                                        <code style="font-size: 9px; opacity: 0.6; font-family: monospace;">{schema.key}</code>
                                                     </span>
-                                                    {#if schema.description}
+                                                    {#if suggested.matched && suggested.token}
+                                                        <div style="display: flex; align-items: center; gap: 3px; font-size: 10px;">
+                                                            <span style="color: var(--indexos-detached-gold, #D9A74A); font-weight: 600;">⚡ 推荐:</span>
+                                                            <span
+                                                                role="button"
+                                                                tabindex="0"
+                                                                class="b3-chip"
+                                                                style="font-family: monospace; font-size: 10px; cursor: pointer; padding: 1px 5px; color: var(--indexos-detached-gold, #D9A74A); background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.14)); border: 1px dashed var(--indexos-detached-gold, #D9A74A); border-radius: 3px;"
+                                                                title="点击一键将智能推荐填入此入参"
+                                                                on:click={() => setParam(cmd.id, schema.key, suggested.token)}
+                                                                on:keydown={e => (e.key === 'Enter' || e.key === ' ') && setParam(cmd.id, schema.key, suggested.token)}
+                                                            >{suggested.token}</span>
+                                                        </div>
+                                                    {:else if schema.description}
                                                         <span style="font-size: 10px; color: var(--indexos-text-muted);">
                                                             {schema.description}
                                                         </span>
@@ -370,9 +391,9 @@
                                                 {#if schema.type === "attributes" || schema.type === "textarea"}
                                                     <textarea
                                                         class="b3-text-field fn__block"
-                                                        style="font-size: 11px; padding: 4px 6px; font-family: monospace; resize: vertical;"
+                                                        style="font-size: 11px; padding: 4px 6px; font-family: monospace; resize: vertical; border: 1px solid {curVal ? 'var(--indexos-detached-gold, #D9A74A)' : (suggested.matched ? 'var(--indexos-detached-gold, #D9A74A)' : 'var(--indexos-border-light)')};"
                                                         rows="3"
-                                                        placeholder={schema.default ? `默认值:\n${schema.default}` : "每行一个属性 (如 status: pending\npriority: high)"}
+                                                        placeholder={curVal ? "" : (suggested.matched ? `默认: ${suggested.token} (智能推导)` : (schema.default ? `默认值:\n${schema.default}` : "每行一个属性 (如 status: pending\npriority: high)"))}
                                                         value={curVal}
                                                         on:input={e => setParam(cmd.id, schema.key, e.currentTarget.value)}
                                                     ></textarea>
@@ -380,27 +401,25 @@
                                                     <input
                                                         type="text"
                                                         class="b3-text-field fn__block"
-                                                        style="font-size: 11px; padding: 3px 6px;"
-                                                        placeholder={schema.default ? `默认值: ${schema.default}` : "留空则使用默认/上下文"}
+                                                        style="font-size: 11px; padding: 3px 6px; border: 1px solid {curVal ? 'var(--indexos-detached-gold, #D9A74A)' : (suggested.matched ? 'var(--indexos-detached-gold, #D9A74A)' : 'var(--indexos-border-light)')};"
+                                                        placeholder={curVal ? "" : (suggested.matched ? `默认: ${suggested.token} (智能推导)` : (schema.default ? `默认值: ${schema.default}` : "留空则使用默认/上下文"))}
                                                         value={curVal}
                                                         on:input={e => setParam(cmd.id, schema.key, e.currentTarget.value)}
                                                     />
                                                 {/if}
                                                 <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
-                                                    <button
-                                                        type="button"
-                                                        style="font-size: 9px; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--indexos-border-light); background: transparent; cursor: pointer;"
-                                                        on:click={() => insertPlaceholder(cmd.id, schema.key, "{{self.id}}")}
-                                                    >
-                                                        + &#123;&#123;self.id&#125;&#125;
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        style="font-size: 9px; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--indexos-border-light); background: transparent; cursor: pointer;"
-                                                        on:click={() => insertPlaceholder(cmd.id, schema.key, "{{time}}")}
-                                                    >
-                                                        + &#123;&#123;time&#125;&#125;
-                                                    </button>
+                                                    {#each tokens as tok}
+                                                        {@const isGold = suggested.matched && tok.token === suggested.token}
+                                                        <button
+                                                            type="button"
+                                                            class="indexos-btn-bordered"
+                                                            style="font-size: 9px; padding: 1px 5px; border-radius: 3px; cursor: pointer; transition: all 0.15s ease; {isGold ? 'color: var(--indexos-detached-gold, #D9A74A) !important; background: var(--indexos-detached-gold-bg, rgba(217, 167, 74, 0.14)) !important; border: 1px solid var(--indexos-detached-gold, #D9A74A) !important; font-weight: 600;' : 'border: 1px solid var(--indexos-border-light); background: transparent; color: var(--indexos-text-main);'}"
+                                                            title={tok.description}
+                                                            on:click={() => insertPlaceholder(cmd.id, schema.key, tok.token)}
+                                                        >
+                                                            {isGold ? '⚡ ' : '+ '}{tok.token}
+                                                        </button>
+                                                    {/each}
                                                     {#if (schema.key === "attrs" || schema.type === "attributes") && availableDbColumns.length > 0}
                                                         {#each availableDbColumns as col}
                                                             <button

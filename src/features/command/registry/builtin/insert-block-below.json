@@ -39,6 +39,12 @@
     ],
     "outputs": [
         {
+            "key": "createdblock",
+            "type": "blockid",
+            "default": "var.createdblock",
+            "description": "成功插入的新内容或新子页面的物理 Block ID"
+        },
+        {
             "key": "id",
             "type": "blockid",
             "default": "var.id",

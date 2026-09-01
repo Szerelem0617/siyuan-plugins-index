@@ -90,6 +90,96 @@ export async function dispatchCommand(
                     console.log(`[Dispatcher] ⚡ 依照 Command-DB 配置存入出参: ${bareVarName} (${token}) = "${rawVal}"`);
                 }
             }
+
+            // 6. 🌟 出参固化到属性流水线 (支持显式 _saveOutputs 声明 与 Manual 跨时间依赖自动感知)
+            const saveOutputsConfig = (resolvedParams as any)?._saveOutputs || (resolvedParams as any)?.saveOutputs;
+            const targetBlockId = getBlockId(context);
+
+            // 6.1 收集所有需要持久化落盘的出参字段列表
+            const keysToPersist: { outKey: string; targetProp?: string }[] = [];
+
+            // A. 显式配置驱动
+            if (saveOutputsConfig) {
+                if (Array.isArray(saveOutputsConfig)) {
+                    for (const k of saveOutputsConfig) {
+                        if (typeof k === "string" && k.trim()) {
+                            keysToPersist.push({ outKey: k.trim() });
+                        }
+                    }
+                } else if (typeof saveOutputsConfig === "object") {
+                    for (const [k, v] of Object.entries(saveOutputsConfig)) {
+                        const targetProp = (typeof v === "string" && v.trim() !== "" && v !== "true") ? v.trim() : undefined;
+                        keysToPersist.push({ outKey: k.trim(), targetProp });
+                    }
+                }
+            }
+
+            // B. 智能跨时间依赖感知：如果当前在 Supertag 上下文中，且该 Supertag 的 Manual 菜单命令入参引用了某个出参
+            if (context.supertag) {
+                const cleanTag = context.supertag.replace(/^#+/, "").trim().toLowerCase();
+                const { SUPERTAG_REGISTRY } = await import("../registration");
+                const boundManuals = SUPERTAG_REGISTRY.filter(item =>
+                    item.typeTag.replace(/^#+/, "").trim().toLowerCase() === cleanTag &&
+                    item.uiLocation !== "BoundOnly"
+                );
+
+                for (const manual of boundManuals) {
+                    const inputStr = manual.inputMapping || "";
+                    if (inputStr.includes("{{")) {
+                        const matches = inputStr.matchAll(/\{\{(?:var\.)?([a-zA-Z0-9_.-]+)\}\}/g);
+                        for (const m of matches) {
+                            const refKey = m[1].trim();
+                            // 检查该引用 key 是否匹配当前命令产出的出参 (例如 createdblock, id)
+                            if (refKey && !keysToPersist.some(p => p.outKey === refKey || p.targetProp === refKey)) {
+                                if (refKey in result.outputs || (resultId && (refKey.includes("block") || refKey.includes("id")))) {
+                                    keysToPersist.push({ outKey: refKey });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6.2 统一执行属性落盘与 AV 动态建列
+            if (targetBlockId && keysToPersist.length > 0 && result.outputs) {
+                try {
+                    const customAttrs: Record<string, string> = {};
+                    const { resolveTargetAttributeKey } = await import("../effect/set-block-attribute");
+
+                    for (const { outKey, targetProp } of keysToPersist) {
+                        const rawKey = outKey.replace(/^var\./, "");
+                        let val = result.outputs[rawKey] ||
+                                  result.outputs[outKey] ||
+                                  context.vars?.[rawKey] ||
+                                  context.vars?.[outKey];
+
+                        if (val === undefined || val === null || String(val).trim() === "") {
+                            // 智能匹配：如果当前命令产出了唯一有效 ID，且字段名含 block/id/card
+                            if (resultId && (rawKey.includes("block") || rawKey.includes("id") || rawKey.includes("card"))) {
+                                val = resultId;
+                            } else if (Object.keys(result.outputs).length === 1) {
+                                val = Object.values(result.outputs)[0];
+                            }
+                        }
+
+                        if (val !== undefined && val !== null && String(val).trim() !== "") {
+                            const finalPropName = targetProp || rawKey;
+                            const resolvedKey = await resolveTargetAttributeKey(finalPropName, val, context.supertag);
+                            customAttrs[resolvedKey.physicalKey] = String(val).trim();
+                        }
+                    }
+
+                    if (Object.keys(customAttrs).length > 0) {
+                        await post("/api/attr/setBlockAttrs", {
+                            id: targetBlockId,
+                            attrs: customAttrs
+                        });
+                        console.log(`[Dispatcher] 💾 出参成功固化到块属性 (${targetBlockId}):`, customAttrs);
+                    }
+                } catch (saveErr) {
+                    console.error(`[Dispatcher] 出参固化到块属性失败:`, saveErr);
+                }
+            }
         }
 
         return result;

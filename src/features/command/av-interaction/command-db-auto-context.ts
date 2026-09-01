@@ -7,6 +7,8 @@
  * 2. Layer 2 是能独立直接执行的默认通用绑定层，快捷词库优先提供通用独立可执行的系统变量 (如 {{block_id}}, {{prompt}}, {{time}})；
  */
 
+import { getAllCompatibleTokens } from "../utils/tag-created-auto-context";
+
 export interface CommandDbTokenOption {
     token: string;
     label: string;
@@ -14,42 +16,13 @@ export interface CommandDbTokenOption {
 }
 
 /** 为 Command-DB 参数类型分配的可快捷点选的 Token 胶囊列表 */
-export function getCommandDbTokens(paramKey: string, paramType?: string): CommandDbTokenOption[] {
-    const isBlockIdParam = paramKey === "id" || paramType === "blockid";
-
+export function getCommandDbTokens(paramKey: string, paramType?: string, supertagLabel?: string): CommandDbTokenOption[] {
     // enum 类型使用专属下拉框呈现，无需通用文本插值胶囊
     if (paramType === "enum") {
         return [];
     }
 
-    if (isBlockIdParam) {
-        return [
-            {
-                token: "{{self.id}}",
-                label: "⚡ {{self.id}}",
-                description: "显式绑定当前触发上下文实体的 ID"
-            }
-        ];
-    }
-
-    // 默认/字符串类型通用常用 Token
-    return [
-        {
-            token: "{{prompt:请输入内容}}",
-            label: "💬 {{prompt:...}}",
-            description: "执行时弹窗提示用户交互式输入"
-        },
-        {
-            token: "{{time}}",
-            label: "🕒 {{time}}",
-            description: "动态插入当前时间 (HH:mm:ss)"
-        },
-        {
-            token: "{{date}}",
-            label: "📅 {{date}}",
-            description: "动态插入当前日期 (YYYY-MM-DD)"
-        }
-    ];
+    return getAllCompatibleTokens(paramKey, paramType, supertagLabel);
 }
 
 /** 为 Command-DB 参数生成显式的推荐 Placeholder 提示 */

@@ -143,5 +143,27 @@ export function registerParamResolverSuite() {
             // project 下没有 card-id，自动命中挂载的 permanent card-id
             expect(resolveVarExpression("var.card-id", context, blockAttrs)).toBe("20260901120000-cardid");
         });
+
+        test("11. 同类型出参与环境宏 Token 汇总生成 (getAllCompatibleTokens)", async () => {
+            const { getAllCompatibleTokens } = await import("../../command/utils/tag-created-auto-context");
+            
+            const blockIdTokens = getAllCompatibleTokens("id", "blockid", "permanent");
+            expect(blockIdTokens.some(t => t.token === "{{self.id}}")).toBe(true);
+            expect(blockIdTokens.some(t => t.token === "{{var.createdblock}}")).toBe(true);
+            expect(blockIdTokens.some(t => t.token === "{{doc.id}}")).toBe(true);
+
+            const strTokens = getAllCompatibleTokens("tag", "string");
+            expect(strTokens.some(t => t.token === "{{time}}")).toBe(true);
+            expect(strTokens.some(t => t.token === "{{date}}")).toBe(true);
+        });
+
+        test("12. tag_created 时序出参自动推荐 (suggestTagCreatedBinding)", async () => {
+            const { suggestTagCreatedBinding } = await import("../../command/utils/tag-created-auto-context");
+
+            // permanent 标签在 tag_created 中调用了 index.insertContentBelow，产出 blockid
+            const suggestion = suggestTagCreatedBinding("permanent", "id", "blockid");
+            expect(suggestion.matched).toBe(true);
+            expect(suggestion.token).toBe("{{var.createdblock}}");
+        });
     }, "unit");
 }
