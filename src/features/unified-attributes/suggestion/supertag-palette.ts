@@ -476,6 +476,19 @@ function removeTriggerAndQuery(range: Range) {
 }
 
 async function applySupertag(tag: string) {
+    const protyle = activeProtyle || (window as any).activeProtyleInstance;
+    let blockEl = protyle ? findActiveBlock(protyle) : null;
+
+    let oldHTML = "";
+    if (blockEl) {
+        // 🌟 列表项层级提权：如果当前所在块是 NodeListItem 内部的段落，自动提权将 Supertag 绑定给宿主 NodeListItem
+        const parentLi = blockEl.closest('[data-type="NodeListItem"]') as HTMLElement | null;
+        if (parentLi && parentLi !== blockEl) {
+            blockEl = parentLi;
+        }
+        oldHTML = blockEl.outerHTML;
+    }
+
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0) {
         removeTriggerAndQuery(sel.getRangeAt(0));
@@ -483,15 +496,7 @@ async function applySupertag(tag: string) {
 
     closePalette();
 
-    const protyle = activeProtyle || (window as any).activeProtyleInstance;
-    let blockEl = protyle ? findActiveBlock(protyle) : null;
     if (!blockEl) return;
-
-    // 🌟 列表项层级提权：如果当前所在块是 NodeListItem 内部的段落，自动提权将 Supertag 绑定给宿主 NodeListItem
-    const parentLi = blockEl.closest('[data-type="NodeListItem"]') as HTMLElement | null;
-    if (parentLi && parentLi !== blockEl) {
-        blockEl = parentLi;
-    }
 
     const blockId = blockEl.getAttribute("data-node-id")!;
     const raw = blockEl.getAttribute("custom-supertags");
@@ -502,6 +507,10 @@ async function applySupertag(tag: string) {
     blockEl.setAttribute("custom-supertags", updatedCustomJSON);
     globalSupertagsCache.set(blockId, updatedCustom);
 
+    // 触发局部 input 事件通知 Protyle 文本已修改，不触发整块重建
+    const editEl = blockEl.querySelector('[contenteditable="true"]') || blockEl;
+    editEl.dispatchEvent(new Event("input", { bubbles: true }));
+
     try {
         await post("/api/attr/setBlockAttrs", {
             id: blockId,
@@ -509,14 +518,8 @@ async function applySupertag(tag: string) {
                 "custom-supertags": updatedCustomJSON
             }
         });
-        const newHTML = blockEl.outerHTML;
-        await post("/api/block/updateBlock", {
-            dataType: "dom",
-            data: newHTML,
-            id: blockId
-        });
     } catch (e) {
-        console.error("[SupertagPalette] setBlockAttrs/updateBlock failed:", e);
+        console.error("[SupertagPalette] setBlockAttrs failed:", e);
     }
 
     await supertagMonitor.processNewTag(blockId, tag);

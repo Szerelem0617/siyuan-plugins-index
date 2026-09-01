@@ -31,7 +31,6 @@ import {
     updateDockDom,
     activeBlockTracker
 } from "./features/unified-attributes";
-import { openSelfTestDialog, runAllSelfTests } from "./features/self-test";
 import { refreshEntryRegistrations, destroyEntryRegistrations } from "./features/command/global-registration/entry-registration";
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
@@ -185,9 +184,6 @@ export default class IndexPlugin extends Plugin {
         avProjectionToggle.init();
         backgroundScheduler.init(this);
         initDockInspector(this);
-
-        (window as any).openIndexOSSelfTests = openSelfTestDialog;
-        (window as any).runIndexOSSelfTests = runAllSelfTests;
 
         // 监听设置变化事件，实现开发者模式开关实时刷新生效
         window.addEventListener("index-plugin-setting-changed", (e: CustomEvent) => {

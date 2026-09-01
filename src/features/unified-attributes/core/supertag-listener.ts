@@ -332,17 +332,17 @@ export class SupertagMonitor {
         try {
             const cleanTag = cleanTagString(tag);
 
-            // Update memory tagCache immediately to prevent WebSocket diff 300ms later from duplicate triggering
-            let cached = tagCache.get(blockId);
-            if (!cached) {
-                cached = new Set(globalSupertagsCache.get(blockId) || []);
-                tagCache.set(blockId, cached);
+            // 维护 processed 集合，防止 WebSocket 事件重入导致重复触发 tag_created
+            let processedTags = tagCache.get(blockId);
+            if (!processedTags) {
+                processedTags = new Set<string>();
+                tagCache.set(blockId, processedTags);
             }
-            if (cached.has(cleanTag)) {
+            if (processedTags.has(cleanTag)) {
                 return;
             }
-            cached.add(cleanTag);
-            globalSupertagsCache.set(blockId, Array.from(cached));
+            processedTags.add(cleanTag);
+            globalSupertagsCache.set(blockId, Array.from(processedTags));
 
             this.dataRegistry = await getGlobalTypeConfigs();
 
