@@ -22,14 +22,6 @@ export {
 } from "./core/supertag-entity";
 
 export {
-    getCommandOutputToken,
-    getSupertagConditionalScript,
-    getSupertagOutputPool,
-    getSupertagAutoContextInfo,
-    type AutoContextMatch
-} from "./core/supertag-auto-context";
-
-export {
     parseSupertags,
     serializeSupertags,
     diffSupertags,

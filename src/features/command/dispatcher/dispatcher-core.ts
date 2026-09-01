@@ -11,7 +11,7 @@
 
 import { post } from "../../../shared/api-client/request";
 import { commandRegistry } from "../registry/command-registry";
-import { getCommandOutputToken } from "../../unified-attributes/core/supertag-auto-context";
+import { getCompositeOutputToken } from "../composite/composite-auto-context";
 import { getBlockId } from "../utils/context-extractor";
 import { evaluateCommandConstraints } from "../utils/constraint-checker";
 import { sanitizeBlockAttrName } from "../utils/attribute-sanitizer";
@@ -79,7 +79,7 @@ export async function dispatchCommand(
             for (const schemaOut of (def.outputs || [])) {
                 const rawVal = result.outputs[schemaOut.key] ?? (schemaOut.key === "id" || schemaOut.type === "blockid" ? resultId : undefined);
                 if (rawVal !== undefined && rawVal !== null) {
-                    const token = getCommandOutputToken(def.id, schemaOut.key, schemaOut.default);
+                    const token = getCompositeOutputToken(def.id, schemaOut.key, schemaOut.default);
                     const bareVarName = token.replace(/^\{\{\s*var\./, "").replace(/^\{\{\s*/, "").replace(/\s*\}\}$/, "").replace(/^var\./, "").trim() || schemaOut.key;
                     
                     if (!context.vars) context.vars = {};

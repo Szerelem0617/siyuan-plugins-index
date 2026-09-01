@@ -6,7 +6,6 @@
  */
 
 import type { CommandDef } from "../registry/command-registry";
-import { getSupertagAutoContextInfo } from "../../unified-attributes/core/supertag-auto-context";
 import { getBlockId, getParentIdAndRootId, getBlockAttrs, resolveLayer4Params } from "../utils/context-extractor";
 import { renderTemplate, formatDate, formatTime } from "../utils/template-engine";
 import { promptUserModal } from "../utils/prompt-modal";
@@ -61,15 +60,7 @@ export async function resolveCommandParams(
     }
     const layer2Params = parseParam(liveDbParam || sources.commandDb);
 
-    const effectiveSources: ParamSources = {
-        commandDb: liveDbParam || undefined,
-        ...sources
-    };
-    const raw = mergeParamSources(effectiveSources);
-
     const result: Record<string, unknown> = {};
-    const vars = context.vars || {};
-    const autoContextInfo = context.supertag ? getSupertagAutoContextInfo(context.supertag, def.id) : {};
 
     for (const schema of def.params) {
         const layer3Val = layer3Params[schema.key];
@@ -79,40 +70,14 @@ export async function resolveCommandParams(
         const isLayer3Specified = layer3Val !== undefined && String(layer3Val).trim() !== "";
 
         if (isLayer3Specified) {
-            // 1. 显式客制化配置 (Layer 3) 拥有最高优先级
+            // 1. 显式客制化配置 (Layer 3 / Manual Params) 拥有最高优先级
             value = layer3Val;
+        } else if (layer2Val !== undefined && String(layer2Val).trim() !== "") {
+            // 2. Layer 2 (Command-DB) 配置值
+            value = layer2Val;
         } else {
-            // 2. 若 Layer 3 留空，依据单一真理源 Auto-Context 分析获取覆盖值
-            const autoMatch = autoContextInfo[schema.key];
-            let autoVal: any = undefined;
-            if (autoMatch && autoMatch.matched && autoMatch.token) {
-                autoVal = await resolveTemplate(autoMatch.token, context);
-            }
-
-            // 防守双重保障：若 autoVal 尚未获取且当前参数是 ID 参数，实时白盒感应物理属性与 vars 中的 Block ID 出参
-            if ((!autoVal || String(autoVal).includes("{{")) && (schema.key === "id" || schema.type === "blockid")) {
-                for (const [vKey, vVal] of Object.entries(vars)) {
-                    if ((vKey.startsWith("var.") || vKey.startsWith("custom-") || vKey === "createdblock" || vKey === "id" || vKey === "last_id") && typeof vVal === "string" && /^\d{14}-[a-z0-9]{7}$/.test(vVal.trim())) {
-                        autoVal = vVal.trim();
-                        break;
-                    }
-                }
-                if ((!autoVal || String(autoVal).includes("{{")) && context.blockEl && context.blockEl.attributes) {
-                    for (const attr of Array.from(context.blockEl.attributes)) {
-                        if (attr.name.startsWith("custom-") && attr.name !== "custom-supertags" && typeof attr.value === "string" && /^\d{14}-[a-z0-9]{7}$/.test(attr.value.trim())) {
-                            autoVal = attr.value.trim();
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (autoVal !== undefined && String(autoVal).trim() !== "") {
-                value = String(autoVal);
-            } else {
-                // 3. 使用 Layer 2 配置值或 Schema 注册默认值
-                value = (layer2Val !== undefined && String(layer2Val).trim() !== "") ? layer2Val : schema.default;
-            }
+            // 3. Schema 注册默认值
+            value = schema.default;
         }
         if (schema.key === "attrs" || schema.type === "attributes") {
             try {

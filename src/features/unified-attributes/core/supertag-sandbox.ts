@@ -6,7 +6,6 @@
 
 import { showMessage } from "siyuan";
 import { dispatchCommand, getBlockId, updateContextVar, type CommandContext } from "../../command/command-dispatcher";
-import { persistOutputVariablesToLayer4 } from "./supertag-persister";
 
 export async function executeTsScript(scriptText: string, context: CommandContext, eventName?: string): Promise<boolean> {
     try {
@@ -41,13 +40,6 @@ export async function executeTsScript(scriptText: string, context: CommandContex
             }
             if (params && params._outputMapping) {
                 context.vars._outputMapping = params._outputMapping;
-            }
-
-            // 自动把命令产出的变量（出参）写回/建列落盘到 Layer 4 数据库
-            const targetBlockId = context.blockEl?.getAttribute("data-node-id") || getBlockId(context);
-            const blockContent = context.blockEl?.textContent || context.nodeElement?.textContent || "";
-            if (targetBlockId && context.supertag && res?.outputs && Object.keys(res.outputs).length > 0) {
-                await persistOutputVariablesToLayer4(targetBlockId, context.supertag, res.outputs, blockContent);
             }
 
             return res;

@@ -82,11 +82,15 @@ async ({ dispatch, state, eventName }) => {
     }
 }`;
 
-const defaultPermanentConditional = `// [打上标签时] -> ➕ 在下方新建内容
+const defaultPermanentConditional = `// [打上标签时] -> ➕ 在下方新建内容, 🏷️ 设置块属性
 
 async ({ dispatch, state, eventName }) => {
     if (eventName === "tag_created") {
-        await dispatch("index.insertContentBelow", { insertType: "p", data: "[Permanent Init] Inserted at {{time}}", id: "{{block_id}}" });
+        const step1 = await dispatch("index.insertContentBelow", { insertType: "p", data: "[Permanent Init] Inserted at {{time}}", id: "{{block_id}}" });
+        const createdId = step1?.id || state.vars?.createdblock || state.vars?.last_id;
+        if (createdId) {
+            await dispatch("index.setBlockAttribute", { id: "{{block_id}}", attrs: { "card-id": createdId } });
+        }
     }
 }`;
 
@@ -116,7 +120,7 @@ async ({ dispatch, state, eventName }) => {
             tag: "task"
         });
     }
-}`;
+} `;
 
 /** Layer 3 种子行：内置 Supertag 及其绑定 */
 export function getSeedSupertagRows(): SeedSupertagRow[] {
@@ -151,7 +155,7 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
             rowID: "20260721140000-permanent",
             supertag: "permanent",
             manual: JSON.stringify([
-                { id: "index.safeUpdateBlock", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
+                { id: "index.safeUpdateBlock", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false, params: { id: "{{permanent.card-id}}" } }
             ]),
             auto: defaultPermanentConditional
         }
