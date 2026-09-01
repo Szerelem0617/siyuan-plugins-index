@@ -470,18 +470,32 @@ export class SupertagMonitor {
 
     public async processTaskCompleted(blockId: string) {
         try {
-            // 严谨校验：只有当该块身上当前依然拥有 #task 标签时，才触发任务完成自动化（如放烟花）
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
             const attrs = attrsRes?.data || attrsRes || {};
-            const rawTags = attrs["custom-supertags"];
-            const currentTags = parseSupertags(rawTags).map(t => cleanTagString(t));
 
-            if (currentTags.includes("task")) {
-                console.log(`[Supertag] Triggering task_completed event for block "${blockId}"...`);
-                await triggerConditionalCommands(blockId, "task", "task_completed");
+            // 1. 严格只检查全局 task 变量是否更新为了 completed
+            const taskStatus = attrs["custom-task"] || attrs["custom-index-task"];
+            if (taskStatus !== "completed") {
+                return;
             }
 
-            // ⚡ 级联广播触发同文档或祖先树中监听了 task_completed 的组件 (如 #player 或 #project)
+            // 2. 提取当前块上挂载的超级标签列表
+            const rawTags = attrs["custom-supertags"];
+            const currentTags = parseSupertags(rawTags).map(t => cleanTagString(t)).filter(Boolean);
+
+            if (currentTags.length === 0) {
+                return;
+            }
+
+            console.log(`[Supertag] 块 "${blockId}" 全局 task 更新为 completed，广播触发挂载的 Supertag [${currentTags.join(", ")}]...`);
+
+            // 3. 针对当前块上挂载的所有 Supertag 广播 task_completed 事件
+            // 只有绑定了 task_completed (或 [任务完成时]) 条件的 Supertag 才会触发其动作
+            for (const tag of currentTags) {
+                await triggerConditionalCommands(blockId, tag, "task_completed");
+            }
+
+            // 4. 级联广播触发同文档或祖先树中监听了 task_completed 的组件 (如 #player 或 #project)
             await dispatchScopeEvents(blockId, "task_completed");
         } catch (e) {
             console.error("[Supertag] Failed to process task completed:", blockId, e);

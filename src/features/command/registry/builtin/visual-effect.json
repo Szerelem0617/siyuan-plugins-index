@@ -16,7 +16,7 @@
         }
     ],
     "constraints": {
-        "environment": "ui",
+        "environment": "universal",
         "targetScope": "none"
     },
     "meta": {

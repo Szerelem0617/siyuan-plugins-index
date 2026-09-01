@@ -185,7 +185,7 @@ export async function querySupertagRuleScript(cleanTag: string): Promise<string>
         }
     }
 
-    if ((!conditionalVal || conditionalVal === "Conditional" || conditionalVal === "Auto") && !typeAvId) {
+    if (!conditionalVal || conditionalVal === "Conditional" || conditionalVal === "Auto") {
         conditionalVal = getSeedConditionalScript(cleanTag);
     }
 
