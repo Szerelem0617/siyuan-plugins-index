@@ -52,10 +52,6 @@ export async function getColIDMap(avID: string) {
         }
     });
 
-    if (itemToBlock.size === 0 && keyValues.length > 0) {
-        console.warn("[AV Utils] Found 0 mappings. Data might not be bound to blocks.");
-    }
-
     return { nameToID, idToType, keyValues, itemToBlock, blockToItem, colToCells };
 }
 

@@ -256,7 +256,6 @@ export async function triggerConditionalCommands(
             // 2. 判定是否为原生 TS/JS 动态脚本模式
             const isTsScript = conditionalVal.includes("async") || conditionalVal.includes("dispatch(") || (conditionalVal.includes("=>") && !conditionalVal.includes("->"));
             if (isTsScript) {
-                console.log(`[Supertag-Trigger] Executing dynamic script for tag #${cleanTag} on event ${eventName} (host=${hostId}, target=${targetId})`);
                 await executeTsScript(conditionalVal, context, eventName);
                 return;
             }
@@ -266,8 +265,6 @@ export async function triggerConditionalCommands(
             const targetRule = rules.find(r => r.event === eventName);
 
             if (targetRule && targetRule.commands.length > 0) {
-                console.log(`[Supertag-Trigger] Executing commands for tag #${cleanTag} on event ${eventName}:`, targetRule.commands);
-
                 for (const cmdObj of targetRule.commands) {
                     const cmdLabel = cmdObj.labelOrId;
                     const cmdInfo = COMMAND_BINDINGS[cmdLabel];

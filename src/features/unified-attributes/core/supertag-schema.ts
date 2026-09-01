@@ -319,7 +319,6 @@ export async function ensureSupertagDatabase(tagName: string): Promise<string> {
             } catch (_) {}
 
             // 2. 自动在 /data-dbs 中追加创建同名 AV 数据库
-            console.log(`[SupertagSchema] 🚀 为 #${cleanTag} 在 /data-dbs 中创建同名 AV 数据库...`);
             const nbRes = await post("/api/notebook/lsNotebooks", {});
             const notebooks = nbRes?.notebooks || [];
             const targetNotebook = notebooks.find((n: any) => n.name === NOTEBOOK_NAME && !n.closed) || notebooks.find((n: any) => !n.closed) || notebooks[0];
@@ -339,7 +338,6 @@ export async function ensureSupertagDatabase(tagName: string): Promise<string> {
             const ddlRes = await executeWritableSql(ddlSql, { targetDocId: dataDbsDocId });
             const avId = ddlRes?.avId || "";
             const avBlockId = ddlRes?.blockId || "";
-            console.log(`[SupertagSchema] ✓ 成功为 #${cleanTag} 创建 AV 数据库: avId=${avId}`);
 
             if (avId) {
                 // 立即在内存中绑定，防止后续轮询产生竞态与重复建库
@@ -384,7 +382,6 @@ export async function ensureSupertagDatabase(tagName: string): Promise<string> {
                                 itemID: targetRow.id,
                                 value: { type: "text", text: { content: avId } }
                             });
-                            console.log(`[SupertagSchema] ✓ 成功回写 supertag-db 行 ${targetRow.id} 的 Related av = ${avId}`);
                         }
                     } catch (updateErr) {
                         console.warn(`[SupertagSchema] 回写 supertag-db 失败:`, updateErr);
@@ -490,7 +487,6 @@ export async function preflightSupertagProperty(
         const existingKeys = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
         const lastKeyID = existingKeys.length > 0 ? existingKeys[existingKeys.length - 1].id : "";
 
-        console.log(`[Supertag-Preflight] 🚀 JIT 扩列: 为 #${cleanTag} (AV: ${avId}) 自动新增列 "${rawProp}" (类型: ${colType})`);
         await post("/api/av/addAttributeViewKey", {
             avID: avId,
             keyID: newKeyID,

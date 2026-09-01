@@ -445,7 +445,6 @@ export async function handleCommandDbAltClick(
             try { currentInputParams = JSON.parse(currentInputStr); } catch (_) {}
             try { currentOutputMapping = JSON.parse(currentOutputStr); } catch (_) {}
 
-            console.log(`[UnifiedConfig] Dialog opened. initialTab: "${initialTab}", paramsSchema:`, paramsSchema, "outputsSchema:", outputsSchema);
             const dialog = new Dialog({
                 title: "配置命令参数 & 出参",
                 content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,
@@ -572,7 +571,6 @@ export async function openConfigForCommand(cmdDef: any, cleanLabel: string) {
         try { currentOutputMapping = JSON.parse(currentOutputStr); } catch (_) {}
 
         // 5. 唤起配置弹窗
-        console.log("[UnifiedConfig] Dialog opened via openConfigForCommand. paramsSchema:", paramsSchema);
         const dialog = new Dialog({
             title: "配置命令参数 & 出参",
             content: `<div class="b3-dialog__content" id="param-config-container" style="height: 100%; display: flex; flex-direction: column;"></div>`,

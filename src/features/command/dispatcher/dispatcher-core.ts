@@ -87,7 +87,6 @@ export async function dispatchCommand(
                     context.vars[`var.${bareVarName}`] = String(rawVal);
                     context.vars[token] = String(rawVal);
                     result.outputs[bareVarName] = String(rawVal);
-                    console.log(`[Dispatcher] ⚡ 依照 Command-DB 配置存入出参: ${bareVarName} (${token}) = "${rawVal}"`);
                 }
             }
 
@@ -174,7 +173,6 @@ export async function dispatchCommand(
                             id: targetBlockId,
                             attrs: customAttrs
                         });
-                        console.log(`[Dispatcher] 💾 出参成功固化到块属性 (${targetBlockId}):`, customAttrs);
                     }
                 } catch (saveErr) {
                     console.error(`[Dispatcher] 出参固化到块属性失败:`, saveErr);

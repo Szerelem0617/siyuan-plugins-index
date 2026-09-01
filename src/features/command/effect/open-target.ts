@@ -28,17 +28,12 @@ export async function handleOpenTargetCommand(
             || "";
     }
 
-    console.group(`⚡ [OpenTarget Execution] target=${target}, position=${params.position}`);
-
     // 1. 系统全局视图分流
     if (target === "graph" || target === "graphView") {
         try {
             (globalCommand as any)("graphView", plugin?.app);
-            console.log("✅ 成功唤起全局关系图");
-            console.groupEnd();
             return { success: true, method: "custom", detail: "Opened graphView" };
         } catch (e: any) {
-            console.groupEnd();
             return { success: false, method: "custom", detail: e.message };
         }
     }
@@ -46,11 +41,8 @@ export async function handleOpenTargetCommand(
     if (target === "inbox") {
         try {
             (globalCommand as any)("inbox", plugin?.app);
-            console.log("✅ 成功唤起收集箱");
-            console.groupEnd();
             return { success: true, method: "custom", detail: "Opened inbox" };
         } catch (e: any) {
-            console.groupEnd();
             return { success: false, method: "custom", detail: e.message };
         }
     }
@@ -58,7 +50,6 @@ export async function handleOpenTargetCommand(
     // 2. 普通块 / 页面实体导航
     if (!target) {
         console.warn("[Command:OpenTarget] 未能从参数或上下文获取有效的目标 ID");
-        console.groupEnd();
         return { success: false, method: "custom", detail: "Missing target ID" };
     }
 
@@ -75,12 +66,9 @@ export async function handleOpenTargetCommand(
             },
             position
         });
-        console.log(`✅ 成功打开目标实体 [${target}] (position: ${position || "tab"})`);
-        console.groupEnd();
         return { success: true, method: "custom", detail: `Opened target ${target}`, id: target };
     } catch (err: any) {
         console.error("[Command:OpenTarget] 唤起 openTab 失败:", err);
-        console.groupEnd();
         return { success: false, method: "custom", detail: String(err) };
     }
 }

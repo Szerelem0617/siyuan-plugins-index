@@ -446,10 +446,8 @@ export function handleBtnPaste(event: CustomEvent) {
         }
     }
 
-    console.log("[BtnPaste] final displayName=", displayName);
     const href = encodeBtnHref({ command: payload.command, param: payload.param });
     const siyuanHTML = `<span data-type="a" data-href="${href}">${displayName}</span>`;
-    console.log("[BtnPaste] resolving with siyuanHTML=", siyuanHTML);
     resolve({ siyuanHTML });
 }
 

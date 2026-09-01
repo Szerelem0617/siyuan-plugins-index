@@ -16,33 +16,27 @@ export async function triggerDuplicateContent(
     _context?: CommandContext
 ): Promise<DispatchResult> {
     const targetId = String(resolvedParams?.id || "").trim();
-    const withChildren = resolvedParams?.withChildren === true || resolvedParams?.withChildren === "true";
-
-    console.group(`⚡ [DuplicateContent Execution] targetId=${targetId}, withChildren=${withChildren}`);
+    const withChildren = Boolean(resolvedParams?.withChildren ?? false);
 
     if (!targetId) {
-        console.groupEnd();
-        throw new Error("[DuplicateContent] 缺失必要的克隆目标实体 ID (id)");
+        throw new Error("[DuplicateContent] 缺失必要的待克隆目标 ID (id)");
     }
 
-    // 1. 查询目标实体的元数据
+    // 1. 查询待克隆实体的元数据
     const metaRes = await post("/api/query/sql", {
         stmt: `SELECT id, root_id, parent_id, path, box, type, subtype FROM blocks WHERE id = '${targetId}' LIMIT 1`
     });
     const metaRows = Array.isArray(metaRes) ? metaRes : (metaRes?.data || []);
     if (metaRows.length === 0) {
-        console.groupEnd();
         throw new Error(`[DuplicateContent] 未在数据库中找到待克隆实体: ${targetId}`);
     }
     const meta = metaRows[0];
-    console.log(`🔍 待克隆实体元数据 (type=${meta.type}, subtype=${meta.subtype}):`, meta);
 
     let createdId = "";
 
     // 2. 多态分流执行
     if (meta.type === "d") {
         // ── 页面/文档克隆 ─────────────────────────────────────────────
-        console.log(`🚀 [API] /api/filetree/duplicateDoc (克隆主文档: ${targetId})`);
         const dupRes = await post("/api/filetree/duplicateDoc", {
             id: targetId
         });
@@ -58,7 +52,6 @@ export async function triggerDuplicateContent(
                     stmt: `SELECT id, path FROM blocks WHERE type = 'd' AND box = '${meta.box}' AND path LIKE '${cleanParentPath}/%' AND id != '${meta.box}' ORDER BY path ASC`
                 });
                 const childDocs = Array.isArray(childDocsRes) ? childDocsRes : (childDocsRes?.data || []);
-                console.log(`📂 [DuplicateContent] 发现 ${childDocs.length} 篇子文档待递归克隆`);
 
                 // 获取新生成主文档的新路径
                 const newParentMeta = await post("/api/query/sql", {
@@ -88,17 +81,14 @@ export async function triggerDuplicateContent(
         }
     } else {
         // ── 块级深克隆 ────────────────────────────────────────────────
-        console.log(`🚀 [API] /api/block/getBlockDOM (获取块物理 DOM: ${targetId})`);
         const domRes = await post("/api/block/getBlockDOM", {
             id: targetId
         });
         const domString = domRes?.data?.dom || "";
         if (!domString) {
-            console.groupEnd();
             throw new Error(`[DuplicateContent] 获取块 DOM 失败: ${targetId}`);
         }
 
-        console.log(`🚀 [API] /api/block/insertBlock (在下方插入副本)`);
         const insertRes = await post("/api/block/insertBlock", {
             previousID: targetId,
             dataType: "dom",
@@ -149,16 +139,12 @@ export async function triggerDuplicateContent(
                             }
                         }
                     }
-                    console.log(`✅ [DuplicateContent] 成功递归克隆标题下 ${subBlocksToCopy.length} 个子块`);
                 }
             } catch (headingErr) {
                 console.warn(`⚠️ 递归克隆标题子块异常:`, headingErr);
             }
         }
     }
-
-    console.log(`✅ [DuplicateContent Success] 克隆完成: 原 ID=${targetId} ➔ 新 ID=${createdId}`);
-    console.groupEnd();
 
     return {
         success: true,

@@ -81,7 +81,6 @@ export async function dispatchCustom(
     resolvedParams: Record<string, unknown>,
     context: CommandContext
 ): Promise<DispatchResult> {
-    console.log(`[Dispatcher STEP Custom] 调用 executor...`);
     if (def.dispatch.executor) {
         const result = await def.dispatch.executor(resolvedParams, context);
         return result as DispatchResult;

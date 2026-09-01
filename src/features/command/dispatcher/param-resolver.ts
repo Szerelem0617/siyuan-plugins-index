@@ -90,7 +90,6 @@ export async function resolveCommandParams(
                 const suggested = suggestTagCreatedBinding(context.supertag, schema.key, schema.type, def.id);
                 if (suggested.matched && suggested.token) {
                     tagCreatedToken = suggested.token;
-                    console.log(`  [ParamResolver Tag-Created-Auto-Context] ⚡ 为参数 "${schema.key}" 自动推导 tag_created 变量: "${tagCreatedToken}"`);
                 }
             }
 
@@ -185,7 +184,6 @@ export async function resolveCommandParams(
             const currentBlockId = getBlockId(context);
             if (currentBlockId) {
                 result[schema.key] = currentBlockId;
-                console.log(`  [ParamResolver Auto-Context-Default] ⚡ 自动为 "${schema.key}" 参数应用当前上下文块 ID: "${currentBlockId}"`);
             }
         }
     }
@@ -546,7 +544,6 @@ export async function resolveTemplate(text: string, context: CommandContext): Pr
                     const resolvedNavId = await navigateTopology(blockId, pathExpr);
                     if (resolvedNavId) {
                         variables[token] = resolvedNavId;
-                        console.log(`[ParamResolver Topology] 🌐 拓扑路径解析成功: {{${token}}} ➔ "${resolvedNavId}" (起始: ${blockId})`);
                     }
                 } catch (navErr) {
                     console.warn(`[ParamResolver Topology] 解析 {{${token}}} 异常:`, navErr);

@@ -14,8 +14,6 @@ import { formatDate } from "../../../shared/utils";
  *    与 Supertag 胶囊，解决更新后数据库图标消失的问题。
  */
 export async function triggerSafeUpdateBlock(params: Record<string, unknown>, context?: CommandContext) {
-    console.log("[SafeUpdateBlock] triggerSafeUpdateBlock called with params:", params);
-    
     let rawId = String(params?.id || params?.block_id || "").trim();
     let id = "";
 
@@ -27,8 +25,6 @@ export async function triggerSafeUpdateBlock(params: Record<string, unknown>, co
     if (!id || id.includes("{{") || id.includes("${")) {
         id = getBlockId(ctx);
     }
-
-    console.log(`[SafeUpdateBlock] Target block ID resolved to: "${id}" (rawId was: "${rawId}")`);
 
     const rawData = String(params?.data || params?.content || "").trim();
     const data = rawData ? await resolveTemplate(rawData, ctx) : "";
@@ -57,7 +53,6 @@ export async function triggerSafeUpdateBlock(params: Record<string, unknown>, co
     }
 
     if (isDoc) {
-        console.log(`[SafeUpdateBlock] 目标节点 ${id} 为文档 (Doc)，执行重命名页面标题: "${data}"`);
         try {
             await post("/api/filetree/renameDocByID", { id, title: data });
             
@@ -112,8 +107,6 @@ export async function triggerSafeUpdateBlock(params: Record<string, unknown>, co
         }
     }
 
-    console.log(`[SafeUpdateBlock] Updating block ${id} while preserving ${Object.keys(preserveAttrs).length} attributes:`, preserveAttrs);
-
     // 2. 调用思源原生接口更新块内容
     const updateRes = await post("/api/block/updateBlock", { id, data, dataType });
 
@@ -124,7 +117,6 @@ export async function triggerSafeUpdateBlock(params: Record<string, unknown>, co
                 id,
                 attrs: preserveAttrs
             });
-            console.log(`[SafeUpdateBlock] Successfully restored attributes for block ${id}`);
         } catch (e) {
             console.error(`[SafeUpdateBlock] Failed to restore attributes for block ${id}:`, e);
         }

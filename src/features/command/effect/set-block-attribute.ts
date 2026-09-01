@@ -178,14 +178,10 @@ export async function setBlockAttribute(
         }
     }
 
-    console.log(`[SetBlockAttribute] 🏷️ 正在批量设置块 ${rawId} 属性:`, finalAttrs, `(Context Supertag: ${contextTag || 'none'})`);
-
     await post("/api/attr/setBlockAttrs", {
         id: rawId,
         attrs: finalAttrs
     });
-
-    console.log(`[SetBlockAttribute] ✓ 成功批量设置块 ${rawId} 属性:`, finalAttrs);
 
     // 即时 DOM 同步与复选框渲染触发（0 延迟 UI 响应）
     const liveBlockEl = document.querySelector(`[data-node-id="${rawId}"]`) as HTMLElement;

@@ -173,8 +173,6 @@ export class SupertagMonitor {
                 return;
             }
 
-            console.log(`[Supertag] Block ${blockId} tag diff -> Added: [${added.join(", ")}], Removed: [${removed.join(", ")}]`);
-
             for (const tag of added) {
                 await this.processNewTag(blockId, tag);
             }
@@ -224,8 +222,6 @@ export class SupertagMonitor {
                 return;
             }
 
-            console.log(`[Supertag-Migration] Intercepted native tags to migrate on block ${blockId}:`, tagsToMigrate);
-
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
             const attrs = attrsRes?.data || attrsRes || {};
             const rawTags = attrs["custom-supertags"];
@@ -248,92 +244,84 @@ export class SupertagMonitor {
             const activeProtyle = (window as any).activeProtyleInstance;
             let blockInActiveEditor = false;
 
-            if (activeProtyle) {
-                const blockEl = activeProtyle.element.querySelector(`[data-node-id="${blockId}"]`);
-                if (blockEl) {
+            if (activeProtyle?.element) {
+                const liveBlock = activeProtyle.element.querySelector(`[data-node-id="${blockId}"]`);
+                if (liveBlock) {
                     blockInActiveEditor = true;
-                    const oldHTML = blockEl.outerHTML;
-                    
-                    const temp = document.createElement("div");
-                    temp.innerHTML = oldHTML;
-                    const innerBlock = temp.firstElementChild as HTMLElement;
-                    if (innerBlock) {
-                        innerBlock.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
-                        const tagEls = innerBlock.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
-                        tagEls.forEach((el: any) => {
-                            const text = cleanTagString(el.textContent || "");
-                            if (supertags.has(text)) el.remove();
-                        });
-                    }
-                    const cleanHTML = temp.innerHTML.trim();
-
-                    try {
-                        activeProtyle.updateTransaction(blockId, cleanHTML, oldHTML);
-                    } catch (e) {
-                        console.error("[Supertag] Native updateTransaction failed, falling back:", e);
-                        blockInActiveEditor = false;
-                    }
-
-                    SupertagRenderer.render(activeProtyle);
+                    liveBlock.setAttribute("custom-supertags", JSON.stringify(updatedCustom));
+                    const liveTags = liveBlock.querySelectorAll('[data-type="tag"], [data-type="NodeTag"]');
+                    liveTags.forEach((el: any) => {
+                        const t = (el.textContent || "")
+                            .replace(/#/g, '')
+                            .replace(/[\u200B-\u200D\uFEFF]/g, '')
+                            .trim()
+                            .toLowerCase();
+                        if (supertags.has(t)) el.remove();
+                    });
+                    SupertagRenderer.renderSingleBlockElement(liveBlock as HTMLElement);
                 }
             }
 
             if (!blockInActiveEditor) {
-                const cleanDOM = tempDiv.innerHTML.trim();
-                await post("/api/block/updateBlock", {
-                    id: blockId,
-                    dataType: "dom",
-                    data: cleanDOM
-                });
+                const newHTML = blockDiv ? blockDiv.outerHTML : tempDiv.innerHTML;
+                try {
+                    await post("/api/block/updateBlock", {
+                        dataType: "dom",
+                        data: newHTML,
+                        id: blockId
+                    });
+                } catch (e) {
+                    console.error("[Supertag] Native updateTransaction failed, falling back:", e);
+                }
             }
 
-            for (const tag of tagsToMigrate) {
-                await this.processNewTag(blockId, tag);
+            tagCache.set(blockId, new Set(updatedCustom));
+            globalSupertagsCache.set(blockId, updatedCustom);
+
+            for (const t of tagsToMigrate) {
+                await this.processNewTag(blockId, t);
             }
         } catch (err) {
             console.error("[Supertag-Migration] Error during native tag auto migration:", err);
         }
     }
 
-    private extractTagsFromPayload(payload: any, _action?: string, _opId?: string): Set<string> | null {
-        if (!payload) return new Set<string>();
-
-        if (typeof payload === "string" && payload.includes("<") && payload.includes(">")) {
-            const match = payload.match(/custom-supertags="([^"]+)"/);
-            if (match) {
-                const decoded = match[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-                const tags = new Set<string>();
-                try {
-                    const parsed = JSON.parse(decoded);
-                    if (Array.isArray(parsed)) {
-                        parsed.forEach((t: any) => {
-                            const clean = String(t || "").trim();
-                            if (clean) tags.add(clean);
-                        });
-                    }
-                } catch (_) {}
-                return tags;
-            }
+    private extractTagsFromPayload(payload: any, action?: string, opId?: string): Set<string> | null {
+        if (!payload) return null;
+        if (action === "setAttrViewCell" || action === "updateAttrViewCell") {
             return null;
         }
 
-        let attrs: any = null;
-        if (typeof payload === "object") {
-            attrs = payload.new || payload;
-        } else if (typeof payload === "string" && payload.trim().startsWith("{")) {
-            try {
-                attrs = JSON.parse(payload);
-                if (attrs.new) attrs = attrs.new;
-            } catch (_) {}
+        const tags = new Set<string>();
+        let hasTagField = false;
+
+        const customSupertags = payload["custom-supertags"] || payload?.attrs?.["custom-supertags"];
+        if (customSupertags !== undefined) {
+            hasTagField = true;
+            parseSupertags(customSupertags).forEach(t => tags.add(cleanTagString(t)));
         }
 
-        if (attrs && attrs["custom-supertags"] !== undefined) {
-            const rawVal = attrs["custom-supertags"];
-            const tags = new Set<string>();
-            if (rawVal) {
-                const parsed = parseSupertags(rawVal);
-                parsed.forEach(t => tags.add(t));
+        const ial = payload.ial || payload.data?.ial;
+        if (ial && typeof ial === "string") {
+            const match = ial.match(/custom-supertags="([^"]+)"/);
+            if (match) {
+                hasTagField = true;
+                const unescaped = match[1].replace(/&quot;/g, '"');
+                parseSupertags(unescaped).forEach(t => tags.add(cleanTagString(t)));
             }
+        }
+
+        const dom = payload.dom || payload.data?.dom;
+        if (dom && typeof dom === "string") {
+            const match = dom.match(/custom-supertags="([^"]+)"/);
+            if (match) {
+                hasTagField = true;
+                const unescaped = match[1].replace(/&quot;/g, '"');
+                parseSupertags(unescaped).forEach(t => tags.add(cleanTagString(t)));
+            }
+        }
+
+        if (hasTagField) {
             return tags;
         }
 
@@ -351,13 +339,10 @@ export class SupertagMonitor {
                 tagCache.set(blockId, cached);
             }
             if (cached.has(cleanTag)) {
-                console.log(`[Supertag] Tag #${cleanTag} already in cache for block "${blockId}". Skipping duplicate processNewTag.`);
                 return;
             }
             cached.add(cleanTag);
             globalSupertagsCache.set(blockId, Array.from(cached));
-
-            console.log(`[Supertag] 🏷️ Processing supertag #${cleanTag} for block "${blockId}"...`);
 
             this.dataRegistry = await getGlobalTypeConfigs();
 
@@ -387,11 +372,9 @@ export class SupertagMonitor {
             }
 
             if (targetConfig) {
-                console.log(`[Supertag] Step 1: Binding block "${blockId}" as row in Layer 4 AV "${targetConfig.avName}" (${targetConfig.avId})...`);
                 await supertagBinder.applySupertag(blockId, cleanTag, targetConfig);
             }
 
-            console.log(`[Supertag] Step 2: Executing conditional trigger commands for #${cleanTag}...`);
             await triggerConditionalCommands(blockId, cleanTag, "tag_created");
             await this.ensureCommandButtons(blockId, cleanTag);
         } catch (e) {
@@ -413,7 +396,6 @@ export class SupertagMonitor {
         try {
             const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
             if (attrsRes?.data?.["custom-index-buttons"]) {
-                console.log(`[Supertag] 块 ${blockId} 已有命令按钮段落，跳过`);
                 return;
             }
         } catch { /* ignore */ }
@@ -435,7 +417,6 @@ export class SupertagMonitor {
         if (newBlockId) {
             await post("/api/attr/setBlockAttrs", { id: blockId, attrs: { "custom-index-buttons": newBlockId } });
         }
-        console.log(`[Supertag] 已为 #${cleanTag} 在块下方创建命令按钮段落 (${buttonEntries.length} 个按钮)`);
     }
 
     public async processRemovedTag(blockId: string, tag: string) {
@@ -455,7 +436,6 @@ export class SupertagMonitor {
             // 从 Hot-SQLite 内存表中即时移除该块
             await supertagAVProjector.removeBlockFromVirtualTable(blockId, cleanTag);
 
-            console.log(`[Supertag] 🗑️ Processing removed tag #${cleanTag} for block "${blockId}"...`);
             await triggerConditionalCommands(blockId, cleanTag, "tag_removed");
         } catch (e) {
             console.error("[Supertag] Failed to process removed tag:", blockId, e);

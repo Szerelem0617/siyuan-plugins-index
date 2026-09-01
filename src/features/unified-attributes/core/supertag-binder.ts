@@ -105,8 +105,6 @@ export class SupertagBinder {
         const avId = config?.avId || this.getPref(rootTag) || this.getPref(cleanTag);
 
         try {
-            console.log(`[Supertag-Binder] 🏷️ 正在为块 "${blockId}" 挂载 Supertag #${cleanTag} (根标签 #${rootTag}) 属性...`);
-
             // 1. 确保该 Tag 与 AV 数据库的虚拟投影处于激活状态
             if (avId && !supertagAVProjector.isVirtualProjection(avId)) {
                 await supertagAVProjector.projectSupertagToAV(rootTag, avId);
@@ -171,7 +169,6 @@ export class SupertagBinder {
                     id: blockId,
                     attrs: initAttrs
                 });
-                console.log(`[Supertag-Binder] ✓ 成功为块 ${blockId} 挂载分类属性:`, initAttrs);
             }
 
             // 4. 获取块自身文本内容
