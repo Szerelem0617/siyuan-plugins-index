@@ -9,6 +9,10 @@
     import { getUnifiedSupertagList, type UnifiedSupertagDefinition } from "../core/supertag-entity";
     import { post } from "../../../shared/api-client/request";
     import { openSupertagUnifiedConfigByTag, openPresetSupertagImportDialog } from "../../command/av-interaction/type-db-handler";
+    import { openGlobalAutomationDialog } from "../../command/av-interaction/command-db-handler";
+    import { openEntryConfigDialog } from "../../command/entry-config-ui";
+    import { constructCommandStorage } from "../../command/instantiate-storage";
+    import { refreshSupertagRegistry } from "../../command/utils/sync-service";
     import { NOTEBOOK_NAME, DATA_DBS_CONFIG } from "../../command/indexos/seed-data";
     import { getOrCreateDataDbsParentDoc } from "../../command/data-db-management";
     import CommandsPanel from "../../sqlite/commands-db/CommandsPanel.svelte";
@@ -17,10 +21,24 @@
     export let activeTab: "supertags" | "commands" = "supertags";
     let loading = true;
     let searchQuery = "";
+    let commandSearchQuery = "";
     let supertagList: UnifiedSupertagDefinition[] = [];
 
     let showCreateInput = false;
     let newTagName = "";
+
+    async function handleInitSystem() {
+        try {
+            showMessage("正在从默认模板将数据存储到思源...", 3000, "info");
+            await constructCommandStorage();
+            await refreshSupertagRegistry();
+            showMessage("✓ 数据已存储到思源，可自行修改配置！", 3000, "info");
+            window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
+        } catch (e: any) {
+            console.error("System init failed", e);
+            showMessage(`存储失败: ${e.message}`, 5000, "error");
+        }
+    }
 
     let locateIndices: Record<string, number> = {};
 
@@ -279,6 +297,47 @@
                     <svg style="position: absolute; right: 8px; width: 13px; height: 13px; color: var(--indexos-text-muted); pointer-events: none;"><use xlink:href="#iconSearch"></use></svg>
                 </div>
             </div>
+        {:else if activeTab === 'commands'}
+            <div class="fn__flex" style="align-items: center; gap: 8px;">
+                <button
+                    class="indexos-btn-bordered"
+                    style="font-size: 11px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 4px;"
+                    title="配置顶栏、底栏、侧栏与右键快捷菜单入口"
+                    on:click={openEntryConfigDialog}
+                >
+                    <span>🧭 UI 入口</span>
+                </button>
+
+                <button
+                    class="indexos-btn-bordered"
+                    style="font-size: 11px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 4px;"
+                    title="后台自动化定时与事件触发引擎"
+                    on:click={openGlobalAutomationDialog}
+                >
+                    <span>⏰ 后台执行</span>
+                </button>
+
+                <button
+                    class="indexos-btn-bordered"
+                    style="font-size: 11px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 4px;"
+                    title={i18n.initSystemDBHint}
+                    on:click={handleInitSystem}
+                >
+                    <svg style="width: 12px; height: 12px; fill: currentColor;"><use xlink:href="#iconDatabase"></use></svg>
+                    <span>{i18n.initSystemDB}</span>
+                </button>
+
+                <!-- 搜索框 -->
+                <div style="position: relative; display: flex; align-items: center; width: 170px;">
+                    <input
+                        class="b3-text-field b3-text-field--small fn__flex-1"
+                        style="width: 100%; box-sizing: border-box; padding-left: 10px; padding-right: 28px; height: 28px; font-size: 12px; border-radius: var(--indexos-radius-sm, 6px);"
+                        placeholder="搜索指令..."
+                        bind:value={commandSearchQuery}
+                    />
+                    <svg style="position: absolute; right: 8px; width: 13px; height: 13px; color: var(--indexos-text-muted); pointer-events: none;"><use xlink:href="#iconSearch"></use></svg>
+                </div>
+            </div>
         {/if}
     </div>
 
@@ -533,7 +592,7 @@
             class="b3-dialog__content fn__flex-1"
             style="padding: 16px; overflow-y: auto; min-height: 0; flex: 1 1 0%;"
         >
-            <CommandsPanel />
+            <CommandsPanel bind:searchQuery={commandSearchQuery} />
         </div>
     {/if}
 

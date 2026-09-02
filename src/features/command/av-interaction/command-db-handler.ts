@@ -63,6 +63,29 @@ export function openGlobalAutomationDialog() {
     });
 }
 
+export function openCustomUserCommandDialog(onCreatedCallback?: (newCmdId: string) => void) {
+    const dialog = new Dialog({
+        title: "新建自定义 user. 命令",
+        content: `<div id="custom-user-cmd-container"></div>`,
+        width: "500px",
+        destroyCallback: () => {}
+    });
+    dialog.element.classList.add("indexos-dialog");
+    dialog.element.querySelector('.b3-dialog__header')?.remove();
+
+    import("./dialogs/CustomUserCommandDialog.svelte").then(m => {
+        new m.default({
+            target: dialog.element.querySelector("#custom-user-cmd-container")!,
+            props: {
+                dialog,
+                onCreated: (newCmdId: string) => {
+                    if (onCreatedCallback) onCreatedCallback(newCmdId);
+                }
+            }
+        });
+    });
+}
+
 export async function handleAvFooterClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
 
@@ -127,47 +150,14 @@ export async function handleAvFooterClick(event: MouseEvent) {
     }
 }
 
-async function triggerRegistryCommandSelectorForInsert(avId: string) {
-    let commands: any[] = [];
-    try {
-        // 先从内存注册表中获取全量已注册命令（包括动态注册的第三方插件命令）
-        const memoryCommands = commandRegistry.getAllCommands().map(c => ({
-            id: c.id,
-            name: c.name,
-            description: c.description || "",
-            params: c.params || []
-        }));
-
-        const existingIds = new Set(memoryCommands.map(c => c.id));
-
-        // 再补充 SQLite 中可能存在的记录
-        const { db } = await getSqliteEngine();
-        const qRes = db.exec(`SELECT id, name, description, params FROM sys_registry_db`);
-        if (qRes.length > 0 && qRes[0].values.length > 0) {
-            for (const row of qRes[0].values) {
-                const id = String(row[0] || "");
-                if (id && !existingIds.has(id)) {
-                    memoryCommands.push({
-                        id,
-                        name: String(row[1] || ""),
-                        description: String(row[2] || ""),
-                        params: JSON.parse(String(row[3] || "[]"))
-                    });
-                }
-            }
-        }
-        commands = memoryCommands;
-        console.log(`[SelectorDialog] Total available commands: ${commands.length}`, commands.map(c => c.id));
-    } catch (e) {
-        console.error("[FooterClick] Failed to query registry commands:", e);
-        commands = commandRegistry.getAllCommands().map(c => ({
-            id: c.id,
-            name: c.name,
-            description: c.description || "",
-            params: c.params || []
-        }));
-        console.log(`[SelectorDialog] Fallback commands count: ${commands.length}`, commands.map(c => c.id));
-    }
+export async function openRegistryCommandSelectorDialog(onSelectCallback?: (cmd: any) => void) {
+    const avId = getCommandAvId() || "";
+    let commands = commandRegistry.getAllCommands().map(c => ({
+        id: c.id,
+        name: c.name,
+        description: c.description || "",
+        params: c.params || []
+    }));
 
     if (commands.length === 0) {
         showMessage("系统命令注册表为空或查询失败");
@@ -183,20 +173,27 @@ async function triggerRegistryCommandSelectorForInsert(avId: string) {
     dialog.element.classList.add("indexos-dialog");
     dialog.element.querySelector('.b3-dialog__header')?.remove();
 
-        new RegistryCommandSelectorDialog({
-            target: document.getElementById("registry-command-selector-dialog")!,
-            props: {
-                commands,
-                onSelect: async (cmd: any) => {
-                    dialog.destroy();
+    new RegistryCommandSelectorDialog({
+        target: document.getElementById("registry-command-selector-dialog")!,
+        props: {
+            commands,
+            onSelect: async (cmd: any) => {
+                dialog.destroy();
+                if (avId) {
                     await insertCommandIntoAv(avId, cmd);
-                },
-                onPipelineCreated: () => {
-                    // 复合命令行已由 createPipelineRow 创建并注册，直接关闭选择器
-                    dialog.destroy();
                 }
+                if (onSelectCallback) onSelectCallback(cmd);
+            },
+            onPipelineCreated: () => {
+                dialog.destroy();
+                if (onSelectCallback) onSelectCallback(null);
             }
-        });
+        }
+    });
+}
+
+async function triggerRegistryCommandSelectorForInsert(avId: string) {
+    await openRegistryCommandSelectorDialog();
 }
 
 async function insertCommandIntoAv(avId: string, cmd: any) {

@@ -66,16 +66,6 @@
             bind:value={searchQuery}
             style="padding: 6px 10px; font-size: 13px;"
         />
-        <button 
-            class="b3-button b3-button--outline" 
-            style="font-size: 11px; padding: 4px 8px; white-space: nowrap;"
-            on:click={openCreateUserCommandDialog}
-        >+ 自定义 user. 命令</button>
-        <button 
-            class="b3-button b3-button--outline" 
-            style="font-size: 11px; padding: 4px 8px; white-space: nowrap;"
-            on:click={openCreatePipelineDialog}
-        >+ 创建复合命令</button>
     </div>
     
     <div style="flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
