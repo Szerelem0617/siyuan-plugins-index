@@ -80,12 +80,12 @@ export class SupertagManager {
     }
 }
 
-export function openSupertagManagerDialog() {
+export function openSupertagManagerDialog(initialTab: "supertags" | "commands" = "supertags") {
     const dialog = new Dialog({
-        title: i18n.supertagManager?.title || "超级标签管理",
+        title: i18n.supertagManager?.title || "超级标签与命令",
         content: `<div id="supertag-manager-container" style="height: 100%;"></div>`,
-        width: "820px",
-        height: "560px",
+        width: "840px",
+        height: "600px",
     });
     dialog.element.classList.add("indexos-dialog");
     dialog.element.querySelector('.b3-dialog__header')?.remove();
@@ -93,7 +93,8 @@ export function openSupertagManagerDialog() {
     new SupertagManagerDialog({
         target: dialog.element.querySelector("#supertag-manager-container")!,
         props: {
-            dialog
+            dialog,
+            activeTab: initialTab
         }
     });
 }

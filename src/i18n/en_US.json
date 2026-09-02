@@ -195,7 +195,7 @@
     "warning": "⚠️ Developer mode and database advanced features are currently in experimental phase. Recommended for use in test workspaces only. Backward compatibility is not guaranteed until plugin v2.0.0 stable release."
   },
   "supertagManager": {
-    "title": "Supertag Management",
+    "title": "Supertags & Commands",
     "tabData": "Data Tag",
     "tabCommand": "Command Tag",
     "colTag": "Tag",

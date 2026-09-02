@@ -1,6 +1,5 @@
 <script lang="ts">
     import { showMessage } from "siyuan";
-    import { runQuery } from "../../../sqlite/sqlite-manager";
 
     export let dialog: any;
     export let onImported: () => void;
@@ -51,29 +50,50 @@
 
     async function importPreset(preset: PresetSupertag) {
         try {
-            const cleanTag = preset.tag.replace(/^#/, "");
+            const cleanTag = preset.tag.replace(/^#/, "").trim().toLowerCase();
             const iconMenuCmd = preset.defaultCommands || "";
             const conditionalScript = preset.defaultConditional || "";
 
-            const sql = `INSERT INTO "supertag-db" ("主键", "Manual", "Auto") VALUES ('${cleanTag}', '${iconMenuCmd}', '${conditionalScript}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto"`;
-            await runQuery(sql);
+            // 1. 启用并自动在 data-dbs 创建同名数据库
+            const { supertagBinder } = await import("../../../unified-attributes/core/supertag-binder");
+            const { supertagAVProjector } = await import("../../../unified-attributes/projection/supertag-av-projector");
+            const { ensureSupertagDatabase } = await import("../../../unified-attributes/core/supertag-schema");
+
+            await supertagBinder.setPref(cleanTag, "enabled");
+            const subAvId = await ensureSupertagDatabase(cleanTag);
+            if (subAvId) {
+                await supertagBinder.setPref(cleanTag, subAvId);
+                supertagAVProjector.bindTagToAV(cleanTag, subAvId);
+            }
+
+            // 2. 原生 AV 属性写入 supertag-db 系统库 (绝不走 SQL DML)
+            const { insertOrUpdateSupertagDbRecord } = await import("../type-db-handler");
+            await insertOrUpdateSupertagDbRecord(cleanTag, {
+                manual: iconMenuCmd,
+                auto: conditionalScript,
+                relatedAv: subAvId || ""
+            });
+
+    // 3. 刷新注册表
+            const { refreshSupertagRegistry } = await import("../../utils/sync-service");
+            await refreshSupertagRegistry();
 
             showMessage(`✓ 成功导入超级标签: #${cleanTag}`);
             onImported();
             if (dialog) dialog.destroy();
         } catch (e: any) {
-            console.error("[PresetSupertag] Failed to import preset via Plugin SQL DML:", e);
-            showMessage(`导入预设 Supertag 失败: ${e.message}`, 3000, "error");
+            console.error("[PresetSupertag] Failed to import preset:", e);
+            showMessage(`导入预设 Supertag 失败: ${e.message || e}`, 3000, "error");
         }
     }
 </script>
 
 <div class="b3-dialog__content" style="display: flex; flex-direction: column; gap: 12px; padding: 16px; min-width: 400px;">
     <div style="font-size: 13px; font-weight: bold; color: var(--b3-theme-on-background); display: flex; align-items: center; justify-content: space-between;">
-        <span>✨ 快捷导入预定义 Supertag (Plugin SQL DML)</span>
+        <span>✨ 快捷导入预定义 Supertag</span>
     </div>
     <div style="font-size: 11px; color: var(--b3-theme-on-surface-light);">
-        选择要导入的特色超级标签预设模板，将通过插件原生 SQL DML 写入 "supertag-db"：
+        选择要导入的特色超级标签预设模板，将自动在 data-dbs 创建同名数据库并注册到 supertag-db：
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;">

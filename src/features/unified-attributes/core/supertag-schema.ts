@@ -357,35 +357,12 @@ export async function ensureSupertagDatabase(tagName: string): Promise<string> {
                     } catch (_) {}
                 }
 
-                // 更新 supertag-db 系统表 (使用 SiYuan 原生 API 批量写属性，不使用 DML)
-                const typeAvId = getTypeAvId();
-                if (typeAvId) {
-                    try {
-                        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
-                        const keys = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
-                        const relKey = keys.find((k: any) => k.name === "Related av" || k.name === "relatedAv");
-                        const primaryKey = keys.find((k: any) => k.type === "block" || k.name === "主键");
-                        
-                        const rowsRes = await post("/api/av/renderAttributeView", { id: typeAvId, page: 1, pageSize: 100 });
-                        const avRows = rowsRes?.data?.view?.rows || rowsRes?.view?.rows || rowsRes?.rows || [];
-
-                        const targetRow = avRows.find((r: any) => {
-                            const pkCell = r.cells?.find((c: any) => c.keyID === primaryKey?.id) || r.cells?.[0];
-                            const tagContent = pkCell?.value?.block?.content || pkCell?.value?.text?.content || "";
-                            return tagContent.replace(/^#+/, "").trim().toLowerCase() === cleanTag;
-                        });
-
-                        if (targetRow && relKey) {
-                            await post("/api/av/setAttributeViewBlockAttr", {
-                                avID: typeAvId,
-                                keyID: relKey.id,
-                                itemID: targetRow.id,
-                                value: { type: "text", text: { content: avId } }
-                            });
-                        }
-                    } catch (updateErr) {
-                        console.warn(`[SupertagSchema] 回写 supertag-db 失败:`, updateErr);
-                    }
+                // 更新 supertag-db 系统表 (使用 SiYuan 原生 AV API 确保行存在)
+                try {
+                    const { insertOrUpdateSupertagDbRecord } = await import("../../command/av-interaction/type-db-handler");
+                    await insertOrUpdateSupertagDbRecord(cleanTag, { relatedAv: avId });
+                } catch (updateErr) {
+                    console.warn(`[SupertagSchema] 回写 supertag-db 失败:`, updateErr);
                 }
 
                 window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));

@@ -1,12 +1,13 @@
 import { Dialog, showMessage } from "siyuan";
-import { getTypeAvId } from "../registration";
+import { getTypeAvId, setTypeAvId } from "../registration";
+import { post } from "../../../shared/api-client/request";
 import { updateCellValue } from "../../av/attribute-view/special/special-handlers";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import UnifiedSupertagConfigDialog from "./dialogs/UnifiedSupertagConfigDialog.svelte";
 import PresetSupertagImportDialog from "./dialogs/PresetSupertagImportDialog.svelte";
 import { getSupertagDbRecords } from "../../unified-attributes/core/supertag-entity";
 
-export function openPresetSupertagImportDialog() {
+export function openPresetSupertagImportDialog(onImportedCallback?: () => void) {
     const dialog = new Dialog({
         title: "导入预设超级标签 (Preset Supertags)",
         content: `<div id="preset-supertag-import-container"></div>`,
@@ -20,9 +21,128 @@ export function openPresetSupertagImportDialog() {
         target: dialog.element.querySelector("#preset-supertag-import-container")!,
         props: {
             dialog,
-            onImported: () => {}
+            onImported: () => {
+                window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
+                if (onImportedCallback) onImportedCallback();
+            }
         }
     });
+}
+
+/**
+ * 向 supertag-db 系统 AV 数据库中插入或更新一条 Supertag 记录 (使用原生 AV API，绝不走 SQL DML)
+ */
+export async function insertOrUpdateSupertagDbRecord(
+    tag: string,
+    options?: { manual?: string; auto?: string; relatedAv?: string }
+): Promise<void> {
+    const cleanTag = tag.replace(/^#+/, "").trim().toLowerCase();
+    if (!cleanTag) return;
+
+    // 1. 获取 typeAvId
+    let typeAvId = getTypeAvId();
+    if (!typeAvId) {
+        try {
+            const typeDocSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-supertag-db' LIMIT 1`;
+            const typeDocs = await post("/api/query/sql", { stmt: typeDocSql });
+            if (typeDocs && typeDocs.length > 0) {
+                const docId = typeDocs[0].root_id;
+                const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
+                const avRes = await post("/api/query/sql", { stmt: avSql });
+                if (avRes && avRes.length > 0) {
+                    const domRes = await post("/api/block/getBlockDOM", { id: avRes[0].id });
+                    const html = domRes?.dom || domRes?.data?.dom || "";
+                    const match = html.match(/data-av-id="([^"]+)"/);
+                    typeAvId = match ? match[1] : avRes[0].id;
+                    if (typeAvId) setTypeAvId(typeAvId);
+                }
+            }
+        } catch (_) {}
+    }
+
+    if (!typeAvId) {
+        // 未实例化时无需操作原生 AV
+        return;
+    }
+
+    // 2. 获取 supertag-db 的列结构
+    const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: typeAvId });
+    const keys = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
+    const primaryKey = keys.find((k: any) => k.type === "block" || k.name === "主键") || keys[0];
+    const manualKey = keys.find((k: any) => k.name === "Manual" || k.name === "manual");
+    const autoKey = keys.find((k: any) => k.name === "Auto" || k.name === "auto");
+    const relatedAvKey = keys.find((k: any) => k.name === "Related av" || k.name === "relatedAv");
+
+    // 3. 查询当前 supertag-db 的行
+    const rowsRes = await post("/api/av/renderAttributeView", { id: typeAvId, page: 1, pageSize: 200 });
+    const avRows = rowsRes?.data?.view?.rows || rowsRes?.view?.rows || rowsRes?.rows || [];
+
+    let targetRow = avRows.find((r: any) => {
+        const pkCell = r.cells?.find((c: any) => c.keyID === primaryKey?.id) || r.cells?.[0];
+        const tagContent = pkCell?.value?.block?.content || pkCell?.value?.text?.content || "";
+        return tagContent.replace(/^#+/, "").trim().toLowerCase() === cleanTag;
+    });
+
+    let rowId = targetRow?.id;
+
+    // 4. 若不存在该行，通过 /api/av/addAttributeViewBlocks 插入新行
+    if (!rowId) {
+        const newRowId = "row_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+        await post("/api/av/addAttributeViewBlocks", {
+            avID: typeAvId,
+            srcs: [{
+                itemID: newRowId,
+                id: "",
+                isDetached: true
+            }]
+        });
+        rowId = newRowId;
+    }
+
+    // 5. 批量写入单元格属性
+    const populateOps: any[] = [];
+
+    if (primaryKey && rowId) {
+        populateOps.push({
+            keyID: primaryKey.id,
+            itemID: rowId,
+            value: { type: "block", block: { content: cleanTag } }
+        });
+    }
+
+    if (manualKey && rowId && options?.manual !== undefined) {
+        populateOps.push({
+            keyID: manualKey.id,
+            itemID: rowId,
+            value: { type: "text", text: { content: options.manual } }
+        });
+    }
+
+    if (autoKey && rowId && options?.auto !== undefined) {
+        populateOps.push({
+            keyID: autoKey.id,
+            itemID: rowId,
+            value: { type: "text", text: { content: options.auto } }
+        });
+    }
+
+    if (relatedAvKey && rowId && options?.relatedAv !== undefined) {
+        populateOps.push({
+            keyID: relatedAvKey.id,
+            itemID: rowId,
+            value: { type: "text", text: { content: options.relatedAv } }
+        });
+    }
+
+    if (populateOps.length > 0) {
+        await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: typeAvId, values: populateOps });
+    }
+
+    // 同步到热 SQLite 虚拟镜像
+    try {
+        const { instantiateAV } = await import("../../sqlite/sqlite-manager");
+        await instantiateAV(typeAvId, true);
+    } catch (_) {}
 }
 
 /**
