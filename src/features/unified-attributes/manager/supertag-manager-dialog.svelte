@@ -175,13 +175,13 @@
             const { ensureSupertagDatabase } = await import("../core/supertag-schema");
             await ensureSupertagDatabase(clean);
 
-            const { refreshSupertagRegistry } = await import("../../command/utils/sync-service");
-            await refreshSupertagRegistry();
-
             showMessage(`✓ 成功创建超级标签 #${clean} 及同名数据库！`, 3000);
             showCreateInput = false;
             newTagName = "";
-            await loadData();
+            searchQuery = "";
+
+            const { refreshSupertagManager } = await import("./supertag-manager");
+            await refreshSupertagManager();
         } catch (e: any) {
             console.error("Failed to create supertag:", e);
             showMessage(`创建超级标签失败: ${e.message || e}`, 5000, "error");

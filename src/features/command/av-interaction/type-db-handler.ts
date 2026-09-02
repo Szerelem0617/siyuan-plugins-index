@@ -21,8 +21,9 @@ export function openPresetSupertagImportDialog(onImportedCallback?: () => void) 
         target: dialog.element.querySelector("#preset-supertag-import-container")!,
         props: {
             dialog,
-            onImported: () => {
-                window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
+            onImported: async () => {
+                const { refreshSupertagManager } = await import("../../unified-attributes/manager/supertag-manager");
+                await refreshSupertagManager();
                 if (onImportedCallback) onImportedCallback();
             }
         }

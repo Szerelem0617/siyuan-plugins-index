@@ -78,6 +78,8 @@ export const isIdLike = (str: string): boolean => {
     if (!str) return true;
     const s = str.trim().toLowerCase().replace(/^#+/, "");
     if (!s) return true;
+    // 过滤多词/空格/换行/过长文本 (防止 DOM innerText 或段落内容被误当作标签)
+    if (s.includes(" ") || s.includes("\n") || s.includes("\t") || s.length > 40) return true;
     return /^av[_\-]/i.test(s) || 
            /^\d{14}/.test(s) || 
            /^[a-z0-9]{14,}[_\-][a-z0-9]+$/i.test(s) ||
@@ -285,7 +287,7 @@ export async function getUnifiedSupertagList(): Promise<UnifiedSupertagDefinitio
         }
     } catch (_) {}
 
-    // 3. 聚合双源 Supertag 集合
+    // 3. 聚合双源 Supertag 集合 (supertag-db + 工作区有效 AV 数据库 + 系统内置标准标签)
     const allTagsSet = new Set<string>([
         ...Array.from(recordsByTag.keys()),
         ...Array.from(avBlocksByTag.keys()),

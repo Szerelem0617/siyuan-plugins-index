@@ -99,4 +99,15 @@ export function openSupertagManagerDialog(initialTab: "supertags" | "commands" =
     });
 }
 
+/**
+ * 全局统一刷新超级标签与命令管理界面及所有相关缓存 (单一入口，随处复用)
+ */
+export async function refreshSupertagManager(): Promise<void> {
+    try {
+        const { refreshSupertagRegistry } = await import("../../command/utils/sync-service");
+        await refreshSupertagRegistry();
+    } catch (_) {}
+    window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
+}
+
 export const supertagManager = new SupertagManager();

@@ -365,7 +365,10 @@ export async function ensureSupertagDatabase(tagName: string): Promise<string> {
                     console.warn(`[SupertagSchema] 回写 supertag-db 失败:`, updateErr);
                 }
 
-                window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
+                try {
+                    const { refreshSupertagManager } = await import("../manager/supertag-manager");
+                    await refreshSupertagManager();
+                } catch (_) {}
                 return avId;
             }
         } catch (e) {

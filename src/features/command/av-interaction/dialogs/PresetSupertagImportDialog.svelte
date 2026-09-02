@@ -74,9 +74,9 @@
                 relatedAv: subAvId || ""
             });
 
-    // 3. 刷新注册表
-            const { refreshSupertagRegistry } = await import("../../utils/sync-service");
-            await refreshSupertagRegistry();
+            // 3. 全局刷新超级标签管理界面与缓存
+            const { refreshSupertagManager } = await import("../../../unified-attributes/manager/supertag-manager");
+            await refreshSupertagManager();
 
             showMessage(`✓ 成功导入超级标签: #${cleanTag}`);
             onImported();
