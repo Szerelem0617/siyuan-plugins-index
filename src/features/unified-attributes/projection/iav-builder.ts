@@ -11,7 +11,10 @@ export function buildVirtualIAVFromSQL(
     columnsList: string[],
     valuesList: any[][],
     db: any,
-    cachedSchema?: SupertagFieldSchema[]
+    cachedSchema?: SupertagFieldSchema[],
+    totalCount?: number,
+    page: number = 1,
+    pageSize: number = 50
 ): any {
     // 1. 区分主键列与自定义属性列
     const attrCols = columnsList.filter((c: string) => c !== "id" && c !== "title" && !c.startsWith("_"));
@@ -224,7 +227,9 @@ export function buildVirtualIAVFromSQL(
                 type: "table",
                 icon: "iconTable",
                 hideAttrViewName: false,
-                pageSize: 50,
+                pageSize,
+                page,
+                pageCount: Math.ceil((typeof totalCount === "number" ? totalCount : avRows.length) / pageSize),
                 showIcon: true,
                 wrapField: false,
                 filters: [],
@@ -238,12 +243,14 @@ export function buildVirtualIAVFromSQL(
             type: "table",
             icon: "iconTable",
             hideAttrViewName: false,
-            pageSize: 50,
+            pageSize,
+            page,
+            pageCount: Math.ceil((typeof totalCount === "number" ? totalCount : avRows.length) / pageSize),
             showIcon: true,
             wrapField: false,
             columns: avColumns,
             rows: avRows,
-            rowCount: avRows.length,
+            rowCount: typeof totalCount === "number" ? totalCount : avRows.length,
             filters: [],
             sorts: [],
             groups: []
@@ -254,7 +261,7 @@ export function buildVirtualIAVFromSQL(
 /**
  * 构造空虚拟 IAV 视图对象
  */
-export function buildEmptyIAV(avId: string, tagName: string, attrNames: string[]): any {
+export function buildEmptyIAV(avId: string, tagName: string, attrNames: string[], page = 1, pageSize = 50): any {
     const viewId = "view_sql_table";
     const primaryColId = "col_primary_block";
     const avColumns: any[] = [{
@@ -300,7 +307,9 @@ export function buildEmptyIAV(avId: string, tagName: string, attrNames: string[]
             type: "table",
             icon: "iconTable",
             hideAttrViewName: false,
-            pageSize: 50,
+            pageSize,
+            page,
+            pageCount: 0,
             showIcon: true,
             wrapField: false,
             filters: [],
@@ -313,7 +322,9 @@ export function buildEmptyIAV(avId: string, tagName: string, attrNames: string[]
             type: "table",
             icon: "iconTable",
             hideAttrViewName: false,
-            pageSize: 50,
+            pageSize,
+            page,
+            pageCount: 0,
             showIcon: true,
             wrapField: false,
             columns: avColumns,

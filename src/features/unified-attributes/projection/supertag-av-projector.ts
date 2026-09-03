@@ -43,7 +43,9 @@ function isSystemDatabase(avId: string, tagName?: string): boolean {
     return false;
 }
 
-export class SupertagAVProjector {
+import type { IVirtualAvDriver } from "../../../core/contracts";
+
+export class SupertagAVProjector implements IVirtualAvDriver {
     private static instance: SupertagAVProjector | null = null;
     /** 记录虚拟投影绑定关系: avId -> VirtualAVBinding */
     private bindings = new Map<string, VirtualAVBinding>();
@@ -69,7 +71,7 @@ export class SupertagAVProjector {
     public installFetchHook() {
         installFetchInterceptor({
             isVirtualProjection: (avId) => this.isVirtualProjection(avId),
-            generateVirtualIAVFromSQLite: (avId) => this.generateVirtualIAVFromSQLite(avId),
+            generateVirtualIAVFromSQLite: (avId, page, pageSize) => this.generateVirtualIAVFromSQLite(avId, page, pageSize),
             handleAVCellUpdate: (op) => this.handleAVCellUpdate(op)
         });
     }
@@ -85,6 +87,21 @@ export class SupertagAVProjector {
             return Boolean(this.projectionModes.get(cleanId));
         }
         return true; // 默认开启投影视图
+    }
+
+    /** IVirtualAvDriver: isVirtual */
+    public isVirtual(avId: string): boolean {
+        return this.isVirtualProjection(avId);
+    }
+
+    /** IVirtualAvDriver: renderView */
+    public async renderView(avId: string, page?: number, pageSize?: number): Promise<any | null> {
+        return this.generateVirtualIAVFromSQLite(avId, page, pageSize);
+    }
+
+    /** IVirtualAvDriver: updateCell */
+    public async updateCell(operation: any): Promise<void> {
+        return this.handleAVCellUpdate(operation);
     }
 
     public isProjectionActive(avId: string): boolean {
@@ -229,9 +246,9 @@ export class SupertagAVProjector {
     }
 
     /**
-     * 从热 SQLite 表组装 IAV 协议 (含冷启动自愈能力)
+     * 从热 SQLite 表组装 IAV 协议 (支持真·流式分页，含冷启动自愈能力)
      */
-    public async generateVirtualIAVFromSQLite(avId: string): Promise<any | null> {
+    public async generateVirtualIAVFromSQLite(avId: string, page = 1, pageSize = 50): Promise<any | null> {
         const binding = this.bindings.get(avId);
         if (!binding) return null;
 
@@ -244,9 +261,25 @@ export class SupertagAVProjector {
                 await this.projectSupertagToAV(binding.tagName, avId);
             }
 
-            const res = db.exec(`SELECT * FROM "${binding.tableName}" ORDER BY _updated DESC;`);
-            if (!res || res.length === 0) {
-                return buildEmptyIAV(avId, binding.tagName, binding.attrNames);
+            // 1. 查询总行数
+            let totalCount = 0;
+            const countRes = db.exec(`SELECT count(*) FROM "${binding.tableName}";`);
+            if (countRes && countRes.length > 0 && countRes[0].values.length > 0) {
+                totalCount = Number(countRes[0].values[0][0]) || 0;
+            }
+
+            if (totalCount === 0) {
+                return buildEmptyIAV(avId, binding.tagName, binding.attrNames, page, pageSize);
+            }
+
+            // 2. 基于 SQL LIMIT / OFFSET 执行真·服务端分页
+            const safePage = Math.max(1, page);
+            const safePageSize = Math.max(1, Math.min(200, pageSize));
+            const offset = (safePage - 1) * safePageSize;
+
+            const res = db.exec(`SELECT * FROM "${binding.tableName}" ORDER BY _updated DESC LIMIT ${safePageSize} OFFSET ${offset};`);
+            if (!res || res.length === 0 || res[0].values.length === 0) {
+                return buildEmptyIAV(avId, binding.tagName, binding.attrNames, safePage, safePageSize);
             }
 
             const { getSupertagSchema } = await import("../core/supertag-schema");
@@ -259,7 +292,10 @@ export class SupertagAVProjector {
                 res[0].columns,
                 res[0].values,
                 db,
-                schema
+                schema,
+                totalCount,
+                safePage,
+                safePageSize
             );
         } catch (err) {
             console.error(`[SupertagAVProjector] generateVirtualIAVFromSQLite 异常:`, err);

@@ -1,4 +1,3 @@
-import { constructCommandStorage } from "./instantiate-storage";
 import { i18n } from "../../shared/utils";
 import { type Protyle } from "siyuan";
 import { registerFriendlyTableName } from "../sqlite/sqlite-manager";
@@ -92,27 +91,6 @@ export function getCommandAvId() { return commandAvId; }
 export function getTypeAvId() { return typeAvId; }
 export function getCommandDocId() { return commandDocId; }
 export function getTypeDocId() { return typeDocId; }
-
-/** 
- * 生成用于 Slash (/) 召唤出的初始构建指令选项
- */
-export function getInitSystemSlashCommand() {
-    if (!isDevInitSysEnabled()) return null;
-
-    return [
-        {
-            filter: ["init system db", "实例化", "存到思源", "sxl"],
-            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">${i18n.initSystemDB}</span><span class="b3-list-item__meta">${i18n.initSystemDBMeta}</span></div>`,
-            id: "initSystemDB",
-            async callback(protyle: Protyle) {
-                protyle.insert("");
-                await constructCommandStorage();
-                await refreshSupertagRegistry();
-            }
-        },
-
-    ];
-}
 
 /**
  * 获取当前所有已在 Layer 2 (Command-DB / 种子数据) 注册的可用命令

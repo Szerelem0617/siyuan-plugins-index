@@ -11,10 +11,6 @@
     import { openSupertagUnifiedConfigByTag, openPresetSupertagImportDialog } from "../../command/av-interaction/type-db-handler";
     import { openGlobalAutomationDialog } from "../../command/av-interaction/command-db-handler";
     import { openEntryConfigDialog } from "../../command/entry-config-ui";
-    import { constructCommandStorage } from "../../command/instantiate-storage";
-    import { refreshSupertagRegistry } from "../../command/utils/sync-service";
-    import { NOTEBOOK_NAME, DATA_DBS_CONFIG } from "../../command/indexos/seed-data";
-    import { getOrCreateDataDbsParentDoc } from "../../command/data-db-management";
     import CommandsPanel from "../../sqlite/commands-db/CommandsPanel.svelte";
 
     export let dialog: any;
@@ -26,19 +22,6 @@
 
     let showCreateInput = false;
     let newTagName = "";
-
-    async function handleInitSystem() {
-        try {
-            showMessage("正在从默认模板将数据存储到思源...", 3000, "info");
-            await constructCommandStorage();
-            await refreshSupertagRegistry();
-            showMessage("✓ 数据已存储到思源，可自行修改配置！", 3000, "info");
-            window.dispatchEvent(new CustomEvent("index-plugin-refresh-supertags"));
-        } catch (e: any) {
-            console.error("System init failed", e);
-            showMessage(`存储失败: ${e.message}`, 5000, "error");
-        }
-    }
 
     let locateIndices: Record<string, number> = {};
 
@@ -149,26 +132,27 @@
     async function handleCreateDatabase(group: UnifiedSupertagDefinition) {
         try {
             const tagName = group.typeName;
-            showMessage(`正在为 #${tagName} 在 data-dbs 中创建同名数据库...`, 3000, "info");
-            
-            const { ensureSupertagDatabase } = await import("../core/supertag-schema");
-            const avId = await ensureSupertagDatabase(tagName);
-            if (!avId) {
-                showMessage("创建数据库失败", 4000, "error");
-                return;
+            showMessage(`正在为 #${tagName} 插入多维表格...`, 2000, "info");
+            const { executeWritableSql } = await import("../../sqlite/sqlite-manager");
+            const ddlRes = await executeWritableSql(`CREATE TABLE "${tagName}" ( "主键" BLOCK );`);
+            const avId = ddlRes?.avId;
+            if (avId) {
+                await supertagBinder.setPref(tagName, avId);
+                const { SupertagAVProjector } = await import("../projection/supertag-av-projector");
+                SupertagAVProjector.getInstance().bindTagToAV(tagName, avId);
+                group.selectedAvId = avId;
+                group.selectedAvName = tagName;
+                group.hasDataSchema = true;
+                group.isReady = true;
+                supertagList = [...supertagList];
+                await loadData();
+                showMessage(`✓ 成功为 #${tagName} 创建并关联多维表格！`, 3000);
+            } else {
+                showMessage("未能在当前文档插入多维表格，请确认编辑器状态", 4000, "warn");
             }
-
-            group.selectedAvId = avId;
-            group.selectedAvName = tagName;
-            group.hasDataSchema = true;
-            group.isReady = true;
-            supertagList = [...supertagList];
-
-            await loadData();
-            showMessage(`✓ 成功为 #${tagName} 在 data-dbs 中创建并关联同名数据库！`, 3000);
         } catch (e: any) {
             console.error("Failed to create database for supertag:", e);
-            showMessage(`创建数据库失败: ${e.message || e}`, 5000, "error");
+            showMessage(`创建多维表格失败: ${e.message || e}`, 5000, "error");
         }
     }
 
@@ -188,18 +172,31 @@
         }
 
         try {
-            showMessage(`正在创建超级标签 #${clean}...`, 2000, "info");
+            showMessage(`正在创建超级标签 #${clean}...`, 1500, "info");
             await supertagBinder.setPref(clean, "enabled");
-            const { ensureSupertagDatabase } = await import("../core/supertag-schema");
-            await ensureSupertagDatabase(clean);
 
-            showMessage(`✓ 成功创建超级标签 #${clean} 及同名数据库！`, 3000);
+            // 纯元数据创建：直接插入 SQLite supertag-db 系统表并持久化，不污染用户笔记正文
+            const { getSqliteEngine } = await import("../../sqlite/sqlite-manager");
+            const { db } = await getSqliteEngine();
+            const newRowId = `tag_${Date.now()}_${clean}`;
+            db.run(
+                `INSERT INTO "supertag-db" (rowID, "主键", "Manual", "Auto", "Related av", _updated) VALUES (?, ?, ?, ?, ?, ?);`,
+                [newRowId, clean, "", "", "", Date.now()]
+            );
+            const { saveMetaToStorage } = await import("../../command/indexos/command-sqlite");
+            await saveMetaToStorage();
+
+            const { refreshSupertagRegistry } = await import("../../command/utils/sync-service");
+            await refreshSupertagRegistry();
+
+            showMessage(`✓ 成功创建超级标签 #${clean}！`, 3000);
             showCreateInput = false;
             newTagName = "";
             searchQuery = "";
 
             const { refreshSupertagManager } = await import("./supertag-manager");
             await refreshSupertagManager();
+            await loadData();
         } catch (e: any) {
             console.error("Failed to create supertag:", e);
             showMessage(`创建超级标签失败: ${e.message || e}`, 5000, "error");
@@ -315,16 +312,6 @@
                     on:click={openGlobalAutomationDialog}
                 >
                     <span>⏰ 后台执行</span>
-                </button>
-
-                <button
-                    class="indexos-btn-bordered"
-                    style="font-size: 11px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 4px;"
-                    title={i18n.initSystemDBHint}
-                    on:click={handleInitSystem}
-                >
-                    <svg style="width: 12px; height: 12px; fill: currentColor;"><use xlink:href="#iconDatabase"></use></svg>
-                    <span>{i18n.initSystemDB}</span>
                 </button>
 
                 <!-- 搜索框 -->
@@ -543,11 +530,11 @@
                                         <button
                                             class="indexos-btn-bordered"
                                             style="font-size: 11px; padding: 3px 10px; color: var(--indexos-accent-primary); border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.06); font-weight: 500;"
-                                            title="在 data-dbs 页面创建同名数据库"
+                                            title="在当前编辑文档中插入此标签的多维表格"
                                             on:click={() => handleCreateDatabase(group)}
                                         >
                                             <svg style="width: 12px; height: 12px; fill: currentColor;"><use xlink:href="#iconDatabase"></use></svg>
-                                            <span>+ 创建数据库</span>
+                                            <span>+ 插入视图</span>
                                         </button>
                                     </div>
                                 {/if}

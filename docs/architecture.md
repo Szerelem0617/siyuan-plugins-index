@@ -14,7 +14,8 @@ flowchart TD
         Palette["@ Supertag 快速面板\n;; 命令快速调色板"]
         Buttons["内嵌按钮 / 顶栏 / 底栏 / 侧栏"]
         MenuHooks["块图标 / 页面标题 / 文档树菜单"]
-        AV_Views["Command-DB / Supertag-DB\n(统一 TabBar 编辑弹窗)"]
+        Virtual_AV["业务数据虚拟投影 (Virtual AV)\n(流式真分页 LIMIT / OFFSET + 双向编辑)"]
+        Config_Dialogs["Command-DB / Supertag-DB\n(统一配置面板，无需前置建库)"]
     end
 
     subgraph Dispatcher_Layer ["⚡ 调度与上下文引擎 (Command Dispatcher)"]
@@ -36,12 +37,17 @@ flowchart TD
         DOMRenderer["SupertagRenderer\n(零延迟 DOM 胶囊药丸与任务挂载)"]
     end
 
-    subgraph State_Layer ["🗄️ 单一真理源状态机与数据库 (State & Storage)"]
+    subgraph Core_Contracts ["📐 DIP 契约抽象层 (Core Contracts)"]
+        ISqlStorageDriver["ISqlStorageDriver\n(SQL 存储驱动抽象)"]
+        IPlatformHost["IPlatformHost\n(宿主环境几何与交互适配)"]
+        IVirtualAvDriver["IVirtualAvDriver\n(流式虚拟多维表格驱动)"]
+    end
+
+    subgraph State_Layer ["🗄️ SQL-First 单一真理源与存储底座 (State & Storage)"]
         direction TB
-        StateCheck{"系统是否已实例化？\n(检测两张系统 AV 物理属性)"}
-        SeedConst["未实例化：只读种子常量\n(seed-data.ts)"]
-        SiYuanAV["已实例化：思源原生 AV 数据库\n(Command-DB & Supertag-DB)"]
-        SQLiteMirror["SQLite 内存镜像缓存\n(sys_registry_db & av_xxx)"]
+        SQLiteEngine["本地内存 SQLite 引擎 (sql.js)\n系统元表: command-db / supertag-db / sys_registry_db\n业务热表: proj_xxx (流式分页缓存)"]
+        StorageJSON["插件私有存储 indexos-meta.json\n(元数据原子持久化，无需物理页面污染)"]
+        BlockIAL["块属性物理分布式底座 (custom-* IAL)\n(思源 attributes 表高并发索引，万级抗压)"]
     end
 
     %% 交互连线
@@ -57,53 +63,52 @@ flowchart TD
 
     DOMRenderer -.->|属性变动| DiffEngine
     DiffEngine -->|广播事件| TriggerEngine
-    TriggerEngine --> StateCheck
+    TriggerEngine --> SQLiteEngine
 
-    StateCheck -->|否| SeedConst
-    StateCheck -->|是| SiYuanAV
-    SiYuanAV <-->|双向同步| SQLiteMirror
-    SeedConst --> TriggerEngine
-    SiYuanAV --> TriggerEngine
+    Config_Dialogs <-->|读写系统元表| SQLiteEngine
+    SQLiteEngine <-->|自动落盘/冷启恢复| StorageJSON
+    Virtual_AV <-->|流式分页拦截| SQLiteEngine
+    SQLiteEngine <-->|双向同步单元格| BlockIAL
 ```
 
 ---
 
-## 2. 状态机：数据源单一真理源 (Single Source of Truth)
+## 2. 状态机：SQL-First 单一真理源与持久化规范
 
 ```mermaid
 stateDiagram-v2
-    [*] --> 未实例化: 检测不到 custom-index-command-db 或 custom-index-supertag-db
-    未实例化 --> 已实例化: 用户点击“将数据存到思源”（一次物化建库）
-    已实例化 --> 未实例化: 用户删除系统库文档（属性物理消失）
+    [*] --> SQLite内存核心启动: 插件加载
+    SQLite内存核心启动 --> 载入私有存储: 检查 indexos-meta.json
+    载入私有存储 --> 系统就绪: 恢复用户历史命令与标签规则
+    载入私有存储 --> 预装种子常量: 无存储文件时加载 seed-data.ts
+    预装种子常量 --> 系统就绪
     
-    state 未实例化 {
-        [*] --> 读种子常量
-        读种子常量: 数据源 = seed-data.ts (只读)
-        读种子常量: 种子常量禁止在运行时被修改
-    }
-    
-    state 已实例化 {
-        [*] --> 读思源AV
-        读思源AV: 数据源 = 思源原生 AV 表 (唯一真理源)
-        读思源AV: 种子常量不再参与任何运行时判定与回退
+    state 系统就绪 {
+        [*] --> 运行中
+        运行中: SQLite 内存系统表为全系统单一真理源
+        运行中: 任何配置变更即时写回 SQLite 并原子保存至 indexos-meta.json
+        运行中: 业务数据分散存于块属性 (IAL)，虚拟 AV 实时分页查询
     }
 ```
 
-### 状态机准则：
-1. **状态判定只看思源可观察事实**：能够同时定位到绑定 `custom-index-command-db` 和 `custom-index-supertag-db` 属性的 Attribute View 实体。
-2. **严禁多层回退 (No Fallbacks)**：已实例化后，思源 AV 为唯一真理源，代码中严禁写入 `|| 种子数据` 的兜底链条，确保问题立即白盒暴露。
-3. **状态刷新中枢**：集中于 `src/features/command/utils/sync-service.ts`。
+### 核心准则：
+1. **纯净内核，拒绝正文元表污染**：系统核心元表（`command-db` 与 `supertag-db`）彻底移出思源正文，不再在用户的笔记本中强制生成物理 AV 页面，避免数据脆弱性与正文污染。
+2. **即开即用与单一真理源**：无论用户是否在思源中建库，内存 SQLite 始终为系统唯一有效真理源。用户在配置面板中添加自定义命令、配置标签规则，立即可用且自动持久化至 `indexos-meta.json`。
+3. **物理底座与展示分离 (DIP)**：
+   - **物理持久化**：业务数据纯走块属性（`custom-supertags` 与 `custom-${tag}-${field}`），利用思源底层 SQLite `attributes` 表的高效索引，杜绝大 JSON 卡死；
+   - **逻辑处理**：本地 SQLite 内存表；
+   - **展示交互**：空 AV 壳子拦截渲染，服务端真流式分页（`LIMIT :pageSize OFFSET :offset`）。
 
 ---
 
 ## 3. 四层架构分层模型 (Four-Tier Hierarchy)
 
-| 层级 | 实体与定义 | 未实例化 | 已实例化 |
+| 层级 | 实体与定义 | 物理真理源 | 逻辑与调度接入 |
 |---|---|---|---|
-| **Layer 1: 命令定义** | `CommandDef`（ID、参数规范、底层执行协议、目标作用域） | 内置 `builtin/*.json` 为源；内存注册表 `commandRegistry` 持有 Executor | 同左（`sys_registry_db` 仅为 SQL 查询镜像） |
-| **Layer 2: 命令分身编排** | `CommandBinding`（Command-DB 行，定义具体分身的默认入参 `Input` 与出参重命名 `Output`） | 读 `seed-data.ts` 常量 | 读思源 `command-db` AV 表 |
-| **Layer 3: Supertag 绑定** | `SupertagCommand`（Supertag-DB 行，定义标签关联的菜单按钮 `Icon Menu` 与条件触发脚本 `Conditional`） | 读 `seed-data.ts` 常量 | 读思源 `supertag-db` AV 表 |
-| **Layer 4: 业务组件数据** | 每个超级标签对应的数据组件与自定义列（如 Project, Task, Resource 属性集） | 不存在 | 动态挂载于 `/data-dbs` 页面与关联 AV 表中 |
+| **Layer 1: 命令定义** | `CommandDef`（ID、参数规范、底层执行协议、目标作用域） | 内置 `builtin/*.json` + 插件注册 | 内存注册表 `commandRegistry` + `sys_registry_db` 表 |
+| **Layer 2: 命令分身编排** | `CommandBinding`（Command-DB 行，定义具体分身的默认入参 `Input` 与出参重命名 `Output`） | 插件存储 `indexos-meta.json` | 内存 SQLite `command-db` 系统表 |
+| **Layer 3: Supertag 绑定** | `SupertagCommand`（Supertag-DB 行，定义标签关联的菜单按钮 `Manual` 与自动化规则 `Auto`） | 插件存储 `indexos-meta.json` | 内存 SQLite `supertag-db` 系统表 |
+| **Layer 4: 业务数据流** | 具有超级标签的实际笔记块及其业务字段（如 Task, Project, Book 属性） | 笔记物理块属性 (IAL) | `proj_${tag}` 虚拟投影表（流式真分页） |
 
 ---
 
@@ -137,4 +142,4 @@ stateDiagram-v2
 - **属性视图与配置弹窗**：`src/features/command/av-interaction/` (`command-db-handler.ts`, `type-db-handler.ts`, `dialogs/`)
 - **入口注册与菜单挂载**：`src/features/command/global-registration/` 与 `src/features/command/menu-hooks.ts`
 - **后台调度与通用工具**：`src/features/command/background/` 与 `src/features/command/utils/`
-- **初始化与存储管理**：`src/features/command/instantiate-storage.ts`, `registration.ts`, `data-db-management.ts`, `src/features/command/indexos/`
+- **初始化与存储管理**：`src/features/command/indexos/` (`command-sqlite.ts`, `seed-data.ts`), `registration.ts`

@@ -2,7 +2,7 @@ import { showMessage } from "siyuan";
 
 export interface FetchInterceptorHandler {
     isVirtualProjection: (avId: string) => boolean;
-    generateVirtualIAVFromSQLite: (avId: string) => Promise<any | null>;
+    generateVirtualIAVFromSQLite: (avId: string, page?: number, pageSize?: number) => Promise<any | null>;
     handleAVCellUpdate: (operation: any) => Promise<void>;
 }
 
@@ -21,7 +21,7 @@ export function installFetchInterceptor(handler: FetchInterceptorHandler) {
         try {
             const url = typeof input === "string" ? input : (input instanceof Request ? input.url : input.toString());
 
-            // 1. 拦截 AV 渲染请求 -> 直接从热 SQLite 表合成虚拟 IAV 返回前端
+            // 1. 拦截 AV 渲染请求 -> 直接从热 SQLite 表合成虚拟 IAV 返回前端 (带真分页支持)
             if (url.includes("/api/av/renderAttributeView")) {
                 let reqBody: any = null;
                 if (typeof init?.body === "string") {
@@ -31,10 +31,12 @@ export function installFetchInterceptor(handler: FetchInterceptorHandler) {
                 }
 
                 const avId = reqBody?.id || reqBody?.avID;
+                const page = typeof reqBody?.page === "number" ? reqBody.page : 1;
+                const pageSize = typeof reqBody?.pageSize === "number" ? reqBody.pageSize : 50;
                 const isVirtual = avId ? handler.isVirtualProjection(avId) : false;
 
                 if (avId && isVirtual) {
-                    const virtualData = await handler.generateVirtualIAVFromSQLite(avId);
+                    const virtualData = await handler.generateVirtualIAVFromSQLite(avId, page, pageSize);
                     if (virtualData) {
                         setTimeout(async () => {
                             try {

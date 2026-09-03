@@ -2,7 +2,6 @@
     import { onMount } from "svelte";
     import { refreshSupertagRegistry } from "../../command/utils/sync-service";
     import { showMessage } from "siyuan";
-    import { constructCommandStorage } from "../../command/instantiate-storage";
     import { commandRegistry } from "../../command/registry/command-registry";
     import { encodeBtnHref } from "../../command/global-registration/inline-button";
     import { openConfigForCommand, openRegistryCommandSelectorDialog, openCustomUserCommandDialog } from "../../command/av-interaction/command-db-handler";
@@ -58,7 +57,38 @@
                 });
             }
 
-            // 2. 补充 Layer 2 种子命令
+            // 2. 从 SQLite command-db 读取持久化数据
+            try {
+                const { getSqliteEngine } = await import("../sqlite-manager");
+                const { db } = await getSqliteEngine();
+                const sqlRes = db.exec(`SELECT rowID, "主键", "Command ID", "Input", "Output" FROM "command-db";`);
+                if (sqlRes.length > 0 && sqlRes[0].values.length > 0) {
+                    for (const r of sqlRes[0].values) {
+                        const rowID = String(r[0]);
+                        const label = String(r[1] || "");
+                        const commandID = String(r[2] || "");
+                        const inputMapping = String(r[3] || "");
+                        const outputMapping = String(r[4] || "");
+                        if (commandID) {
+                            const isComposite = commandID.startsWith("composite.") || commandID.startsWith("user.");
+                            const def = commandRegistry.getCommand(commandID);
+                            map.set(commandID, {
+                                id: commandID,
+                                name: label || def?.name || commandID,
+                                description: def?.description || (isComposite ? "多步骤工作流与管道编排" : "原生原子系统操作"),
+                                category: isComposite ? "composite" : "atomic",
+                                params: def?.params || [],
+                                outputs: def?.outputs || [],
+                                inputMapping,
+                                outputMapping,
+                                rowId: rowID
+                            });
+                        }
+                    }
+                }
+            } catch (_) {}
+
+            // 3. 补充 Layer 2 种子命令
             for (const row of seedRows) {
                 if (!map.has(row.commandID)) {
                     const isComposite = row.commandID.startsWith("composite.");

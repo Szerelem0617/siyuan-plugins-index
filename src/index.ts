@@ -222,21 +222,22 @@ export default class IndexPlugin extends Plugin {
 
 
 
-        // SQLite Entry Point: Alt + Click on Native Search Button
+        // 初始化 IndexOS 核心 SQLite 引擎与系统元数据底座
+        getSqliteEngine().then(async () => {
+            console.log("[IndexOS] SQLite Engine Ready. Initializing builtin DB...");
+            await initSystemTables();
+            // Reload command registry from SQLite (Layer 1)
+            await commandRegistry.loadFromDatabase();
+            // Refresh registrations once DB is ready
+            await refreshSupertagRegistry();
+            await refreshEntryRegistrations();
+            await syncGlobalSupertagsCache();
+            
+            // 广播 indexos-ready 全局事件通知第三方插件
+            window.dispatchEvent(new CustomEvent("indexos-ready", { detail: (window as any).indexOS }));
+        }).catch(e => console.error("[SQLite] Preload failed", e));
+
         if (isDevInitSysEnabled()) {
-            getSqliteEngine().then(async () => {
-                console.log("[IndexOS] SQLite Engine Ready. Initializing builtin DB...");
-                await initSystemTables();
-                // Reload command registry from SQLite (Layer 1)
-                await commandRegistry.loadFromDatabase();
-                // Refresh registrations once DB is ready
-                await refreshSupertagRegistry();
-                await refreshEntryRegistrations();
-                await syncGlobalSupertagsCache();
-                
-                // 广播 indexos-ready 全局事件通知第三方插件
-                window.dispatchEvent(new CustomEvent("indexos-ready", { detail: (window as any).indexOS }));
-            }).catch(e => console.error("[SQLite] Preload failed", e));
             this.registerSqliteEntry();
         }
     }

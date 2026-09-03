@@ -102,11 +102,34 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
     const records: SupertagDbRecord[] = [];
     const SYSTEM_EXCLUDED = SYSTEM_EXCLUDED_SUPERTAGS;
     
-    // 1. 优先尝试从内存 SQLite 引擎查询活跃的 "supertag-db" (支持 av_${typeAvId} 或系统表 supertag-db)
+    // 1. 优先尝试从内存 SQLite 系统表 "supertag-db" (开箱即用，SQL 为单一真理源) 查询
     try {
+        const { db } = await getSqliteEngine();
+
+        // 1.1 核心系统表 "supertag-db"
+        const sysCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='supertag-db';`);
+        if (sysCheck.length > 0 && sysCheck[0].values.length > 0) {
+            const rows = db.exec(`SELECT rowID, "主键", "Manual", "Auto", "Related av" FROM "supertag-db";`);
+            if (rows.length > 0 && rows[0].values.length > 0) {
+                for (const r of rows[0].values) {
+                    const rowId = String(r[0] || "");
+                    const typeTag = String(r[1] || "").replace(/^#+/, "").trim().toLowerCase();
+                    const manual = String(r[2] || "").trim();
+                    const auto = String(r[3] || "").trim();
+                    const relatedAv = String(r[4] || "").trim();
+                    if (typeTag && !isIdLike(typeTag) && !SYSTEM_EXCLUDED.has(typeTag)) {
+                        records.push({ rowId, typeTag, manual, auto, relatedAv });
+                    }
+                }
+                if (records.length > 0) {
+                    return records;
+                }
+            }
+        }
+
+        // 1.2 兼容历史思源物理表 av_${typeAvId}
         const { getTypeAvId } = await import("../../command/registration");
         const typeAvId = getTypeAvId();
-        const { db } = await getSqliteEngine();
 
         if (typeAvId) {
             const typeTableName = `av_${typeAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;

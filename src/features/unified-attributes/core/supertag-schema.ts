@@ -15,8 +15,6 @@ import { post } from "../../../shared/api-client/request";
 import { getSupertagDbRecords, SYSTEM_EXCLUDED_SUPERTAGS, isIdLike } from "./supertag-entity";
 import { supertagBinder } from "./supertag-binder";
 import { supertagAVProjector } from "../projection/supertag-av-projector";
-import { getOrCreateDataDbsParentDoc } from "../../command/data-db-management";
-import { NOTEBOOK_NAME } from "../../command/indexos/seed-data";
 import { getTypeAvId } from "../../command/registration";
 import { getAVSchema, instantiateAV, executeWritableSql, runQuery, avIdToTableName, registerFriendlyTableName } from "../../sqlite/sqlite-manager";
 
@@ -318,61 +316,10 @@ export async function ensureSupertagDatabase(tagName: string): Promise<string> {
                 }
             } catch (_) {}
 
-            // 2. 自动在 /data-dbs 中追加创建同名 AV 数据库
-            const nbRes = await post("/api/notebook/lsNotebooks", {});
-            const notebooks = nbRes?.notebooks || [];
-            const targetNotebook = notebooks.find((n: any) => n.name === NOTEBOOK_NAME && !n.closed) || notebooks.find((n: any) => !n.closed) || notebooks[0];
-            if (!targetNotebook) {
-                console.warn("[SupertagSchema] 未找到可用笔记本");
-                return "";
-            }
-
-            const dataDbsDocId = await getOrCreateDataDbsParentDoc(targetNotebook.id);
-            if (!dataDbsDocId) {
-                console.warn("[SupertagSchema] 创建或获取 /data-dbs 页面失败");
-                return "";
-            }
-
-            // 创建新数据库（默认包含主键 BLOCK 列）
-            const ddlSql = `CREATE TABLE "${cleanTag}" ( "主键" BLOCK );`;
-            const ddlRes = await executeWritableSql(ddlSql, { targetDocId: dataDbsDocId });
-            const avId = ddlRes?.avId || "";
-            const avBlockId = ddlRes?.blockId || "";
-
-            if (avId) {
-                // 立即在内存中绑定，防止后续轮询产生竞态与重复建库
-                await supertagBinder.setPref(cleanTag, avId);
-                supertagAVProjector.bindTagToAV(cleanTag, avId);
-
-                if (avBlockId) {
-                    try {
-                        await post("/api/attr/setBlockAttrs", {
-                            id: avBlockId,
-                            attrs: {
-                                "custom-supertag-tag": cleanTag,
-                                "custom-supertag-id": cleanTag,
-                                "custom-av-name": cleanTag
-                            }
-                        });
-                    } catch (_) {}
-                }
-
-                // 更新 supertag-db 系统表 (使用 SiYuan 原生 AV API 确保行存在)
-                try {
-                    const { insertOrUpdateSupertagDbRecord } = await import("../../command/av-interaction/type-db-handler");
-                    await insertOrUpdateSupertagDbRecord(cleanTag, { relatedAv: avId });
-                } catch (updateErr) {
-                    console.warn(`[SupertagSchema] 回写 supertag-db 失败:`, updateErr);
-                }
-
-                try {
-                    const { refreshSupertagManager } = await import("../manager/supertag-manager");
-                    await refreshSupertagManager();
-                } catch (_) {}
-                return avId;
-            }
+            return "";
         } catch (e) {
-            console.error(`[SupertagSchema] 自动为 #${cleanTag} 创建 AV 数据库失败:`, e);
+            console.error(`[SupertagSchema] 解析 #${cleanTag} 关联数据库失败:`, e);
+            return "";
         } finally {
             inFlightCreations.delete(cleanTag);
         }

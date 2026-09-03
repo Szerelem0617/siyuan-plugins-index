@@ -208,25 +208,7 @@ export async function openSupertagUnifiedConfigByTag(
                     return;
                 }
 
-                // 1. 如果存在思源 AV 实例化表 (typeAvId)，通过统一 DML UPSERT 写入思源 AV 实体行与单元格属性
-                if (typeAvId) {
-                    try {
-                        const { runQuery, avIdToTableName } = await import("../../sqlite/sqlite-manager");
-                        const exactTableName = avIdToTableName(typeAvId);
-                        const escapeSql = (str: string) => (str || "").replace(/'/g, "''");
-                        let dmlSql = "";
-                        if (relatedAvId) {
-                            dmlSql = `INSERT INTO "${exactTableName}" ("主键", "Manual", "Auto", "Related av") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(manual)}', '${escapeSql(auto)}', '${escapeSql(relatedAvId)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto", "Related av" = EXCLUDED."Related av"`;
-                        } else {
-                            dmlSql = `INSERT INTO "${exactTableName}" ("主键", "Manual", "Auto") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(manual)}', '${escapeSql(auto)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto"`;
-                        }
-                        await runQuery(dmlSql);
-                    } catch (dmlErr) {
-                        console.error("[Supertag-UnifiedConfig] runQuery DML error:", dmlErr);
-                    }
-                }
-
-                // 2. 同步更新 SQLite 内存热表 (无论是未实例化还是实例化，都保证本地 SQLite 内存表实时一致)
+                // 1. 同步更新 SQLite 内存系统表并持久化 (SQL-First 单一真理源，即开即用)
                 try {
                     const { db } = await getSqliteEngine();
                     const check = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='supertag-db';`);
@@ -235,17 +217,38 @@ export async function openSupertagUnifiedConfigByTag(
                         if (rowCheck.length > 0 && rowCheck[0].values.length > 0) {
                             db.run(
                                 `UPDATE "supertag-db" SET "Manual" = ?, "Auto" = ?, "Related av" = COALESCE(NULLIF(?, ''), "Related av"), _updated = ? WHERE LOWER("主键") = ? OR LOWER(supertag) = ?;`,
-                                [manual, auto, relatedAvId, Date.now(), cleanTag, cleanTag]
+                                [cleanManual, cleanAuto, relatedAvId, Date.now(), cleanTag, cleanTag]
                             );
                         } else {
+                            const newRowId = `tag_${Date.now()}_${cleanTag}`;
                             db.run(
-                                `INSERT INTO "supertag-db" ("主键", "Manual", "Auto", "Related av", _updated) VALUES (?, ?, ?, ?, ?);`,
-                                [cleanTag, manual, auto, relatedAvId, Date.now()]
+                                `INSERT INTO "supertag-db" (rowID, "主键", "Manual", "Auto", "Related av", _updated) VALUES (?, ?, ?, ?, ?, ?);`,
+                                [newRowId, cleanTag, cleanManual, cleanAuto, relatedAvId, Date.now()]
                             );
                         }
+                        const { saveMetaToStorage } = await import("../indexos/command-sqlite");
+                        await saveMetaToStorage();
                     }
                 } catch (sqlErr) {
-                    console.error("[Supertag-UnifiedConfig] SQLite memory update error:", sqlErr);
+                    console.error("[Supertag-UnifiedConfig] SQLite update error:", sqlErr);
+                }
+
+                // 2. 兼容模式：如果存在思源 AV 实例化表 (typeAvId)，同步更新原生 AV
+                if (typeAvId) {
+                    try {
+                        const { runQuery, avIdToTableName } = await import("../../sqlite/sqlite-manager");
+                        const exactTableName = avIdToTableName(typeAvId);
+                        const escapeSql = (str: string) => (str || "").replace(/'/g, "''");
+                        let dmlSql = "";
+                        if (relatedAvId) {
+                            dmlSql = `INSERT INTO "${exactTableName}" ("主键", "Manual", "Auto", "Related av") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(cleanManual)}', '${escapeSql(cleanAuto)}', '${escapeSql(relatedAvId)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto", "Related av" = EXCLUDED."Related av"`;
+                        } else {
+                            dmlSql = `INSERT INTO "${exactTableName}" ("主键", "Manual", "Auto") VALUES ('${escapeSql(cleanTag)}', '${escapeSql(cleanManual)}', '${escapeSql(cleanAuto)}') ON CONFLICT("主键") DO UPDATE SET "Manual" = EXCLUDED."Manual", "Auto" = EXCLUDED."Auto"`;
+                        }
+                        await runQuery(dmlSql);
+                    } catch (dmlErr) {
+                        console.error("[Supertag-UnifiedConfig] runQuery DML error:", dmlErr);
+                    }
                 }
 
                 // 3. 立即刷新注册表并通知 UI 重新加载

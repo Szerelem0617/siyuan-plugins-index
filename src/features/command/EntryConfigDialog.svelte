@@ -110,11 +110,6 @@
     {#if loading}
         <div style="text-align: center; padding: 40px; opacity: 0.6; font-size: 12px;">加载中...</div>
     {:else if cfg}
-        {#if !isInstantiated}
-            <div style="font-size: 11px; padding: 6px 10px; border-radius: 5px; background: rgba(59, 130, 246, 0.1); color: var(--indexos-primary, #3b82f6); flex-shrink: 0;">
-                ⓘ 当前为本地配置模式：保存后将立刻在本地生效。将数据“存到思源”后，会自动双写备份至 Command-DB 数据库属性中。
-            </div>
-        {/if}
         <div style="display: flex; gap: 12px; flex: 1; min-height: 0;">
         <!-- 左：位置列表 -->
         <div style="width: 150px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; border-right: 1px solid var(--indexos-border-divider, rgba(161,196,230,0.2)); padding-right: 8px;">

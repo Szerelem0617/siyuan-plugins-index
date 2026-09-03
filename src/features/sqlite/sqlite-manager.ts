@@ -140,40 +140,47 @@ export interface SavedQuery {
 //  Engine Initialization
 // ═══════════════════════════════════════════
 
+let initEnginePromise: Promise<{ db: any; SQL: any }> | null = null;
+
 export async function getSqliteEngine() {
     if (dbInstance) return { db: dbInstance, SQL: SQL_ENGINE };
+    if (initEnginePromise) return initEnginePromise;
 
-    try {
-        if (!(window as any).initSqlJs) {
-            const pluginId = plugin?.name || "siyuan-plugins-index";
-            const scriptUrl = `/plugins/${pluginId}/sql-wasm.js`;
+    initEnginePromise = (async () => {
+        try {
+            if (!(window as any).initSqlJs) {
+                const pluginId = plugin?.name || "siyuan-plugins-index";
+                const scriptUrl = `/plugins/${pluginId}/sql-wasm.js`;
 
-            await new Promise((resolve, reject) => {
-                const script = document.createElement("script");
-                script.src = scriptUrl;
-                script.onload = resolve;
-                script.onerror = () => reject(new Error(`Failed to load ${scriptUrl}`));
-                document.head.appendChild(script);
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement("script");
+                    script.src = scriptUrl;
+                    script.onload = resolve;
+                    script.onerror = () => reject(new Error(`Failed to load ${scriptUrl}`));
+                    document.head.appendChild(script);
+                });
+            }
+
+            const initSqlJs = (window as any).initSqlJs;
+            SQL_ENGINE = await initSqlJs({
+                locateFile: (file: string) => `/plugins/${plugin?.name || "siyuan-plugins-index"}/${file}`
             });
+
+            dbInstance = new SQL_ENGINE.Database();
+
+            // Initialize system tables
+            _initSystemTables(dbInstance);
+
+            // Clear cache since we started clean in memory
+            instantiatedAvIdsCache = new Set();
+            
+            return { db: dbInstance, SQL: SQL_ENGINE };
+        } finally {
+            initEnginePromise = null;
         }
+    })();
 
-        const initSqlJs = (window as any).initSqlJs;
-        SQL_ENGINE = await initSqlJs({
-            locateFile: (file: string) => `/plugins/${plugin?.name || "siyuan-plugins-index"}/${file}`
-        });
-
-        dbInstance = new SQL_ENGINE.Database();
-
-        // Initialize system tables
-        _initSystemTables(dbInstance);
-
-        // Clear cache since we started clean in memory
-        instantiatedAvIdsCache = new Set();
-        
-        return { db: dbInstance, SQL: SQL_ENGINE };
-    } catch (e) {
-        throw e;
-    }
+    return initEnginePromise;
 }
 
 /**
@@ -686,6 +693,10 @@ export async function runQuery(sql: string, params?: any[], options?: DDLOptions
     }
 
     const { db } = await getSqliteEngine();
+    if (/sys_registry_db|command-db|supertag-db/i.test(processedSql)) {
+        const { initSystemTables } = await import("../command/indexos/command-sqlite");
+        await initSystemTables();
+    }
     const res = db.exec(processedSql, params);
     if (res.length > 0) {
         return { columns: res[0].columns, values: res[0].values };
@@ -894,3 +905,42 @@ export async function checkTableExists(tableName: string): Promise<boolean> {
         return false;
     }
 }
+
+import type { ISqlStorageDriver } from "../../core/contracts";
+
+export const defaultSqlStorageDriver: ISqlStorageDriver = {
+    async query<T = any>(sql: string, params?: any[]): Promise<T[]> {
+        const { db } = await getSqliteEngine();
+        const res = db.exec(sql, params);
+        if (!res || res.length === 0) return [];
+        const cols = res[0].columns;
+        return res[0].values.map((row: any[]) => {
+            const obj: any = {};
+            cols.forEach((c: string, i: number) => { obj[c] = row[i]; });
+            return obj as T;
+        });
+    },
+    async execute(sql: string, params?: any[]): Promise<any> {
+        const { db } = await getSqliteEngine();
+        return db.run(sql, params);
+    },
+    async hasTable(tableName: string): Promise<boolean> {
+        return checkTableExists(tableName);
+    },
+    async transaction(sqls: Array<{ sql: string; params?: any[] }>): Promise<void> {
+        const { db } = await getSqliteEngine();
+        db.run("BEGIN TRANSACTION;");
+        try {
+            for (const item of sqls) {
+                db.run(item.sql, item.params);
+            }
+            db.run("COMMIT;");
+        } catch (err) {
+            db.run("ROLLBACK;");
+            throw err;
+        }
+    },
+    async saveToDisk(): Promise<void> {
+        await saveDatabaseToDisk();
+    }
+};

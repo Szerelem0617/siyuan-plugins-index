@@ -144,18 +144,19 @@ export async function getTargetTablesInfo() {
 }
 
 /**
- * 刷新 Supertag 注册表：从 Command-DB (Layer 2) 和 Type-DB (Layer 3) 联合加载数据
- * 优先尝试从 SQLite 加载以获得更好的性能 and 统一性
+ * 刷新 Supertag 注册表：优先直接从 SQLite 内存系统核心表 (command-db & supertag-db) 加载
+ * 保证不论是否在思源建库，SQL 始终为唯一高效真理源
  */
 export async function refreshSupertagRegistry() {
     try {
-        const { db } = await getSqliteEngine();
-        await getTargetTablesInfo();
+        const coreOk = await refreshRegistryFromSqliteCore();
+        if (coreOk && SUPERTAG_REGISTRY.length > 0) {
+            return;
+        }
+
         const cmdAvId = getCommandAvId();
         const tAvId = getTypeAvId();
-
         if (cmdAvId && tAvId) {
-            // 已实例化：从思源 AV 刷新（经 av_ SQLite 镜像）
             await instantiateAV(cmdAvId, true);
             await instantiateAV(tAvId, true);
             const success = await refreshRegistryFromSqlite();
@@ -164,11 +165,120 @@ export async function refreshSupertagRegistry() {
             if (SUPERTAG_REGISTRY.length > 0) return;
         }
     } catch (e) {
-        console.warn("[Supertag Sync] SQLite/AV check failed, using seed data fallback:", e);
+        console.warn("[Supertag Sync] SQLite core check failed, using seed data fallback:", e);
     }
 
-    // 未实例化状态（或数据库未创建）：直接从 seed-data.ts 常量构建 Layer 2/3 注册表
+    // 兜底：从 seed-data.ts 常量构建
     refreshRegistryFromSeed();
+}
+
+/**
+ * 核心路径：直接从 SQLite 内存系统表 (command-db & supertag-db) 构建 Layer 2/3 注册表
+ */
+async function refreshRegistryFromSqliteCore(): Promise<boolean> {
+    try {
+        const { db } = await getSqliteEngine();
+        const cmdCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='command-db';`);
+        const tagCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='supertag-db';`);
+        if (cmdCheck.length === 0 || tagCheck.length === 0) return false;
+
+        const cmdRes = db.exec(`SELECT rowID, "主键", "Command ID", "Input", "Output" FROM "command-db";`);
+        const newCommandBindings: Record<string, CommandBinding> = {};
+        if (cmdRes.length > 0 && cmdRes[0].values.length > 0) {
+            for (const row of cmdRes[0].values) {
+                const label = String(row[1] || "").trim();
+                const cmdId = String(row[2] || "").trim();
+                const inputMap = String(row[3] || "").trim();
+                const outputMap = String(row[4] || "").trim();
+                if (label && cmdId) {
+                    newCommandBindings[label] = {
+                        methodName: label,
+                        commandRef: cmdId,
+                        inputMapping: inputMap,
+                        outputMapping: outputMap
+                    };
+                }
+            }
+        }
+        setCommandBindings(newCommandBindings);
+
+        const tagRes = db.exec(`SELECT rowID, "主键", "Manual", "Auto" FROM "supertag-db";`);
+        const newRegistry: SupertagCommand[] = [];
+        if (tagRes.length > 0 && tagRes[0].values.length > 0) {
+            for (const row of tagRes[0].values) {
+                const cleanTag = String(row[1] || "").replace(/\\/g, "").replace(/#/g, "").split("|")[0].split("(")[0].trim().toLowerCase();
+                if (!cleanTag) continue;
+
+                const manualStr = String(row[2] || "");
+                const autoScript = String(row[3] || "");
+
+                const findBinding = (token: string) => {
+                    const lower = token.toLowerCase();
+                    const exact = Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower);
+                    if (exact) return exact;
+                    const byName = Object.values(newCommandBindings).find(b => b.methodName.toLowerCase() === lower);
+                    if (byName) return byName;
+
+                    const sysCmd = commandRegistry.getCommand(token);
+                    if (sysCmd) {
+                        const hasOutputs = sysCmd.outputs && sysCmd.outputs.length > 0;
+                        return {
+                            methodName: sysCmd.name,
+                            commandRef: sysCmd.id,
+                            inputMapping: "",
+                            outputMapping: hasOutputs ? "{}" : ""
+                        };
+                    }
+                    return undefined;
+                };
+
+                const manualEntries = parseManualConfig(manualStr);
+                const pushEntry = (e: ManualEntry, location: "IconMenu" | "Slash" | "Button" | "VirtualButton") => {
+                    const found = findBinding(e.commandRef);
+                    if (found) {
+                        newRegistry.push({
+                            typeTag: cleanTag,
+                            methodName: e.label || found.methodName,
+                            commandRef: found.commandRef,
+                            inputMapping: found.inputMapping,
+                            outputMapping: found.outputMapping,
+                            uiLocation: location,
+                            conditionalScript: autoScript
+                        });
+                    }
+                };
+                for (const e of manualEntries) {
+                    if (e.showInMenu) pushEntry(e, "IconMenu");
+                    if (e.showInSlash) pushEntry(e, "Slash");
+                    if (e.showInButton) pushEntry(e, "Button");
+                    if (e.showInVirtualButton) pushEntry(e, "VirtualButton");
+                }
+
+                if (autoScript) {
+                    const matches = String(autoScript).matchAll(/dispatch\(\s*["']([^"']+)["']/g);
+                    for (const m of matches) {
+                        const cmdRef = m[1];
+                        const foundCmd = Object.values(newCommandBindings).find(c => c.commandRef === cmdRef);
+                        if (foundCmd
+                            && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef && r.uiLocation === "IconMenu")
+                            && !newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === foundCmd.commandRef)) {
+                            newRegistry.push({ typeTag: cleanTag, methodName: foundCmd.methodName, commandRef: foundCmd.commandRef, inputMapping: foundCmd.inputMapping, outputMapping: foundCmd.outputMapping, uiLocation: "BoundOnly", conditionalScript: autoScript });
+                        }
+                    }
+                }
+
+                if (!newRegistry.some(r => r.typeTag === cleanTag)) {
+                    newRegistry.push({ typeTag: cleanTag, methodName: "", commandRef: "", inputMapping: "", outputMapping: "", uiLocation: "IconMenu", conditionalScript: autoScript });
+                }
+            }
+        }
+        setSupertagRegistry(newRegistry);
+        console.log(`[Supertag] Registry loaded directly from SQLite core: ${Object.keys(newCommandBindings).length} commands, ${newRegistry.length} supertags.`);
+        return true;
+    } catch (e) {
+        console.warn("[Supertag Sync] refreshRegistryFromSqliteCore error:", e);
+        return false;
+    }
 }
 
 /**
