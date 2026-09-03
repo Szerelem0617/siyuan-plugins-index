@@ -530,11 +530,11 @@
                                         <button
                                             class="indexos-btn-bordered"
                                             style="font-size: 11px; padding: 3px 10px; color: var(--indexos-accent-primary); border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.06); font-weight: 500;"
-                                            title="在当前编辑文档中插入此标签的多维表格"
+                                            title="在当前文档中创建同名数据库"
                                             on:click={() => handleCreateDatabase(group)}
                                         >
                                             <svg style="width: 12px; height: 12px; fill: currentColor;"><use xlink:href="#iconDatabase"></use></svg>
-                                            <span>+ 插入视图</span>
+                                            <span>+ 创建数据库</span>
                                         </button>
                                     </div>
                                 {/if}

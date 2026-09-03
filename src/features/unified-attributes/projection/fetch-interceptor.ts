@@ -79,10 +79,24 @@ export function installFetchInterceptor(handler: FetchInterceptorHandler) {
                     const ops = tx?.doOperations || [];
                     for (const op of ops) {
                         if (op.avID && handler.isVirtualProjection(op.avID)) {
-                            hasVirtualAvOp = true;
+                            // 单元格值编辑：拦截并写回块属性 custom-tag--*
                             if (op.action === "updateAttrViewCell" || op.action === "updateAttrViewCells" || op.action === "setAttrViewCell") {
+                                hasVirtualAvOp = true;
                                 await handler.handleAVCellUpdate(op);
-                            } else if (op.action?.includes("Item") || op.action?.includes("Block") || op.action?.includes("Row") || op.action?.includes("Col")) {
+                            } 
+                            // 列结构操作 (改列名、改类型、新增列、排序列、调列宽等)：放行给真实数据库落盘！
+                            else if (op.action?.includes("Col")) {
+                                // 不拦截，直接透传给 SiYuan 原生落盘，之后通知刷新
+                                setTimeout(async () => {
+                                    try {
+                                        const { supertagAVProjector } = await import("./supertag-av-projector");
+                                        supertagAVProjector.notifyFrontendToRerender(op.avID);
+                                    } catch (_) {}
+                                }, 150);
+                            } 
+                            // 行/块结构操作：阻止物理穿透
+                            else if (op.action?.includes("Item") || op.action?.includes("Block") || op.action?.includes("Row")) {
+                                hasVirtualAvOp = true;
                                 showMessage("🏷️ 当前为 Supertag 虚拟投影视图，为笔记块打上标签即可自动呈现在此；如需管理物理结构，请切换至原生物理数据视图", 4000, "info");
                             }
                         }

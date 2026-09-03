@@ -16,7 +16,7 @@ import { getSupertagDbRecords, SYSTEM_EXCLUDED_SUPERTAGS, isIdLike } from "./sup
 import { supertagBinder } from "./supertag-binder";
 import { supertagAVProjector } from "../projection/supertag-av-projector";
 import { getTypeAvId } from "../../command/registration";
-import { getAVSchema, instantiateAV, executeWritableSql, runQuery, avIdToTableName, registerFriendlyTableName } from "../../sqlite/sqlite-manager";
+import { getAVSchema, executeWritableSql, runQuery, avIdToTableName, registerFriendlyTableName } from "../../sqlite/sqlite-manager";
 
 export interface SupertagFieldOption {
     id: string;
@@ -408,30 +408,17 @@ export async function preflightSupertagProperty(
         colType = "mSelect";
     }
 
-    const newKeyID = (window as any).Lute?.NewNodeID?.() || `key_${Date.now()}`;
-    try {
-        const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: avId });
-        const existingKeys = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
-        const lastKeyID = existingKeys.length > 0 ? existingKeys[existingKeys.length - 1].id : "";
-
-        await post("/api/av/addAttributeViewKey", {
-            avID: avId,
-            keyID: newKeyID,
-            keyName: rawProp,
-            keyType: colType,
-            keyIcon: "",
-            previousKeyID: lastKeyID
-        });
-
-        await instantiateAV(avId, true);
-    } catch (e) {
-        console.warn(`[Supertag-Preflight] JIT 扩列失败:`, e);
-    }
+    // 沉淀至 supertag-db 命令侧 Core Schema (0.1ms SQLite 本地写入，零物理网络副作用)
+    await appendSupertagCommandField(cleanTag, {
+        slug,
+        label: rawProp,
+        type: colType
+    });
 
     return {
         slug,
         physicalKey,
-        keyId: newKeyID,
+        keyId: "",
         keyType: colType
     };
 }
@@ -450,23 +437,97 @@ export function registerSupertagSchema(tagName: string, fields: SupertagFieldSch
 }
 
 /**
- * 获取指定 Supertag 的字段定义 Schema（单一真理源：从绑定 AV 数据库动态提取）
+ * 读取 supertag-db 中的命令侧持久化 Core Schema
+ */
+export async function getSupertagCommandSchema(tagName: string): Promise<SupertagFieldSchema[]> {
+    const cleanTag = tagName.replace(/^#+/, "").trim().toLowerCase();
+    if (!cleanTag) return [];
+
+    try {
+        const { getSqliteEngine } = await import("../../sqlite/sqlite-manager");
+        const { db } = await getSqliteEngine();
+        const res = db.exec(`SELECT "Schema" FROM "supertag-db" WHERE lower("主键") = '${cleanTag}' LIMIT 1;`);
+        if (res && res.length > 0 && res[0].values.length > 0) {
+            const rawJson = String(res[0].values[0][0] || "[]");
+            const parsed = JSON.parse(rawJson);
+            if (Array.isArray(parsed)) {
+                return parsed.map((item: any) => ({
+                    slug: slugify(item.name || item.slug || item.label || ""),
+                    label: item.label || item.name || item.slug || "",
+                    type: item.type || "text",
+                    options: item.options,
+                    description: item.description || ""
+                })).filter(f => f.slug);
+            }
+        }
+    } catch (e) {
+        console.warn(`[SupertagSchema] 读取命令 Schema 失败:`, e);
+    }
+    return [];
+}
+
+/**
+ * 追加/更新 supertag-db 中的命令侧字段定义
+ */
+export async function appendSupertagCommandField(tagName: string, field: SupertagFieldSchema): Promise<void> {
+    const cleanTag = tagName.replace(/^#+/, "").trim().toLowerCase();
+    if (!cleanTag || !field.slug) return;
+
+    try {
+        const { getSqliteEngine } = await import("../../sqlite/sqlite-manager");
+        const { db } = await getSqliteEngine();
+        const current = await getSupertagCommandSchema(cleanTag);
+        const existingIdx = current.findIndex(f => f.slug.toLowerCase() === field.slug.toLowerCase());
+        if (existingIdx >= 0) {
+            current[existingIdx] = { ...current[existingIdx], ...field };
+        } else {
+            current.push(field);
+        }
+
+        const newSchemaJson = JSON.stringify(current);
+        db.run(`UPDATE "supertag-db" SET "Schema" = ?, _updated = ? WHERE lower("主键") = ?;`, [newSchemaJson, Date.now(), cleanTag]);
+
+        const { saveMetaToStorage } = await import("../../command/indexos/command-sqlite");
+        await saveMetaToStorage();
+    } catch (e) {
+        console.warn(`[SupertagSchema] 更新命令 Schema 失败:`, e);
+    }
+}
+
+/**
+ * 获取指定 Supertag 的超集合并 Schema (真实同名 AV 列 ∪ 命令侧持久化 Core Schema)
  */
 export async function getSupertagSchema(tagName: string): Promise<SupertagFieldSchema[]> {
     const cleanTag = tagName.replace(/^#+/, "").trim().toLowerCase();
     if (!cleanTag) return [];
 
+    // 1. 读取真实同名 AV 数据库列
+    let avSchema: SupertagFieldSchema[] = [];
     try {
         const avId = supertagBinder.getPref(cleanTag) || (await ensureSupertagDatabase(cleanTag));
         if (avId) {
-            const avSchema = await fetchAVKeyDefinitions(avId);
-            if (avSchema.length > 0) {
-                memorySchemaCache.set(cleanTag, avSchema);
-                return avSchema;
-            }
+            avSchema = await fetchAVKeyDefinitions(avId);
         }
     } catch (e) {
-        console.warn(`[SupertagSchema] 读取 #${cleanTag} Schema 失败:`, e);
+        console.warn(`[SupertagSchema] 读取 #${cleanTag} AV Schema 失败:`, e);
+    }
+
+    // 2. 读取命令侧持久化 Core Schema (0.1ms SQLite 直读)
+    const cmdSchema = await getSupertagCommandSchema(cleanTag);
+
+    // 3. 超集合并 (以真实同名 AV 原生列定义优先覆盖)
+    const mergedMap = new Map<string, SupertagFieldSchema>();
+    for (const f of cmdSchema) {
+        mergedMap.set(f.slug.toLowerCase(), f);
+    }
+    for (const f of avSchema) {
+        mergedMap.set(f.slug.toLowerCase(), f);
+    }
+
+    const result = Array.from(mergedMap.values());
+    if (result.length > 0) {
+        memorySchemaCache.set(cleanTag, result);
+        return result;
     }
 
     if (memorySchemaCache.has(cleanTag)) {

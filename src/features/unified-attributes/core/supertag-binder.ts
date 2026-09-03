@@ -14,7 +14,7 @@
 import { post } from "../../../shared/api-client/request";
 import { getColIDMap } from "../../../shared/utils/av-utils";
 import { slugify, getPhysicalAttrKey } from "./supertag-schema";
-import { supertagAVProjector, registerColumnMeta } from "../projection/supertag-av-projector";
+import { supertagAVProjector } from "../projection/supertag-av-projector";
 import { showMessage } from "siyuan";
 import { plugin } from "../../../shared/utils";
 import type { TypeConfig } from "../../av/av-setting/types";
@@ -126,19 +126,6 @@ export class SupertagBinder {
                         }
 
                         const colSlug = slugify(colName);
-
-                        // 注册列元数据供 Inspector 与虚拟表渲染中文 label
-                        registerColumnMeta(rootTag, colSlug, {
-                            id: colId,
-                            name: colName,
-                            type: colType
-                        });
-                        registerColumnMeta(cleanTag, colSlug, {
-                            id: colId,
-                            name: colName,
-                            type: colType
-                        });
-
                         const attrKey = getPhysicalAttrKey(rootTag, colSlug);
 
                         const subTagVal = config?.mappedValue !== undefined

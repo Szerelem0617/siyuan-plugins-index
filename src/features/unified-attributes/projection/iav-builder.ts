@@ -1,4 +1,3 @@
-import { getColumnMeta } from "./types";
 import { getSupertagSchema, type SupertagFieldSchema } from "../core/supertag-schema";
 
 /**
@@ -73,9 +72,8 @@ export function buildVirtualIAVFromSQL(
             });
         }
 
-        const meta = getColumnMeta(tagName, attr);
-        const displayName = schemaField?.label || meta?.name || attr;
-        const colType = schemaField?.type || meta?.type || "select";
+        const displayName = schemaField?.label || attr;
+        const colType = schemaField?.type || "text";
 
         avColumns.push({
             id: colId,
@@ -276,17 +274,18 @@ export function buildEmptyIAV(avId: string, tagName: string, attrNames: string[]
 
     for (const attr of attrNames) {
         const colId = `col_${attr}`;
-        const meta = getColumnMeta(tagName, attr);
-        let displayName = meta?.name || attr;
+        let displayName = attr;
         if (attr === "status" || attr === "index-task") displayName = "状态";
         else if (attr === "priority") displayName = "优先级";
         else if (attr === "due" || attr === "due_date") displayName = "截止时间";
         else if (attr === "memo") displayName = "备注";
 
+        const colType = (attr === "due" ? "date" : (attr === "status" || attr === "priority") ? "select" : "text");
+
         avColumns.push({
             id: colId,
             name: displayName,
-            type: meta?.type || "select",
+            type: colType,
             icon: "",
             width: "160px",
             hidden: false,

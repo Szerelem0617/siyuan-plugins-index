@@ -9,8 +9,7 @@
  *    - 所属原生 AV 数据库属性 (支持 <dbName>.<colName> 解析与双向回写)
  */
 
-import { post } from "../../../shared/api-client/request";
-import { supertagAVProjector, getColumnMeta } from "../projection/supertag-av-projector";
+import { supertagAVProjector } from "../projection/supertag-av-projector";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { getColIDMap } from "../../../shared/utils/av-utils";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
@@ -219,7 +218,20 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
         "custom-supertags", "custom-avs", "av-names", "custom-av-name",
         "custom-av-names", "custom-index-buttons", "custom-index-db-config"
     ]);
-    const rawCustomFields: RawCustomField[] = [];
+    // 预先拉取当前所有打标 Supertag 的超集合并 Schema (包含 supertag-db 命令侧 Core Schema)
+    const tagSchemaMap = new Map<string, Map<string, any>>();
+    for (const t of supertags) {
+        try {
+            const { getSupertagSchema } = await import("../core/supertag-schema");
+            const fields = await getSupertagSchema(t);
+            const m = new Map<string, any>();
+            for (const f of fields) {
+                m.set(f.slug.toLowerCase(), f);
+                m.set(f.label.toLowerCase(), f);
+            }
+            tagSchemaMap.set(t.replace(/^#/, "").trim().toLowerCase(), m);
+        } catch (_) {}
+    }
 
     for (const [k, v] of Object.entries(rawAttrs)) {
         if (
@@ -245,22 +257,23 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
             }
 
             if (matchedTag) {
-                // 独占命名空间属性 (支持通过 getColumnMeta 与 Base32 还原中文 Label 与列类型)
-                const meta = getColumnMeta(matchedTag, subAttrKey);
+                // 独占命名空间属性 (直接读取 Schema-First 真实/命令侧合并 Schema)
+                const cleanMatched = matchedTag.replace(/^#/, "").trim().toLowerCase();
+                const tagFieldsMap = tagSchemaMap.get(cleanMatched);
+                const schemaDef = tagFieldsMap?.get(subAttrKey.toLowerCase());
                 const decodedLabel = parsed?.originalName || subAttrKey;
-                const schema = KNOWN_SCHEMA_DEFS[subAttrKey] || {
-                    label: meta?.name || decodedLabel,
-                    type: meta?.type || "text"
-                };
-                const options = buildFieldOptions(subAttrKey, schema, v);
+                const label = schemaDef?.label || decodedLabel;
+                const type = (schemaDef?.type || "text") as any;
+                const options = schemaDef?.options?.map((o: any) => ({ id: o.id, name: o.name, color: o.color || "1" })) || [];
+
                 const field: SupertagField = {
                     key: subAttrKey,
-                    fullKey: `${matchedTag}.${meta?.name || decodedLabel}`,
+                    fullKey: `${matchedTag}.${label}`,
                     rawKey: k,
-                    label: meta?.name || schema.label || decodedLabel,
-                    type: meta?.type || schema.type,
+                    label,
+                    type,
                     value: v,
-                    options,
+                    options: options.length > 0 ? options : undefined,
                     isScoped: true,
                     tag: matchedTag
                 };
@@ -365,6 +378,29 @@ export async function loadBlockAttributeData(blockId: string): Promise<BlockAttr
             } catch (err) {
                 console.warn(`[AttributeModel] 拉取 Supertag #${tag} 关联数据库 Schema 失败:`, err);
             }
+        }
+
+        // 🌟 深度结合命令侧 Core Schema：即使无物理数据库，也为每个 Supertag 补充预设空列占位
+        const cmdFields = tagSchemaMap.get(cleanTag);
+        if (cmdFields) {
+            const tagFields = supertagGroupsMap.get(tag) || [];
+            for (const f of cmdFields.values()) {
+                const existing = tagFields.find(ef => ef.key.toLowerCase() === f.slug.toLowerCase() || ef.label.toLowerCase() === f.label.toLowerCase());
+                if (!existing) {
+                    tagFields.push({
+                        key: f.slug,
+                        fullKey: `${tag}.${f.label}`,
+                        rawKey: getPhysicalAttrKey(cleanTag, f.slug),
+                        label: f.label,
+                        type: (f.type as any) || "text",
+                        value: "",
+                        options: f.options?.map((o: any) => ({ id: o.id, name: o.name, color: o.color || "1" })),
+                        isScoped: true,
+                        tag
+                    });
+                }
+            }
+            supertagGroupsMap.set(tag, tagFields);
         }
     }
 

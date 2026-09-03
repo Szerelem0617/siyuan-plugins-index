@@ -56,15 +56,6 @@ export function addSlash() {
             const blockId = getCurrentBlockId();
             await insertOutlineAction(blockId);
         }
-    }, {
-        filter: ["insert supertag view", "插入超级标签多维表格", "插入标签视图", "supertag av", "crawtag"],
-        html: `<div class="b3-list-item__first"><span class="b3-list-item__text">📊 插入超级标签多维表格</span><span class="b3-list-item__meta">IndexOS</span></div>`,
-        id: "insertSupertagView",
-        async callback(_protyle: Protyle) {
-            const blockId = getCurrentBlockId();
-            const { openSupertagViewSelectorDialog } = await import("../features/unified-attributes/projection/insert-supertag-view");
-            await openSupertagViewSelectorDialog(blockId);
-        }
     }];
 
 

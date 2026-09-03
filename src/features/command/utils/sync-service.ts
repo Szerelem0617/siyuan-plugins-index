@@ -213,13 +213,14 @@ async function refreshRegistryFromSqliteCore(): Promise<boolean> {
                 const autoScript = String(row[3] || "");
 
                 const findBinding = (token: string) => {
+                    if (!token) return undefined;
                     const lower = token.toLowerCase();
-                    const exact = Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower);
+                    const exact = Object.values(newCommandBindings).find(b => b.commandRef && b.commandRef.toLowerCase() === lower);
                     if (exact) return exact;
-                    const byName = Object.values(newCommandBindings).find(b => b.methodName.toLowerCase() === lower);
+                    const byName = Object.values(newCommandBindings).find(b => b.methodName && b.methodName.toLowerCase() === lower);
                     if (byName) return byName;
 
-                    const sysCmd = commandRegistry.getCommand(token);
+                    const sysCmd = commandRegistry.getCommand(token) || commandRegistry.findByNameOrId(token);
                     if (sysCmd) {
                         const hasOutputs = sysCmd.outputs && sysCmd.outputs.length > 0;
                         return {
@@ -233,18 +234,27 @@ async function refreshRegistryFromSqliteCore(): Promise<boolean> {
                 };
 
                 const manualEntries = parseManualConfig(manualStr);
-                const pushEntry = (e: ManualEntry, location: "IconMenu" | "Slash" | "Button" | "VirtualButton") => {
-                    const found = findBinding(e.commandRef);
+                const pushEntry = (entry: ManualCommandEntry, location: "IconMenu" | "Slash" | "Button" | "VirtualButton") => {
+                    const cmdId = entry?.id || (entry as any)?.commandRef;
+                    if (!cmdId) return;
+                    const found = findBinding(cmdId);
                     if (found) {
-                        newRegistry.push({
-                            typeTag: cleanTag,
-                            methodName: e.label || found.methodName,
-                            commandRef: found.commandRef,
-                            inputMapping: found.inputMapping,
-                            outputMapping: found.outputMapping,
-                            uiLocation: location,
-                            conditionalScript: autoScript
-                        });
+                        const hasParams = entry.params && Object.keys(entry.params).length > 0;
+                        const inputMapping = hasParams ? JSON.stringify(entry.params) : found.inputMapping;
+                        if (!newRegistry.some(r => r.typeTag === cleanTag && r.commandRef === found.commandRef && r.uiLocation === location)) {
+                            newRegistry.push({
+                                typeTag: cleanTag,
+                                methodName: entry.buttonLabel || found.methodName,
+                                commandRef: found.commandRef,
+                                inputMapping,
+                                outputMapping: found.outputMapping,
+                                uiLocation: location,
+                                condition: entry.condition || entry.blockFilter,
+                                blockFilter: entry.condition || entry.blockFilter,
+                                buttonLabel: entry.buttonLabel,
+                                conditionalScript: autoScript
+                            });
+                        }
                     }
                 };
                 for (const e of manualEntries) {
@@ -307,10 +317,11 @@ function refreshRegistryFromSeed() {
         if (!cleanTag) continue;
 
         const findBinding = (token: string) => {
+            if (!token) return undefined;
             const lower = token.toLowerCase();
-            const exact = Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower);
+            const exact = Object.values(newCommandBindings).find(b => b.commandRef && b.commandRef.toLowerCase() === lower);
             if (exact) return exact;
-            const byName = Object.values(newCommandBindings).find(b => b.methodName.toLowerCase() === lower);
+            const byName = Object.values(newCommandBindings).find(b => b.methodName && b.methodName.toLowerCase() === lower);
             if (byName) return byName;
 
             const sysCmd = commandRegistry.getCommand(token);
@@ -729,10 +740,11 @@ async function refreshRegistryFromApi() {
                 // 1. Manual 列：4 态分流分发
                 const manualEntries = parseManualConfig(manualRaw);
                 const resolveCmd = (token: string) => {
+                    if (!token) return undefined;
                     const lower = token.toLowerCase();
-                    const exact = Object.values(newCommandBindings).find(b => b.commandRef.toLowerCase() === lower);
+                    const exact = Object.values(newCommandBindings).find(b => b.commandRef && b.commandRef.toLowerCase() === lower);
                     if (exact) return exact;
-                    const byName = Object.values(newCommandBindings).find(b => b.methodName.toLowerCase() === lower);
+                    const byName = Object.values(newCommandBindings).find(b => b.methodName && b.methodName.toLowerCase() === lower);
                     if (byName) return byName;
                     const sysCmd = commandRegistry.getCommand(token);
                     if (sysCmd) {

@@ -72,8 +72,17 @@ export async function initSystemTables(): Promise<void> {
         "Manual" TEXT,
         "Auto" TEXT,
         "Related av" TEXT,
+        "Schema" TEXT DEFAULT '[]',
         _updated INTEGER
     );`);
+
+    try {
+        const pragma = db.exec(`PRAGMA table_info("${TABLE_SUPERTAGS}");`);
+        const cols = (pragma[0]?.values || []).map((v: any) => String(v[1]));
+        if (!cols.includes("Schema")) {
+            db.run(`ALTER TABLE "${TABLE_SUPERTAGS}" ADD COLUMN "Schema" TEXT DEFAULT '[]';`);
+        }
+    } catch (_) {}
 
     // 4. 尝试从本地插件持久化配置 (indexos-meta.json) 载入数据
     let loadedMeta: any = null;
@@ -118,7 +127,7 @@ export async function initSystemTables(): Promise<void> {
     const tagCount = tagCountRes[0]?.values[0]?.[0] || 0;
     if (tagCount === 0) {
         if (loadedMeta?.supertags && Array.isArray(loadedMeta.supertags) && loadedMeta.supertags.length > 0) {
-            const insTag = db.prepare(`INSERT OR REPLACE INTO "${TABLE_SUPERTAGS}" (rowID, "主键", "Manual", "Auto", "Related av", _updated) VALUES (?, ?, ?, ?, ?, ?)`);
+            const insTag = db.prepare(`INSERT OR REPLACE INTO "${TABLE_SUPERTAGS}" (rowID, "主键", "Manual", "Auto", "Related av", "Schema", _updated) VALUES (?, ?, ?, ?, ?, ?, ?)`);
             for (const r of loadedMeta.supertags) {
                 insTag.run([
                     r.rowID,
@@ -126,6 +135,7 @@ export async function initSystemTables(): Promise<void> {
                     r.manual || r["Manual"] || "",
                     r.auto || r["Auto"] || "",
                     r.relatedAv || r["Related av"] || "",
+                    r.schema || r["Schema"] || "[]",
                     r._updated || Date.now()
                 ]);
             }
@@ -133,9 +143,9 @@ export async function initSystemTables(): Promise<void> {
         } else {
             // 用 seed-data 初始化
             const seedTags = getSeedSupertagRows();
-            const insTag = db.prepare(`INSERT OR REPLACE INTO "${TABLE_SUPERTAGS}" (rowID, "主键", "Manual", "Auto", "Related av", _updated) VALUES (?, ?, ?, ?, ?, ?)`);
+            const insTag = db.prepare(`INSERT OR REPLACE INTO "${TABLE_SUPERTAGS}" (rowID, "主键", "Manual", "Auto", "Related av", "Schema", _updated) VALUES (?, ?, ?, ?, ?, ?, ?)`);
             for (const r of seedTags) {
-                insTag.run([r.rowID, r.supertag, r.manual || "", r.auto || r.conditional || "", "", Date.now()]);
+                insTag.run([r.rowID, r.supertag, r.manual || "", r.auto || r.conditional || "", "", r.schema || "[]", Date.now()]);
             }
             insTag.free();
         }
@@ -154,7 +164,7 @@ export async function saveMetaToStorage() {
     try {
         const { db } = await getSqliteEngine();
         const cmdRes = db.exec(`SELECT rowID, "主键", "Command ID", "Input", "Output", _updated FROM "${TABLE_COMMANDS}"`);
-        const tagRes = db.exec(`SELECT rowID, "主键", "Manual", "Auto", "Related av", _updated FROM "${TABLE_SUPERTAGS}"`);
+        const tagRes = db.exec(`SELECT rowID, "主键", "Manual", "Auto", "Related av", "Schema", _updated FROM "${TABLE_SUPERTAGS}"`);
 
         const commands = (cmdRes[0]?.values || []).map((v: any[]) => ({
             rowID: String(v[0] || ""),
@@ -171,7 +181,8 @@ export async function saveMetaToStorage() {
             manual: String(v[2] || ""),
             auto: String(v[3] || ""),
             relatedAv: String(v[4] || ""),
-            _updated: Number(v[5] || Date.now())
+            schema: String(v[5] || "[]"),
+            _updated: Number(v[6] || Date.now())
         }));
 
         if (plugin?.saveData) {

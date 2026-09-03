@@ -51,9 +51,6 @@ export {
 export {
     SupertagAVProjector,
     supertagAVProjector,
-    getColumnMeta,
-    registerColumnMeta,
-    type VirtualColumnMeta,
     type VirtualAVBinding
 } from "./projection/supertag-av-projector";
 

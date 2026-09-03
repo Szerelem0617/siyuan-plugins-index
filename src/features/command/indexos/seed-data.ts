@@ -19,6 +19,8 @@ export interface SeedSupertagRow {
     manual?: string;
     /** 自动条件触发脚本（TypeScript DSL） */
     auto?: string;
+    /** 命令侧核心字段模式（JSON 数组） */
+    schema?: string;
     /** 兼容旧字段 */
     iconMenu?: string;
     conditional?: string;
@@ -124,7 +126,12 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
                 { id: "index.setBlockAttribute", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false },
                 { id: "index.visualEffect", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
             ]),
-            auto: defaultTaskConditional
+            auto: defaultTaskConditional,
+            schema: JSON.stringify([
+                { name: "status", label: "状态", type: "select", options: [{ id: "opt_todo", name: "Todo", color: "1" }, { id: "opt_doing", name: "Doing", color: "4" }, { id: "opt_done", name: "Done", color: "8" }] },
+                { name: "priority", label: "优先级", type: "select", options: [{ id: "opt_p0", name: "P0", color: "2" }, { id: "opt_p1", name: "P1", color: "3" }, { id: "opt_p2", name: "P2", color: "4" }, { id: "opt_p3", name: "P3", color: "7" }] },
+                { name: "due", label: "截止时间", type: "date" }
+            ])
         },
         {
             rowID: "20260821113000-project",
@@ -132,7 +139,11 @@ export function getSeedSupertagRows(): SeedSupertagRow[] {
             manual: JSON.stringify([
                 { id: "index.addSupertag", showInSlash: true, showInMenu: true, showInButton: false, showInVirtualButton: false }
             ]),
-            auto: defaultProjectConditional
+            auto: defaultProjectConditional,
+            schema: JSON.stringify([
+                { name: "status", label: "状态", type: "select", options: [{ id: "opt_plan", name: "Planning", color: "7" }, { id: "opt_prog", name: "In Progress", color: "4" }, { id: "opt_comp", name: "Completed", color: "8" }] },
+                { name: "progress", label: "进度", type: "number" }
+            ])
         },
         {
             rowID: "20260721140000-composite",

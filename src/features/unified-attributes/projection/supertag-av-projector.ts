@@ -13,7 +13,7 @@
 
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
 import { showMessage } from "siyuan";
-import { type VirtualAVBinding, type VirtualColumnMeta, registerColumnMeta, getColumnMeta } from "./types";
+import { type VirtualAVBinding } from "./types";
 import { buildVirtualIAVFromSQL, buildEmptyIAV } from "./iav-builder";
 import { notifyFrontendToRerender } from "./rerender-dispatcher";
 import {
@@ -27,7 +27,7 @@ import { installFetchInterceptor } from "./fetch-interceptor";
 
 import { getTypeAvId, getCommandAvId } from "../../command/registration";
 
-export { type VirtualAVBinding, type VirtualColumnMeta, registerColumnMeta, getColumnMeta };
+export { type VirtualAVBinding };
 
 const SYSTEM_EXCLUDED_TAGS = new Set(["commanddb", "command-db", "supertagdb", "supertag-db", "command", "supertag", "db", "datadbs", "data-dbs"]);
 
