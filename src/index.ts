@@ -35,7 +35,7 @@ import { refreshEntryRegistrations, destroyEntryRegistrations } from "./features
 import { initInlineButtonListener, destroyInlineButtonListener, handleBtnPaste } from "./features/command/global-registration/inline-button";
 import { initCommandPalette, destroyCommandPalette } from "./features/command/global-registration/command-palette";
 import { backgroundScheduler } from "./features/command/background/background-scheduler";
-import { initButtonLinkListener, destroyButtonLinkListener, initHoverTooltipListener, destroyHoverTooltipListener } from "./features/command/av-interaction";
+import { initButtonLinkListener, destroyButtonLinkListener } from "./features/command/av-interaction";
 import SQLiteStatus from "./features/sqlite/sqlite-status.svelte";
 import { getSqliteEngine, runQuery, executeWritableSql, instantiateAV, registerFriendlyTableName } from "./features/sqlite/sqlite-manager";
 import { version } from "../plugin.json";
@@ -196,7 +196,6 @@ export default class IndexPlugin extends Plugin {
             initInlineButtonListener();
             initCommandPalette();
             initButtonLinkListener();
-            initHoverTooltipListener();
         }
         // paste 钩子始终激活：只对 siyuan-btn:// 链接生效，与实验模式无关
         this.eventBus.on("paste", handleBtnPaste);
@@ -269,7 +268,6 @@ export default class IndexPlugin extends Plugin {
             destroyInlineButtonListener();
             destroyCommandPalette();
             destroyButtonLinkListener();
-            destroyHoverTooltipListener();
             destroyEntryRegistrations();
         }
         destroySupertagPalette();

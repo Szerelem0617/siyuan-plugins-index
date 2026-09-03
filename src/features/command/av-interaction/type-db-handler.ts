@@ -170,7 +170,6 @@ export async function openSupertagUnifiedConfigByTag(
         if (rec) {
             currentManualVal = rec.manual || "";
             currentAutoVal = rec.auto || "";
-            matchedRowId = rec.rowId || "";
             if (rec.relatedAv) relatedAvId = rec.relatedAv;
             isAlreadyCustomized = Boolean(rec.manual || rec.auto);
         }
