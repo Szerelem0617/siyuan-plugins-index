@@ -209,8 +209,11 @@ export const TYPE_DB_CONFIG: DbPageConfig = {
     ]
 };
 
+export const SYSTEM_DOC_TITLE = "IndexOS";
+export const SYSTEM_DOC_ATTR = "custom-index-system-doc";
+
 export const DATA_DBS_CONFIG = {
-    title: "data-dbs",
+    title: SYSTEM_DOC_TITLE,
     attrName: "custom-index-data-dbs"
 };
 

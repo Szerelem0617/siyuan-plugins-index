@@ -65,61 +65,37 @@ export async function getTargetTablesInfo() {
     if (!cmdAvId || !tAvId || !cmdDocId || !tDocId) {
         try {
             // 1. Resolve Command-DB
-            const cmdDocSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
-            const cmdDocs = await post("/api/query/sql", { stmt: cmdDocSql });
-            if (cmdDocs && cmdDocs.length > 0) {
-                const docId = cmdDocs[0].root_id;
+            const cmdAttrSql = `SELECT block_id, root_id FROM attributes WHERE name = 'custom-index-command-db' LIMIT 1`;
+            const cmdAttrs = await post("/api/query/sql", { stmt: cmdAttrSql });
+            if (cmdAttrs && cmdAttrs.length > 0) {
+                const docId = cmdAttrs[0].root_id;
+                const blockId = cmdAttrs[0].block_id;
                 setCommandDocId(docId);
                 cmdDocId = docId;
 
-                const avLinkSql = `SELECT a.value FROM attributes a JOIN blocks b ON a.block_id = b.id WHERE b.root_id = '${docId}' AND a.name = 'custom-index-linked-av' LIMIT 1`;
-                const avLinkRes = await post("/api/query/sql", { stmt: avLinkSql });
-                if (avLinkRes && avLinkRes.length > 0) {
-                    const val = avLinkRes[0].value || "";
-                    setCommandAvId(val);
-                    cmdAvId = val;
-                } else {
-                    // Fallback for Pure Database Mode
-                    const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
-                    const avRes = await post("/api/query/sql", { stmt: avSql });
-                    if (avRes && avRes.length > 0) {
-                        const domRes = await client.getBlockDOM({ id: avRes[0].id });
-                        const html = domRes.data?.dom || "";
-                        const match = html.match(/data-av-id="([^"]+)"/);
-                        const val = match ? match[1] : avRes[0].id;
-                        setCommandAvId(val);
-                        cmdAvId = val;
-                    }
-                }
+                const domRes = await client.getBlockDOM({ id: blockId });
+                const html = domRes?.data?.dom || (domRes as any)?.dom || "";
+                const match = html.match(/data-av-id="([^"]+)"/);
+                const val = match ? match[1] : blockId;
+                setCommandAvId(val);
+                cmdAvId = val;
             }
 
             // 2. Resolve Type-DB
-            const typeDocSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-supertag-db' LIMIT 1`;
-            const typeDocs = await post("/api/query/sql", { stmt: typeDocSql });
-            if (typeDocs && typeDocs.length > 0) {
-                const docId = typeDocs[0].root_id;
+            const typeAttrSql = `SELECT block_id, root_id FROM attributes WHERE name = 'custom-index-supertag-db' LIMIT 1`;
+            const typeAttrs = await post("/api/query/sql", { stmt: typeAttrSql });
+            if (typeAttrs && typeAttrs.length > 0) {
+                const docId = typeAttrs[0].root_id;
+                const blockId = typeAttrs[0].block_id;
                 setTypeDocId(docId);
                 tDocId = docId;
 
-                const avLinkSql = `SELECT a.value FROM attributes a JOIN blocks b ON a.block_id = b.id WHERE b.root_id = '${docId}' AND a.name = 'custom-index-linked-av' LIMIT 1`;
-                const avLinkRes = await post("/api/query/sql", { stmt: avLinkSql });
-                if (avLinkRes && avLinkRes.length > 0) {
-                    const val = avLinkRes[0].value || "";
-                    setTypeAvId(val);
-                    tAvId = val;
-                } else {
-                    // Fallback for Pure Database Mode
-                    const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
-                    const avRes = await post("/api/query/sql", { stmt: avSql });
-                    if (avRes && avRes.length > 0) {
-                        const domRes = await client.getBlockDOM({ id: avRes[0].id });
-                        const html = domRes.data?.dom || "";
-                        const match = html.match(/data-av-id="([^"]+)"/);
-                        const val = match ? match[1] : avRes[0].id;
-                        setTypeAvId(val);
-                        tAvId = val;
-                    }
-                }
+                const domRes = await client.getBlockDOM({ id: blockId });
+                const html = domRes?.data?.dom || (domRes as any)?.dom || "";
+                const match = html.match(/data-av-id="([^"]+)"/);
+                const val = match ? match[1] : blockId;
+                setTypeAvId(val);
+                tAvId = val;
             }
         } catch (e) {
             console.warn("[IndexOS] Error fetching AV IDs on registry load:", e);

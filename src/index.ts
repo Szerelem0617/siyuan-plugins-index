@@ -364,7 +364,7 @@ export default class IndexPlugin extends Plugin {
             observer.observe(document.body, { childList: true, subtree: true });
         }
 
-        // 全局快捷键监听: Cmd + Alt + S / Ctrl + Alt + S 呼出命令与数据库管理面板
+        // 全局快捷键监听: Cmd + Alt + S / Ctrl + Alt + S 呼出数据库管理面板
         window.addEventListener("keydown", (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === "s" || e.key === "S")) {
                 e.preventDefault();
@@ -376,7 +376,7 @@ export default class IndexPlugin extends Plugin {
 
     public openSqliteStatus() {
         const dialog = new Dialog({
-            title: "数据库与命令管理",
+            title: this.i18n.openSqliteStatus || "数据库管理",
             content: `<div id="sqlite-status-container" class="fn__flex-1" style="height: 100%;"></div>`,
             width: "850px",
             height: "650px",

@@ -171,17 +171,14 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
 
     // 2. 如果 SQLite 未就绪，尝试从 SiYuan 原生 AV 读取 "supertag-db" (已实例化状态)
     try {
-        const typeDocSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-supertag-db' LIMIT 1`;
-        const typeDocs = await post("/api/query/sql", { stmt: typeDocSql });
-        if (typeDocs && typeDocs.length > 0) {
-            const docId = typeDocs[0].root_id;
-            const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
-            const avRes = await post("/api/query/sql", { stmt: avSql });
-            if (avRes && avRes.length > 0) {
-                const domRes = await post("/api/block/getBlockDOM", { id: avRes[0].id });
-                const html = domRes?.data?.dom || domRes?.dom || "";
-                const match = html.match(/data-av-id="([^"]+)"/);
-                const avId = match ? match[1] : avRes[0].id;
+        const typeAttrSql = `SELECT block_id FROM attributes WHERE name = 'custom-index-supertag-db' LIMIT 1`;
+        const typeAttrs = await post("/api/query/sql", { stmt: typeAttrSql });
+        if (typeAttrs && typeAttrs.length > 0) {
+            const blockId = typeAttrs[0].block_id;
+            const domRes = await post("/api/block/getBlockDOM", { id: blockId });
+            const html = domRes?.data?.dom || domRes?.dom || "";
+            const match = html.match(/data-av-id="([^"]+)"/);
+            const avId = match ? match[1] : blockId;
                 if (avId) {
                     const renderRes = await post("/api/av/renderAttributeView", { id: avId });
                     const view = renderRes?.view || renderRes;
@@ -216,7 +213,6 @@ export async function getSupertagDbRecords(): Promise<SupertagDbRecord[]> {
                     }
                 }
             }
-        }
     } catch (_) {}
 
     // 3. 未实例化状态：读取 seed-data.ts TS 常量种子 (单一真理源)

@@ -8,7 +8,6 @@
         exportToCSV, exportToJSON, downloadFile,
         avIdToTableName, type SavedQuery
     } from "./sqlite-manager";
-    import CommandsPanel from "./commands-db/CommandsPanel.svelte";
 
     let avBlocks: any[] = [];
     let loading = true;
@@ -31,7 +30,7 @@
     let locateIndices: Record<string, number> = {};
 
     // Tabs
-    let activeTab: "databases" | "console" | "commands" = "databases";
+    let activeTab: "databases" | "console" = "databases";
 
     async function init() {
         loading = true;
@@ -212,22 +211,8 @@
         >
             SQL 控制台
         </button>
-        <button
-            class="tab-btn"
-            class:active={activeTab === "commands"}
-            on:click={() => activeTab = "commands"}
-        >
-            命令管理
-        </button>
         <div style="flex: 1;"></div>
     </div>
-
-    <!-- Tab Content: Command Control -->
-    {#if activeTab === "commands"}
-        <div class="fn__flex-1 fn__flex-column" style="min-height: 0; display: flex; flex-direction: column;">
-            <CommandsPanel />
-        </div>
-    {/if}
 
     <!-- Tab Content: Databases -->
     {#if activeTab === "databases"}

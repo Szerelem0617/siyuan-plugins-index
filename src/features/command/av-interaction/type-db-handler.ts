@@ -44,19 +44,16 @@ export async function insertOrUpdateSupertagDbRecord(
     let typeAvId = getTypeAvId();
     if (!typeAvId) {
         try {
-            const typeDocSql = `SELECT root_id FROM attributes WHERE name = 'custom-index-supertag-db' LIMIT 1`;
-            const typeDocs = await post("/api/query/sql", { stmt: typeDocSql });
-            if (typeDocs && typeDocs.length > 0) {
-                const docId = typeDocs[0].root_id;
-                const avSql = `SELECT id FROM blocks WHERE root_id = '${docId}' AND type = 'av' LIMIT 1`;
-                const avRes = await post("/api/query/sql", { stmt: avSql });
-                if (avRes && avRes.length > 0) {
-                    const domRes = await post("/api/block/getBlockDOM", { id: avRes[0].id });
-                    const html = domRes?.dom || domRes?.data?.dom || "";
-                    const match = html.match(/data-av-id="([^"]+)"/);
-                    typeAvId = match ? match[1] : avRes[0].id;
-                    if (typeAvId) setTypeAvId(typeAvId);
-                }
+            const typeAttrSql = `SELECT block_id, root_id FROM attributes WHERE name = 'custom-index-supertag-db' LIMIT 1`;
+            const typeAttrs = await post("/api/query/sql", { stmt: typeAttrSql });
+            if (typeAttrs && typeAttrs.length > 0) {
+                const blockId = typeAttrs[0].block_id;
+                const domRes = await post("/api/block/getBlockDOM", { id: blockId });
+                const html = domRes?.dom || domRes?.data?.dom || "";
+                const match = html.match(/data-av-id="([^"]+)"/);
+                typeAvId = match ? match[1] : blockId;
+                if (typeAvId) setTypeAvId(typeAvId);
+                if (typeAttrs[0].root_id) setTypeDocId(typeAttrs[0].root_id);
             }
         } catch (_) {}
     }
