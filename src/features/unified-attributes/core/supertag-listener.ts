@@ -116,6 +116,12 @@ export class SupertagMonitor {
         this.eventQueue.clear();
 
         for (const [blockId, eventData] of queueToProcess.entries()) {
+            if (eventData.action === "delete") {
+                tagCache.delete(blockId);
+                globalSupertagsCache.delete(blockId);
+                continue;
+            }
+
             await this.processBlockTagsDiff(blockId, eventData.payload, eventData.action, eventData.opId);
 
             const isInsert = eventData.action === "insert" || 

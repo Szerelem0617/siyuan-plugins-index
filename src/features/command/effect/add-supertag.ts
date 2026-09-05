@@ -54,7 +54,7 @@ export async function triggerAddSupertag(
 
         if (updated) {
             // A. 前端 DOM 属性更新与即时渲染
-            if (context.blockEl) {
+            if (context.blockEl && context.blockEl.getAttribute("data-node-id") === targetBlockId) {
                 context.blockEl.setAttribute("custom-supertags", newRawCustomTags);
                 SupertagRenderer.renderSingleBlockElement(context.blockEl);
             }
