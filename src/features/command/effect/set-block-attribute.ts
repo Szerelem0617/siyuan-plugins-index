@@ -183,7 +183,7 @@ export async function setBlockAttribute(
         attrs: finalAttrs
     });
 
-    // 即时 DOM 同步与复选框渲染触发（0 延迟 UI 响应）
+    // 即时 DOM 同步与通用组件渲染触发（0 延迟 UI 响应）
     const liveBlockEl = document.querySelector(`[data-node-id="${rawId}"]`) as HTMLElement;
     if (liveBlockEl) {
         for (const [cleanAttrName, rawVal] of Object.entries(finalAttrs)) {
@@ -194,18 +194,34 @@ export async function setBlockAttribute(
             }
         }
 
-        const hasTagOrTaskAttr = Object.keys(finalAttrs).some(k => k.includes("task") || k === "custom-supertags");
-        if (hasTagOrTaskAttr) {
-            try {
-                const { SupertagRenderer } = await import("../../unified-attributes/renderer/SupertagRenderer");
-                if (liveBlockEl.classList.contains("protyle-title") || liveBlockEl.closest(".protyle-title")) {
-                    const editorEl = (liveBlockEl.closest(".protyle") || document.querySelector(".protyle")) as HTMLElement;
-                    await SupertagRenderer.renderDocumentTags(rawId, editorEl);
-                } else {
-                    SupertagRenderer.renderSingleBlockElement(liveBlockEl);
-                }
-            } catch (_) {}
+        // 双向同步列表项及其内部段落
+        const childPara = liveBlockEl.querySelector('.p[data-node-id]') as HTMLElement | null;
+        if (childPara) {
+            for (const [cleanAttrName, rawVal] of Object.entries(finalAttrs)) {
+                if (rawVal) childPara.setAttribute(cleanAttrName, rawVal);
+                else childPara.removeAttribute(cleanAttrName);
+            }
         }
+        const parentLi = liveBlockEl.closest('[data-type="NodeListItem"]') as HTMLElement | null;
+        if (parentLi && parentLi !== liveBlockEl) {
+            for (const [cleanAttrName, rawVal] of Object.entries(finalAttrs)) {
+                if (rawVal) parentLi.setAttribute(cleanAttrName, rawVal);
+                else parentLi.removeAttribute(cleanAttrName);
+            }
+        }
+
+        try {
+            const { SupertagRenderer } = await import("../../unified-attributes/renderer/SupertagRenderer");
+            if (liveBlockEl.classList.contains("protyle-title") || liveBlockEl.closest(".protyle-title")) {
+                const editorEl = (liveBlockEl.closest(".protyle") || document.querySelector(".protyle")) as HTMLElement;
+                await SupertagRenderer.renderDocumentTags(rawId, editorEl);
+            } else {
+                SupertagRenderer.renderSingleBlockElement(liveBlockEl);
+                if (parentLi && parentLi !== liveBlockEl) {
+                    SupertagRenderer.renderSingleBlockElement(parentLi);
+                }
+            }
+        } catch (_) {}
     }
 
     // 内存虚拟投影联动：若相关 Supertag 已建立虚拟投影，同步更新内存 SQLite 热表

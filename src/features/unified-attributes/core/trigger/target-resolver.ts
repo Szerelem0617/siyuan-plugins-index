@@ -117,29 +117,29 @@ export async function resolveTargetBlockInfo(targetBlockId: string): Promise<Tar
 
     const closestListItem = domEl?.closest('[data-type="NodeListItem"]');
     const closestList = domEl?.closest('[data-type="NodeList"]');
-    const childListItem = domEl?.querySelector('[data-type="NodeListItem"]');
 
     let isList = rawInfo.type === "l" || 
                  rawInfo.type === "i" ||
                  Boolean(closestListItem) ||
-                 Boolean(closestList) ||
-                 Boolean(childListItem);
+                 Boolean(closestList);
 
     let parentIsListItem = false;
     if (!isList && rawInfo.parent_id) {
         const parentDom = document.querySelector(`[data-node-id="${rawInfo.parent_id}"]`);
         if (parentDom) {
             const pType = parentDom.getAttribute("data-type");
-            if (pType === "NodeListItem" || pType === "NodeList" || parentDom.classList.contains("li") || parentDom.classList.contains("list")) {
+            if (pType === "NodeListItem" || parentDom.classList.contains("li")) {
                 isList = true;
                 parentIsListItem = true;
             }
         }
         if (!isList) {
             try {
-                const pDomRes = await post("/api/block/getBlockDOM", { id: rawInfo.parent_id });
-                const pHtml = pDomRes?.data?.dom || pDomRes?.dom || "";
-                if (pHtml.includes('data-type="NodeListItem"') || pHtml.includes('data-type="NodeList"')) {
+                const pSql = await post("/api/query/sql", {
+                    stmt: `SELECT type FROM blocks WHERE id = '${rawInfo.parent_id}' LIMIT 1`
+                });
+                const pRows = Array.isArray(pSql) ? pSql : (pSql?.data || []);
+                if (pRows.length > 0 && pRows[0].type === "i") {
                     isList = true;
                     parentIsListItem = true;
                 }

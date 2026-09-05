@@ -165,43 +165,47 @@ export async function dispatchScopeEvents(
                 let scopeMatched = false;
                 if (scope === "self") {
                     scopeMatched = (host.id === targetInfo.id);
-                } else if (scope === "current_doc") {
-                    // 仅当目标不是宿主自身时，同文档其他块匹配
-                    scopeMatched = (host.id !== targetInfo.id) && (host.root_id === targetInfo.root_id || host.id === targetInfo.root_id);
-                } else if (scope === "inner_blocks") {
-                    scopeMatched = (host.id !== targetInfo.id) && (targetInfo.parent_id === host.id || (host.id === targetInfo.root_id));
-                } else if (scope === "subtree") {
-                    // 1. 若宿主是文档本身，匹配该文档下除了宿主自身外的所有子孙内容
-                    if (host.id === targetInfo.root_id) {
-                        scopeMatched = (host.id !== targetInfo.id);
-                    } else if (host.id !== targetInfo.id) {
-                        // 2. 直接父子关系检测
-                        if (targetInfo.parent_id === host.id) {
+                } else {
+                    // 非 self 作用域下，目标绝不能是宿主块自身或提权至宿主自身
+                    if (host.id === targetInfo.id || host.id === targetInfo.actualTargetId) {
+                        scopeMatched = false;
+                    } else if (scope === "current_doc") {
+                        scopeMatched = (host.root_id === targetInfo.root_id || host.id === targetInfo.root_id);
+                    } else if (scope === "inner_blocks") {
+                        scopeMatched = (targetInfo.parent_id === host.id || (host.id === targetInfo.root_id));
+                    } else if (scope === "subtree") {
+                        // 1. 若宿主是文档本身，匹配该文档下的所有子孙内容
+                        if (host.id === targetInfo.root_id) {
                             scopeMatched = true;
-                        }
-
-                        // 3. DOM 层面标题折叠子树 / 大纲辖区检测 (思源标题与子块为同级兄弟节点)
-                        if (!scopeMatched && targetInfo.domEl) {
-                            const hostDom = document.querySelector(`[data-node-id="${host.id}"]`);
-                            if (hostDom) {
-                                scopeMatched = isBlockInsideHeadingSubtree(hostDom, targetInfo.domEl);
+                        } else {
+                            // 2. 直接父子关系检测 (注：列表项内部的主文本段落属于列表项自身，已在上述 host.id === actualTargetId 拦截)
+                            if (targetInfo.parent_id === host.id) {
+                                scopeMatched = true;
                             }
-                        }
 
-                        // 4. 思源 blocks 表中的 HeadingParent 语义子树多级检测 (支持段落 -> 列表项 -> 列表容器 -> 标题)
-                        if (!scopeMatched && targetInfo.id && host.id) {
-                            try {
-                                const sqlStmt = `
-                                    SELECT id, parent_id FROM blocks 
-                                    WHERE id = '${targetInfo.id}' 
-                                       OR id = '${targetInfo.parent_id}'
-                                `;
-                                const headingParentRes = await post("/api/query/sql", { stmt: sqlStmt });
-                                const hRows = Array.isArray(headingParentRes) ? headingParentRes : (headingParentRes?.data || []);
-                                if (hRows.some((r: any) => String(r.parent_id) === host.id)) {
-                                    scopeMatched = true;
+                            // 3. DOM 层面标题折叠子树 / 大纲辖区检测 (思源标题与子块为同级兄弟节点)
+                            if (!scopeMatched && targetInfo.domEl) {
+                                const hostDom = document.querySelector(`[data-node-id="${host.id}"]`);
+                                if (hostDom) {
+                                    scopeMatched = isBlockInsideHeadingSubtree(hostDom, targetInfo.domEl);
                                 }
-                            } catch (_) {}
+                            }
+
+                            // 4. 思源 blocks 表中的 HeadingParent 语义子树多级检测 (支持段落 -> 列表项 -> 列表容器 -> 标题)
+                            if (!scopeMatched && targetInfo.id && host.id) {
+                                try {
+                                    const sqlStmt = `
+                                        SELECT id, parent_id FROM blocks 
+                                        WHERE id = '${targetInfo.id}' 
+                                           OR id = '${targetInfo.parent_id}'
+                                    `;
+                                    const headingParentRes = await post("/api/query/sql", { stmt: sqlStmt });
+                                    const hRows = Array.isArray(headingParentRes) ? headingParentRes : (headingParentRes?.data || []);
+                                    if (hRows.some((r: any) => String(r.parent_id) === host.id)) {
+                                        scopeMatched = true;
+                                    }
+                                } catch (_) {}
+                            }
                         }
                     }
                 }
@@ -263,6 +267,19 @@ export async function dispatchScopeEvents(
                     }
 
                     for (const actualTargetId of targetIds) {
+                        // 严格守卫 1: 非 self 作用域下绝不能对宿主自身执行
+                        if (scope !== "self" && (actualTargetId === host.id || actualTargetId === targetInfo.id)) {
+                            continue;
+                        }
+
+                        // 严格守卫 2: 若目标块自身已拥有该宿主标签 (如自身已是 #project)，则作为同级/独立实体，不被父级同类标签级联处理
+                        const targetTags = globalSupertagsCache.get(actualTargetId) || (actualTargetId === targetInfo.id ? targetInfo.tags : []);
+                        const cleanTargetTags = targetTags.map(t => cleanTagString(t));
+                        if (scope !== "self" && cleanTargetTags.includes(cleanTag)) {
+                            console.log(`[Supertag-Scope] 目标块 ${actualTargetId} 自身已拥有标签 #${cleanTag}，跳过父级级联处理`);
+                            continue;
+                        }
+
                         const triggerKey = `${host.id}:${cleanTag}:${eventName}:${actualTargetId}`;
                         if (!triggeredKeys.has(triggerKey)) {
                             triggeredKeys.add(triggerKey);

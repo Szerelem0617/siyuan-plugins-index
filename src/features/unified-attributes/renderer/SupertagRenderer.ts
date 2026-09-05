@@ -20,22 +20,47 @@ export class SupertagRenderer {
         this.isObserverInit = true;
 
         let timer: any = null;
-        const observer = new MutationObserver(() => {
+        const pendingBlocks = new Set<HTMLElement>();
+
+        const observer = new MutationObserver((mutations) => {
+            let hasCustomChange = false;
+
+            for (const m of mutations) {
+                if (m.type === "attributes") {
+                    const attr = m.attributeName || "";
+                    if (attr.startsWith("custom-")) {
+                        hasCustomChange = true;
+                        const block = (m.target as HTMLElement)?.closest('[data-node-id]') as HTMLElement | null;
+                        if (block) pendingBlocks.add(block);
+                    }
+                } else if (m.type === "childList" && (m.addedNodes.length > 0 || m.removedNodes.length > 0)) {
+                    hasCustomChange = true;
+                }
+            }
+
+            if (!hasCustomChange) return;
+
             if (timer) clearTimeout(timer);
             timer = setTimeout(() => {
-                const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
-                const editorEl = activeProtyle?.element || document.querySelector(".protyle-content") || document.body;
-                if (editorEl) {
-                    this.renderBlockTags(editorEl as HTMLElement);
+                if (pendingBlocks.size > 0) {
+                    pendingBlocks.forEach(block => {
+                        this.renderSingleBlockElement(block);
+                    });
+                    pendingBlocks.clear();
+                } else {
+                    const activeProtyle = (window as any).activeProtyleInstance || (window as any).siyuan?.ws?.protyle;
+                    const editorEl = activeProtyle?.element || document.querySelector(".protyle-content") || document.body;
+                    if (editorEl) {
+                        this.renderBlockTags(editorEl as HTMLElement);
+                    }
                 }
-            }, 50);
+            }, 30);
         });
 
         observer.observe(document.body, {
             childList: true,
             subtree: true,
-            attributes: true,
-            attributeFilter: ["custom-supertags", "custom-task-status"]
+            attributes: true
         });
     }
 
@@ -131,9 +156,29 @@ export class SupertagRenderer {
         if (!blockId) return;
 
         const editorEl = blockEl.closest(".protyle-wysiwyg") as HTMLElement || document.body;
-        const rawTags = blockEl.getAttribute("custom-supertags") || "";
+        let rawTags = blockEl.getAttribute("custom-supertags") || "";
+        let taskStatus = blockEl.getAttribute("custom-task") || blockEl.getAttribute("custom-index-task") || blockEl.getAttribute("custom-task-status") || "";
+
+        // 🌟 列表项双向属性穿透：若列表项与其子段落属性存在分离，双向聚合
+        const parentLi = blockEl.closest('[data-type="NodeListItem"]') as HTMLElement | null;
+        if (parentLi && parentLi !== blockEl) {
+            if (!rawTags) rawTags = parentLi.getAttribute("custom-supertags") || "";
+            if (!taskStatus) taskStatus = parentLi.getAttribute("custom-task") || parentLi.getAttribute("custom-index-task") || parentLi.getAttribute("custom-task-status") || "";
+        }
+        const childPara = blockEl.querySelector('.p[data-node-id]') as HTMLElement | null;
+        if (childPara) {
+            if (!rawTags) rawTags = childPara.getAttribute("custom-supertags") || "";
+            if (!taskStatus) taskStatus = childPara.getAttribute("custom-task") || childPara.getAttribute("custom-index-task") || childPara.getAttribute("custom-task-status") || "";
+        }
+
         const tags = parseSupertags(rawTags);
-        const taskStatus = blockEl.getAttribute("custom-task") || blockEl.getAttribute("custom-index-task") || blockEl.getAttribute("custom-task-status");
+        const cleanTagList = tags.map(t => t.replace(/^#/, "").trim().toLowerCase());
+
+        // 🌟 核心状态机自愈：拥有 task 超级标签时，若尚未被显式赋值，默认就绪为 pending
+        if (cleanTagList.includes("task") && !taskStatus) {
+            taskStatus = "pending";
+        }
+
         const isTask = Boolean(taskStatus);
 
         let attrEl = blockEl.querySelector(".protyle-attr") as HTMLElement;
@@ -151,7 +196,6 @@ export class SupertagRenderer {
             return;
         }
 
-        const cleanTagList = tags.map(t => t.replace(/^#/, "").trim().toLowerCase());
         const vBtnConfigs = SUPERTAG_REGISTRY.filter(r => r.uiLocation === "VirtualButton" && cleanTagList.includes(r.typeTag.toLowerCase()));
         const vBtnSig = vBtnConfigs.map(v => `${v.commandRef}:${v.condition || ''}:${v.buttonLabel || ''}`).join(";");
         const renderedKey = `${tags.join(",")}|${taskStatus || ""}|${vBtnSig}`;
