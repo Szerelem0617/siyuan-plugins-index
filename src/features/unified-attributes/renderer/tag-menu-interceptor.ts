@@ -5,6 +5,38 @@ import { SupertagRenderer } from "./SupertagRenderer";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
 import { getGlobalTypeConfigs } from "../../av/av-setting/db-config";
 
+import { findActiveBlock } from "../../command/utils/context-extractor";
+
+async function addBlockSupertag(blockId: string, tag: string, blockEl: HTMLElement | null, protyle: any) {
+    (window.siyuan.menus.menu as any)?.remove?.();
+
+    const attrsRes = await post("/api/attr/getBlockAttrs", { id: blockId });
+    const attrs = attrsRes?.data || attrsRes || {};
+    const rawTags = attrs["custom-supertags"];
+    
+    const currentCustom = parseSupertags(rawTags);
+    const updatedCustom = Array.from(new Set([...currentCustom, tag]));
+    const updatedCustomJSON = serializeSupertags(updatedCustom);
+
+    if (blockEl) {
+        blockEl.setAttribute("custom-supertags", updatedCustomJSON);
+        SupertagRenderer.renderSingleBlockElement(blockEl);
+    }
+
+    await post("/api/attr/setBlockAttrs", {
+        id: blockId,
+        attrs: {
+            "custom-supertags": updatedCustomJSON
+        }
+    });
+    globalSupertagsCache.set(blockId, updatedCustom);
+
+    await supertagMonitor.processNewTag(blockId, tag);
+    if (protyle?.element) {
+        SupertagRenderer.renderBlockTags(protyle.element);
+    }
+}
+
 async function addDocumentSupertag(docId: string, tag: string, protyle: any) {
     // 1. Close Siyuan's menu popover
     (window.siyuan.menus.menu as any)?.remove?.();
@@ -81,11 +113,43 @@ async function renderSupertagsInPanel(panel: HTMLElement, query: string) {
             e.preventDefault();
             
             const protyle = (window as any).activeProtyleInstance;
-            if (protyle) {
-                const docId = protyle.block?.id || protyle.blockId;
+            if (!protyle) return;
+
+            const menuEl = (window as any).siyuan?.menus?.menu?.element as HTMLElement | null;
+            const menuName = menuEl?.getAttribute("data-name");
+            const isDocMenu = menuName === "docTag" || menuName === "openDocTagMenu";
+
+            const docId = protyle.block?.id || protyle.blockId;
+
+            // 1. 如果明确是文档顶栏标签菜单，打在文档上
+            if (isDocMenu) {
                 if (docId) {
                     await addDocumentSupertag(docId, item.typeName, protyle);
                 }
+                return;
+            }
+
+            // 2. 查找当前活跃块或选中块
+            let targetBlockEl = protyle.wysiwyg?.element?.querySelector(".protyle-wysiwyg--select") as HTMLElement | null;
+            if (!targetBlockEl) {
+                targetBlockEl = findActiveBlock(protyle);
+            }
+
+            // 如果处于列表项内，提权到外层 NodeListItem
+            if (targetBlockEl) {
+                const parentLi = targetBlockEl.closest('[data-type="NodeListItem"]') as HTMLElement | null;
+                if (parentLi) {
+                    targetBlockEl = parentLi;
+                }
+            }
+
+            const targetBlockId = targetBlockEl?.getAttribute("data-node-id");
+
+            // 3. 若找到了正文中的具体块，打给该块；否则才打给 docId
+            if (targetBlockId && targetBlockId !== docId) {
+                await addBlockSupertag(targetBlockId, item.typeName, targetBlockEl, protyle);
+            } else if (docId) {
+                await addDocumentSupertag(docId, item.typeName, protyle);
             }
         });
         

@@ -23,20 +23,26 @@ function isBlockInsideHeadingSubtree(hostHeadingEl: Element, targetEl: Element):
     const hostLevelStr = hostHeadingEl.getAttribute("data-subtype") || "h1";
     const hostLevel = parseInt(hostLevelStr.replace(/\D/g, "") || "1", 10);
 
-    const wysiwyg = hostHeadingEl.closest(".protyle-wysiwyg");
-    if (!wysiwyg || !wysiwyg.contains(targetEl)) {
+    const hostWysiwyg = hostHeadingEl.closest(".protyle-wysiwyg");
+    const targetWysiwyg = targetEl.closest(".protyle-wysiwyg");
+    if (!hostWysiwyg || !targetWysiwyg) {
         return false;
     }
 
-    // 找到 targetEl 在 wysiwyg 下的直接子节点 (顶级块)
+    // 找到 targetEl 在 wysiwyg 下的顶级父块
     let targetTop: Element | null = targetEl;
-    while (targetTop && targetTop.parentElement && targetTop.parentElement !== wysiwyg) {
+    while (targetTop && targetTop.parentElement && !targetTop.parentElement.classList.contains("protyle-wysiwyg")) {
         targetTop = targetTop.parentElement;
     }
-    if (!targetTop) return false;
+    // 找到 hostHeadingEl 在 wysiwyg 下的顶级父块
+    let hostTop: Element | null = hostHeadingEl;
+    while (hostTop && hostTop.parentElement && !hostTop.parentElement.classList.contains("protyle-wysiwyg")) {
+        hostTop = hostTop.parentElement;
+    }
+    if (!targetTop || !hostTop) return false;
 
-    // 从 hostHeadingEl 向后扫描兄弟节点，直到遇到同级或更高级别的标题
-    let curr = hostHeadingEl.nextElementSibling;
+    // 从 hostTop 向后扫描兄弟节点，直到遇到同级或更高级别的标题
+    let curr = hostTop.nextElementSibling;
     while (curr) {
         if (curr === targetTop) {
             return true;
@@ -52,6 +58,46 @@ function isBlockInsideHeadingSubtree(hostHeadingEl: Element, targetEl: Element):
     }
 
     return false;
+}
+
+async function isSqlHeadingSubtree(hostId: string, targetId: string): Promise<boolean> {
+    try {
+        const sqlStmt = `
+            SELECT id, root_id, sort, type, subtype FROM blocks 
+            WHERE id IN ('${hostId}', '${targetId}')
+        `;
+        const res = await post("/api/query/sql", { stmt: sqlStmt });
+        const rows = Array.isArray(res) ? res : (res?.data || []);
+        if (rows.length < 2) return false;
+
+        const hostRow = rows.find((r: any) => String(r.id) === hostId);
+        const targetRow = rows.find((r: any) => String(r.id) === targetId);
+        if (!hostRow || !targetRow) return false;
+
+        // 必须在同一个根文档内，且目标块在物理顺序上必须位于宿主标题之后
+        if (hostRow.root_id !== targetRow.root_id || Number(targetRow.sort) <= Number(hostRow.sort)) {
+            return false;
+        }
+
+        const hostLevel = parseInt(String(hostRow.subtype || "h1").replace(/\D/g, "") || "1", 10);
+
+        // 检查两者之间是否存在同级或更高级的标题阻断 (sort 位于 host 与 target 之间，且 level <= hostLevel)
+        const checkNextHeadingSql = `
+            SELECT id FROM blocks 
+            WHERE root_id = '${hostRow.root_id}' 
+              AND type = 'h' 
+              AND sort > ${hostRow.sort} 
+              AND sort < ${targetRow.sort} 
+              AND CAST(SUBSTR(subtype, 2) AS INTEGER) <= ${hostLevel} 
+            LIMIT 1
+        `;
+        const checkRes = await post("/api/query/sql", { stmt: checkNextHeadingSql });
+        const checkRows = Array.isArray(checkRes) ? checkRes : (checkRes?.data || []);
+        
+        return checkRows.length === 0;
+    } catch (_) {
+        return false;
+    }
 }
 
 export async function dispatchScopeEvents(
@@ -191,20 +237,9 @@ export async function dispatchScopeEvents(
                                 }
                             }
 
-                            // 4. 思源 blocks 表中的 HeadingParent 语义子树多级检测 (支持段落 -> 列表项 -> 列表容器 -> 标题)
+                            // 4. 思源 SQLite blocks 表真实物理拓扑 (sort 排序序号) 大纲辖区精准核验
                             if (!scopeMatched && targetInfo.id && host.id) {
-                                try {
-                                    const sqlStmt = `
-                                        SELECT id, parent_id FROM blocks 
-                                        WHERE id = '${targetInfo.id}' 
-                                           OR id = '${targetInfo.parent_id}'
-                                    `;
-                                    const headingParentRes = await post("/api/query/sql", { stmt: sqlStmt });
-                                    const hRows = Array.isArray(headingParentRes) ? headingParentRes : (headingParentRes?.data || []);
-                                    if (hRows.some((r: any) => String(r.parent_id) === host.id)) {
-                                        scopeMatched = true;
-                                    }
-                                } catch (_) {}
+                                scopeMatched = await isSqlHeadingSubtree(host.id, targetInfo.id);
                             }
                         }
                     }
@@ -268,7 +303,7 @@ export async function dispatchScopeEvents(
 
                     for (const actualTargetId of targetIds) {
                         // 严格守卫 1: 非 self 作用域下绝不能对宿主自身执行
-                        if (scope !== "self" && (actualTargetId === host.id || actualTargetId === targetInfo.id)) {
+                        if (scope !== "self" && (actualTargetId === host.id || targetInfo.id === host.id)) {
                             continue;
                         }
 

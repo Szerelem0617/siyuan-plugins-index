@@ -58,8 +58,9 @@ export async function resolveTargetBlockInfo(targetBlockId: string): Promise<Tar
                 root_id: String(row.root_id || ""),
                 parent_id: String(row.parent_id || ""),
                 path: String(row.path || ""),
-                type: String(row.type || domType),
-                subType: String(row.subtype || row.subType || domSubType),
+                // 🌟 优先级关键修复：实时 DOM 类型优先于异步写入尚未落盘的 SQL 旧记录
+                type: domType || String(row.type || ""),
+                subType: domSubType || String(row.subtype || row.subType || ""),
                 markdown: String(row.markdown || ""),
                 tags: parseSupertags(String(row.ial || ""))
             };
@@ -115,13 +116,30 @@ export async function resolveTargetBlockInfo(targetBlockId: string): Promise<Tar
         domEl = document.querySelector(`[data-node-id="${targetBlockId}"]`) as HTMLElement | null;
     }
 
-    const closestListItem = domEl?.closest('[data-type="NodeListItem"]');
-    const closestList = domEl?.closest('[data-type="NodeList"]');
+    const closestListItem = domEl?.closest('[data-type="NodeListItem"], .li');
+    const closestList = domEl?.closest('[data-type="NodeList"], .list');
+    const hasChildListItem = Boolean(domEl?.querySelector('[data-type="NodeListItem"], .li'));
 
     let isList = rawInfo.type === "l" || 
                  rawInfo.type === "i" ||
+                 domType === "l" ||
+                 domType === "i" ||
+                 domEl?.getAttribute("data-type") === "NodeList" ||
+                 domEl?.getAttribute("data-type") === "NodeListItem" ||
+                 domEl?.classList.contains("list") ||
+                 domEl?.classList.contains("li") ||
                  Boolean(closestListItem) ||
-                 Boolean(closestList);
+                 Boolean(closestList) ||
+                 hasChildListItem;
+
+    // 若判定为列表且为列表容器，修正 type 为 "l"；若为列表项，修正 type 为 "i"
+    if (isList) {
+        if (domType === "l" || domEl?.getAttribute("data-type") === "NodeList" || hasChildListItem) {
+            rawInfo.type = "l";
+        } else if (domType === "i" || domEl?.getAttribute("data-type") === "NodeListItem" || Boolean(closestListItem)) {
+            rawInfo.type = "i";
+        }
+    }
 
     let parentIsListItem = false;
     if (!isList && rawInfo.parent_id) {
@@ -167,8 +185,8 @@ export async function resolveTargetBlockInfo(targetBlockId: string): Promise<Tar
         } else if (parentIsListItem && rawInfo.parent_id) {
             actualTargetId = rawInfo.parent_id;
         } else if (domEl) {
-            if (rawInfo.type === "l") {
-                const firstLi = domEl.querySelector('[data-type="NodeListItem"]') as HTMLElement | null;
+            if (rawInfo.type === "l" || domEl.getAttribute("data-type") === "NodeList" || hasChildListItem) {
+                const firstLi = domEl.querySelector('[data-type="NodeListItem"], .li') as HTMLElement | null;
                 if (firstLi) {
                     actualTargetId = firstLi.getAttribute("data-node-id") || actualTargetId;
                 }
@@ -176,7 +194,7 @@ export async function resolveTargetBlockInfo(targetBlockId: string): Promise<Tar
         }
     }
 
-    if (rawInfo.type === "l" && actualTargetId === rawInfo.id) {
+    if ((rawInfo.type === "l" || domType === "l") && actualTargetId === rawInfo.id) {
         try {
             const domRes = await post("/api/block/getBlockDOM", { id: rawInfo.id });
             const domHtml = domRes?.data?.dom || domRes?.dom || "";

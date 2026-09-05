@@ -28,6 +28,13 @@ export async function triggerConditionalCommands(
         const hostId = extraContext?.hostBlockId || blockId;
         const targetId = extraContext?.targetBlockId || blockId;
 
+        // 🛡️ 底层执行防护：若规则明确声明为非 self 级联作用域 (如 subtree / inner_blocks)，宿主自身绝不能作为执行目标
+        const isCascadeScope = /Scope:\s*(subtree|inner_blocks|current_doc)/i.test(conditionalVal);
+        if (isCascadeScope && hostId === targetId) {
+            console.log(`[Supertag-Trigger] 🛡️ 底层拦截：规则 #${cleanTag} 声明了级联作用域，不能对宿主自身 ${hostId} 执行动作`);
+            return;
+        }
+
         const doc = document;
         const targetEl = doc.querySelector(`[data-node-id="${targetId}"]`) as HTMLElement || null;
         const hostEl = doc.querySelector(`[data-node-id="${hostId}"]`) as HTMLElement || null;
