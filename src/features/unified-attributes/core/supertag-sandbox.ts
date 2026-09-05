@@ -20,8 +20,10 @@ export async function executeTsScript(scriptText: string, context: CommandContex
         };
 
         const dispatch = async (commandId: string, params?: any) => {
+            console.log(`[Supertag-TS] 动态脚本调用 dispatch: commandId=${commandId}, params=`, params, `context.vars=`, context.vars);
             // TS 脚本参数 = #1 Pipeline 人为规划（最高优先级）
             const res = await dispatchCommand(commandId, null, context, { manual: params || {} });
+            console.log(`[Supertag-TS] dispatchCommand 响应结果:`, res);
 
             if (!context.vars) context.vars = {};
             if (res && typeof res === "object") {

@@ -199,7 +199,9 @@ export async function triggerConditionalCommands(
     extraContext?: { targetBlockId?: string; hostBlockId?: string }
 ): Promise<void> {
     try {
+        console.log(`[Supertag-Trigger] 准备执行条件触发: tag=#${cleanTag}, event=${eventName}, hostId=${extraContext?.hostBlockId || blockId}, targetId=${extraContext?.targetBlockId || blockId}`);
         const conditionalVal = await querySupertagRuleScript(cleanTag);
+        console.log(`[Supertag-Trigger] 查询到规则脚本:`, conditionalVal);
 
         if (conditionalVal) {
             const hostId = extraContext?.hostBlockId || blockId;
@@ -312,6 +314,23 @@ export async function dispatchScopeEvents(
             tags: string[];
         } | null = null;
 
+        let domEl = document.querySelector(`[data-node-id="${targetBlockId}"]`);
+        let domType = "";
+        let domSubType = "";
+
+        if (domEl) {
+            const rawType = domEl.getAttribute("data-type") || "";
+            domSubType = domEl.getAttribute("data-subtype") || "";
+            if (rawType === "NodeList") domType = "l";
+            else if (rawType === "NodeListItem") domType = "i";
+            else if (rawType === "NodeParagraph") domType = "p";
+            else if (rawType === "NodeHeading") domType = "h";
+            else if (rawType === "NodeBlockquote") domType = "b";
+            else if (rawType === "NodeSuperBlock") domType = "sb";
+            else if (rawType === "NodeTable") domType = "table";
+            else if (rawType === "NodeAttributeView") domType = "av";
+        }
+
         // 1. 通过思源官方 HTTP SQL API (/api/query/sql) 查询目标块元数据
         try {
             const sqlRes = await post("/api/query/sql", {
@@ -325,82 +344,102 @@ export async function dispatchScopeEvents(
                     root_id: String(row.root_id || ""),
                     parent_id: String(row.parent_id || ""),
                     path: String(row.path || ""),
-                    type: String(row.type || ""),
-                    subType: String(row.subtype || row.subType || ""),
+                    type: String(row.type || domType),
+                    subType: String(row.subtype || row.subType || domSubType),
                     markdown: String(row.markdown || ""),
                     tags: parseSupertags(String(row.ial || ""))
                 };
-
-                // 🌟 感知：如果当前块位于待办列表项内部，记录父级是否为待办
-                if (targetInfo.type === "p" && targetInfo.parent_id) {
-                    const parentRes = await post("/api/query/sql", {
-                        stmt: `SELECT id, type, subtype FROM blocks WHERE id = '${targetInfo.parent_id}' LIMIT 1`
-                    });
-                    const parentRows = Array.isArray(parentRes) ? parentRes : (parentRes?.data || []);
-                    if (parentRows.length > 0 && (parentRows[0].subtype === "t" || parentRows[0].type === "l" && parentRows[0].subtype === "t")) {
-                        targetInfo.subType = "t";
-                    }
-                }
             }
         } catch (queryErr) {
-            console.warn("[Supertag-Scope] /api/query/sql failed, fallback to getBlockInfo:", queryErr);
+            console.warn("[Supertag-Scope] /api/query/sql failed:", queryErr);
         }
 
-        if (!targetInfo || !targetInfo.root_id || targetInfo.root_id === targetBlockId) {
-            // 通过 getBlockInfo 及 DOM 补齐真实的 root_id 与 parent_id
+        // 2. 若 SQL 尚未建立索引，从 getBlockDOM 及 getBlockInfo 获取第一手实时数据
+        if (!targetInfo) {
             try {
+                let liveType = domType;
+                let liveSubType = domSubType;
+
+                if (!liveType) {
+                    const domRes = await post("/api/block/getBlockDOM", { id: targetBlockId });
+                    const domHtml = domRes?.data?.dom || domRes?.dom || "";
+                    if (domHtml) {
+                        const tpl = document.createElement("template");
+                        tpl.innerHTML = domHtml;
+                        const rootEl = tpl.content.firstElementChild;
+                        if (rootEl) {
+                            const rawType = rootEl.getAttribute("data-type") || "";
+                            liveSubType = rootEl.getAttribute("data-subtype") || "";
+                            if (rawType === "NodeList") liveType = "l";
+                            else if (rawType === "NodeListItem") liveType = "i";
+                            else if (rawType === "NodeParagraph") liveType = "p";
+                            else if (rawType === "NodeHeading") liveType = "h";
+                            else if (rawType === "NodeBlockquote") liveType = "b";
+                            else if (rawType === "NodeSuperBlock") liveType = "sb";
+                            else if (rawType === "NodeTable") liveType = "table";
+                            else if (rawType === "NodeAttributeView") liveType = "av";
+                        }
+                    }
+                }
+
                 const infoRes = await post("/api/block/getBlockInfo", { id: targetBlockId });
                 const rootID = infoRes?.rootID || infoRes?.root_id || "";
                 const parentID = infoRes?.parentID || infoRes?.parent_id || "";
+                const path = infoRes?.path || "";
                 const attrRes = await post("/api/attr/getBlockAttrs", { id: targetBlockId });
                 const ial = attrRes?.["custom-supertags"] || "";
 
-                // DOM 辅助推导
-                const domEl = document.querySelector(`[data-node-id="${targetBlockId}"]`);
-                const isDomTodo = Boolean(domEl?.closest('.li[data-subtype="t"], [data-subtype="t"], [data-task]'));
-
                 targetInfo = {
                     id: targetBlockId,
-                    root_id: rootID || (targetInfo?.root_id && targetInfo.root_id !== targetBlockId ? targetInfo.root_id : (domEl?.closest('[data-doc-id]')?.getAttribute('data-doc-id') || targetBlockId)),
-                    parent_id: parentID || targetInfo?.parent_id || "",
-                    path: targetInfo?.path || "",
-                    type: targetInfo?.type || (isDomTodo ? "i" : "p"),
-                    subType: isDomTodo ? "t" : (targetInfo?.subType || ""),
-                    markdown: targetInfo?.markdown || "",
-                    tags: targetInfo?.tags?.length ? targetInfo.tags : parseSupertags(ial)
+                    root_id: rootID,
+                    parent_id: parentID,
+                    path: path,
+                    type: liveType,
+                    subType: liveSubType,
+                    markdown: "",
+                    tags: parseSupertags(ial)
                 };
-            } catch (_) {
-                if (!targetInfo) return;
+            } catch (err) {
+                console.error("[Supertag-Scope] 实时解析目标块失败:", err);
+                return;
             }
         }
 
-        const domEl = document.querySelector(`[data-node-id="${targetBlockId}"]`);
-        const isDomTodo = Boolean(
-            domEl?.closest('.li[data-subtype="t"], [data-subtype="t"], [data-task], .protyle-action--task') ||
-            domEl?.querySelector('.li[data-subtype="t"], [data-subtype="t"], [data-task], .protyle-action--task')
-        );
+        if (!domEl) {
+            domEl = document.querySelector(`[data-node-id="${targetBlockId}"]`);
+        }
+
+        const closestListItem = domEl?.closest('[data-type="NodeListItem"]');
+        const closestList = domEl?.closest('[data-type="NodeList"]');
+        const childListItem = domEl?.querySelector('[data-type="NodeListItem"]');
+
+        const isList = targetInfo.type === "l" || 
+                       targetInfo.type === "i" ||
+                       Boolean(closestListItem) ||
+                       Boolean(closestList) ||
+                       Boolean(childListItem);
 
         const isTodo = (targetInfo.subType === "t") ||
                        (targetInfo.type === "l" && targetInfo.subType === "t") ||
-                       (targetInfo.type === "i" && targetInfo.subType === "t") || 
-                       targetInfo.markdown.includes("- [ ]") || 
-                       targetInfo.markdown.includes("- [x]") ||
-                       targetInfo.markdown.includes("* [ ]") ||
-                       targetInfo.markdown.includes("* [x]") ||
-                       isDomTodo;
+                       (targetInfo.type === "i" && targetInfo.subType === "t") ||
+                       Boolean(domEl?.closest('.li[data-subtype="t"], [data-subtype="t"], [data-task]'));
+
         const isHeading = targetInfo.type === "h";
         const isParagraph = targetInfo.type === "p";
         const isDoc = targetInfo.type === "d";
         const isAv = targetInfo.type === "av";
 
+        console.log(`[Supertag-Scope] 触发事件: ${eventName}, 目标块Id: ${targetBlockId}, type: ${targetInfo.type}, subType: ${targetInfo.subType}, isList: ${isList}, isTodo: ${isTodo}`);
+
         const matchesFilter = (filter?: string): boolean => {
             if (!filter || filter === "all") return true;
+            if (filter === "list") return isList;
             if (filter === "todo") return isTodo;
             if (filter === "heading") return isHeading;
             if (filter === "paragraph") return isParagraph;
             if (filter === "doc") return isDoc;
             if (filter === "av") return isAv;
-            return true;
+            return false;
         };
 
         // 2. 检索可能作为宿主 (Host) 的所有候选块 (自身、同文档块、祖先文档块)
@@ -466,6 +505,8 @@ export async function dispatchScopeEvents(
             }
         });
 
+        console.log(`[Supertag-Scope] 检索到宿主候选池 (${hostCandidates.length} 个):`, hostCandidates);
+
         // 3. 对每个宿主拥有的 Supertag 规则进行作用域与过滤器核验
         const triggeredKeys = new Set<string>();
 
@@ -490,27 +531,58 @@ export async function dispatchScopeEvents(
                 if (scope === "self") {
                     scopeMatched = (host.id === targetInfo.id);
                 } else if (scope === "current_doc") {
-                    scopeMatched = (host.root_id === targetInfo.root_id || host.id === targetInfo.root_id);
+                    // 仅当目标不是宿主自身时，同文档其他块匹配
+                    scopeMatched = (host.id !== targetInfo.id) && (host.root_id === targetInfo.root_id || host.id === targetInfo.root_id);
                 } else if (scope === "inner_blocks") {
-                    scopeMatched = (targetInfo.parent_id === host.id || (host.id === targetInfo.root_id && targetInfo.id !== host.id));
+                    scopeMatched = (host.id !== targetInfo.id) && (targetInfo.parent_id === host.id || (host.id === targetInfo.root_id));
                 } else if (scope === "subtree") {
-                    scopeMatched = (host.id === targetInfo.id) || 
-                                   (host.id === targetInfo.root_id) || 
-                                   (targetInfo.path && targetInfo.path.includes(host.id));
-                    
-                    // 如果 path 尚在构建中，通过查询文档祖先链补齐检查
-                    if (!scopeMatched && targetInfo.root_id) {
-                        try {
-                            const pathRes = await post("/api/query/sql", {
-                                stmt: `SELECT path FROM blocks WHERE id = '${targetInfo.root_id}' LIMIT 1`
-                            });
-                            const pRows = Array.isArray(pathRes) ? pathRes : (pathRes?.data || []);
-                            if (pRows.length > 0 && String(pRows[0].path || "").includes(host.id)) {
+                    // 1. 若宿主是文档本身，匹配该文档下除了宿主自身外的所有子孙内容
+                    if (host.id === targetInfo.root_id) {
+                        scopeMatched = (host.id !== targetInfo.id);
+                    } else if (host.id !== targetInfo.id) {
+                        // 2. 宿主是块（例如标题块）：检查目标是否直接以 host 为父级，或者处于该标题的折叠子树中
+                        if (targetInfo.parent_id === host.id) {
+                            scopeMatched = true;
+                        } else if (targetInfo.path && targetInfo.path.includes(host.id)) {
+                            scopeMatched = true;
+                        } else if (domEl) {
+                            // DOM 层面排查：若当前块位于以 hostId 为标识的容器内部
+                            const hostDom = document.querySelector(`[data-node-id="${host.id}"]`);
+                            if (hostDom && hostDom.contains(domEl)) {
                                 scopeMatched = true;
                             }
-                        } catch (_) {}
+                        }
+
+                        // 3. 针对思源标题块 (NodeHeading) 的语义子树检测：
+                        // 在思源中，标题下方的块在 SQL blocks 表中的 parent_id 会指向该标题块的 id
+                        if (!scopeMatched && targetInfo.id && host.id) {
+                            try {
+                                const headingParentRes = await post("/api/query/sql", {
+                                    stmt: `SELECT parent_id FROM blocks WHERE id = '${targetInfo.id}' LIMIT 1`
+                                });
+                                const hRows = Array.isArray(headingParentRes) ? headingParentRes : (headingParentRes?.data || []);
+                                if (hRows.length > 0 && String(hRows[0].parent_id) === host.id) {
+                                    scopeMatched = true;
+                                }
+                            } catch (_) {}
+                        }
+
+                        // 4. 文档祖先链路径兜底检测
+                        if (!scopeMatched && targetInfo.root_id) {
+                            try {
+                                const pathRes = await post("/api/query/sql", {
+                                    stmt: `SELECT path FROM blocks WHERE id = '${targetInfo.root_id}' LIMIT 1`
+                                });
+                                const pRows = Array.isArray(pathRes) ? pathRes : (pathRes?.data || []);
+                                if (pRows.length > 0 && String(pRows[0].path || "").includes(host.id)) {
+                                    scopeMatched = true;
+                                }
+                            } catch (_) {}
+                        }
                     }
                 }
+
+                console.log(`[Supertag-Scope] 规则评估: tag=#${cleanTag}, host=${host.id}, scope=${scope}(匹配:${scopeMatched}), filter=${filter}(匹配:${filterMatched})`);
 
                 // 4. 前置断言检查 (Condition Predicate)
                 let conditionMatched = true;
@@ -533,16 +605,35 @@ export async function dispatchScopeEvents(
                 }
 
                 if (filterMatched && scopeMatched && conditionMatched) {
-                    // 如果目标块是列表容器 (type = 'l') 或列表项 (type = 'i')，尝试下寻到具体内容段落块以进行精准打标
+                    // 🌟 列表块适配：优先提权并绑定到列表项 (NodeListItem)，若目标是列表容器，找到其首个列表项
                     let actualTargetId = targetInfo.id;
-                    if ((targetInfo.type === "l" || targetInfo.type === "i") && domEl) {
-                        const childPara = domEl.querySelector('.p[data-node-id]');
-                        if (childPara) {
-                            actualTargetId = childPara.getAttribute("data-node-id") || actualTargetId;
+                    if (domEl) {
+                        const parentLi = domEl.closest('[data-type="NodeListItem"]') as HTMLElement | null;
+                        if (parentLi) {
+                            actualTargetId = parentLi.getAttribute("data-node-id") || actualTargetId;
+                        } else if (targetInfo.type === "l") {
+                            const firstLi = domEl.querySelector('[data-type="NodeListItem"]') as HTMLElement | null;
+                            if (firstLi) {
+                                actualTargetId = firstLi.getAttribute("data-node-id") || actualTargetId;
+                            }
                         }
                     }
 
+                    if (targetInfo.type === "l" && actualTargetId === targetInfo.id) {
+                        try {
+                            const domRes = await post("/api/block/getBlockDOM", { id: targetInfo.id });
+                            const domHtml = domRes?.data?.dom || domRes?.dom || "";
+                            if (domHtml) {
+                                const match = domHtml.match(/data-type="NodeListItem"[^>]*data-node-id="([^"]+)"/);
+                                if (match && match[1]) {
+                                    actualTargetId = match[1];
+                                }
+                            }
+                        } catch (_) {}
+                    }
+
                     const triggerKey = `${host.id}:${cleanTag}:${eventName}:${actualTargetId}`;
+                    console.log(`[Supertag-Scope] 🚀 触发级联执行: triggerKey=${triggerKey}, actualTargetId=${actualTargetId}`);
                     if (!triggeredKeys.has(triggerKey)) {
                         triggeredKeys.add(triggerKey);
                         await triggerConditionalCommands(host.id, cleanTag, eventName, {

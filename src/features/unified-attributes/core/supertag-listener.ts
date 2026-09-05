@@ -122,6 +122,8 @@ export class SupertagMonitor {
                              eventData.action === "insertBlock" || 
                              eventData.action === "append";
 
+            console.log(`[SupertagListener] 队列处理块: ${blockId}, action: ${eventData.action}, isInsert: ${isInsert}`);
+
             if (isInsert) {
                 await this.processBlockCreated(blockId);
             } else {

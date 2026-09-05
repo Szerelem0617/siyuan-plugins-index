@@ -10,7 +10,7 @@ export interface RuleCommand {
 
 export interface EventScopeFilter {
     scope?: "self" | "inner_blocks" | "current_doc" | "subtree";
-    filter?: "all" | "todo" | "doc" | "heading" | "paragraph" | "av";
+    filter?: "all" | "todo" | "list" | "doc" | "heading" | "paragraph" | "av";
     condition?: string;
 }
 
@@ -20,7 +20,7 @@ export interface RuleScript {
     /** Conditional 用：触发事件列表（空 = 不限） */
     events?: string[];
     scope?: "self" | "inner_blocks" | "current_doc" | "subtree";
-    filter?: "all" | "todo" | "doc" | "heading" | "paragraph" | "av";
+    filter?: "all" | "todo" | "list" | "doc" | "heading" | "paragraph" | "av";
     condition?: string;
 }
 

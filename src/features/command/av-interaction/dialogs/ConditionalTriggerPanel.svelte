@@ -34,6 +34,7 @@
 
     const FILTER_OPTIONS = [
         { id: "all", label: "任意内容", icon: "🌐" },
+        { id: "list", label: "列表项", icon: "📝" },
         { id: "todo", label: "待办任务", icon: "☑" },
         { id: "heading", label: "各级标题", icon: "📑" },
         { id: "paragraph", label: "文本段落", icon: "✍️" },
