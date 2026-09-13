@@ -4,6 +4,7 @@ import {
 import { insertAction } from "../features/insert-moc/index/action";
 import { insertOutlineAction } from "../features/insert-moc/outline/action";
 import { i18n, isMobile, plugin } from "../shared/utils";
+import { isDevInitSysEnabled } from "../features/command/registration";
 import SettingsTab from "./components/setting.svelte";
 
 // //tab类型
@@ -42,6 +43,7 @@ export async function initTopbar() {
         langKey: "openSqliteStatus",
         hotkey: "⌥⌘S",
         callback: async () => {
+            if (!isDevInitSysEnabled()) return;
             (plugin as any).openSqliteStatus?.();
         }
     });

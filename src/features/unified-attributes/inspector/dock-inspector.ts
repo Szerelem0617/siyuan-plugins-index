@@ -21,9 +21,11 @@ export function updateDockDom(plugin: Plugin) {
         dockButtons.forEach((btn: any) => {
             if (!isDev) {
                 btn.style.display = "none";
+                btn.classList.add("fn__none");
                 return;
             }
             btn.style.display = "";
+            btn.classList.remove("fn__none");
             btn.setAttribute("aria-label", "属性管理");
             btn.setAttribute("title", "属性管理");
             btn.setAttribute("data-title", "属性管理");
@@ -34,23 +36,30 @@ export function updateDockDom(plugin: Plugin) {
             }
         });
 
-        const dockHeaderTitles = document.querySelectorAll(`.layout-tab-bar .item[data-type="${dockType}"] .item__text, .layout-tab-bar .item[data-type*="indexos_inspector_dock"] .item__text`);
-        dockHeaderTitles.forEach((titleEl: any) => {
-            const item = titleEl.closest(".item");
+        const dockHeaderTitles = document.querySelectorAll(`.layout-tab-bar .item[data-type="${dockType}"], .layout-tab-bar .item[data-type*="indexos_inspector_dock"]`);
+        dockHeaderTitles.forEach((item: any) => {
             if (!isDev) {
-                if (item) item.style.display = "none";
+                item.style.display = "none";
+                item.classList.add("fn__none");
                 return;
             }
-            if (item) item.style.display = "";
-            titleEl.textContent = "属性管理";
-        });
-        const dockHeaderIcons = document.querySelectorAll(`.layout-tab-bar .item[data-type="${dockType}"] use, .layout-tab-bar .item[data-type*="indexos_inspector_dock"] use`);
-        dockHeaderIcons.forEach((useEl: any) => {
-            if (!isDev) return;
-            useEl.setAttribute("xlink:href", "#iconAttr");
-            useEl.setAttribute("href", "#iconAttr");
+            item.style.display = "";
+            item.classList.remove("fn__none");
+            const titleEl = item.querySelector(".item__text");
+            if (titleEl) titleEl.textContent = "属性管理";
+            const useEl = item.querySelector("use");
+            if (useEl) {
+                useEl.setAttribute("xlink:href", "#iconAttr");
+                useEl.setAttribute("href", "#iconAttr");
+            }
         });
     } catch (_) {}
+}
+
+export function destroyDockInspector(plugin: Plugin) {
+    activeBlockTracker.destroy();
+    activeBlockTracker.clearHighlight();
+    updateDockDom(plugin);
 }
 
 export function initDockInspector(plugin: Plugin) {

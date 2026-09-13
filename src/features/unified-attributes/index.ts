@@ -89,6 +89,7 @@ export {
 
 export {
     initDockInspector,
+    destroyDockInspector,
     updateDockDom,
     DOCK_TYPE
 } from "./inspector/dock-inspector";
@@ -109,7 +110,8 @@ export {
 } from "./renderer/SupertagRenderer";
 
 export {
-    initTagMenuInterceptor
+    initTagMenuInterceptor,
+    destroyTagMenuInterceptor
 } from "./renderer/tag-menu-interceptor";
 
 // 6. Suggestion

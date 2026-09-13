@@ -23,7 +23,8 @@ import {
     handleCellUpdateInSQLite,
     dropHotTable
 } from "./hot-table-engine";
-import { installFetchInterceptor } from "./fetch-interceptor";
+import { installFetchInterceptor, uninstallFetchInterceptor } from "./fetch-interceptor";
+import { isDevInitSysEnabled } from "../../command/registration";
 
 import { getTypeAvId, getCommandAvId } from "../../command/registration";
 
@@ -59,7 +60,6 @@ export class SupertagAVProjector implements IVirtualAvDriver {
     public static getInstance(): SupertagAVProjector {
         if (!SupertagAVProjector.instance) {
             SupertagAVProjector.instance = new SupertagAVProjector();
-            SupertagAVProjector.instance.installFetchHook();
             SupertagAVProjector.instance.loadPersistedBindings();
         }
         return SupertagAVProjector.instance;
@@ -69,6 +69,7 @@ export class SupertagAVProjector implements IVirtualAvDriver {
      * 安装 window.fetch 拦截网关
      */
     public installFetchHook() {
+        if (!isDevInitSysEnabled()) return;
         installFetchInterceptor({
             isVirtualProjection: (avId) => this.isVirtualProjection(avId),
             generateVirtualIAVFromSQLite: (avId, page, pageSize) => this.generateVirtualIAVFromSQLite(avId, page, pageSize),
@@ -76,7 +77,15 @@ export class SupertagAVProjector implements IVirtualAvDriver {
         });
     }
 
+    /**
+     * 卸载 window.fetch 拦截网关
+     */
+    public uninstallFetchHook() {
+        uninstallFetchInterceptor();
+    }
+
     public isVirtualProjection(avId: string): boolean {
+        if (!isDevInitSysEnabled()) return false;
         const cleanId = (avId || "").trim();
         if (!cleanId || isSystemDatabase(cleanId)) return false;
         if (!this.bindings.has(cleanId)) return false;
@@ -86,7 +95,7 @@ export class SupertagAVProjector implements IVirtualAvDriver {
         if (this.projectionModes.has(cleanId)) {
             return Boolean(this.projectionModes.get(cleanId));
         }
-        return true; // 默认开启投影视图
+        return false; // 默认展示原生物理数据，避免未经确认越权篡改无关数据库
     }
 
     /** IVirtualAvDriver: isVirtual */

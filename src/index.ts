@@ -26,9 +26,11 @@ import {
     destroySupertagPalette,
     SupertagRenderer, 
     initTagMenuInterceptor,
+    destroyTagMenuInterceptor,
     supertagAVProjector,
     avProjectionToggle,
     initDockInspector,
+    destroyDockInspector,
     updateDockDom,
     activeBlockTracker
 } from "./features/unified-attributes";
@@ -54,6 +56,10 @@ export default class IndexPlugin extends Plugin {
     private switchHandler: any;
     private lastActiveDoc: { rootId: string, notebookId: string, path: string } | null = null;
     private openUrlPluginHandler?: (event: any) => void;
+    private settingChangeHandler?: ((e: CustomEvent) => void) | null = null;
+    private protyleLoadedHandler?: (event: any) => void;
+    private isDevFeaturesEnabled = false;
+    private searchObserver: MutationObserver | null = null;
 
     //加载插件
     async onload() {
@@ -130,75 +136,50 @@ export default class IndexPlugin extends Plugin {
             duplicateContentCmd.dispatch.executor = triggerDuplicateContent;
         }
 
-
-
         this.init();
         await settings.initData();
         addSlash(); // Rebuild slash items after settings are loaded
         await initTopbar();
 
-        if (isDevInitSysEnabled()) {
-            refreshSupertagRegistry();
-            await refreshEntryRegistrations();
-        }
-        // 监听块/页面/编辑器/右键菜单事件
+        // 基础稳定功能：目录构建与自动更新
         this.eventBus.on("click-blockicon", buildDocNew);
-        this.eventBus.on("click-blockicon", addDataMenuItems);
-        this.eventBus.on("click-blockicon", addBlockEntryMenuItems);
-        this.eventBus.on("open-menu-content", addBlockEntryMenuItems);
-        this.eventBus.on("open-menu-doctree", addPageEntryMenuItems);
-        this.eventBus.on("click-editortitleicon", addEditorEntryMenuItems);
-
-        if (isDevInitSysEnabled()) {
-            this.eventBus.on("click-blockicon", addCommandTestMenuItem);
-            this.eventBus.on("open-menu-doctree", addDoctreeMenuItems);
-            this.eventBus.on("click-editortitleicon", addEditorTitleIconMenuItems);
-        }
-        this.eventBus.on("open-menu-av", addAVMenuItems);
-        //监听文档载入事件
         this.eventBus.on("loaded-protyle-static", updateIndex);
-        this.eventBus.on("loaded-protyle-static", (event: any) => {
-            const protyle = event.detail.protyle;
-            if (protyle) {
-                (window as any).activeProtyleInstance = protyle;
-                SupertagRenderer.render(protyle);
-            }
-        });
-        this.eventBus.on("loaded-protyle-dynamic", (event: any) => {
-            const protyle = event.detail.protyle;
-            if (protyle) {
-                (window as any).activeProtyleInstance = protyle;
-                SupertagRenderer.render(protyle);
-            }
-        });
 
         this.switchHandler = this.onTabSwitch.bind(this);
         this.eventBus.on("switch-protyle", this.switchHandler);
 
         initEmojiEvent();
-        avEventHandler.init();
-        supertagMonitor.init(this);
-        protyleMutationWatcher.init();
-        supertagManager.updateState();
-        SupertagRenderer.initAutoObserver();
-        await initSupertagPalette(this);
-        initTagMenuInterceptor();
-        avProjectionToggle.init();
-        backgroundScheduler.init(this);
-        initDockInspector(this);
+        initDockInspector(this); // 注册 dock 类型，内部自动受 devMode 开关控制显隐
 
-        // 监听设置变化事件，实现开发者模式开关实时刷新生效
-        window.addEventListener("index-plugin-setting-changed", (e: CustomEvent) => {
-            if (e.detail?.key === "devMode") {
-                supertagManager.updateState();
-                updateDockDom(this);
+        this.protyleLoadedHandler = (event: any) => {
+            const protyle = event?.detail?.protyle;
+            if (protyle) {
+                (window as any).activeProtyleInstance = protyle;
+                if (this.isDevFeaturesEnabled) {
+                    SupertagRenderer.render(protyle);
+                }
             }
-        });
+        };
+
+        // 严格根据开发者模式加载高级实验功能
         if (isDevInitSysEnabled()) {
-            initInlineButtonListener();
-            initCommandPalette();
-            initButtonLinkListener();
+            await this.enableDevFeatures();
+        } else {
+            updateDockDom(this);
         }
+
+        // 监听设置变化事件，实现开发者模式开关实时双向生效
+        this.settingChangeHandler = (e: CustomEvent) => {
+            if (e.detail?.key === "devMode") {
+                if (e.detail.value) {
+                    this.enableDevFeatures();
+                } else {
+                    this.disableDevFeatures();
+                }
+            }
+        };
+        window.addEventListener("index-plugin-setting-changed", this.settingChangeHandler);
+
         // paste 钩子始终激活：只对 siyuan-btn:// 链接生效，与实验模式无关
         this.eventBus.on("paste", handleBtnPaste);
 
@@ -222,69 +203,142 @@ export default class IndexPlugin extends Plugin {
         };
         this.eventBus.on("open-siyuan-url-plugin", this.openUrlPluginHandler);
 
-
-
         // 初始化 IndexOS 核心 SQLite 引擎与系统元数据底座
         getSqliteEngine().then(async () => {
             console.log("[IndexOS] SQLite Engine Ready. Initializing builtin DB...");
             await initSystemTables();
             // Reload command registry from SQLite (Layer 1)
             await commandRegistry.loadFromDatabase();
-            // Refresh registrations once DB is ready
-            await refreshSupertagRegistry();
-            await refreshEntryRegistrations();
-            await syncGlobalSupertagsCache();
+            if (this.isDevFeaturesEnabled) {
+                await refreshSupertagRegistry();
+                await refreshEntryRegistrations();
+                await syncGlobalSupertagsCache();
+            }
             
             // 广播 indexos-ready 全局事件通知第三方插件
             window.dispatchEvent(new CustomEvent("indexos-ready", { detail: (window as any).indexOS }));
         }).catch(e => console.error("[SQLite] Preload failed", e));
+    }
 
-        if (isDevInitSysEnabled()) {
-            this.registerSqliteEntry();
+    /**
+     * 启用开发者模式高级实验功能（Supertag、AV 投影、命令系统与 SQLite 控制台）
+     */
+    public async enableDevFeatures() {
+        if (this.isDevFeaturesEnabled) return;
+        this.isDevFeaturesEnabled = true;
+        console.log("[IndexOS] Enabling Developer Mode features...");
+
+        // 1. Supertag 系统
+        supertagMonitor.init(this);
+        protyleMutationWatcher.init();
+        supertagManager.updateState();
+        SupertagRenderer.initAutoObserver();
+        await initSupertagPalette(this);
+        initTagMenuInterceptor();
+        activeBlockTracker.init();
+        updateDockDom(this);
+
+        // 2. 数据库与投影系统
+        supertagAVProjector.installFetchHook();
+        avProjectionToggle.init();
+        avEventHandler.init();
+
+        // 3. 命令系统与 SQLite
+        refreshSupertagRegistry();
+        await refreshEntryRegistrations();
+        initInlineButtonListener();
+        initCommandPalette();
+        initButtonLinkListener();
+        backgroundScheduler.init(this);
+        this.registerSqliteEntry();
+
+        // 4. 事件监听挂载
+        this.eventBus.on("click-blockicon", addDataMenuItems);
+        this.eventBus.on("click-blockicon", addBlockEntryMenuItems);
+        this.eventBus.on("click-blockicon", addCommandTestMenuItem);
+        this.eventBus.on("open-menu-content", addBlockEntryMenuItems);
+        this.eventBus.on("open-menu-doctree", addPageEntryMenuItems);
+        this.eventBus.on("open-menu-doctree", addDoctreeMenuItems);
+        this.eventBus.on("click-editortitleicon", addEditorEntryMenuItems);
+        this.eventBus.on("click-editortitleicon", addEditorTitleIconMenuItems);
+        this.eventBus.on("open-menu-av", addAVMenuItems);
+
+        if (this.protyleLoadedHandler) {
+            this.eventBus.on("loaded-protyle-static", this.protyleLoadedHandler);
+            this.eventBus.on("loaded-protyle-dynamic", this.protyleLoadedHandler);
+        }
+
+        const activeProtyle = (window as any).activeProtyleInstance;
+        if (activeProtyle) {
+            SupertagRenderer.render(activeProtyle);
         }
     }
-    // onLayoutReady() {
-    //     initObserver();
-    // }
 
-    onunload() {
-        this.eventBus.off("click-blockicon", buildDocNew);
+    /**
+     * 禁用并彻底清理开发者模式高级实验功能，还原纯净环境
+     */
+    public disableDevFeatures() {
+        if (!this.isDevFeaturesEnabled) return;
+        this.isDevFeaturesEnabled = false;
+        console.log("[IndexOS] Disabling Developer Mode features and cleaning up...");
+
+        // 1. 解绑事件总线
         this.eventBus.off("click-blockicon", addDataMenuItems);
-        if (isDevInitSysEnabled()) {
-            this.eventBus.off("click-blockicon", addCommandTestMenuItem);
-            this.eventBus.off("click-blockicon", addBlockEntryMenuItems);
-            this.eventBus.off("open-menu-content", addBlockEntryMenuItems);
-            this.eventBus.off("open-menu-doctree", addDoctreeMenuItems);
-            this.eventBus.off("open-menu-doctree", addPageEntryMenuItems);
-            this.eventBus.off("click-editortitleicon", addEditorTitleIconMenuItems);
-            this.eventBus.off("click-editortitleicon", addEditorEntryMenuItems);
-        }
+        this.eventBus.off("click-blockicon", addBlockEntryMenuItems);
+        this.eventBus.off("click-blockicon", addCommandTestMenuItem);
+        this.eventBus.off("open-menu-content", addBlockEntryMenuItems);
+        this.eventBus.off("open-menu-doctree", addPageEntryMenuItems);
+        this.eventBus.off("open-menu-doctree", addDoctreeMenuItems);
+        this.eventBus.off("click-editortitleicon", addEditorEntryMenuItems);
+        this.eventBus.off("click-editortitleicon", addEditorTitleIconMenuItems);
         this.eventBus.off("open-menu-av", addAVMenuItems);
-        this.eventBus.off("loaded-protyle-static", updateIndex);
-        this.eventBus.off("switch-protyle", this.switchHandler);
-        removeEmojiEvent();
+
+        if (this.protyleLoadedHandler) {
+            this.eventBus.off("loaded-protyle-static", this.protyleLoadedHandler);
+            this.eventBus.off("loaded-protyle-dynamic", this.protyleLoadedHandler);
+        }
+
+        // 2. 命令系统与 SQLite 清理
+        this.unregisterSqliteEntry();
+        destroyInlineButtonListener();
+        destroyCommandPalette();
+        destroyButtonLinkListener();
+        destroyEntryRegistrations();
+        backgroundScheduler.stop();
+
+        // 3. 数据库与投影系统清理
+        avProjectionToggle.destroy();
+        supertagAVProjector.uninstallFetchHook();
         avEventHandler.destroy();
+
+        // 4. Supertag 系统彻底清理
+        destroyTagMenuInterceptor();
+        destroySupertagPalette();
+        SupertagRenderer.destroyAutoObserver();
+        SupertagRenderer.clearAllPills();
         supertagMonitor.destroy();
         protyleMutationWatcher.destroy();
         supertagManager.destroy();
-        avProjectionToggle.destroy();
-        if (isDevInitSysEnabled()) {
-            destroyInlineButtonListener();
-            destroyCommandPalette();
-            destroyButtonLinkListener();
-            destroyEntryRegistrations();
-        }
-        destroySupertagPalette();
-        backgroundScheduler.stop();
+        destroyDockInspector(this);
+    }
+
+    onunload() {
+        // 1. 彻底禁用与清理所有开发者模式功能
+        this.disableDevFeatures();
+
+        // 2. 清理基础功能监听器
+        this.eventBus.off("click-blockicon", buildDocNew);
+        this.eventBus.off("loaded-protyle-static", updateIndex);
+        this.eventBus.off("switch-protyle", this.switchHandler);
+        removeEmojiEvent();
         this.eventBus.off("paste", handleBtnPaste);
         if (this.openUrlPluginHandler) {
             this.eventBus.off("open-siyuan-url-plugin", this.openUrlPluginHandler);
         }
 
-        // Remove Search bar event listener to prevent hot reload leakage
-        const btn = document.querySelector("#barSearch");
-        if (btn) {
-            btn.removeEventListener("mousedown", this.handleSearchMouseDown, true);
+        if (this.settingChangeHandler) {
+            window.removeEventListener("index-plugin-setting-changed", this.settingChangeHandler);
+            this.settingChangeHandler = null;
         }
 
         console.log("IndexPlugin onunload");
@@ -308,9 +362,13 @@ export default class IndexPlugin extends Plugin {
                     notebookId: detail.protyle.notebookId,
                     path: detail.protyle.path
                 };
-                activeBlockTracker.forceInspectDocRoot(detail.protyle.block.rootID);
+                if (this.isDevFeaturesEnabled) {
+                    activeBlockTracker.forceInspectDocRoot(detail.protyle.block.rootID);
+                }
             }
-            SupertagRenderer.render(detail.protyle);
+            if (this.isDevFeaturesEnabled) {
+                SupertagRenderer.render(detail.protyle);
+            }
         }
     }
 
@@ -330,25 +388,28 @@ export default class IndexPlugin extends Plugin {
         setI18n(this.i18n);
         setPlugin(this);
         addSlash();
-        // console.log(this.getOpenedTab());
     }
 
-    //输出事件detail
-    // private eventBusLog({detail}: any) {
-    //     console.log(detail);
-    // }
     async openSetting() {
         await createDialog();
     }
 
     private handleSearchMouseDown = (e: MouseEvent) => {
-        if (e.altKey) {
+        if (e.altKey && this.isDevFeaturesEnabled) {
             e.stopPropagation();
             e.preventDefault();
-            
             this.openSqliteStatus();
         }
-    }
+    };
+
+    private handleSqliteKeydown = (e: KeyboardEvent) => {
+        if (!this.isDevFeaturesEnabled) return;
+        if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === "s" || e.key === "S")) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.openSqliteStatus();
+        }
+    };
 
     private registerSqliteEntry() {
         const addListener = () => {
@@ -360,20 +421,28 @@ export default class IndexPlugin extends Plugin {
             return false;
         };
         if (!addListener()) {
-            const observer = new MutationObserver(() => {
-                if (addListener()) observer.disconnect();
+            this.searchObserver = new MutationObserver(() => {
+                if (addListener()) {
+                    this.searchObserver?.disconnect();
+                    this.searchObserver = null;
+                }
             });
-            observer.observe(document.body, { childList: true, subtree: true });
+            this.searchObserver.observe(document.body, { childList: true, subtree: true });
         }
 
-        // 全局快捷键监听: Cmd + Alt + S / Ctrl + Alt + S 呼出数据库管理面板
-        window.addEventListener("keydown", (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === "s" || e.key === "S")) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.openSqliteStatus();
-            }
-        }, true);
+        window.addEventListener("keydown", this.handleSqliteKeydown, true);
+    }
+
+    private unregisterSqliteEntry() {
+        const btn = document.querySelector("#barSearch");
+        if (btn) {
+            btn.removeEventListener("mousedown", this.handleSearchMouseDown, true);
+        }
+        if (this.searchObserver) {
+            this.searchObserver.disconnect();
+            this.searchObserver = null;
+        }
+        window.removeEventListener("keydown", this.handleSqliteKeydown, true);
     }
 
     public openSqliteStatus() {
@@ -394,3 +463,4 @@ export default class IndexPlugin extends Plugin {
     }
 
 }
+

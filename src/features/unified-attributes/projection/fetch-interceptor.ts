@@ -7,6 +7,7 @@ export interface FetchInterceptorHandler {
 }
 
 let isHookInstalled = false;
+let originalFetch: typeof window.fetch | null = null;
 
 /**
  * 安装 window.fetch 拦截器网关
@@ -14,10 +15,10 @@ let isHookInstalled = false;
 export function installFetchInterceptor(handler: FetchInterceptorHandler) {
     if (isHookInstalled || typeof window === "undefined") return;
     isHookInstalled = true;
-
-    const originalFetch = window.fetch;
+    originalFetch = window.fetch;
 
     window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+        if (!originalFetch) return fetch(input, init);
         try {
             const url = typeof input === "string" ? input : (input instanceof Request ? input.url : input.toString());
 
@@ -53,13 +54,6 @@ export function installFetchInterceptor(handler: FetchInterceptorHandler) {
                             headers: { "Content-Type": "application/json" }
                         });
                     }
-                } else {
-                    setTimeout(async () => {
-                        try {
-                            const { avProjectionToggle } = await import("./av-projection-toggle");
-                            avProjectionToggle.scanAndMountToggles();
-                        } catch (_) {}
-                    }, 60);
                 }
             }
 
@@ -123,3 +117,17 @@ export function installFetchInterceptor(handler: FetchInterceptorHandler) {
 
     console.log(`🚀 [FetchInterceptor] 热 SQLite 拦截网关已就绪 (SQL驱动 + 零磁盘双存)`);
 }
+
+/**
+ * 卸载 window.fetch 拦截器网关并恢复原生 fetch
+ */
+export function uninstallFetchInterceptor() {
+    if (!isHookInstalled || typeof window === "undefined") return;
+    if (originalFetch) {
+        window.fetch = originalFetch;
+        originalFetch = null;
+    }
+    isHookInstalled = false;
+    console.log(`🛑 [FetchInterceptor] 拦截网关已完全卸载，恢复原生 fetch`);
+}
+

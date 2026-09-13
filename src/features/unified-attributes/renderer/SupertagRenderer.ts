@@ -1,7 +1,7 @@
 import { post } from "../../../shared/api-client/request";
 import { showMessage } from "siyuan";
 import { supertagMonitor } from "../core/supertag-listener";
-import { globalSupertagsCache, SUPERTAG_REGISTRY, getLayer2CommandDisplayName } from "../../command/registration";
+import { globalSupertagsCache, SUPERTAG_REGISTRY, getLayer2CommandDisplayName, isDevInitSysEnabled } from "../../command/registration";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
 import { evaluateCondition } from "../core/condition-evaluator";
 import { dispatchCommand } from "../../command/command-dispatcher";
@@ -9,6 +9,7 @@ import { commandRegistry } from "../../command/registry/command-registry";
 
 export class SupertagRenderer {
     private static isObserverInit = false;
+    private static observer: MutationObserver | null = null;
 
     /**
      * 初始化前端 MutationObserver 监听器。
@@ -16,13 +17,21 @@ export class SupertagRenderer {
      * 自动在前端实时挂载渲染 Supertag 胶囊药丸，无需后端轮询或复杂 API 调用。
      */
     public static initAutoObserver() {
+        if (!isDevInitSysEnabled()) {
+            this.destroyAutoObserver();
+            return;
+        }
         if (this.isObserverInit) return;
         this.isObserverInit = true;
 
         let timer: any = null;
         const pendingBlocks = new Set<HTMLElement>();
 
-        const observer = new MutationObserver((mutations) => {
+        this.observer = new MutationObserver((mutations) => {
+            if (!isDevInitSysEnabled()) {
+                this.destroyAutoObserver();
+                return;
+            }
             let hasCustomChange = false;
 
             for (const m of mutations) {
@@ -57,7 +66,7 @@ export class SupertagRenderer {
             }, 30);
         });
 
-        observer.observe(document.body, {
+        this.observer.observe(document.body, {
             childList: true,
             subtree: true,
             attributes: true
@@ -65,9 +74,32 @@ export class SupertagRenderer {
     }
 
     /**
+     * 停止监听器并清除界面所有 Supertag 胶囊药丸
+     */
+    public static destroyAutoObserver() {
+        if (this.observer) {
+            this.observer.disconnect();
+            this.observer = null;
+        }
+        this.isObserverInit = false;
+        this.clearAllPills();
+    }
+
+    /**
+     * 清理页面上所有 Supertag 相关的 DOM 元素
+     */
+    public static clearAllPills() {
+        document.querySelectorAll(".indexos-supertag-container, .indexos-supertag-pill, .indexos-supertag-wrapper").forEach(el => el.remove());
+    }
+
+    /**
      * Scan the editor and render tags for the page and its blocks.
      */
     public static async render(protyle: any) {
+        if (!isDevInitSysEnabled()) {
+            this.clearAllPills();
+            return;
+        }
         if (!protyle || !protyle.element) return;
         const docId = protyle.block?.id || protyle.blockId;
         if (!docId) return;

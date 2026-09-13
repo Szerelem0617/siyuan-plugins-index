@@ -1,6 +1,6 @@
 import { post } from "../../../shared/api-client/request";
 import { supertagMonitor } from "../core/supertag-listener";
-import { SUPERTAG_REGISTRY, globalSupertagsCache } from "../../command/registration";
+import { SUPERTAG_REGISTRY, globalSupertagsCache, isDevInitSysEnabled } from "../../command/registration";
 import { SupertagRenderer } from "./SupertagRenderer";
 import { parseSupertags, serializeSupertags } from "../core/supertag-diff";
 import { getGlobalTypeConfigs } from "../../av/av-setting/db-config";
@@ -194,8 +194,20 @@ function transformTagMenu(menuFilter: HTMLElement, inputEl: HTMLInputElement) {
     });
 }
 
+let tagMenuObserver: MutationObserver | null = null;
+
 export function initTagMenuInterceptor() {
-    const observer = new MutationObserver((mutations) => {
+    if (!isDevInitSysEnabled()) {
+        destroyTagMenuInterceptor();
+        return;
+    }
+    if (tagMenuObserver) return;
+
+    tagMenuObserver = new MutationObserver((mutations) => {
+        if (!isDevInitSysEnabled()) {
+            destroyTagMenuInterceptor();
+            return;
+        }
         for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
                 if (node.nodeType === 1) {
@@ -212,5 +224,17 @@ export function initTagMenuInterceptor() {
         }
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    tagMenuObserver.observe(document.body, { childList: true, subtree: true });
 }
+
+export function destroyTagMenuInterceptor() {
+    if (tagMenuObserver) {
+        tagMenuObserver.disconnect();
+        tagMenuObserver = null;
+    }
+    document.querySelectorAll(".indexos-supertags-panel").forEach(el => el.remove());
+    document.querySelectorAll(".indexos-transformed").forEach(el => {
+        el.classList.remove("indexos-transformed");
+    });
+}
+

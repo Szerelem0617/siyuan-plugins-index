@@ -15,13 +15,14 @@
 import { supertagAVProjector } from "./supertag-av-projector";
 import { supertagBinder } from "../core/supertag-binder";
 import { post } from "../../../shared/api-client/request";
-import { getTypeAvId, getCommandAvId } from "../../command/registration";
+import { getTypeAvId, getCommandAvId, isDevInitSysEnabled } from "../../command/registration";
 
 export class AVProjectionToggleManager {
     private static instance: AVProjectionToggleManager | null = null;
     private observer: MutationObserver | null = null;
     private isObserving = false;
     private sqlCheckingAvIds = new Set<string>();
+    private resizeHandler: (() => void) | null = null;
 
     public static getInstance(): AVProjectionToggleManager {
         if (!AVProjectionToggleManager.instance) {
@@ -31,6 +32,10 @@ export class AVProjectionToggleManager {
     }
 
     public init() {
+        if (!isDevInitSysEnabled()) {
+            this.destroy();
+            return;
+        }
         if (this.isObserving || typeof window === "undefined") return;
         this.isObserving = true;
 
@@ -52,7 +57,8 @@ export class AVProjectionToggleManager {
         });
 
         // 窗口尺寸变化与全局点击时兜底补齐扫描
-        window.addEventListener("resize", () => this.scanAndMountToggles(), { passive: true });
+        this.resizeHandler = () => this.scanAndMountToggles();
+        window.addEventListener("resize", this.resizeHandler, { passive: true });
     }
 
     public destroy() {
@@ -60,11 +66,19 @@ export class AVProjectionToggleManager {
             this.observer.disconnect();
             this.observer = null;
         }
+        if (this.resizeHandler) {
+            window.removeEventListener("resize", this.resizeHandler);
+            this.resizeHandler = null;
+        }
         this.isObserving = false;
         document.querySelectorAll(".indexos-av-mode-toggle").forEach(el => el.remove());
     }
 
     public scanAndMountToggles() {
+        if (!isDevInitSysEnabled()) {
+            this.destroy();
+            return;
+        }
         // 查找页面中所有 AV 节点
         const avHeaders = document.querySelectorAll(".av__header");
         const avBlocks = document.querySelectorAll(".av, div[data-type='NodeAttributeView']");

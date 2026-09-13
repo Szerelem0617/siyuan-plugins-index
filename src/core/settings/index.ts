@@ -73,6 +73,7 @@ export class SettingsProperty {
 
 class Settings {
     async initData() {
+        if (!plugin) return;
         await this.load();
         if (plugin.data[CONFIG] === "" || plugin.data[CONFIG] === undefined || plugin.data[CONFIG] === null) {
             await plugin.saveData(CONFIG, new SettingsProperty());
@@ -100,29 +101,31 @@ class Settings {
     }
 
     set(key: any, value: any, config = CONFIG) {
+        if (!plugin) return;
         if (!plugin.data) plugin.data = {};
         if (!plugin.data[config]) plugin.data[config] = {};
         plugin.data[config][key] = value;
     }
 
     get(key: any, config = CONFIG) {
-        return plugin.data?.[config]?.[key];
+        return plugin?.data?.[config]?.[key];
     }
 
     async load(config = CONFIG) {
+        if (!plugin) return;
         await plugin.loadData(config);
         if (!plugin.data) plugin.data = {};
         if (!plugin.data[config]) plugin.data[config] = {};
     }
 
     async save(config = CONFIG) {
-        if (!plugin.data || !plugin.data[config]) return;
+        if (!plugin?.data || !plugin.data[config]) return;
         await plugin.saveData(config, plugin.data[config]);
     }
 
     getMergedConfig(localData: any) {
         const def = new SettingsProperty();
-        const global = plugin.data[CONFIG] || {};
+        const global = plugin?.data?.[CONFIG] || {};
 
         let linkType = localData.linkType ?? global.linkType ?? def.linkType;
         if (linkType === "ref") linkType = "link";
@@ -151,7 +154,7 @@ class Settings {
 
     getMergedConfigForOutline(localData: any) {
         const def = new SettingsProperty();
-        const global = plugin.data[CONFIG] || {};
+        const global = plugin?.data?.[CONFIG] || {};
 
         let outlineType = localData.outlineType ?? global.outlineType ?? def.outlineType;
         if (outlineType === "ref") outlineType = "link";
