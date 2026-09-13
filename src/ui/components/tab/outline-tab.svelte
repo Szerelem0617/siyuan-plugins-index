@@ -47,6 +47,12 @@
         settingValue={settingsStrings.iconOutline}
     />
     <SettingItem
+        type="range"
+        content={i18n.settingsTab.items.depthOutline}
+        settingKey="depthOutline"
+        settingValue={settingsStrings.depthOutline}
+    />
+    <SettingItem
         type="switch"
         content={i18n.settingsTab.items.outlineAutoUpdate}
         settingKey="outlineAutoUpdate"

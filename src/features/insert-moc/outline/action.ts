@@ -37,7 +37,7 @@ export async function insertOutlineAction(targetBlockId?: string) {
         if (localSettings.useDynamicAnchorOutline === true && localSettings.outlineType !== "dynamic-ref") localSettings.outlineType = "dynamic-ref";
         delete localSettings.useDynamicAnchorOutline;
 
-        const keysToCheck = ["outlineType", "listTypeOutline", "iconOutline"];
+        const keysToCheck = ["depthOutline", "outlineType", "listTypeOutline", "iconOutline"];
         let mismatch = false;
         for (const key of keysToCheck) {
             if (localSettings[key] !== settings.get(key)) {
@@ -59,11 +59,11 @@ export async function insertOutlineAction(targetBlockId?: string) {
 
     }
 
-    let outlineData = await requestGetDocOutline(parentId);
-    let ids = collectOutlineIds(outlineData);
-    let extraData = await getBlocksData(ids);
-
     const currentConfig = forceLocalConfig || settings.getMergedConfigForOutline({});
+
+    let outlineData = await requestGetDocOutline(parentId);
+    let ids = collectOutlineIds(outlineData, [], 0, currentConfig.depthOutline);
+    let extraData = await getBlocksData(ids);
 
     // Manual insert: Pass empty map to reset anchors
     let data = generateOutlineMarkdown(outlineData, 0, 0, extraData, new Map<string, string>(), currentConfig);
@@ -134,7 +134,7 @@ export async function autoUpdateOutline(parentId: string, existingBlock?: any) {
         if (!localConfig.outlineAutoUpdate) return;
 
         let outlineData = await requestGetDocOutline(parentId);
-        let ids = collectOutlineIds(outlineData);
+        let ids = collectOutlineIds(outlineData, [], 0, localConfig.depthOutline);
         let extraData = await getBlocksData(ids);
 
         let data = generateOutlineMarkdown(outlineData, 0, 0, extraData, existingAnchors, localConfig);

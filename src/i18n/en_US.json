@@ -107,6 +107,13 @@
         "title": "Rich Text Sync",
         "content": "Sync rich text content for headings"
       },
+      "depthOutline": {
+        "title": "Outline Depth",
+        "content": "Max depth for outline (0 for infinite)",
+        "min": 0,
+        "max": 6,
+        "step": 1
+      },
       "outlineAutoUpdate": {
         "title": "Outline Auto Update",
         "content": "Auto update outline on doc load"

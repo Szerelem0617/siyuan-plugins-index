@@ -19,6 +19,7 @@ import { commandRegistry } from "./features/command/registry/command-registry";
 import { dispatchCommand } from "./features/command/command-dispatcher";
 import { 
     supertagMonitor, 
+    protyleMutationWatcher,
     supertagManager, 
     supertagBinder,
     initSupertagPalette, 
@@ -177,6 +178,7 @@ export default class IndexPlugin extends Plugin {
         initEmojiEvent();
         avEventHandler.init();
         supertagMonitor.init(this);
+        protyleMutationWatcher.init();
         supertagManager.updateState();
         SupertagRenderer.initAutoObserver();
         await initSupertagPalette(this);
@@ -263,6 +265,7 @@ export default class IndexPlugin extends Plugin {
         removeEmojiEvent();
         avEventHandler.destroy();
         supertagMonitor.destroy();
+        protyleMutationWatcher.destroy();
         supertagManager.destroy();
         avProjectionToggle.destroy();
         if (isDevInitSysEnabled()) {

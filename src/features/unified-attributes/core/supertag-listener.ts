@@ -24,7 +24,6 @@ export class SupertagMonitor {
     private plugin: any = null;
     private wsHandler: any = null;
     private dbSyncDebounceTimer: any = null;
-    private hintClickHandler: any = null;
 
     public init(plugin: any) {
         this.plugin = plugin;
@@ -64,42 +63,6 @@ export class SupertagMonitor {
         if (plugin?.eventBus) {
             plugin.eventBus.on("ws-main", this.wsHandler);
         }
-
-        // 🌟 捕获阶段监听 Slash 菜单 (protyle-hint) 鼠标点击选项，彻底解决鼠标点击不触发级联的问题
-        this.hintClickHandler = (event: MouseEvent) => {
-            const btn = (event.target as HTMLElement)?.closest(".protyle-hint button") as HTMLElement;
-            if (!btn) return;
-            const dataId = btn.getAttribute("data-id") || "";
-            const dataValue = btn.getAttribute("data-value") || "";
-
-            const isListAction = dataId === "list" || dataId === "orderedList" || dataId === "check" ||
-                                 dataValue.includes("- ") || dataValue.includes("1. ") || dataValue.includes("- [ ]");
-
-            if (isListAction) {
-                setTimeout(() => {
-                    const selection = window.getSelection();
-                    let activeEl: HTMLElement | null = null;
-                    if (selection && selection.anchorNode) {
-                        let node: Node | null = selection.anchorNode;
-                        if (node.nodeType !== Node.ELEMENT_NODE) node = node.parentElement;
-                        activeEl = (node as HTMLElement)?.closest("[data-node-id]") || null;
-                    }
-                    if (!activeEl) {
-                        activeEl = document.querySelector('.protyle-wysiwyg--select, [data-type="NodeListItem"].li--focus, [data-type="NodeListItem"]') as HTMLElement;
-                    }
-
-                    if (activeEl) {
-                        const targetLi = activeEl.closest('[data-type="NodeListItem"]') || activeEl;
-                        const blockId = targetLi.getAttribute("data-node-id");
-                        if (blockId) {
-                            console.log(`[SupertagListener] 捕获 Slash 鼠标点击列表项: ${blockId}`);
-                            this.handleBlockUpdatedEvent({ id: blockId, action: "update" });
-                        }
-                    }
-                }, 80);
-            }
-        };
-        document.addEventListener("click", this.hintClickHandler, true);
     }
 
     private triggerSupertagDbSync() {
@@ -124,10 +87,6 @@ export class SupertagMonitor {
         if (this.plugin?.eventBus && this.wsHandler) {
             this.plugin.eventBus.off("ws-main", this.wsHandler);
             this.wsHandler = null;
-        }
-        if (this.hintClickHandler) {
-            document.removeEventListener("click", this.hintClickHandler, true);
-            this.hintClickHandler = null;
         }
     }
 

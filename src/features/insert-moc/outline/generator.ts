@@ -23,21 +23,34 @@ function extractHeadingContent(markdown: string) {
     return content;
 }
 
+export interface OutlineConfig {
+    depthOutline?: number;
+    outlineType?: string;
+    listTypeOutline?: string;
+    iconOutline?: boolean;
+    outlineAutoUpdate?: boolean;
+}
+
 export function generateOutlineMarkdown(
     outlineData: any[],
     tab: number,
     stab: number,
     extraData?: Record<string, { ial: string, markdown: string, content: string }>,
     existingAnchors?: Map<string, string>,
-    config?: any
+    config?: OutlineConfig
 ): string {
+    const depth = config?.depthOutline !== undefined ? config.depthOutline : (settings.get("depthOutline") ?? 0);
+    const currentDepth = tab - stab;
+    if (depth !== 0 && currentDepth >= depth) return "";
+
     let data = "";
     tab++;
 
     const effectiveConfig = {
         outlineType: config?.outlineType ?? settings.get("outlineType"),
         listTypeOutline: config?.listTypeOutline ?? settings.get("listTypeOutline"),
-        iconOutline: config?.iconOutline ?? settings.get("iconOutline")
+        iconOutline: config?.iconOutline ?? settings.get("iconOutline"),
+        depthOutline: depth
     };
 
     const renderContext: RenderContext = {

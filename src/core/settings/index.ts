@@ -13,6 +13,7 @@ export class SettingsProperty {
     outlineAutoUpdate: boolean;
     outlineType: string;
     listTypeOutline: string;
+    depthOutline: number;
 
     depthNotebook: number;
     listTypeNotebook: string;
@@ -34,6 +35,7 @@ export class SettingsProperty {
         this.outlineAutoUpdate = true;
         this.outlineType = "link";
         this.listTypeOutline = "unordered";
+        this.depthOutline = 0;
 
         this.depthNotebook = 3;
         this.listTypeNotebook = "unordered";
@@ -56,6 +58,7 @@ export class SettingsProperty {
         this.outlineAutoUpdate = settings.get("outlineAutoUpdate");
         this.outlineType = settings.get("outlineType");
         this.listTypeOutline = settings.get("listTypeOutline");
+        this.depthOutline = settings.get("depthOutline") ?? 0;
 
         this.depthNotebook = settings.get("depthNotebook") ?? 3;
         this.listTypeNotebook = settings.get("listTypeNotebook") ?? "unordered";
@@ -157,6 +160,7 @@ class Settings {
 
         const merged = {
             outlineType: outlineType,
+            depthOutline: localData.depthOutline ?? global.depthOutline ?? def.depthOutline,
             outlineAutoUpdate: localData.outlineAutoUpdate ?? global.outlineAutoUpdate ?? def.outlineAutoUpdate,
             listTypeOutline: localData.listTypeOutline ?? global.listTypeOutline ?? def.listTypeOutline,
             iconOutline: localData.iconOutline ?? global.iconOutline ?? def.iconOutline,

@@ -9,11 +9,13 @@ export async function requestGetDocOutline(blockId: string) {
     return result;
 }
 
-export function collectOutlineIds(outlineData: any[], ids: string[] = []) {
+export function collectOutlineIds(outlineData: any[], ids: string[] = [], currentDepth = 0, maxDepth = 0) {
+    if (maxDepth !== 0 && currentDepth >= maxDepth) return ids;
+    currentDepth++;
     for (const item of outlineData) {
         ids.push(item.id);
-        if (item.blocks) collectOutlineIds(item.blocks, ids);
-        if (item.children) collectOutlineIds(item.children, ids);
+        if (item.blocks) collectOutlineIds(item.blocks, ids, currentDepth, maxDepth);
+        if (item.children) collectOutlineIds(item.children, ids, currentDepth, maxDepth);
     }
     return ids;
 }

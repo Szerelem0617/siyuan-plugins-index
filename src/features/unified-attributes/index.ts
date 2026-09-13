@@ -11,6 +11,11 @@ export {
 } from "./core/supertag-listener";
 
 export {
+    ProtyleMutationWatcher,
+    protyleMutationWatcher
+} from "./core/protyle-mutation-watcher";
+
+export {
     SupertagBinder,
     supertagBinder
 } from "./core/supertag-binder";
