@@ -82,7 +82,6 @@
             targetScript = sequenceEditorRef.getScript();
         }
 
-        console.log("[CompositeSave-Debug] 💾 handleSave 触发！targetScript:", JSON.stringify(targetScript));
         const rule = parseRuleScript(targetScript);
 
         if (!rule || !rule.commands || rule.commands.length === 0) {

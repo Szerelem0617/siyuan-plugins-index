@@ -41,7 +41,6 @@ export function initSupertagPalette(_plugin: Plugin) {
         keyListenerAttached = true;
     }
     document.addEventListener("mousedown", onOutsideClick, true);
-    console.log("[SupertagPalette] Initialized (@ trigger mode).");
 }
 
 export function destroySupertagPalette() {
@@ -59,7 +58,6 @@ export function destroySupertagPalette() {
     inputListenerAttached = false;
     keyListenerAttached = false;
     isComposing = false;
-    console.log("[SupertagPalette] Destroyed.");
 }
 
 function onCompositionStart() {

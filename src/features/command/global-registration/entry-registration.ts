@@ -97,7 +97,6 @@ function syncNativeCommands(ids: string[]) {
                 callback
             });
             registeredNativeCommands.add(id);
-            console.log(`[Entry] 原生命令面板注册 ${id}`);
         } catch (e) {
             console.error(`[Entry] 原生命令面板注册失败 ${id}:`, e);
         }
@@ -185,7 +184,6 @@ export async function refreshEntryRegistrations() {
     }
 
     applyEntryUpdates(newTopBars, newStatusBars, newDocks, newInlineBtns, newPaletteCmds);
-    console.log(`[Entry] 入口刷新：顶栏 ${newTopBars.length}，底栏 ${newStatusBars.length}，侧栏 ${newDocks.length}，按钮 ${newInlineBtns.length}，;;菜单 ${newPaletteCmds.length}`);
 }
 
 function applyEntryUpdates(

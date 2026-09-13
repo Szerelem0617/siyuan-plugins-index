@@ -128,8 +128,6 @@ export class SupertagMonitor {
                              eventData.action === "insertBlock" || 
                              eventData.action === "append";
 
-            console.log(`[SupertagListener] 队列处理块: ${blockId}, action: ${eventData.action}, isInsert: ${isInsert}`);
-
             if (isInsert) {
                 await this.processBlockCreated(blockId);
             } else {
@@ -474,8 +472,6 @@ export class SupertagMonitor {
             if (currentTags.length === 0) {
                 return;
             }
-
-            console.log(`[Supertag] 块 "${blockId}" 全局 task 更新为 completed，广播触发挂载的 Supertag [${currentTags.join(", ")}]...`);
 
             // 3. 针对当前块上挂载的所有 Supertag 广播 task_completed 事件
             // 只有绑定了 task_completed (或 [任务完成时]) 条件的 Supertag 才会触发其动作

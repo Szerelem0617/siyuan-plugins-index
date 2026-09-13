@@ -45,7 +45,6 @@ export async function syncGlobalSupertagsCache() {
                 }
             }
         }
-        console.log(`[Supertag-Cache] Preloaded ${globalSupertagsCache.size} supertags mappings into cache.`);
     } catch (e) {
         console.error("[Supertag-Cache] Failed to sync supertags cache:", e);
     }
@@ -283,7 +282,6 @@ async function refreshRegistryFromSqliteCore(): Promise<boolean> {
             }
         }
         setSupertagRegistry(newRegistry);
-        console.log(`[Supertag] Registry loaded directly from SQLite core: ${Object.keys(newCommandBindings).length} commands, ${newRegistry.length} supertags.`);
         return true;
     } catch (e) {
         console.warn("[Supertag Sync] refreshRegistryFromSqliteCore error:", e);
@@ -387,7 +385,6 @@ function refreshRegistryFromSeed() {
         }
     }
     setSupertagRegistry(newRegistry);
-    console.log(`[Supertag] Registry loaded from seed data: ${Object.keys(newCommandBindings).length} commands, ${newRegistry.length} supertags.`);
 }
 
 /**

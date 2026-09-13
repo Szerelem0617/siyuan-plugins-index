@@ -5,10 +5,8 @@
  */
 
 import { Dialog, showMessage } from "siyuan";
-import { post } from "../../../shared/api-client/request";
-import { sleep } from "../../../shared/utils";
 import { getSqliteEngine } from "../../sqlite/sqlite-manager";
-import { getCommandAvId } from "../registration";
+import { saveMetaToStorage } from "../indexos/command-sqlite";
 import { commandRegistry } from "../registry/command-registry";
 import type { CommandContext } from "../command-dispatcher";
 import { runRuleScript } from "./engine";
@@ -98,39 +96,6 @@ function cleanJsonOrEmpty(jsonStr?: string): string {
     return trimmed;
 }
 
-/** 获取 Command-DB 的关键列 keyID */
-export async function getCommandDbKeyIds(): Promise<{
-    pkKeyId: string;
-    cmdIdKeyId: string;
-    inputKeyId: string;
-    outputKeyId: string;
-    compositeKeyId: string;
-    pipelineKeyId: string;
-} | null> {
-    const cmdAvId = getCommandAvId();
-    if (!cmdAvId) return null;
-    const keysRes = await post("/api/av/getAttributeViewKeysByAvID", { avID: cmdAvId });
-    const keys: any[] = Array.isArray(keysRes) ? keysRes : (keysRes?.keys || []);
-    const findId = (...names: string[]) => {
-        for (const name of names) {
-            const hit = keys.find((k: any) => k.name === name);
-            if (hit) return String(hit.id || "");
-        }
-        return "";
-    };
-    const pk = keys.find((k: any) => k.type === "block" || k.name === "主键" || k.name === "Primary Key");
-    const compositeColId = findId("Composite", "复合命令", "Pipeline");
-    const result = {
-        pkKeyId: pk?.id ? String(pk.id) : (keys[0]?.id ? String(keys[0].id) : ""),
-        cmdIdKeyId: findId("Command ID"),
-        inputKeyId: findId("Input"),
-        outputKeyId: findId("Output"),
-        compositeKeyId: compositeColId,
-        pipelineKeyId: compositeColId
-    };
-    return result.compositeKeyId ? result : null;
-}
-
 /** 在 Command-DB 创建一行复合命令记录（自动填充 Input, Output, Composite） */
 export async function createCompositeRow(
     name: string,
@@ -138,15 +103,6 @@ export async function createCompositeRow(
     inputParams?: string,
     outputParams?: string
 ): Promise<string> {
-    const cmdAvId = getCommandAvId();
-    if (!cmdAvId) {
-        throw new Error("请先将数据存储到思源（Command-DB 不存在）");
-    }
-    const keys = await getCommandDbKeyIds();
-    if (!keys) {
-        throw new Error("Command-DB 缺少 'Composite' 列：请删除 IndexOS 笔记本后重新“将数据存到思源”");
-    }
-
     const rule = parseRuleScript(script);
     let finalInputJson = inputParams || "";
     let finalOutputJson = outputParams;
@@ -163,22 +119,26 @@ export async function createCompositeRow(
     }
 
     // @ts-ignore
-    const rowId = window.Lute?.NewNodeID() || Date.now().toString();
-    await post("/api/av/addAttributeViewBlocks", {
-        avID: cmdAvId,
-        srcs: [{ itemID: rowId, id: "", isDetached: true }]
-    });
-    await sleep(300);
-
+    const rowId = (window as any).Lute?.NewNodeID?.() || `comp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const commandId = compositeCommandId(rowId);
-    const ops: any[] = [];
-    if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
-    if (keys.cmdIdKeyId) ops.push({ keyID: keys.cmdIdKeyId, itemID: rowId, value: { type: "text", text: { content: commandId } } });
-    if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalInputJson) } } });
-    if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalOutputJson) } } });
-    if (keys.compositeKeyId) ops.push({ keyID: keys.compositeKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
-    
-    await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
+
+    const { db } = await getSqliteEngine();
+
+    // 确保 Composite 字段存在
+    try {
+        const pragma = db.exec(`PRAGMA table_info("command-db");`);
+        const cols = (pragma[0]?.values || []).map((v: any) => String(v[1]));
+        if (!cols.includes("Composite")) {
+            db.run(`ALTER TABLE "command-db" ADD COLUMN "Composite" TEXT DEFAULT '';`);
+        }
+    } catch (_) {}
+
+    db.run(
+        `INSERT INTO "command-db" (rowID, "主键", "Command ID", "Input", "Output", "Composite", _updated) VALUES (?, ?, ?, ?, ?, ?, ?);`,
+        [rowId, name, commandId, cleanJsonOrEmpty(finalInputJson), cleanJsonOrEmpty(finalOutputJson), script, Date.now()]
+    );
+
+    await saveMetaToStorage();
     return rowId;
 }
 export const createPipelineRow = createCompositeRow;
@@ -191,38 +151,29 @@ export async function readCompositeRow(rowId: string): Promise<{
     outputStr: string;
     rule: RuleScript | null;
 } | null> {
-    const cmdAvId = getCommandAvId();
-    if (!cmdAvId) return null;
-    const { db } = await getSqliteEngine();
-    const tableName = `av_${cmdAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    try {
+        const { db } = await getSqliteEngine();
+        const tblCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='command-db';`);
+        if (tblCheck.length === 0 || tblCheck[0].values.length === 0) return null;
 
-    const pkRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [cmdAvId]);
-    const pkCol = pkRes.length > 0 && pkRes[0].values.length > 0 ? String(pkRes[0].values[0][0]) : "label";
-    
-    const pipeRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Composite' OR key_name = '复合命令' OR key_name = 'Pipeline')`, [cmdAvId]);
-    if (pipeRes.length === 0 || pipeRes[0].values.length === 0) return null;
-    const pipeCol = String(pipeRes[0].values[0][0]);
+        const pragma = db.exec(`PRAGMA table_info("command-db");`);
+        const cols = (pragma[0]?.values || []).map((v: any) => String(v[1]));
+        if (!cols.includes("Composite")) return null;
 
-    const inputRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Input'`, [cmdAvId]);
-    const inputCol = inputRes.length > 0 && inputRes[0].values.length > 0 ? String(inputRes[0].values[0][0]) : "";
+        const rows = db.exec(`SELECT "主键", "Composite", "Input", "Output" FROM "command-db" WHERE rowID = ?`, [rowId]);
+        if (rows.length === 0 || rows[0].values.length === 0) return null;
+        const r = rows[0].values[0];
+        const name = String(r[0] || "");
+        const script = String(r[1] || "").trim();
+        const inputStr = String(r[2] || "");
+        const outputStr = String(r[3] || "");
 
-    const outputRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Output'`, [cmdAvId]);
-    const outputCol = outputRes.length > 0 && outputRes[0].values.length > 0 ? String(outputRes[0].values[0][0]) : "";
-
-    const selectCols = [`"${pkCol}"`, `"${pipeCol}"`];
-    if (inputCol) selectCols.push(`"${inputCol}"`);
-    if (outputCol) selectCols.push(`"${outputCol}"`);
-
-    const rows = db.exec(`SELECT ${selectCols.join(", ")} FROM "${tableName}" WHERE _itemID = ?`, [rowId]);
-    if (rows.length === 0 || rows[0].values.length === 0) return null;
-    const r = rows[0].values[0];
-    const name = String(r[0] || "");
-    const script = String(r[1] || "").trim();
-    const inputStr = inputCol && r[2] !== undefined ? String(r[2] || "") : "";
-    const outputStr = outputCol ? (inputCol ? String(r[3] || "") : String(r[2] || "")) : "";
-
-    if (!script) return null;
-    return { name, script, inputStr, outputStr, rule: parseRuleScript(script) };
+        if (!script) return null;
+        return { name, script, inputStr, outputStr, rule: parseRuleScript(script) };
+    } catch (e) {
+        console.error("[Composite] readCompositeRow failed:", e);
+        return null;
+    }
 }
 export const readPipelineRow = readCompositeRow;
 
@@ -234,12 +185,6 @@ export async function updateCompositeRow(
     inputParams?: string,
     outputParams?: string
 ): Promise<void> {
-    const cmdAvId = getCommandAvId();
-    const keys = await getCommandDbKeyIds();
-    if (!cmdAvId || !keys) {
-        throw new Error("Command-DB 不可用或缺少 Composite 列");
-    }
-
     const rule = parseRuleScript(script);
     let finalInputJson = inputParams !== undefined ? inputParams : "";
     let finalOutputJson = outputParams;
@@ -255,13 +200,23 @@ export async function updateCompositeRow(
         finalOutputJson = Object.keys(defaultOutputs).length > 0 ? JSON.stringify(defaultOutputs, null, 2) : "";
     }
 
-    const ops: any[] = [];
-    if (keys.pkKeyId) ops.push({ keyID: keys.pkKeyId, itemID: rowId, value: { type: "block", block: { content: name } } });
-    if (keys.inputKeyId) ops.push({ keyID: keys.inputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalInputJson) } } });
-    if (keys.outputKeyId) ops.push({ keyID: keys.outputKeyId, itemID: rowId, value: { type: "text", text: { content: cleanJsonOrEmpty(finalOutputJson) } } });
-    if (keys.compositeKeyId) ops.push({ keyID: keys.compositeKeyId, itemID: rowId, value: { type: "text", text: { content: script } } });
-    
-    await post("/api/av/batchSetAttributeViewBlockAttrs", { avID: cmdAvId, values: ops });
+    const { db } = await getSqliteEngine();
+
+    // 确保 Composite 字段存在
+    try {
+        const pragma = db.exec(`PRAGMA table_info("command-db");`);
+        const cols = (pragma[0]?.values || []).map((v: any) => String(v[1]));
+        if (!cols.includes("Composite")) {
+            db.run(`ALTER TABLE "command-db" ADD COLUMN "Composite" TEXT DEFAULT '';`);
+        }
+    } catch (_) {}
+
+    db.run(
+        `UPDATE "command-db" SET "主键" = ?, "Input" = ?, "Output" = ?, "Composite" = ?, _updated = ? WHERE rowID = ?;`,
+        [name, cleanJsonOrEmpty(finalInputJson), cleanJsonOrEmpty(finalOutputJson), script, Date.now(), rowId]
+    );
+
+    await saveMetaToStorage();
 }
 export const updatePipelineRow = updateCompositeRow;
 
@@ -269,23 +224,15 @@ export const updatePipelineRow = updateCompositeRow;
 export async function syncCompositesFromCommandDb(): Promise<void> {
     try {
         unregisterAllComposites();
-        const cmdAvId = getCommandAvId();
-        if (!cmdAvId) return;
-
         const { db } = await getSqliteEngine();
-        const tableName = `av_${cmdAvId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-        const colRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND (key_name = 'Composite' OR key_name = '复合命令' OR key_name = 'Pipeline')`, [cmdAvId]);
-        if (colRes.length === 0 || colRes[0].values.length === 0) return;
-        const pipelineCol = String(colRes[0].values[0][0]);
+        const tblCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='command-db';`);
+        if (tblCheck.length === 0 || tblCheck[0].values.length === 0) return;
 
-        const pkRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_type = 'block'`, [cmdAvId]);
-        const pkCol = pkRes.length > 0 && pkRes[0].values.length > 0 ? String(pkRes[0].values[0][0]) : "label";
-        const paramRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Input'`, [cmdAvId]);
-        const paramCol = paramRes.length > 0 && paramRes[0].values.length > 0 ? String(paramRes[0].values[0][0]) : "Input";
-        const cmdIdRes = db.exec(`SELECT col_name FROM _av_schema WHERE av_id = ? AND key_name = 'Command ID'`, [cmdAvId]);
-        const cmdIdCol = cmdIdRes.length > 0 && cmdIdRes[0].values.length > 0 ? String(cmdIdRes[0].values[0][0]) : "Command_ID";
+        const pragma = db.exec(`PRAGMA table_info("command-db");`);
+        const cols = (pragma[0]?.values || []).map((v: any) => String(v[1]));
+        if (!cols.includes("Composite")) return;
 
-        const rows = db.exec(`SELECT _itemID, "${pkCol}", "${pipelineCol}", "${paramCol}", "${cmdIdCol}" FROM "${tableName}" WHERE "${pipelineCol}" IS NOT NULL AND "${pipelineCol}" != ''`);
+        const rows = db.exec(`SELECT rowID, "主键", "Composite", "Input", "Command ID" FROM "command-db" WHERE "Composite" IS NOT NULL AND "Composite" != ''`);
         if (rows.length === 0 || rows[0].values.length === 0) return;
 
         for (const row of rows[0].values) {
@@ -304,7 +251,6 @@ export async function syncCompositesFromCommandDb(): Promise<void> {
                 ? storedCmdId
                 : compositeCommandId(rowId);
             registerCompositeCommand(commandId, rule.name || label || rowId, script, globalParams);
-            console.log(`[Composite] 已注册复合命令 ${commandId} (${rule.name || label})`);
         }
     } catch (e) {
         console.error("[Composite] syncCompositesFromCommandDb failed:", e);

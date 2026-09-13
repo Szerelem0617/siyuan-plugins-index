@@ -114,8 +114,6 @@ export function installFetchInterceptor(handler: FetchInterceptorHandler) {
 
         return originalFetch.apply(this, arguments as any);
     };
-
-    console.log(`🚀 [FetchInterceptor] 热 SQLite 拦截网关已就绪 (SQL驱动 + 零磁盘双存)`);
 }
 
 /**
@@ -128,6 +126,5 @@ export function uninstallFetchInterceptor() {
         originalFetch = null;
     }
     isHookInstalled = false;
-    console.log(`🛑 [FetchInterceptor] 拦截网关已完全卸载，恢复原生 fetch`);
 }
 

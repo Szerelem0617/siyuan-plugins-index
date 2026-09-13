@@ -30,8 +30,6 @@ export class ProtyleMutationWatcher {
             childList: true,
             subtree: true
         });
-
-        console.log("[ProtyleMutationWatcher] 🚀 快轨近场 DOM 观察器已启动 (微任务 0ms 感知)");
     }
 
     public destroy() {
@@ -49,7 +47,6 @@ export class ProtyleMutationWatcher {
         }
 
         this.pendingBlockIds.clear();
-        console.log("[ProtyleMutationWatcher] 快轨近场 DOM 观察器已注销");
     }
 
     private handleMutations(mutations: MutationRecord[]) {

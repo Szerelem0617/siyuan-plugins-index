@@ -110,8 +110,6 @@ export async function dispatchScopeEvents(
         const targetInfo = await resolveTargetBlockInfo(targetBlockId);
         if (!targetInfo) return;
 
-        console.log(`[Supertag-Scope] 触发事件: ${eventName}, 目标块Id: ${targetBlockId}, type: ${targetInfo.type}, subType: ${targetInfo.subType}, isList: ${targetInfo.isList}, isTodo: ${targetInfo.isTodo}`);
-
         const matchesFilter = (filter?: string): boolean => {
             if (!filter || filter === "all") return true;
             if (filter === "list") return targetInfo.isList;
@@ -186,8 +184,6 @@ export async function dispatchScopeEvents(
             }
         });
 
-        console.log(`[Supertag-Scope] 检索到宿主候选池 (${hostCandidates.length} 个):`, hostCandidates);
-
         // 2. 对每个宿主拥有的 Supertag 规则进行作用域与过滤器核验
         const triggeredKeys = new Set<string>();
 
@@ -245,8 +241,6 @@ export async function dispatchScopeEvents(
                     }
                 }
 
-                console.log(`[Supertag-Scope] 规则评估: tag=#${cleanTag}, host=${host.id}, scope=${scope}(匹配:${scopeMatched}), filter=${filter}(匹配:${filterMatched})`);
-
                 // 3. 前置断言检查 (Condition Predicate)
                 let conditionMatched = true;
                 if (cfg.condition && cfg.condition.trim()) {
@@ -294,7 +288,6 @@ export async function dispatchScopeEvents(
                                 }
                             } catch (_) {}
                         }
-                        console.log(`[Supertag-Scope] 目标为列表容器 ${targetInfo.id}，展开子列表项 (${targetIds.length} 个):`, targetIds);
                     }
 
                     if (targetIds.length === 0) {
@@ -311,14 +304,12 @@ export async function dispatchScopeEvents(
                         const targetTags = globalSupertagsCache.get(actualTargetId) || (actualTargetId === targetInfo.id ? targetInfo.tags : []);
                         const cleanTargetTags = targetTags.map(t => cleanTagString(t));
                         if (scope !== "self" && cleanTargetTags.includes(cleanTag)) {
-                            console.log(`[Supertag-Scope] 目标块 ${actualTargetId} 自身已拥有标签 #${cleanTag}，跳过父级级联处理`);
                             continue;
                         }
 
                         const triggerKey = `${host.id}:${cleanTag}:${eventName}:${actualTargetId}`;
                         if (!triggeredKeys.has(triggerKey)) {
                             triggeredKeys.add(triggerKey);
-                            console.log(`[Supertag-Scope] 🚀 触发级联执行: triggerKey=${triggerKey}, actualTargetId=${actualTargetId}`);
                             await triggerConditionalCommands(host.id, cleanTag, eventName as TriggerEventName, {
                                 targetBlockId: actualTargetId,
                                 hostBlockId: host.id

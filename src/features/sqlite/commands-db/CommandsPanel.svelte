@@ -13,7 +13,6 @@
 
     let loading = true;
     export let searchQuery = "";
-    let selectedCategory: "all" | "atomic" | "composite" = "all";
 
     interface CmdCard {
         id: string;
@@ -41,7 +40,7 @@
 
             // 1. 从命令注册表 (Layer 1 + Layer 3) 读取
             for (const c of allCmds) {
-                const isComposite = c.id.startsWith("composite.") || c.category === "custom" || c.category === "user";
+                const isComposite = c.id.startsWith("composite.") || c.id.startsWith("pipeline.") || c.meta?.plugin === "composite" || (c as any).category === "composite";
                 const seed = seedMap.get(c.id);
                 const binding = Object.values(COMMAND_BINDINGS).find(b => b.commandRef === c.id || b.methodName === c.name);
 
@@ -61,7 +60,13 @@
             try {
                 const { getSqliteEngine } = await import("../sqlite-manager");
                 const { db } = await getSqliteEngine();
-                const sqlRes = db.exec(`SELECT rowID, "主键", "Command ID", "Input", "Output" FROM "command-db";`);
+                const pragma = db.exec(`PRAGMA table_info("command-db");`);
+                const cols = (pragma[0]?.values || []).map((v: any) => String(v[1]));
+                const hasComposite = cols.includes("Composite");
+                const selectSql = hasComposite
+                    ? `SELECT rowID, "主键", "Command ID", "Input", "Output", "Composite" FROM "command-db";`
+                    : `SELECT rowID, "主键", "Command ID", "Input", "Output" FROM "command-db";`;
+                const sqlRes = db.exec(selectSql);
                 if (sqlRes.length > 0 && sqlRes[0].values.length > 0) {
                     for (const r of sqlRes[0].values) {
                         const rowID = String(r[0]);
@@ -69,8 +74,9 @@
                         const commandID = String(r[2] || "");
                         const inputMapping = String(r[3] || "");
                         const outputMapping = String(r[4] || "");
+                        const script = hasComposite ? String(r[5] || "") : "";
                         if (commandID) {
-                            const isComposite = commandID.startsWith("composite.") || commandID.startsWith("user.");
+                            const isComposite = commandID.startsWith("composite.") || commandID.startsWith("pipeline.") || Boolean(script && script.trim());
                             const def = commandRegistry.getCommand(commandID);
                             map.set(commandID, {
                                 id: commandID,
@@ -81,7 +87,8 @@
                                 outputs: def?.outputs || [],
                                 inputMapping,
                                 outputMapping,
-                                rowId: rowID
+                                rowId: rowID,
+                                script: script || undefined
                             });
                         }
                     }
@@ -91,7 +98,7 @@
             // 3. 补充 Layer 2 种子命令
             for (const row of seedRows) {
                 if (!map.has(row.commandID)) {
-                    const isComposite = row.commandID.startsWith("composite.");
+                    const isComposite = row.commandID.startsWith("composite.") || row.commandID.startsWith("pipeline.");
                     const def = commandRegistry.getCommand(row.commandID);
                     map.set(row.commandID, {
                         id: row.commandID,
@@ -172,8 +179,6 @@
     }
 
     $: filteredList = commandsList.filter(card => {
-        if (selectedCategory === "atomic" && card.category !== "atomic") return false;
-        if (selectedCategory === "composite" && card.category !== "composite") return false;
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase().trim();
         return card.name.toLowerCase().includes(q) ||
@@ -181,39 +186,12 @@
                card.description.toLowerCase().includes(q);
     });
 
-    $: totalAtomicCount = commandsList.filter(c => c.category === "atomic").length;
-    $: totalCompositeCount = commandsList.filter(c => c.category === "composite").length;
-
     onMount(() => {
         loadData();
     });
 </script>
 
 <div class="commands-db-panel" style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
-    <!-- 顶部分类 Pills 切换 -->
-    <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;">
-        <div class="fn__flex" style="align-items: center; gap: 6px;">
-            <button
-                class="indexos-tab-pill {selectedCategory === 'all' ? 'active' : ''}"
-                on:click={() => selectedCategory = 'all'}
-            >
-                全部 ({commandsList.length})
-            </button>
-            <button
-                class="indexos-tab-pill {selectedCategory === 'atomic' ? 'active' : ''}"
-                on:click={() => selectedCategory = 'atomic'}
-            >
-                ⚡ 原子命令 ({totalAtomicCount})
-            </button>
-            <button
-                class="indexos-tab-pill {selectedCategory === 'composite' ? 'active' : ''}"
-                on:click={() => selectedCategory = 'composite'}
-            >
-                🔀 复合命令 ({totalCompositeCount})
-            </button>
-        </div>
-    </div>
-
     <!-- 命令列表 / 卡片网格 -->
     <div style="flex: 1; overflow-y: auto; min-height: 0;">
         {#if loading}
@@ -225,68 +203,46 @@
         {:else}
             <div class="cmd-cards-grid">
                 <!-- 第一张卡片：操作卡片 (Action Card) -->
-                {#if selectedCategory === 'all' || selectedCategory === 'atomic'}
-                    <div class="cmd-item-card cmd-action-card">
-                        <div class="cmd-card-header">
-                            <div class="fn__flex" style="align-items: center; gap: 6px;">
-                                <span class="cmd-icon-badge cmd-icon-badge--atomic">⚡</span>
-                                <span class="cmd-name-label">普通命令管理</span>
-                            </div>
-                            <span class="indexos-tag-badge" style="font-size: 10px;">操作</span>
+                <div class="cmd-item-card cmd-action-card">
+                    <div class="cmd-card-header">
+                        <div class="fn__flex" style="align-items: center; gap: 6px;">
+                            <span class="cmd-icon-badge cmd-icon-badge--atomic">⚡</span>
+                            <span class="cmd-name-label">命令管理</span>
                         </div>
-                        <div class="cmd-card-body">
-                            <div class="cmd-desc-text">
-                                从系统内置注册表导入指令，或创建新的系统原子命令。
-                            </div>
-                        </div>
-                        <div class="cmd-card-actions">
-                            <button
-                                class="indexos-btn-bordered"
-                                style="font-size: 11px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px;"
-                                title="从系统内置注册表导入命令"
-                                on:click={handleImportCommand}
-                            >
-                                <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconInbox"></use></svg>
-                                <span>导入命令</span>
-                            </button>
-                            <button
-                                class="indexos-btn-bordered"
-                                style="font-size: 11px; padding: 3px 8px; color: var(--indexos-accent-primary); border-color: rgba(59, 130, 246, 0.4); display: inline-flex; align-items: center; gap: 4px;"
-                                title="创建新的原子命令"
-                                on:click={handleCreateAtomicCommand}
-                            >
-                                <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconAdd"></use></svg>
-                                <span>创建命令</span>
-                            </button>
+                        <span class="indexos-tag-badge" style="font-size: 10px;">操作</span>
+                    </div>
+                    <div class="cmd-card-body">
+                        <div class="cmd-desc-text">
+                            从系统内置注册表导入指令，或创建原子命令与多步骤复合命令。
                         </div>
                     </div>
-                {:else if selectedCategory === 'composite'}
-                    <div class="cmd-item-card cmd-action-card">
-                        <div class="cmd-card-header">
-                            <div class="fn__flex" style="align-items: center; gap: 6px;">
-                                <span class="cmd-icon-badge cmd-icon-badge--composite">🔀</span>
-                                <span class="cmd-name-label">复合命令编排</span>
-                            </div>
-                            <span class="indexos-tag-badge indexos-tag-badge--builtin" style="font-size: 10px;">编排</span>
-                        </div>
-                        <div class="cmd-card-body">
-                            <div class="cmd-desc-text">
-                                通过可视化流水线编辑器创建多步骤流式复合命令管道。
-                            </div>
-                        </div>
-                        <div class="cmd-card-actions">
-                            <button
-                                class="indexos-btn-bordered"
-                                style="font-size: 11px; padding: 3px 10px; color: var(--indexos-accent-primary); border-color: rgba(59, 130, 246, 0.4); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"
-                                title="创建多步骤流式复合命令管道"
-                                on:click={handleCreateComposite}
-                            >
-                                <svg style="width: 11px; height: 11px; fill: currentColor;"><use xlink:href="#iconAdd"></use></svg>
-                                <span>创建复合命令</span>
-                            </button>
-                        </div>
+                    <div class="cmd-card-actions cmd-card-actions--action">
+                        <button
+                            class="indexos-btn-bordered cmd-action-btn"
+                            title="从系统内置注册表导入命令"
+                            on:click={handleImportCommand}
+                        >
+                            <svg class="cmd-action-icon"><use xlink:href="#iconInbox"></use></svg>
+                            <span>导入</span>
+                        </button>
+                        <button
+                            class="indexos-btn-bordered cmd-action-btn cmd-action-btn--atomic"
+                            title="创建新的原子命令"
+                            on:click={handleCreateAtomicCommand}
+                        >
+                            <svg class="cmd-action-icon"><use xlink:href="#iconAdd"></use></svg>
+                            <span>创建</span>
+                        </button>
+                        <button
+                            class="indexos-btn-bordered cmd-action-btn cmd-btn-composite"
+                            title="创建多步骤流式复合命令管道"
+                            on:click={handleCreateComposite}
+                        >
+                            <svg class="cmd-action-icon"><use xlink:href="#iconAdd"></use></svg>
+                            <span>复合命令</span>
+                        </button>
                     </div>
-                {/if}
+                </div>
 
                 {#if filteredList.length === 0}
                     <div class="fn__flex-column fn__flex-center" style="grid-column: 1 / -1; height: 120px; color: var(--b3-theme-on-surface-light);">
@@ -295,7 +251,7 @@
                 {/if}
 
                 {#each filteredList as card}
-                    <div class="cmd-item-card">
+                    <div class="cmd-item-card {card.category === 'composite' ? 'cmd-item-card--composite' : ''}">
                         <!-- 卡片头部：图标 + 标题 + 分类徽标 -->
                         <div class="cmd-card-header">
                             <div class="fn__flex" style="align-items: center; gap: 6px; overflow: hidden;">
@@ -307,7 +263,7 @@
                                 </span>
                             </div>
 
-                            <span class="indexos-tag-badge {card.category === 'composite' ? 'indexos-tag-badge--builtin' : ''}" style="font-size: 10px; flex-shrink: 0;">
+                            <span class="indexos-tag-badge {card.category === 'composite' ? 'indexos-tag-badge--composite' : ''}" style="font-size: 10px; flex-shrink: 0;">
                                 {card.category === 'composite' ? '复合命令' : '原子命令'}
                             </span>
                         </div>
@@ -373,27 +329,6 @@
 </div>
 
 <style>
-    .indexos-tab-pill {
-        padding: 3px 10px;
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--indexos-text-muted, #5A6D82);
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: var(--indexos-radius-sm, 6px);
-        cursor: pointer;
-        transition: all 0.15s ease;
-    }
-    .indexos-tab-pill:hover {
-        background: var(--indexos-bg-hover, rgba(0, 0, 0, 0.04));
-        color: var(--indexos-text-main, #0F243B);
-    }
-    .indexos-tab-pill.active {
-        background: var(--indexos-bg-container, rgba(0, 0, 0, 0.06));
-        border-color: var(--indexos-border-subtle, rgba(0, 0, 0, 0.08));
-        color: var(--indexos-accent-primary, #3B82F6);
-        font-weight: 600;
-    }
     .cmd-cards-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -417,6 +352,45 @@
         border-color: var(--indexos-accent-primary, #3B82F6);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         transform: translateY(-1px);
+    }
+    .cmd-item-card--composite {
+        border: 2px solid #1E40AF !important;
+        background: rgba(30, 64, 175, 0.04);
+        box-shadow: 0 0 0 1px rgba(30, 64, 175, 0.15), 0 2px 8px rgba(30, 64, 175, 0.08);
+    }
+    .cmd-item-card--composite:hover {
+        border-color: #1E3A8A !important;
+        box-shadow: 0 0 0 1px #1E3A8A, 0 4px 16px rgba(30, 64, 175, 0.25);
+        transform: translateY(-1px);
+    }
+    :global(html[data-theme-mode="dark"]) .cmd-item-card--composite,
+    :global(.theme-dark) .cmd-item-card--composite {
+        border: 2px solid #3B82F6 !important;
+        background: rgba(59, 130, 246, 0.08);
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25), 0 2px 10px rgba(59, 130, 246, 0.15);
+    }
+    :global(html[data-theme-mode="dark"]) .cmd-item-card--composite:hover,
+    :global(.theme-dark) .cmd-item-card--composite:hover {
+        border-color: #60A5FA !important;
+        box-shadow: 0 0 0 1px #60A5FA, 0 4px 18px rgba(59, 130, 246, 0.35);
+    }
+    .cmd-btn-composite {
+        color: #1E40AF;
+        border-color: rgba(30, 64, 175, 0.5);
+    }
+    .cmd-btn-composite:hover {
+        background: rgba(30, 64, 175, 0.08);
+        border-color: #1E40AF;
+    }
+    :global(html[data-theme-mode="dark"]) .cmd-btn-composite,
+    :global(.theme-dark) .cmd-btn-composite {
+        color: #60A5FA;
+        border-color: rgba(96, 165, 250, 0.5);
+    }
+    :global(html[data-theme-mode="dark"]) .cmd-btn-composite:hover,
+    :global(.theme-dark) .cmd-btn-composite:hover {
+        background: rgba(96, 165, 250, 0.12);
+        border-color: #60A5FA;
     }
     .cmd-action-card {
         background: var(--b3-theme-surface-lighter, var(--b3-theme-surface));
@@ -447,8 +421,25 @@
         color: var(--indexos-accent-primary, #3B82F6);
     }
     .cmd-icon-badge--composite {
-        background: rgba(217, 167, 74, 0.12);
-        color: var(--indexos-detached-gold, #D9A74A);
+        background: rgba(30, 64, 175, 0.12);
+        color: #1E40AF;
+    }
+    :global(html[data-theme-mode="dark"]) .cmd-icon-badge--composite,
+    :global(.theme-dark) .cmd-icon-badge--composite {
+        background: rgba(59, 130, 246, 0.2);
+        color: #93C5FD;
+    }
+    .indexos-tag-badge--composite {
+        background: rgba(30, 64, 175, 0.1) !important;
+        color: #1E40AF !important;
+        border: 1px solid rgba(30, 64, 175, 0.3) !important;
+        font-weight: 600;
+    }
+    :global(html[data-theme-mode="dark"]) .indexos-tag-badge--composite,
+    :global(.theme-dark) .indexos-tag-badge--composite {
+        background: rgba(59, 130, 246, 0.2) !important;
+        color: #93C5FD !important;
+        border-color: rgba(59, 130, 246, 0.4) !important;
     }
     .cmd-name-label {
         font-weight: 600;
@@ -496,5 +487,37 @@
         gap: 6px;
         padding-top: 6px;
         border-top: 1px dashed var(--indexos-border-subtle, var(--b3-border-color));
+    }
+    .cmd-card-actions--action {
+        justify-content: space-between;
+        flex-wrap: nowrap;
+        gap: 4px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .cmd-action-btn {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 3px 5px;
+        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        box-sizing: border-box;
+    }
+    .cmd-action-btn span {
+        white-space: nowrap;
+    }
+    .cmd-action-btn--atomic {
+        color: var(--indexos-accent-primary, #3B82F6);
+        border-color: rgba(59, 130, 246, 0.4);
+    }
+    .cmd-action-icon {
+        width: 11px;
+        height: 11px;
+        fill: currentColor;
+        flex-shrink: 0;
+        margin-right: 2px;
     }
 </style>

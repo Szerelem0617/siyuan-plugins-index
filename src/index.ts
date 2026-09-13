@@ -205,7 +205,6 @@ export default class IndexPlugin extends Plugin {
 
         // 初始化 IndexOS 核心 SQLite 引擎与系统元数据底座
         getSqliteEngine().then(async () => {
-            console.log("[IndexOS] SQLite Engine Ready. Initializing builtin DB...");
             await initSystemTables();
             // Reload command registry from SQLite (Layer 1)
             await commandRegistry.loadFromDatabase();
@@ -226,7 +225,6 @@ export default class IndexPlugin extends Plugin {
     public async enableDevFeatures() {
         if (this.isDevFeaturesEnabled) return;
         this.isDevFeaturesEnabled = true;
-        console.log("[IndexOS] Enabling Developer Mode features...");
 
         // 1. Supertag 系统
         supertagMonitor.init(this);
@@ -280,7 +278,6 @@ export default class IndexPlugin extends Plugin {
     public disableDevFeatures() {
         if (!this.isDevFeaturesEnabled) return;
         this.isDevFeaturesEnabled = false;
-        console.log("[IndexOS] Disabling Developer Mode features and cleaning up...");
 
         // 1. 解绑事件总线
         this.eventBus.off("click-blockicon", addDataMenuItems);

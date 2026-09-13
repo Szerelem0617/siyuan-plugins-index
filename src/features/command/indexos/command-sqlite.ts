@@ -62,8 +62,17 @@ export async function initSystemTables(): Promise<void> {
         "Command ID" TEXT,
         "Input" TEXT,
         "Output" TEXT,
+        "Composite" TEXT DEFAULT '',
         _updated INTEGER
     );`);
+
+    try {
+        const pragma = db.exec(`PRAGMA table_info("${TABLE_COMMANDS}");`);
+        const cols = (pragma[0]?.values || []).map((v: any) => String(v[1]));
+        if (!cols.includes("Composite")) {
+            db.run(`ALTER TABLE "${TABLE_COMMANDS}" ADD COLUMN "Composite" TEXT DEFAULT '';`);
+        }
+    } catch (_) {}
 
     // 3. Layer 3 超级标签绑定表 (supertag-db)
     db.run(`CREATE TABLE IF NOT EXISTS "${TABLE_SUPERTAGS}" (
@@ -99,7 +108,7 @@ export async function initSystemTables(): Promise<void> {
     const cmdCount = cmdCountRes[0]?.values[0]?.[0] || 0;
     if (cmdCount === 0) {
         if (loadedMeta?.commands && Array.isArray(loadedMeta.commands) && loadedMeta.commands.length > 0) {
-            const insCmd = db.prepare(`INSERT OR REPLACE INTO "${TABLE_COMMANDS}" (rowID, "主键", "Command ID", "Input", "Output", _updated) VALUES (?, ?, ?, ?, ?, ?)`);
+            const insCmd = db.prepare(`INSERT OR REPLACE INTO "${TABLE_COMMANDS}" (rowID, "主键", "Command ID", "Input", "Output", "Composite", _updated) VALUES (?, ?, ?, ?, ?, ?, ?)`);
             for (const r of loadedMeta.commands) {
                 insCmd.run([
                     r.rowID,
@@ -107,6 +116,7 @@ export async function initSystemTables(): Promise<void> {
                     r.commandID || r["Command ID"] || "",
                     r.inputMapping || r["Input"] || "{}",
                     r.outputMapping || r["Output"] || "{}",
+                    r.composite || r["Composite"] || "",
                     r._updated || Date.now()
                 ]);
             }
@@ -114,9 +124,9 @@ export async function initSystemTables(): Promise<void> {
         } else {
             // 用 seed-data 初始化
             const seedCmds = getSeedCommandRows();
-            const insCmd = db.prepare(`INSERT OR REPLACE INTO "${TABLE_COMMANDS}" (rowID, "主键", "Command ID", "Input", "Output", _updated) VALUES (?, ?, ?, ?, ?, ?)`);
+            const insCmd = db.prepare(`INSERT OR REPLACE INTO "${TABLE_COMMANDS}" (rowID, "主键", "Command ID", "Input", "Output", "Composite", _updated) VALUES (?, ?, ?, ?, ?, ?, ?)`);
             for (const r of seedCmds) {
-                insCmd.run([r.rowID, r.label, r.commandID, r.inputMapping || "{}", r.outputMapping || "{}", Date.now()]);
+                insCmd.run([r.rowID, r.label, r.commandID, r.inputMapping || "{}", r.outputMapping || "{}", (r as any).composite || "", Date.now()]);
             }
             insCmd.free();
         }
@@ -163,7 +173,7 @@ export async function initSystemTables(): Promise<void> {
 export async function saveMetaToStorage() {
     try {
         const { db } = await getSqliteEngine();
-        const cmdRes = db.exec(`SELECT rowID, "主键", "Command ID", "Input", "Output", _updated FROM "${TABLE_COMMANDS}"`);
+        const cmdRes = db.exec(`SELECT rowID, "主键", "Command ID", "Input", "Output", "Composite", _updated FROM "${TABLE_COMMANDS}"`);
         const tagRes = db.exec(`SELECT rowID, "主键", "Manual", "Auto", "Related av", "Schema", _updated FROM "${TABLE_SUPERTAGS}"`);
 
         const commands = (cmdRes[0]?.values || []).map((v: any[]) => ({
@@ -172,7 +182,8 @@ export async function saveMetaToStorage() {
             commandID: String(v[2] || ""),
             inputMapping: String(v[3] || "{}"),
             outputMapping: String(v[4] || "{}"),
-            _updated: Number(v[5] || Date.now())
+            composite: String(v[5] || ""),
+            _updated: Number(v[6] || Date.now())
         }));
 
         const supertags = (tagRes[0]?.values || []).map((v: any[]) => ({

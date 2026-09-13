@@ -50,7 +50,6 @@ export function initCommandPalette() {
     }
     // Clicking outside closes the palette
     document.addEventListener("mousedown", onOutsideClick, true);
-    console.log("[CommandPalette] Initialized.");
 }
 
 export function destroyCommandPalette() {
@@ -65,7 +64,6 @@ export function destroyCommandPalette() {
     inputListenerAttached = false;
     keyListenerAttached = false;
     isOpen = false;
-    console.log("[CommandPalette] Destroyed.");
 }
 
 // ─── Palette Element ──────────────────────────────────────────────────────────
