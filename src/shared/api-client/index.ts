@@ -3,6 +3,11 @@ import { sleep } from "../utils";
 
 export const client = new Client();
 
+// 判定是否属于列表/导图类容器块（标准列表、思维导图、页签等）
+const isListContainerType = (type?: string) => {
+    return type === 'l' || type === 'mindmap' || type === 'tabs';
+};
+
 export class BlockService {
     /**
      * 通用插入/更新数据逻辑，支持属性绑定和自动修复大纲结构
@@ -23,7 +28,6 @@ export class BlockService {
         existingBlockInfo?: { id: string, type: string, parent_id: string }
     ) {
         const attrs = { [attrName]: JSON.stringify(attrValue) };
-
 
         try {
             // 1. Check for existing block
@@ -49,7 +53,6 @@ export class BlockService {
             if (currentId == undefined) {
                 // === Case: Insert New ===
 
-
                 // Check for empty document (single empty P block)
                 let emptyBlockId: string | undefined;
                 if (!targetBlockId) {
@@ -58,7 +61,6 @@ export class BlockService {
                     });
                     if (checkRs.data && checkRs.data.length === 1) {
                         const b = checkRs.data[0];
-                        // content can be empty string for empty P block
                         if (b.type === 'p' && (!b.content || b.content.trim() === '')) {
                             emptyBlockId = b.id;
                         }
@@ -86,29 +88,25 @@ export class BlockService {
                 // If the returned block is a wrapper (Blockquote for outline, Super Block for index with col>1),
                 // find the inner List block to bind the attribute to
                 if (attrName !== "custom-tree-create") {
-                    // Check what type of block we got
                     let needsSearch = false;
                     if (type == "outline") {
                         needsSearch = true;
                     } else {
-                        // For index: check if the block is a super block (col > 1 case)
                         let typeRs = await client.sql({
                             stmt: `SELECT type FROM blocks WHERE id = '${opId}' LIMIT 1`
                         });
                         if (typeRs.data?.[0]?.type === 'sb') {
                             needsSearch = true;
-
                         }
                     }
                     if (needsSearch) {
                         for (let i = 0; i < 15; i++) {
                             await sleep(500);
                             let childRs = await client.sql({
-                                stmt: `SELECT id FROM blocks WHERE parent_id = '${opId}' AND type = 'l' LIMIT 1`
+                                stmt: `SELECT id FROM blocks WHERE parent_id = '${opId}' AND type IN ('l', 'mindmap', 'tabs') LIMIT 1`
                             });
                             if (childRs.data && childRs.data[0]) {
                                 attrTargetId = childRs.data[0].id;
-
                                 break;
                             }
                         }
@@ -120,11 +118,9 @@ export class BlockService {
                     id: attrTargetId
                 });
 
-                // Remove empty block if identified
                 if (emptyBlockId) {
                     await client.deleteBlock({ id: emptyBlockId });
                 }
-
 
                 return { success: true, id: attrTargetId, msg: "insert_success" };
 
@@ -132,34 +128,48 @@ export class BlockService {
                 // === Case: Update Existing ===
                 let updateTargetId = currentId;
 
+                // 1. 抓取现有块的所有属性快照，妥善保留思维导图/标签页等视图选择与用户自定义属性
+                const preservedAttrs: Record<string, string> = {};
+                try {
+                    const attrRes = await client.getBlockAttrs({ id: currentId });
+                    if (attrRes?.data) {
+                        for (const [k, v] of Object.entries(attrRes.data as Record<string, string>)) {
+                            // 排除思源底层自动维护的只读/索引字段
+                            if (k === "id" || k === "updated" || k === "created" || k === "hash") {
+                                continue;
+                            }
+                            if (v !== undefined && v !== null && v !== "") {
+                                preservedAttrs[k] = v;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[BlockService] Failed to fetch existing block attrs:", e);
+                }
 
-
-                // Fix: If attr is on a List inside a wrapper, update the wrapper instead
-                // Outline uses blockquote ('b'), Index with col>1 uses super block ('sb')
-                if (currentType === 'l') {
+                // 2. 如果当前块是嵌套在 Blockquote ('b') 或 Super Block ('sb') 内部的列表/导图块，则更新外层容器
+                if (isListContainerType(currentType)) {
                     let parentRs = await client.sql({ stmt: `SELECT id, type FROM blocks WHERE id = '${parentId}'` });
                     const parentType = parentRs.data?.[0]?.type;
                     if (parentType === 'b' || parentType === 'sb') {
                         updateTargetId = parentRs.data[0].id;
-
                     }
                 }
 
+                // 3. 执行块内容更新
                 await client.updateBlock({
                     data: data,
                     dataType: 'markdown',
                     id: updateTargetId
                 });
 
-                // Re-bind attributes to the inner list block after updating wrapper
+                // 4. 定位内部列表/导图块，将属性重新绑定
                 let attrTargetId = updateTargetId;
                 if (updateTargetId !== currentId && attrName !== "custom-tree-create") {
-                    // We updated a wrapper (blockquote/super block), need to find the new inner list
-
                     let foundNew = false;
                     for (let i = 0; i < 15; i++) {
                         await sleep(500);
-                        let stmt = `SELECT id FROM blocks WHERE parent_id = '${updateTargetId}' AND type = 'l' AND id != '${currentId}' LIMIT 1`;
+                        let stmt = `SELECT id FROM blocks WHERE parent_id = '${updateTargetId}' AND type IN ('l', 'mindmap', 'tabs') AND id != '${currentId}' LIMIT 1`;
                         let childRs = await client.sql({ stmt });
                         if (childRs.data && childRs.data[0]) {
                             attrTargetId = childRs.data[0].id;
@@ -169,24 +179,24 @@ export class BlockService {
                     }
                     if (!foundNew) {
                         let childRs = await client.sql({
-                            stmt: `SELECT id FROM blocks WHERE parent_id = '${updateTargetId}' AND type = 'l' LIMIT 1`
+                            stmt: `SELECT id FROM blocks WHERE parent_id = '${updateTargetId}' AND type IN ('l', 'mindmap', 'tabs') LIMIT 1`
                         });
                         if (childRs.data && childRs.data[0]) {
                             attrTargetId = childRs.data[0].id;
-
                         }
                     }
                 }
 
+                // 5. 将插件的新配置合并到保留属性快照中，全量写回
+                preservedAttrs[attrName] = JSON.stringify(attrValue);
                 await client.setBlockAttrs({
-                    attrs: attrs,
+                    attrs: preservedAttrs,
                     id: attrTargetId
                 });
 
                 if (targetBlockId && targetBlockId !== updateTargetId) {
                     await client.deleteBlock({ id: targetBlockId });
                 }
-
 
                 return { success: true, id: attrTargetId, msg: "update_success" };
             }
